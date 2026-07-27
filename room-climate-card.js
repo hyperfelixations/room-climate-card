@@ -2,9 +2,9 @@
   "use strict";
 
   // Custom card for Home Assistant room climate data (temperature, humidity,
-  // CO2, PM2.5). Developer/technical documentation, including the reasoning
-  // behind design decisions, lives in "Readme/readme climate card.md"
-  // (German) — not in code comments.
+  // CO2, PM2.5). Public usage documentation lives in this repository's
+  // README. Private architecture and audit documentation is maintained
+  // separately from the public project.
   //
   // One card-wide classification policy resolves complete HA attributes,
   // built-in profiles, or a validated custom YAML profile. A profile owns

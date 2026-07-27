@@ -1,20 +1,6 @@
-# CI workflow draft — NOT YET ACTIVE.
-#
-# This repo doesn't have a working GitHub remote yet (it currently lives
-# inside a larger private, mixed HA-config repo whose local .git metadata
-# is itself broken/empty — see "Entwicklungsumgebung und Tooling" in
-# ../../readme climate card.md). GitHub Actions only runs once this folder
-# is pushed to an actual GitHub repository; until then this file is a
-# ready-to-use template, not a running pipeline.
-#
-# Once a real repo exists: verify `npm ci`/`npm run test:browser` succeed
-# from a clean checkout (this file assumes `room-climate-card.js` and this
-# `test/`/`package.json` tree ARE the repo root, matching the folder layout
-# already used here), then enable by pushing this file as-is.
-#
-# Loosely follows the stack recommended in the v2.15.0 audit report,
-# section 10.1 ("Empfohlener Stack"/minimal CI outline), adapted to this
-# project's actual npm scripts (see package.json).
+# CI for the standalone room-climate-card repository.
+# The workflow validates syntax, unit behavior, and browser behavior for
+# pushes and pull requests targeting main.
 
 name: CI
 

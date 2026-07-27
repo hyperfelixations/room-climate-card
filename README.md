@@ -70,7 +70,7 @@ store yet, add it as a custom repository first:
 
 ### Manual
 
-1. Download `room-climate-card.js` from the [latest release](releases/latest) and copy it into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
+1. Download `room-climate-card.js` from the [latest release](https://github.com/hyperfelixations/room-climate-card/releases/latest) and copy it into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
 2. Add it as a Lovelace resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
 3. Add a card with `type: custom:room-climate-card` to a dashboard.
 
@@ -575,7 +575,7 @@ most common cause). If the problem persists, open your browser's developer
 console and check for an error message before reporting it.
 
 If none of this helps, please open a
-[GitHub issue](issues) and include:
+[GitHub issue](https://github.com/hyperfelixations/room-climate-card/issues) and include:
 
 - your Home Assistant version;
 - the card version (open your browser's developer console, type
@@ -586,5 +586,5 @@ If none of this helps, please open a
 
 ## Links
 
-- [Releases](releases)
+- [Releases](https://github.com/hyperfelixations/room-climate-card/releases)
 - [License](LICENSE) (MIT)
