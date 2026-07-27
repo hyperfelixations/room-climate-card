@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>room-climate-card test harness</title>
+    <link rel="stylesheet" href="fonts/roboto.css" />
+    <style>
+      /* Home Assistant's real default-theme CSS custom properties. The
+         card itself never sets colors -- it reads these from its host
+         (--card-background-color, --primary-text-color, --secondary-
+         text-color, --divider-color; --ha-card-background/-box-shadow
+         already have literal fallbacks in the card and need no value
+         here), by design, so it inherits through the shadow boundary in
+         production. Without real values the harness leaves those custom
+         properties undefined, and per CSS var()-fallback-chain rules an
+         undefined var() with an undefined fallback resolves to the
+         property's initial value -- i.e. the card silently loses its
+         border/shadow/chip backgrounds and blends into the page, which is
+         NOT how it looks in real HA. Values sourced from home-assistant/
+         frontend, src/resources/theme/color/color.globals.ts
+         (colorStyles/darkColorStyles). Dark-mode values are taken
+         directly from that file (high confidence). Light-mode
+         --primary-text-color/--secondary-text-color indirect through a
+         further token layer whose literal value could not be pinned down
+         via automated research; the long-established, community-
+         documented classic HA light values (#212121 / rgba(0,0,0,0.6))
+         are used instead -- slightly lower confidence than the other
+         five values, called out here transparently. */
+      :root {
+        --primary-background-color: #fafafa;
+        --card-background-color: #ffffff;
+        --primary-text-color: #212121;
+        --secondary-text-color: rgba(0, 0, 0, 0.6);
+        --divider-color: rgba(0, 0, 0, 0.12);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --primary-background-color: #111111;
+          --card-background-color: #1c1c1c;
+          --primary-text-color: #e1e1e1;
+          --secondary-text-color: #9b9b9b;
+          --divider-color: rgba(225, 225, 225, 0.12);
+        }
+      }
+      /* Fixed body width so Playwright tests get deterministic layout
+         unless a test explicitly resizes its own wrapper. Roboto (self-
+         hosted, see fonts/roboto.css) matches real Home Assistant's
+         frontend font -- the card itself never sets font-family, it
+         inherits from its host, so this is what makes the test harness's
+         text metrics (and therefore layout/overflow measurements)
+         representative of production instead of whatever generic
+         sans-serif system font Chromium happens to substitute. sans-serif
+         remains the fallback for scripts Roboto has no glyphs for (CJK). */
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--primary-background-color);
+        font-family: "Roboto", sans-serif;
+      }
+      /* Screenshots capture #stage (see shot() in visual-golden.spec.js),
+         not the bare card element. box-shadow is a compositing effect
+         painted OUTSIDE an element's own border box (overflow:hidden on
+         .rtc-card only clips its own children, never its own shadow) --
+         a screenshot cropped tight to the card's bounding box (as it was
+         before) silently cuts the shadow off entirely, and also leaves
+         zero surrounding page-background pixels visible, unlike a real HA
+         dashboard grid where cards sit with a gutter around them. 40px
+         comfortably exceeds the card's shadow extent (offset-y 8px +
+         blur-radius 26px = 34px) on every side and reveals enough of
+         body's page background to read as "an isolated card" the way it
+         does in production. #stage intentionally has no background of its
+         own -- it stays transparent so body's background shows through. */
+      #stage {
+        display: inline-block;
+        padding: 40px;
+        box-sizing: border-box;
+      }
+      /* room-climate-card.js renders its body as <ha-card class="rtc-card">
+         -- a real HA custom element, exactly as a Lovelace card should. In
+         production, Home Assistant's frontend registers ha-card, so it's a
+         normal block-level element. This offline harness never loads the HA
+         frontend, so ha-card stays an UNDEFINED custom element -- and by
+         the HTML/CSS spec, an undefined custom element's user-agent default
+         is display:inline (a non-atomic inline box), not block. Two
+         consequences, both purely from that missing display value: (1) the
+         status accent bar (.rtc-top-line, absolutely positioned inside
+         .rtc-root) is not reliably contained by .rtc-card's own
+         overflow:hidden + border-radius on a non-atomic inline box, so it
+         visually bleeds outside the card's rounded silhouette; (2) the
+         container-query declaration on .rtc-card (container: rtc-card /
+         inline-size) is spec-excluded on non-atomic inline boxes, so every
+         @container rtc-card (...) rule -- all the narrow-width responsive
+         adjustments -- silently never matched. Confirmed empirically before
+         this fix: computed display was "inline", and .rtc-root's padding at
+         a 320px card width was still the unqualified 15px 16px 16px, not
+         the @container (max-width: 460px) block's 14px. Neither of these
+         is a bug in the card -- ha-card really is registered in real HA, so
+         neither issue exists there.
+
+         A plain `ha-card { display: block; }` rule HERE does NOT fix this:
+         room-climate-card.js calls attachShadow({mode:"open"}), and
+         <ha-card> lives inside that shadow root. Shadow DOM encapsulates
+         stylesheets -- a light-DOM rule in this document never crosses the
+         boundary (confirmed empirically: adding that rule alone left the
+         computed display "inline"). customElements.define(), unlike
+         stylesheets, upgrades matching tags wherever they appear, including
+         inside any shadow root -- so ha-card is registered as an actual
+         (trivial) element in ha-stubs.js instead, setting its own inline
+         style.display, which always wins regardless of stylesheet
+         scoping. See that file. */
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script src="../helpers/hass-fixtures.js"></script>
+    <script src="ha-stubs.js"></script>
+    <script src="../../room-climate-card.js"></script>
+  </body>
+</html>

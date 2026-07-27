@@ -1,0 +1,20 @@
+{
+  "name": "room-climate-card",
+  "version": "2.34.2",
+  "private": true,
+  "description": "Test tooling for the Room Climate Card Home Assistant custom card. The card itself (room-climate-card.js) ships as a single, dependency-free file for HACS/Lovelace and does not require any of this tooling to run in Home Assistant.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node --test --test-reporter=./test/helpers/compact-reporter.js --test-reporter-destination=stdout \"test/unit/*.test.js\"",
+    "test:unit:verbose": "node --test \"test/unit/*.test.js\"",
+    "test:browser": "playwright test",
+    "test:install": "playwright install --with-deps chromium",
+    "test:fuzz": "node --test test/unit/randomized-extremes.property.test.js",
+    "check": "node --check room-climate-card.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "jsdom": "^29.1.1"
+  }
+}

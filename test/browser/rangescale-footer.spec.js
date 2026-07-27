@@ -1,0 +1,44 @@
+"use strict";
+
+// AP-06 (audit section 16): RangeScale's own localized daily footer. Text
+// content/data-selection correctness (span/min/max/timestamps, hide_footer,
+// all 11 languages) is already fully covered in test/unit/range-and-spread.test.js
+// via jsdom (no real layout needed for that). This file's job is the one
+// thing jsdom can't verify: with REAL text metrics, at a narrow card width,
+// the footer still fits without being clipped/overflowing its container —
+// and that it renders at all in a real browser with zero rooms configured.
+
+const { test, expect } = require("@playwright/test");
+const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+
+test("RangeScale footer renders in a real browser with zero rooms configured, and fits a narrow card without overflowing", async ({ page }) => {
+  await gotoHarness(page);
+  const states = {
+    "sensor.avg": mkStateObj("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.range": mkStateObj("sensor.range", 5, {
+      unit_of_measurement: "°C",
+      minimum: 18,
+      maximum: 23,
+      minimum_zeitpunkt: "2026-07-23T05:00:00+00:00",
+      maximum_zeitpunkt: "2026-07-23T15:00:00+00:00",
+    }),
+  };
+  // German ("Tagesspanne ...") is one of the longer footer translations —
+  // deliberately chosen here, at a narrow width, to stress-test wrapping.
+  const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true }] }, states, "de");
+  await page.evaluate((id) => {
+    document.getElementById(id).style.width = "300px";
+  }, cardId);
+  await page.waitForTimeout(120);
+
+  const card = page.locator(`#${cardId}`);
+  const footerEl = card.locator(".rtc-range-scale-view .rtc-scale-footer").first();
+  await expect(footerEl).toBeVisible();
+  const text = await footerEl.textContent();
+  expect(text.length).toBeGreaterThan(0);
+
+  const footerBox = await footerEl.boundingBox();
+  const containerBox = await card.locator(".rtc-range-scale-view").first().boundingBox();
+  expect(footerBox.x, "footer must not overflow past the left edge of its view container").toBeGreaterThanOrEqual(containerBox.x - 1);
+  expect(footerBox.x + footerBox.width, "footer must not overflow past the right edge of its view container").toBeLessThanOrEqual(containerBox.x + containerBox.width + 1);
+});
