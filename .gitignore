@@ -3,3 +3,6 @@ test-results/
 playwright-report/
 .cache/
 *.log
+
+# Local agent routing
+/AGENTS.md

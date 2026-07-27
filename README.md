@@ -1,14 +1,11 @@
 # Room Climate Card
 
-A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the entity's `device_class`.
-
-![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
-
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The card never sets its own colors — it reads Home Assistant's active theme, so it automatically matches your dashboard's light or dark mode:
+A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the entity's `device_class`. Will automatically adapt to your dashboard's light or dark mode.
 
+![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
 ![Room Climate Card in dark mode](screenshot-dark.png)
 
 ## Features
@@ -22,7 +19,7 @@ The card never sets its own colors — it reads Home Assistant's active theme, s
 - Profile-driven header icons for temperature, humidity, CO₂, and PM2.5
 - A configurable classification policy: complete `value_color`/`value_level`
   entity attributes, built-in profiles, or a strictly validated custom YAML
-  profile. Temperature includes `indoor` and `outdoor` profiles.
+  profile. Temperature includes `indoor`, `outdoor`, and `fridge` profiles.
 - Built-in UI in English, German, Dutch, French, Italian, Spanish, Russian, Polish, Korean, Japanese, and Simplified Chinese, following Home Assistant's language setting — falls back to English for any other language
 - Extensive optional YAML customization for views, bands and labels, markers,
   footers, room chips, carousel behavior, language, and tap/hold actions (see
@@ -50,8 +47,8 @@ With more than one view enabled (here: the scale and room-comparison views), the
   through YAML; see [Quickstart](#quickstart) and
   [Configuration](#configuration) below.
 - **Known limitations**:
-  - The built-in `outdoor` classification profile currently exists only
-    for temperature.
+  - The built-in `outdoor` and `fridge` classification profiles currently
+    exist only for temperature.
   - A `language` other than the eleven built-in ones (see
     [Features](#features)) falls back to English automatically.
   - The room-comparison features (extremes view, coldest/warmest room)
@@ -152,143 +149,6 @@ number is converted for display. A Fahrenheit card therefore uses the same
 physical temperature boundary, displayed as approximately `±0.18 °F/h`.
 Missing, unavailable, non-numeric, unitless, or incompatible trend entities
 do not add an empty placeholder.
-
-### Classification
-
-With no `classification` option, the card uses `source: auto`: a live entity
-classification is accepted only when both `value_color` and `value_level` are
-present and valid. Otherwise the complete numeric fallback profile is used.
-`value_score` and `value_zone` are carried with the classification but are not
-displayed as additional text.
-
-Temperature uses `indoor` by default. Select the built-in outdoor profile with
-the short form:
-
-```yaml
-classification: outdoor
-```
-
-The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
-`14–26 °C`. Unlike all anchored indoor profiles, its rendered scale has no
-fixed `10–30 °C` base anchor: both edges follow the current room/current-value
-range with the same rounded headroom algorithm used everywhere else. A
-fully off-axis comfort or optimal band is hidden until the live scale reaches
-it. Classification tiers and temperature icons still follow the outdoor
-thresholds.
-
-Unless the top-level `icon` option overrides it, the header icon follows the
-active profile's value: temperature keeps its thermometer/fire/snowflake
-sequence; humidity uses water-percent/plus/minus/alert variants; CO₂ switches
-to an alert icon at its critical tier; and PM2.5 progresses through molecule,
-haze, dust, and alert icons. The empty-state icon remains metric-specific but
-does not classify a missing value.
-
-The canonical object form supports four sources:
-
-```yaml
-# Complete entity attributes, then the selected built-in fallback.
-classification:
-  source: auto
-  profile: outdoor
-
-# Entity attributes only. Partial/missing attributes stay neutral and are
-# never mixed with numeric profile fields.
-classification:
-  source: entity
-
-# Ignore entity classification and force the built-in profile.
-classification:
-  source: profile
-  profile: outdoor
-```
-
-`auto` and `profile` use the metric's default profile when `profile` is
-omitted. `outdoor` is currently available only for temperature; `indoor` is
-the default profile for temperature, humidity, CO₂, and PM2.5.
-
-A custom profile is authoritative: it ignores entity classification and owns
-tiers, bands, base scale, and temperature icon thresholds together.
-
-```yaml
-classification:
-  source: custom
-  unit: "°C"
-  comparison: ">="
-
-  bands:
-    comfort:
-      min: 14
-      max: 26
-    optimal:
-      min: 18
-      max: 22
-
-  scale:
-    min: 10
-    max: 30
-    step: 1
-
-  icons:                 # optional, temperature only
-    fire: 35
-    high: 30
-    normal: 14
-    low: 5
-
-  tiers:
-    - min: 30
-      score: 6
-      level: Very hot
-      color: "#B85F67"
-      zone: aussen
-    - min: 26
-      score: 5
-      level: Warm
-      color: "#C0A752"
-      zone: aussen
-    - min: 22
-      score: 4
-      level: Slightly warm
-      color: "#9DA85A"
-      zone: komfort
-    - min: 18
-      score: 3
-      level: Comfortable
-      color: "#79A86C"
-      zone: optimal
-    - min: 14
-      score: 2
-      level: Slightly cool
-      color: "#69A78B"
-      zone: komfort
-    - default: true
-      score: 1
-      level: Cold
-      color: "#8192C8"
-      zone: aussen
-```
-
-Custom-profile rules:
-
-- `unit` must be a unit registered for the detected metric. Temperature
-  accepts Celsius, Fahrenheit, or Kelvin aliases and converts the complete
-  profile through the same UnitProfile pipeline as sensor values.
-- `comparison` is `>=` by default and may be `>`.
-- Tier `min` values must be unique and strictly descending. Exactly one final
-  `{default: true}` tier is required.
-- Every tier requires a finite numeric `score`, a non-empty `level`, a safe
-  3/4/6/8-digit hex `color`, and `zone: optimal | komfort | aussen |
-  ungueltig`.
-- The optimal band must be inside the comfort band; the base scale must
-  contain both. `scale.step` must be greater than zero.
-- Optional `scale.headroom` must be non-negative; `scale.one_sided` is a
-  boolean.
-- Optional `icons` must contain descending `fire`, `high`, `normal`, and
-  `low` thresholds. Without it, temperature derives icon thresholds from the
-  custom scale and comfort bounds.
-- Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
-  `max_inclusive`.
-- Invalid semantic classification configuration fails fast with a
-  path-specific configuration error instead of silently changing meaning.
 
 #### Text, language, and number display
 
@@ -464,6 +324,159 @@ Hiding a band is purely visual. It does not change comfort/optimal thresholds,
 classification, colors, dynamic scale limits, marker positions, room extrema,
 or footer calculations. Scale-edge labels and the range-scale
 current/minimum/maximum labels also remain visible.
+
+### Classification
+
+With no `classification` option, the card uses `source: auto`: a live entity
+classification is accepted only when both `value_color` and `value_level` are
+present and valid. Otherwise the complete numeric fallback profile is used.
+`value_score` and `value_zone` are carried with the classification but are not
+displayed as additional text.
+
+Temperature uses `indoor` by default. Select the built-in outdoor profile with
+the short form:
+
+```yaml
+classification: outdoor
+```
+
+The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
+`14–26 °C`. Unlike all anchored indoor profiles, its rendered scale has no
+fixed `10–30 °C` base anchor: both edges follow the current room/current-value
+range with the same rounded headroom algorithm used everywhere else. A
+fully off-axis comfort or optimal band is hidden until the live scale reaches
+it. Classification tiers and temperature icons still follow the outdoor
+thresholds.
+
+Select the built-in fridge profile the same way, for monitoring an appliance
+instead of a room:
+
+```yaml
+classification: fridge
+```
+
+The fridge profile targets food-safety-appropriate temperatures rather than
+room comfort: an optimal band of `3–5 °C` and a comfort band of `1–6 °C`,
+with more headroom above the band than below it, since overheating — not
+overcooling — is the actual spoilage risk. Unlike `outdoor`, it keeps a
+fixed, anchored reference scale (`0–8 °C`, like `indoor`), because a
+fridge's normal operating range is narrow and well-defined by its
+compressor cycling rather than the weather.
+
+Unless the top-level `icon` option overrides it, the header icon follows the
+active profile's value: temperature keeps its thermometer/fire/snowflake
+sequence; humidity uses water-percent/plus/minus/alert variants; CO₂ switches
+to an alert icon at its critical tier; and PM2.5 progresses through molecule,
+haze, dust, and alert icons. The empty-state icon remains metric-specific but
+does not classify a missing value.
+
+The canonical object form supports four sources:
+
+```yaml
+# Complete entity attributes, then the selected built-in fallback.
+classification:
+  source: auto
+  profile: outdoor
+
+# Entity attributes only. Partial/missing attributes stay neutral and are
+# never mixed with numeric profile fields.
+classification:
+  source: entity
+
+# Ignore entity classification and force the built-in profile.
+classification:
+  source: profile
+  profile: outdoor
+```
+
+`auto` and `profile` use the metric's default profile when `profile` is
+omitted. `outdoor` and `fridge` are currently available only for
+temperature; `indoor` is the default profile for temperature, humidity,
+CO₂, and PM2.5.
+
+A custom profile is authoritative: it ignores entity classification and owns
+tiers, bands, base scale, and temperature icon thresholds together.
+
+```yaml
+classification:
+  source: custom
+  unit: "°C"
+  comparison: ">="
+
+  bands:
+    comfort:
+      min: 14
+      max: 26
+    optimal:
+      min: 18
+      max: 22
+
+  scale:
+    min: 10
+    max: 30
+    step: 1
+
+  icons:                 # optional, temperature only
+    fire: 35
+    high: 30
+    normal: 14
+    low: 5
+
+  tiers:
+    - min: 30
+      score: 6
+      level: Very hot
+      color: "#B85F67"
+      zone: outside
+    - min: 26
+      score: 5
+      level: Warm
+      color: "#C0A752"
+      zone: outside
+    - min: 22
+      score: 4
+      level: Slightly warm
+      color: "#9DA85A"
+      zone: comfort
+    - min: 18
+      score: 3
+      level: Comfortable
+      color: "#79A86C"
+      zone: optimal
+    - min: 14
+      score: 2
+      level: Slightly cool
+      color: "#69A78B"
+      zone: comfort
+    - default: true
+      score: 1
+      level: Cold
+      color: "#8192C8"
+      zone: outside
+```
+
+Custom-profile rules:
+
+- `unit` must be a unit registered for the detected metric. Temperature
+  accepts Celsius, Fahrenheit, or Kelvin aliases and converts the complete
+  profile through the same UnitProfile pipeline as sensor values.
+- `comparison` is `>=` by default and may be `>`.
+- Tier `min` values must be unique and strictly descending. Exactly one final
+  `{default: true}` tier is required.
+- Every tier requires a finite numeric `score`, a non-empty `level`, a safe
+  3/4/6/8-digit hex `color`, and `zone: optimal | comfort | outside |
+  invalid`.
+- The optimal band must be inside the comfort band; the base scale must
+  contain both. `scale.step` must be greater than zero.
+- Optional `scale.headroom` must be non-negative; `scale.one_sided` is a
+  boolean.
+- Optional `icons` must contain descending `fire`, `high`, `normal`, and
+  `low` thresholds. Without it, temperature derives icon thresholds from the
+  custom scale and comfort bounds.
+- Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
+  `max_inclusive`.
+- Invalid semantic classification configuration fails fast with a
+  path-specific configuration error instead of silently changing meaning.
 
 ### Validation and fixed behavior
 
