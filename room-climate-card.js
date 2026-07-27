@@ -13,7 +13,7 @@
   // ==== Constants: card metadata, metric mode, language ====
   const CARD_TYPE = "room-climate-card";
   const CARD_NAME = "Room Climate Card";
-  const CARD_VERSION = "2.34.2-trend-footer-restoration";
+  const CARD_VERSION = "2.35.0-english-zones-fridge-profile";
 
   // Matches a room-chip label that is exactly two Unicode uppercase letters
   // (e.g. "WZ", "KÜ") — the only case where a room's short code is
@@ -176,6 +176,12 @@
     return "stable";
   }
 
+  // The closed set of tier/invalid-classification zone values. Single
+  // source of truth for both the built-in profiles below and custom-profile
+  // validation (_normalizeCustomClassification()) — anything that needs to
+  // know "which zone values exist" reads this instead of repeating the list.
+  const CLASSIFICATION_ZONES = Object.freeze(["optimal", "comfort", "outside", "invalid"]);
+
   // One classification profile owns every semantic decision that must stay
   // coherent: tiers, score/zone metadata, comfort/optimal bands, scale policy,
   // physical validity, and profile icon thresholds. Unit conversion is
@@ -189,17 +195,17 @@
           metricKind: "temperature",
           comparison: ">=",
           tiers: [
-            { min: 28, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "aussen" },
-            { min: 26, score: 10, levelKey: "level.hot", color: "#C67277", zone: "aussen" },
-            { min: 25, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "aussen" },
-            { min: 24, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "aussen" },
-            { min: 23, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "komfort" },
+            { min: 28, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
+            { min: 26, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
+            { min: 25, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
+            { min: 24, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
+            { min: 23, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
             { min: 21, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 20, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "komfort" },
-            { min: 19, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "aussen" },
-            { min: 18, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "aussen" },
-            { min: 16, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "aussen" },
-            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "aussen" },
+            { min: 20, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
+            { min: 19, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
+            { min: 18, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
+            { min: 16, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
+            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
           ],
           comfort: { min: 20, max: 24 },
           optimal: { min: 21, max: 23 },
@@ -212,17 +218,17 @@
           metricKind: "temperature",
           comparison: ">=",
           tiers: [
-            { min: 35, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "aussen" },
-            { min: 30, score: 10, levelKey: "level.hot", color: "#C67277", zone: "aussen" },
-            { min: 28, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "aussen" },
-            { min: 26, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "aussen" },
-            { min: 22, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "komfort" },
+            { min: 35, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
+            { min: 30, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
+            { min: 28, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
+            { min: 26, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
+            { min: 22, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
             { min: 18, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 14, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "komfort" },
-            { min: 10, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "aussen" },
-            { min: 5, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "aussen" },
-            { min: 0, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "aussen" },
-            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "aussen" },
+            { min: 14, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
+            { min: 10, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
+            { min: 5, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
+            { min: 0, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
+            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
           ],
           comfort: { min: 14, max: 26 },
           optimal: { min: 18, max: 22 },
@@ -235,6 +241,38 @@
           anchorScale: false,
           iconThresholds: { fire: 35, high: 30, normal: 14, low: 5 },
         },
+        // Appliance profile, not a room: target band follows common food-
+        // safety guidance (e.g. FDA/EU "at or below 5 C", ideal ~3-4 C) —
+        // the internationally cited "danger zone" for holding food starts
+        // at 8 C, so the tiers widen that headroom on the warm side, the
+        // direction that actually risks spoilage. anchorScale stays at its
+        // default (true, unlike outdoor): a fridge's normal operating band
+        // is narrow and well-defined by the compressor's own cycling, so a
+        // fixed reference axis is more useful here than one that floats
+        // with every door-open spike.
+        fridge: {
+          id: "fridge",
+          metricKind: "temperature",
+          comparison: ">=",
+          tiers: [
+            { min: 12, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
+            { min: 10, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
+            { min: 8, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
+            { min: 6, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
+            { min: 5, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
+            { min: 3, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
+            { min: 1, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
+            { min: 0, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
+            { min: -2, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
+            { min: -4, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
+            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
+          ],
+          comfort: { min: 1, max: 6 },
+          optimal: { min: 3, max: 5 },
+          scale: { min: 0, max: 8 },
+          step: 1,
+          iconThresholds: { fire: 12, high: 10, normal: 1, low: -2 },
+        },
       },
     },
     humidity: {
@@ -245,19 +283,19 @@
           metricKind: "humidity",
           comparison: ">=",
           invalidWhen: (value) => value < 0 || value > 100,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "ungueltig" },
+          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
           tiers: [
-            { min: 75, score: 11, levelKey: "level.criticallyHumid", color: "#B85F67", zone: "aussen" },
-            { min: 70, score: 10, levelKey: "level.tooHumid", color: "#C67277", zone: "aussen" },
-            { min: 65, score: 9, levelKey: "level.veryHumid", color: "#C98A67", zone: "aussen" },
-            { min: 60, score: 8, levelKey: "level.humid", color: "#C0A752", zone: "aussen" },
-            { min: 58, score: 7, levelKey: "level.slightlyHumid", color: "#9DA85A", zone: "komfort" },
+            { min: 75, score: 11, levelKey: "level.criticallyHumid", color: "#B85F67", zone: "outside" },
+            { min: 70, score: 10, levelKey: "level.tooHumid", color: "#C67277", zone: "outside" },
+            { min: 65, score: 9, levelKey: "level.veryHumid", color: "#C98A67", zone: "outside" },
+            { min: 60, score: 8, levelKey: "level.humid", color: "#C0A752", zone: "outside" },
+            { min: 58, score: 7, levelKey: "level.slightlyHumid", color: "#9DA85A", zone: "comfort" },
             { min: 42, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 40, score: 5, levelKey: "level.slightlyDry", color: "#69A78B", zone: "komfort" },
-            { min: 35, score: 4, levelKey: "level.dry", color: "#67A7AE", zone: "aussen" },
-            { min: 30, score: 3, levelKey: "level.veryDry", color: "#76A0C0", zone: "aussen" },
-            { min: 25, score: 2, levelKey: "level.tooDry", color: "#8192C8", zone: "aussen" },
-            { min: -Infinity, score: 1, levelKey: "level.criticallyDry", color: "#8A88C9", zone: "aussen" },
+            { min: 40, score: 5, levelKey: "level.slightlyDry", color: "#69A78B", zone: "comfort" },
+            { min: 35, score: 4, levelKey: "level.dry", color: "#67A7AE", zone: "outside" },
+            { min: 30, score: 3, levelKey: "level.veryDry", color: "#76A0C0", zone: "outside" },
+            { min: 25, score: 2, levelKey: "level.tooDry", color: "#8192C8", zone: "outside" },
+            { min: -Infinity, score: 1, levelKey: "level.criticallyDry", color: "#8A88C9", zone: "outside" },
           ],
           comfort: { min: 40, max: 60 },
           optimal: { min: 42, max: 58 },
@@ -280,13 +318,13 @@
           metricKind: "co2",
           comparison: ">=",
           invalidWhen: (value) => value <= 0,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "ungueltig" },
+          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
           tiers: [
-            { min: 2000, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "aussen" },
-            { min: 1600, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "aussen" },
-            { min: 1200, score: 9, levelKey: "level.high", color: "#C98A67", zone: "aussen" },
-            { min: 1000, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "aussen" },
-            { min: 800, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "komfort" },
+            { min: 2000, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "outside" },
+            { min: 1600, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "outside" },
+            { min: 1200, score: 9, levelKey: "level.high", color: "#C98A67", zone: "outside" },
+            { min: 1000, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "outside" },
+            { min: 800, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "comfort" },
             { min: -Infinity, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
           ],
           comfort: { min: 0, max: 1000 },
@@ -310,13 +348,13 @@
           metricKind: "pm25",
           comparison: ">",
           invalidWhen: (value) => value < 0,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "ungueltig" },
+          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
           tiers: [
-            { min: 50, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "aussen" },
-            { min: 35, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "aussen" },
-            { min: 25, score: 9, levelKey: "level.high", color: "#C98A67", zone: "aussen" },
-            { min: 15, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "aussen" },
-            { min: 5, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "komfort" },
+            { min: 50, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "outside" },
+            { min: 35, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "outside" },
+            { min: 25, score: 9, levelKey: "level.high", color: "#C98A67", zone: "outside" },
+            { min: 15, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "outside" },
+            { min: 5, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "comfort" },
             { min: -Infinity, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
           ],
           comfort: { min: 0, max: 15 },
@@ -2604,7 +2642,7 @@
       if (!Array.isArray(value.tiers) || value.tiers.length === 0) {
         this._classificationConfigError("classification.tiers", "must be a non-empty array");
       }
-      const zones = new Set(["optimal", "komfort", "aussen", "ungueltig"]);
+      const zones = new Set(CLASSIFICATION_ZONES);
       let defaultCount = 0;
       let previousMin = Infinity;
       const sourceTiers = value.tiers.map((tier, index) => {
@@ -2636,7 +2674,9 @@
           this._classificationConfigError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
         }
         if (!zones.has(tier.zone)) {
-          this._classificationConfigError(`${path}.zone`, 'must be one of "optimal", "komfort", "aussen", or "ungueltig"');
+          const quoted = CLASSIFICATION_ZONES.map((zone) => `"${zone}"`);
+          const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
+          this._classificationConfigError(`${path}.zone`, `must be one of ${list}`);
         }
         return {
           min,
@@ -2723,7 +2763,7 @@
         oneSided: value.scale.one_sided === true,
         invalidWhen,
         validRange: canonicalValidRange,
-        invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "ungueltig" },
+        invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
         iconThresholds: sourceIcons && Object.fromEntries(
           Object.entries(sourceIcons).map(([key, threshold]) => [key, toCanonical(threshold)])
         ),
@@ -4464,13 +4504,13 @@
           score: null,
           levelKey: "level.invalidReading",
           color: "#B4B2A9",
-          zone: "ungueltig",
+          zone: "invalid",
         };
         return {
           level: invalid.level || this._t(invalid.levelKey),
           color: invalid.color,
           score: invalid.score ?? null,
-          zone: invalid.zone ?? "ungueltig",
+          zone: invalid.zone ?? "invalid",
         };
       }
       const tier = table.tiers.find((candidate) =>
@@ -7263,6 +7303,26 @@
         .rtc-rotator {
           /* Only the swipeable rotator needs pan-y so vertical scroll still reaches the browser. */
           touch-action: pan-y;
+        }
+
+        .rtc-no-views {
+          /* _renderNoActiveViews(): a requested-but-unavailable view (e.g.
+             range_scale with no valid range_entity) falls back to this
+             localized one-line hint instead of the usual view content.
+             Previously unstyled — it inherited plain block/left/top text
+             instead of matching the rest of the card's centered, muted
+             typography. Same box as .rtc-rotator-solo above (this class is
+             always combined with it, never alone), so centering here only
+             needs flex on that existing 70px-tall box. */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 0 14px;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.3;
+          color: var(--secondary-text-color);
         }
 
         .rtc-track {

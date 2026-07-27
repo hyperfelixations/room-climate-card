@@ -1,6 +1,6 @@
 {
   "name": "room-climate-card",
-  "version": "2.34.2",
+  "version": "2.35.0",
   "private": true,
   "description": "Test tooling for the Room Climate Card Home Assistant custom card. The card itself (room-climate-card.js) ships as a single, dependency-free file for HACS/Lovelace and does not require any of this tooling to run in Home Assistant.",
   "type": "commonjs",

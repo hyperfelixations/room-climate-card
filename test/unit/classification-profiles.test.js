@@ -67,7 +67,7 @@ test("outdoor profile owns tiers and bands but explicitly opts out of the retain
   assert.equal(scale.anchorScale, false);
 
   assert.equal(card._fallbackTone(25.99, "temperature", celsius).score, 7);
-  assert.equal(card._fallbackTone(25.99, "temperature", celsius).zone, "komfort");
+  assert.equal(card._fallbackTone(25.99, "temperature", celsius).zone, "comfort");
   assert.equal(card._fallbackTone(26, "temperature", celsius).score, 8);
   assert.equal(card._fallbackTone(18, "temperature", celsius).score, 6);
   assert.equal(card._fallbackTone(14, "temperature", celsius).score, 5);
@@ -164,6 +164,84 @@ test("outdoor temperature icons follow outdoor thresholds instead of indoor thre
   env.cleanup(card);
 });
 
+test("classification: fridge is a built-in temperature profile independent of indoor/outdoor", () => {
+  const card = createTemperatureCard("fridge");
+  assert.equal(card._resolveClassificationProfile("temperature").id, "fridge");
+  env.cleanup(card);
+});
+
+test("fridge profile targets an appliance-appropriate band, not room temperature", () => {
+  const card = createTemperatureCard("fridge");
+  const celsius = card._getUnitProfile("temperature", "celsius");
+  const scale = card._scaleConfigFor("temperature", celsius);
+  assert.deepEqual(normalize(scale.comfort), { min: 1, max: 6 });
+  assert.deepEqual(normalize(scale.optimal), { min: 3, max: 5 });
+  assert.deepEqual(normalize(scale.scale), { min: 0, max: 8 });
+  assert.equal(scale.step, 1);
+  assert.equal(scale.anchorScale, true, "unlike outdoor, fridge keeps a fixed reference axis");
+  env.cleanup(card);
+});
+
+test("fridge classification tiers follow food-safety-appropriate boundaries", () => {
+  const card = createTemperatureCard("fridge");
+  const celsius = card._getUnitProfile("temperature", "celsius");
+  const at = (value) => card._fallbackTone(value, "temperature", celsius);
+  assert.equal(at(12).score, 11);
+  assert.equal(at(12).zone, "outside");
+  assert.equal(at(6).score, 8);
+  assert.equal(at(6).zone, "outside");
+  assert.equal(at(5).score, 7);
+  assert.equal(at(5).zone, "comfort");
+  assert.equal(at(4).score, 6);
+  assert.equal(at(4).zone, "optimal");
+  assert.equal(at(3).score, 6);
+  assert.equal(at(3).zone, "optimal");
+  assert.equal(at(1).score, 5);
+  assert.equal(at(1).zone, "comfort");
+  assert.equal(at(0).score, 4);
+  assert.equal(at(0).zone, "outside");
+  assert.equal(at(-4).score, 2);
+  assert.equal(at(-5).score, 1);
+  env.cleanup(card);
+});
+
+test("fridge temperature icons follow fridge-specific thresholds, not room thresholds", () => {
+  const card = createTemperatureCard("fridge");
+  const celsius = card._getUnitProfile("temperature", "celsius");
+  assert.equal(card._fallbackTemperatureIcon(12, celsius), "mdi:fire-alert");
+  assert.equal(card._fallbackTemperatureIcon(10, celsius), "mdi:thermometer-high");
+  assert.equal(card._fallbackTemperatureIcon(4, celsius), "mdi:thermometer");
+  assert.equal(card._fallbackTemperatureIcon(-2, celsius), "mdi:thermometer-low");
+  assert.equal(card._fallbackTemperatureIcon(-2.01, celsius), "mdi:snowflake");
+  env.cleanup(card);
+});
+
+test("fridge profile is projected atomically into Fahrenheit without collapsing tiers", () => {
+  const card = createTemperatureCard("fridge");
+  const fahrenheit = card._getUnitProfile("temperature", "fahrenheit");
+  const scale = card._scaleConfigFor("temperature", fahrenheit);
+  assert.deepEqual(normalize(scale.comfort), { min: 34, max: 43 });
+  assert.deepEqual(normalize(scale.optimal), { min: 37, max: 41 });
+  assert.deepEqual(normalize(scale.scale), { min: 32, max: 46 });
+
+  const table = card._classificationTableFor("temperature", fahrenheit);
+  const warmTier = table.tiers.find((tier) => tier.score === 8);
+  assert.equal(warmTier.min, 43, "6 °C must become the rounded 43 °F tier boundary");
+  assert.equal(card._fallbackTemperatureIcon(54, fahrenheit), "mdi:fire-alert");
+  assert.equal(card._fallbackTemperatureIcon(28, fahrenheit), "mdi:thermometer-low");
+  env.cleanup(card);
+});
+
+test("fridge cannot be applied to a non-temperature metric kind", () => {
+  const hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+  });
+  assert.throws(
+    () => env.createCard({ entity: "sensor.avg", classification: "fridge" }, hass),
+    /profile "fridge".*humidity/
+  );
+});
+
 test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thresholds", () => {
   const cases = [
     {
@@ -234,7 +312,7 @@ test("auto accepts entity classification only when both color and level are vali
     value_color: "#123456",
     value_level: "Entity level",
     value_score: 42,
-    value_zone: "komfort",
+    value_zone: "comfort",
   });
   assert.equal(complete._computeData().tone.color, "#123456");
   assert.equal(complete._computeData().tone.label, "Entity level");
@@ -261,13 +339,13 @@ test("source entity deliberately accepts partial attributes but never fills them
   const colorOnly = createTemperatureCard({ source: "entity" }, 25.5, {
     value_color: "#123456",
     value_score: 9,
-    value_zone: "aussen",
+    value_zone: "outside",
   });
   const tone = colorOnly._computeData().tone;
   assert.equal(tone.color, "#123456");
   assert.equal(tone.label, "—");
   assert.equal(tone.score, 9);
-  assert.equal(tone.zone, "aussen");
+  assert.equal(tone.zone, "outside");
   env.cleanup(colorOnly);
 
   const noAttributes = createTemperatureCard({ source: "entity" });
@@ -293,7 +371,7 @@ test("source profile ignores even a complete entity classification", () => {
   assert.equal(tone.color, "#9DA85A");
   assert.equal(tone.label, "Slightly warm");
   assert.equal(tone.score, 7);
-  assert.equal(tone.zone, "komfort");
+  assert.equal(tone.zone, "comfort");
   assert.equal(tone.source, "builtin");
   env.cleanup(card);
 });
@@ -326,9 +404,9 @@ const customProfile = {
   },
   scale: { min: 0, max: 40, step: 2 },
   tiers: [
-    { min: 30, score: 3, level: "Custom hot", color: "#AA0000", zone: "aussen" },
+    { min: 30, score: 3, level: "Custom hot", color: "#AA0000", zone: "outside" },
     { min: 18, score: 2, level: "Custom ideal", color: "#00AA00", zone: "optimal" },
-    { default: true, score: 1, level: "Custom cold", color: "#0000AA", zone: "aussen" },
+    { default: true, score: 1, level: "Custom cold", color: "#0000AA", zone: "outside" },
   ],
 };
 
@@ -361,9 +439,9 @@ test("custom Fahrenheit thresholds are canonicalized and project back coherently
     },
     scale: { min: 32, max: 104, step: 2 },
     tiers: [
-      { min: 86, score: 3, level: "Hot F", color: "#AA0000", zone: "aussen" },
+      { min: 86, score: 3, level: "Hot F", color: "#AA0000", zone: "outside" },
       { min: 64, score: 2, level: "Ideal F", color: "#00AA00", zone: "optimal" },
-      { default: true, score: 1, level: "Cold F", color: "#0000AA", zone: "aussen" },
+      { default: true, score: 1, level: "Cold F", color: "#0000AA", zone: "outside" },
     ],
   };
   const hass = mkHass({
@@ -458,7 +536,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
   const data = card._computeData();
   assert.equal(data.empty, false);
   assert.equal(data.tone.score, 7); // 25°C falls in the outdoor profile's [22,26) "slightlyWarm" tier
-  assert.equal(data.tone.zone, "komfort");
+  assert.equal(data.tone.zone, "comfort");
   env.cleanup(card);
 });
 
@@ -507,8 +585,8 @@ test("custom profile with a comfort band narrower than Fahrenheit's rounding gri
     },
     scale: { min: 15, max: 25, step: 1 },
     tiers: [
-      { min: 22, score: 2, level: "High", color: "#AA0000", zone: "aussen" },
-      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "aussen" },
+      { min: 22, score: 2, level: "High", color: "#AA0000", zone: "outside" },
+      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "outside" },
     ],
   };
   assert.throws(
@@ -528,9 +606,9 @@ test("custom profile with two tier thresholds narrower than Fahrenheit's roundin
     },
     scale: { min: 0, max: 40, step: 2 },
     tiers: [
-      { min: 25.2, score: 3, level: "Very high", color: "#AA0000", zone: "aussen" },
-      { min: 25.0, score: 2, level: "High", color: "#AA5500", zone: "aussen" }, // 77.36°F and 77.0°F both round to 77°F
-      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "aussen" },
+      { min: 25.2, score: 3, level: "Very high", color: "#AA0000", zone: "outside" },
+      { min: 25.0, score: 2, level: "High", color: "#AA5500", zone: "outside" }, // 77.36°F and 77.0°F both round to 77°F
+      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "outside" },
     ],
   };
   assert.throws(
@@ -550,8 +628,8 @@ test("custom profile with gaps just wide enough to survive Fahrenheit rounding d
     },
     scale: { min: 15, max: 25, step: 1 },
     tiers: [
-      { min: 22, score: 2, level: "High", color: "#AA0000", zone: "aussen" },
-      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "aussen" },
+      { min: 22, score: 2, level: "High", color: "#AA0000", zone: "outside" },
+      { default: true, score: 1, level: "Low", color: "#0000AA", zone: "outside" },
     ],
   };
   const card = env.createCard({ entity: "sensor.avg", classification: safeProfile }, fahrenheitHass());
