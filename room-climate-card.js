@@ -13,7 +13,7 @@
   // ==== Constants: card metadata, metric mode, language ====
   const CARD_TYPE = "room-climate-card";
   const CARD_NAME = "Room Climate Card";
-  const CARD_VERSION = "2.35.0-english-zones-fridge-profile";
+  const CARD_VERSION = "2.36.0-generic-config-languages-icons";
 
   // Matches a room-chip label that is exactly two Unicode uppercase letters
   // (e.g. "WZ", "KÜ") — the only case where a room's short code is
@@ -607,7 +607,8 @@
   // English is the canonical/primary language (card default, HACS audience,
   // and the fallback _t() uses for any key missing in another language, see
   // _t()); German, Dutch, French, Italian, Spanish, Russian, Polish,
-  // Korean, Japanese, and Chinese are fully supported additional languages.
+  // Korean, Japanese, Chinese, Norwegian Bokmål, Swedish, and Latvian are
+  // fully supported additional languages.
   //
   // Adding a new language (including community contributions):
   //   1. Add its base code to NUMBER_LOCALE_BY_LANGUAGE below, mapped to an
@@ -639,6 +640,9 @@
     ko: "ko",
     ja: "ja",
     zh: "zh",
+    nb: "nb-NO",
+    sv: "sv-SE",
+    lv: "lv-LV",
   };
 
   // Escape map for _esc(); hoisted so the replace() callback doesn't
@@ -1808,6 +1812,333 @@
       "empty.hintMissingRooms": (v) => `${v.count}个已配置实体缺失或未返回数值。`,
       "empty.hintNoRoomData": "配置的房间实体均未返回数值。",
     },
+    nb: {
+      "title.temperature": "Temperatur",
+      "title.humidity": "Luftfuktighet",
+      "title.co2": "CO₂",
+      "title.pm25": "PM2,5",
+
+      "level.veryHot": "Svært hett",
+      "level.hot": "Hett",
+      "level.veryWarm": "Svært varmt",
+      "level.warm": "Varmt",
+      "level.slightlyWarm": "Lett varmt",
+      "level.optimal": "Optimalt",
+      "level.slightlyCool": "Lett kjølig",
+      "level.fresh": "Friskt",
+      "level.cool": "Kjølig",
+      "level.cold": "Kaldt",
+      "level.veryCold": "Svært kaldt",
+
+      "level.criticallyHumid": "Kritisk fuktig",
+      "level.tooHumid": "For fuktig",
+      "level.veryHumid": "Svært fuktig",
+      "level.humid": "Fuktig",
+      "level.slightlyHumid": "Lett fuktig",
+      "level.slightlyDry": "Lett tørt",
+      "level.dry": "Tørt",
+      "level.veryDry": "Svært tørt",
+      "level.tooDry": "For tørt",
+      "level.criticallyDry": "Kritisk tørt",
+
+      "level.critical": "Kritisk",
+      "level.veryHigh": "Svært høyt",
+      "level.high": "Høyt",
+      "level.elevated": "Forhøyet",
+      "level.slightlyElevated": "Lett forhøyet",
+      "level.invalidReading": "Ugyldig",
+
+      // Predicative fragment ("2/4 rom er varme"); Norwegian predicative
+      // adjectives DO inflect for number (unlike German/English/Dutch) — these
+      // are the plural forms, the only ones this key is ever used with
+      // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+      // requires >= 2 rooms, see _computeData()). Note "rom" itself is
+      // plural-invariant ("et rom" / "flere rom"), unlike English
+      // "room"/"rooms" — see the ternaries below, which are correctly
+      // same-value-both-branches for the noun, not a bug.
+      "adjective.warm": "varme",
+      "adjective.cool": "kjølige",
+      "adjective.humid": "fuktige",
+      "adjective.dry": "tørre",
+      "adjective.elevated": "forhøyede",
+      "adjective.low": "lave",
+
+      "avg.label": "Ø bolig",
+      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
+      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
+      "avg.ariaOpen": "Åpne gjennomsnitt",
+
+      "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
+      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,
+      "subtitle.belowComfort": (v) => `Ø ${v.diff} under komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
+      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} under komfort.`,
+      "subtitle.inComfortIssue": (v) => `Ø innenfor komfort · ${v.name} skiller seg mest ut.`,
+      "subtitle.inComfortAllGood": "Ø innenfor komfort · alle rom er innenfor målområdet.",
+      "subtitle.inComfort": "Ø innenfor komfort.",
+      "subtitle.missingRooms": (v) => ` ${v.count} rom uten data.`,
+
+      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
+      "footer.spread": (v) => `Spredning ${v.value}`,
+      "footer.trend": (v) => `Trend ${v.value}`,
+      "trend.direction.rising": "stigende",
+      "trend.direction.stable": "stabil",
+      "trend.direction.falling": "fallende",
+      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
+
+      "scale.comfortLabel": (v) => `${v.range} komfort`,
+      "scale.comfortLabelShort": (v) => `${v.range} komfort`,
+      "scale.optimalLabel": (v) => `${v.range} optimalt`,
+      "scale.optimalLabelShort": (v) => `${v.range} optimalt`,
+
+      "rangeScale.currentLabel": "nå",
+      "rangeScale.currentLabelShort": "nå",
+      "rangeScale.minLabel": "min",
+      "rangeScale.maxLabel": "maks",
+      "rangeScale.footer": (v) => `Dagens spenn ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
+      "rangeScale.footerCompact": (v) => `Dagens spenn ${v.span} · Min ${v.min} · Maks ${v.max}`,
+
+      "card.coldestRoom": "Kaldeste rommet",
+      "card.warmestRoom": "Varmeste rommet",
+      "card.driestRoom": "Tørreste rommet",
+      "card.mostHumidRoom": "Fuktigste rommet",
+      "card.lowestRoom": "Laveste rommet",
+      "card.highestRoom": "Høyeste rommet",
+      "card.dailyMinimum": "Dagens minimum",
+      "card.dailyMaximum": "Dagens maksimum",
+      "card.ariaOpen": (v) => `Åpne ${v.label}: ${v.name}`,
+
+      "room.ariaOpen": (v) => `Åpne ${v.name}`,
+
+      "rotator.hint": "Sveip for å bytte mellom visninger",
+
+      "views.none": "Ingen visning tilgjengelig.",
+
+      "empty.title": "Ingen data tilgjengelig.",
+      "empty.hintNoRooms": "Den konfigurerte gjennomsnittsenheten rapporterer ikke et tall.",
+      "empty.hintMissingRooms": (v) => `${v.count} konfigurert${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? "" : "er"} mangler eller rapporterer ikke et tall.`,
+      "empty.hintNoRoomData": "Ingen konfigurert rom-enhet rapporterer et tall.",
+    },
+    sv: {
+      "title.temperature": "Temperatur",
+      "title.humidity": "Luftfuktighet",
+      "title.co2": "CO₂",
+      "title.pm25": "PM2,5",
+
+      "level.veryHot": "Mycket hett",
+      "level.hot": "Hett",
+      "level.veryWarm": "Mycket varmt",
+      "level.warm": "Varmt",
+      "level.slightlyWarm": "Lite varmt",
+      "level.optimal": "Optimalt",
+      "level.slightlyCool": "Lite svalt",
+      "level.fresh": "Friskt",
+      "level.cool": "Svalt",
+      "level.cold": "Kallt",
+      "level.veryCold": "Mycket kallt",
+
+      "level.criticallyHumid": "Kritiskt fuktigt",
+      "level.tooHumid": "För fuktigt",
+      "level.veryHumid": "Mycket fuktigt",
+      "level.humid": "Fuktigt",
+      "level.slightlyHumid": "Lite fuktigt",
+      "level.slightlyDry": "Lite torrt",
+      "level.dry": "Torrt",
+      "level.veryDry": "Mycket torrt",
+      "level.tooDry": "För torrt",
+      "level.criticallyDry": "Kritiskt torrt",
+
+      "level.critical": "Kritiskt",
+      "level.veryHigh": "Mycket högt",
+      "level.high": "Högt",
+      "level.elevated": "Förhöjt",
+      "level.slightlyElevated": "Lite förhöjt",
+      "level.invalidReading": "Ogiltigt",
+
+      // Predicative fragment ("2/4 rum är varma"); Swedish predicative
+      // adjectives DO inflect for number (unlike German/English/Dutch) —
+      // these are the plural forms, the only ones this key is ever used with
+      // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+      // requires >= 2 rooms, see _computeData()). Note "rum" itself is
+      // plural-invariant ("ett rum" / "flera rum"), unlike English
+      // "room"/"rooms" — see the ternaries below, which are correctly
+      // same-value-both-branches for the noun, not a bug.
+      "adjective.warm": "varma",
+      "adjective.cool": "svala",
+      "adjective.humid": "fuktiga",
+      "adjective.dry": "torra",
+      "adjective.elevated": "förhöjda",
+      "adjective.low": "låga",
+
+      "avg.label": "Ø hem",
+      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
+      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
+      "avg.ariaOpen": "Öppna medelvärde",
+
+      "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
+      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,
+      "subtitle.belowComfort": (v) => `Ø ${v.diff} under komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
+      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} under komfort.`,
+      "subtitle.inComfortIssue": (v) => `Ø inom komfort · ${v.name} sticker ut mest.`,
+      "subtitle.inComfortAllGood": "Ø inom komfort · alla rum ligger inom målintervallet.",
+      "subtitle.inComfort": "Ø inom komfort.",
+      "subtitle.missingRooms": (v) => ` ${v.count} rum utan data.`,
+
+      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
+      "footer.spread": (v) => `Spridning ${v.value}`,
+      "footer.trend": (v) => `Trend ${v.value}`,
+      "trend.direction.rising": "stigande",
+      "trend.direction.stable": "stabil",
+      "trend.direction.falling": "fallande",
+      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
+
+      "scale.comfortLabel": (v) => `${v.range} komfort`,
+      "scale.comfortLabelShort": (v) => `${v.range} komfort`,
+      "scale.optimalLabel": (v) => `${v.range} optimalt`,
+      "scale.optimalLabelShort": (v) => `${v.range} optimalt`,
+
+      "rangeScale.currentLabel": "nu",
+      "rangeScale.currentLabelShort": "nu",
+      "rangeScale.minLabel": "min",
+      "rangeScale.maxLabel": "max",
+      "rangeScale.footer": (v) => `Dagens intervall ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
+      "rangeScale.footerCompact": (v) => `Dagens intervall ${v.span} · Min ${v.min} · Max ${v.max}`,
+
+      "card.coldestRoom": "Kallaste rummet",
+      "card.warmestRoom": "Varmaste rummet",
+      "card.driestRoom": "Torraste rummet",
+      "card.mostHumidRoom": "Fuktigaste rummet",
+      "card.lowestRoom": "Lägsta rummet",
+      "card.highestRoom": "Högsta rummet",
+      "card.dailyMinimum": "Dagens minimum",
+      "card.dailyMaximum": "Dagens maximum",
+      "card.ariaOpen": (v) => `Öppna ${v.label}: ${v.name}`,
+
+      "room.ariaOpen": (v) => `Öppna ${v.name}`,
+
+      "rotator.hint": "Svep för att växla mellan vyer",
+
+      "views.none": "Ingen vy tillgänglig.",
+
+      "empty.title": "Inga data tillgängliga.",
+      "empty.hintNoRooms": "Den konfigurerade medelvärdesenheten rapporterar inget tal.",
+      "empty.hintMissingRooms": (v) => `${v.count} konfigurerad${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? " saknas" : "er saknas"} eller rapporterar inget tal.`,
+      "empty.hintNoRoomData": "Ingen konfigurerad rumsenhet rapporterar ett tal.",
+    },
+    lv: {
+      "title.temperature": "Temperatūra",
+      "title.humidity": "Mitrums",
+      "title.co2": "CO₂",
+      "title.pm25": "PM2,5",
+
+      "level.veryHot": "Ļoti karsts",
+      "level.hot": "Karsts",
+      "level.veryWarm": "Ļoti silts",
+      "level.warm": "Silts",
+      "level.slightlyWarm": "Nedaudz silts",
+      "level.optimal": "Optimāls",
+      "level.slightlyCool": "Nedaudz vēss",
+      "level.fresh": "Svaigs",
+      "level.cool": "Vēss",
+      "level.cold": "Auksts",
+      "level.veryCold": "Ļoti auksts",
+
+      "level.criticallyHumid": "Kritiski mitrs",
+      "level.tooHumid": "Pārāk mitrs",
+      "level.veryHumid": "Ļoti mitrs",
+      "level.humid": "Mitrs",
+      "level.slightlyHumid": "Nedaudz mitrs",
+      "level.slightlyDry": "Nedaudz sauss",
+      "level.dry": "Sauss",
+      "level.veryDry": "Ļoti sauss",
+      "level.tooDry": "Pārāk sauss",
+      "level.criticallyDry": "Kritiski sauss",
+
+      "level.critical": "Kritisks",
+      "level.veryHigh": "Ļoti augsts",
+      "level.high": "Augsts",
+      "level.elevated": "Paaugstināts",
+      "level.slightlyElevated": "Nedaudz paaugstināts",
+      "level.invalidReading": "Nederīgs",
+
+      // Predicative fragment ("2/4 telpas ir siltas"); "telpa" (room) is
+      // feminine, so these are feminine-plural forms — the only form this
+      // key is actually used with (subtitle.*Comfort's rooms branch is only
+      // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
+      "adjective.warm": "siltas",
+      "adjective.cool": "vēsas",
+      "adjective.humid": "mitras",
+      "adjective.dry": "sausas",
+      "adjective.elevated": "paaugstinātas",
+      "adjective.low": "zemas",
+
+      "avg.label": "Ø māja",
+      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
+      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
+      "avg.ariaOpen": "Atvērt vidējo vērtību",
+
+      // Latvian cardinal numbers have a three-way CLDR plural split (zero:
+      // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:
+      // everything else) — e.g. "1 telpa" / "2 telpas" / "11 telpu" / "21
+      // telpa". Unlike the two-way (one/other) languages above, v.total >= 2
+      // does NOT collapse this to a single safe form (10, 11, 20, 21 are all
+      // >= 2 but land in different categories), so this uses selectPlural()
+      // for the noun instead of a plain ternary — same reasoning as the
+      // existing ru/pl blocks.
+      "subtitle.aboveComfort": (v) => `Vidēji ${v.diff} virs komforta zonas · ${v.count}/${v.total} ${selectPlural("lv", v.total, { zero: "telpu", one: "telpa", other: "telpas" })} ir ${v.adjective}.`,
+      "subtitle.aboveComfortNoRooms": (v) => `Vidēji ${v.diff} virs komforta zonas.`,
+      "subtitle.belowComfort": (v) => `Vidēji ${v.diff} zem komforta zonas · ${v.count}/${v.total} ${selectPlural("lv", v.total, { zero: "telpu", one: "telpa", other: "telpas" })} ir ${v.adjective}.`,
+      "subtitle.belowComfortNoRooms": (v) => `Vidēji ${v.diff} zem komforta zonas.`,
+      "subtitle.inComfortIssue": (v) => `Vidēji komforta zonā · ${v.name} izceļas visvairāk.`,
+      "subtitle.inComfortAllGood": "Vidēji komforta zonā · visas telpas ir mērķa diapazonā.",
+      "subtitle.inComfort": "Vidēji komforta zonā.",
+      "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} bez datiem.`,
+
+      "footer.comfort": (v) => `Komforts ${v.count}/${v.total}`,
+      "footer.spread": (v) => `Izkliede ${v.value}`,
+      "footer.trend": (v) => `Tendence ${v.value}`,
+      "trend.direction.rising": "pieaugoša",
+      "trend.direction.stable": "stabila",
+      "trend.direction.falling": "krītoša",
+      "trend.aria": (v) => `Tendence ${v.direction}: ${v.value}`,
+
+      "scale.comfortLabel": (v) => `${v.range} komforts`,
+      "scale.comfortLabelShort": (v) => `${v.range} komforts`,
+      "scale.optimalLabel": (v) => `${v.range} optimāli`,
+      "scale.optimalLabelShort": (v) => `${v.range} optimāli`,
+
+      "rangeScale.currentLabel": "tagad",
+      "rangeScale.currentLabelShort": "tagad",
+      "rangeScale.minLabel": "min",
+      "rangeScale.maxLabel": "maks",
+      "rangeScale.footer": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
+      "rangeScale.footerCompact": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} · Maks ${v.max}`,
+
+      "card.coldestRoom": "Aukstākā telpa",
+      "card.warmestRoom": "Siltākā telpa",
+      "card.driestRoom": "Sausākā telpa",
+      "card.mostHumidRoom": "Mitrākā telpa",
+      "card.lowestRoom": "Zemākā telpa",
+      "card.highestRoom": "Augstākā telpa",
+      "card.dailyMinimum": "Dienas minimums",
+      "card.dailyMaximum": "Dienas maksimums",
+      "card.ariaOpen": (v) => `Atvērt ${v.label}: ${v.name}`,
+
+      "room.ariaOpen": (v) => `Atvērt ${v.name}`,
+
+      "rotator.hint": "Velciet, lai pārslēgtu skatus",
+
+      "views.none": "Nav pieejams neviens skats.",
+
+      "empty.title": "Dati nav pieejami.",
+      "empty.hintNoRooms": "Konfigurētā vidējās vērtības entītija nesniedz skaitli.",
+      "empty.hintMissingRooms": (v) => {
+        const category = getPluralCategory("lv", v.count);
+        if (category === "one") return `${v.count} konfigurēta entītija trūkst vai nesniedz skaitli.`;
+        if (category === "zero") return `${v.count} konfigurētu entītiju trūkst vai nesniedz skaitli.`;
+        return `${v.count} konfigurētas entītijas trūkst vai nesniedz skaitli.`;
+      },
+      "empty.hintNoRoomData": "Neviena konfigurētā telpas entītija nesniedz skaitli.",
+    },
   };
 
   // Self-check (module load time only): warns if a language's key set
@@ -2179,18 +2510,15 @@
 
     static getStubConfig() {
       // Example config for the Home Assistant card editor; entity/rooms are
-      // editor placeholders only — the card never falls back to default
+      // generic editor placeholders only (matching the README's own
+      // Quickstart examples) — the card never falls back to default
       // entities at runtime (see _normalizeConfig()).
       return {
-        entity: "sensor.wohnungstemperatur",
+        entity: "sensor.house_temperature",
         rooms: [
-          { name: "Küche", short: "KÜ", entity: "sensor.ku_temperatur" },
-          { name: "Bad", short: "BA", entity: "sensor.ba_temperatur" },
-          { name: "Schlafzimmer", short: "SZ", entity: "sensor.sz_temperatur" },
-          { name: "Arbeitszimmer", short: "AZ", entity: "sensor.az_temperatur" },
-          { name: "Wohnzimmer", short: "WZ", entity: "sensor.wz_temperatur" },
-          { name: "Flur", short: "FL", entity: "sensor.fl_temperatur" },
-          { name: "Gäste-WC", short: "WC", entity: "sensor.wc_temperatur" },
+          { name: "Kitchen", short: "KI", entity: "sensor.kitchen_temperature" },
+          { name: "Bedroom", short: "BE", entity: "sensor.bedroom_temperature" },
+          { name: "Living Room", short: "LR", entity: "sensor.living_room_temperature" },
         ],
       };
     }
@@ -2438,7 +2766,7 @@
         seenRoomEntities.add(room.entity);
       }
 
-      // Optional daily-range/trend entities, e.g. from klima_metriken.yaml.
+      // Optional daily-range/trend entities, as produced by a template sensor.
       const rangeEntity = this._optionalEntity(userConfig.range_entity, null, "range_entity");
       const trendEntity = this._optionalEntity(userConfig.trend_entity, null, "trend_entity");
 
@@ -2591,6 +2919,46 @@
       return { min, max };
     }
 
+    // Shared "descending min + exactly one final default: true" list
+    // contract, used by both classification.tiers (score/level/color/zone
+    // per item) and a non-temperature classification.icons list (icon per
+    // item) — the two lists differ only in their per-item extra fields,
+    // validated by validateItem(item, path), which returns the extra fields
+    // to merge onto the normalized {min, ...} entry.
+    _normalizeDescendingTierList(list, basePath, extraKeys, validateItem) {
+      if (!Array.isArray(list) || list.length === 0) {
+        this._classificationConfigError(basePath, "must be a non-empty array");
+      }
+      let defaultCount = 0;
+      let previousMin = Infinity;
+      const normalized = list.map((item, index) => {
+        const path = `${basePath}[${index}]`;
+        if (!this._isPlainObject(item)) this._classificationConfigError(path, "must be an object");
+        this._assertClassificationKeys(item, new Set(["min", "default", ...extraKeys]), path);
+        const isDefault = item.default === true;
+        if (item.default !== undefined && item.default !== true) {
+          this._classificationConfigError(`${path}.default`, "must be true when present");
+        }
+        if (isDefault) {
+          defaultCount += 1;
+          if (index !== list.length - 1) this._classificationConfigError(path, "default tier must be the final tier");
+          if (item.min !== undefined) this._classificationConfigError(`${path}.min`, "must be omitted on the default tier");
+        } else if (item.min === undefined) {
+          this._classificationConfigError(`${path}.min`, "is required for every non-default tier");
+        }
+
+        const min = isDefault ? -Infinity : this._classificationNumber(item.min, `${path}.min`);
+        if (!isDefault && min >= previousMin) {
+          this._classificationConfigError(basePath, "must use unique min values in strictly descending order");
+        }
+        previousMin = min;
+
+        return { min, ...validateItem(item, path) };
+      });
+      if (defaultCount !== 1) this._classificationConfigError(basePath, "must contain exactly one final default tier");
+      return normalized;
+    }
+
     _normalizeCustomClassification(value) {
       const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"]);
       this._assertClassificationKeys(value, allowed, "classification");
@@ -2639,54 +3007,27 @@
         this._classificationConfigError("classification.scale.one_sided", "must be a boolean");
       }
 
-      if (!Array.isArray(value.tiers) || value.tiers.length === 0) {
-        this._classificationConfigError("classification.tiers", "must be a non-empty array");
-      }
       const zones = new Set(CLASSIFICATION_ZONES);
-      let defaultCount = 0;
-      let previousMin = Infinity;
-      const sourceTiers = value.tiers.map((tier, index) => {
-        const path = `classification.tiers[${index}]`;
-        if (!this._isPlainObject(tier)) this._classificationConfigError(path, "must be an object");
-        this._assertClassificationKeys(tier, new Set(["min", "default", "score", "level", "color", "zone"]), path);
-        const isDefault = tier.default === true;
-        if (tier.default !== undefined && tier.default !== true) {
-          this._classificationConfigError(`${path}.default`, "must be true when present");
+      const sourceTiers = this._normalizeDescendingTierList(
+        value.tiers,
+        "classification.tiers",
+        ["score", "level", "color", "zone"],
+        (tier, path) => {
+          const score = this._classificationNumber(tier.score, `${path}.score`);
+          if (typeof tier.level !== "string" || !tier.level.trim()) {
+            this._classificationConfigError(`${path}.level`, "must be a non-empty string");
+          }
+          if (typeof tier.color !== "string" || !HEX_COLOR_PATTERN.test(tier.color.trim())) {
+            this._classificationConfigError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
+          }
+          if (!zones.has(tier.zone)) {
+            const quoted = CLASSIFICATION_ZONES.map((zone) => `"${zone}"`);
+            const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
+            this._classificationConfigError(`${path}.zone`, `must be one of ${list}`);
+          }
+          return { score, level: tier.level.trim(), color: tier.color.trim(), zone: tier.zone };
         }
-        if (isDefault) {
-          defaultCount += 1;
-          if (index !== value.tiers.length - 1) this._classificationConfigError(path, "default tier must be the final tier");
-          if (tier.min !== undefined) this._classificationConfigError(`${path}.min`, "must be omitted on the default tier");
-        } else if (tier.min === undefined) {
-          this._classificationConfigError(`${path}.min`, "is required for every non-default tier");
-        }
-
-        const min = isDefault ? -Infinity : this._classificationNumber(tier.min, `${path}.min`);
-        if (!isDefault && min >= previousMin) {
-          this._classificationConfigError("classification.tiers", "must use unique min values in strictly descending order");
-        }
-        previousMin = min;
-        const score = this._classificationNumber(tier.score, `${path}.score`);
-        if (typeof tier.level !== "string" || !tier.level.trim()) {
-          this._classificationConfigError(`${path}.level`, "must be a non-empty string");
-        }
-        if (typeof tier.color !== "string" || !HEX_COLOR_PATTERN.test(tier.color.trim())) {
-          this._classificationConfigError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
-        }
-        if (!zones.has(tier.zone)) {
-          const quoted = CLASSIFICATION_ZONES.map((zone) => `"${zone}"`);
-          const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
-          this._classificationConfigError(`${path}.zone`, `must be one of ${list}`);
-        }
-        return {
-          min,
-          score,
-          level: tier.level.trim(),
-          color: tier.color.trim(),
-          zone: tier.zone,
-        };
-      });
-      if (defaultCount !== 1) this._classificationConfigError("classification.tiers", "must contain exactly one final default tier");
+      );
 
       let sourceValidRange = null;
       if (value.valid_range !== undefined) {
@@ -2711,20 +3052,37 @@
         }
       }
 
+      // classification.icons has two distinct shapes, chosen by metricKind
+      // (mirroring the built-in profiles: temperature uses iconThresholds,
+      // the other three kinds use iconTiers) — a fixed fire/high/normal/low
+      // object for temperature, a descending {min, icon} list with a final
+      // {default: true, icon} entry for humidity/CO2/PM2.5.
       let sourceIcons = null;
+      let sourceIconTiers = null;
       if (value.icons !== undefined) {
-        if (metricKind !== "temperature") {
-          this._classificationConfigError("classification.icons", "is supported only for temperature profiles");
-        }
-        if (!this._isPlainObject(value.icons)) this._classificationConfigError("classification.icons", "must be an object");
-        this._assertClassificationKeys(value.icons, new Set(["fire", "high", "normal", "low"]), "classification.icons");
-        sourceIcons = {};
-        let previous = Infinity;
-        for (const key of ["fire", "high", "normal", "low"]) {
-          const threshold = this._classificationNumber(value.icons[key], `classification.icons.${key}`);
-          if (threshold >= previous) this._classificationConfigError("classification.icons", "must descend from fire to low");
-          previous = threshold;
-          sourceIcons[key] = threshold;
+        if (metricKind === "temperature") {
+          if (!this._isPlainObject(value.icons)) {
+            this._classificationConfigError("classification.icons", "must be an object with fire/high/normal/low thresholds for a temperature profile");
+          }
+          this._assertClassificationKeys(value.icons, new Set(["fire", "high", "normal", "low"]), "classification.icons");
+          sourceIcons = {};
+          let previous = Infinity;
+          for (const key of ["fire", "high", "normal", "low"]) {
+            const threshold = this._classificationNumber(value.icons[key], `classification.icons.${key}`);
+            if (threshold >= previous) this._classificationConfigError("classification.icons", "must descend from fire to low");
+            previous = threshold;
+            sourceIcons[key] = threshold;
+          }
+        } else {
+          if (!Array.isArray(value.icons)) {
+            this._classificationConfigError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry for a non-temperature profile");
+          }
+          sourceIconTiers = this._normalizeDescendingTierList(value.icons, "classification.icons", ["icon"], (item, path) => {
+            if (typeof item.icon !== "string" || !item.icon.trim()) {
+              this._classificationConfigError(`${path}.icon`, "must be a non-empty string");
+            }
+            return { icon: item.icon.trim() };
+          });
         }
       } else if (metricKind === "temperature") {
         sourceIcons = {
@@ -2767,6 +3125,7 @@
         iconThresholds: sourceIcons && Object.fromEntries(
           Object.entries(sourceIcons).map(([key, threshold]) => [key, toCanonical(threshold)])
         ),
+        iconTiers: sourceIconTiers?.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
       };
     }
 
@@ -3167,12 +3526,22 @@
           }
         }
       }
+      if (projected.iconTiers) {
+        for (let i = 1; i < canonical.iconTiers.length; i++) {
+          const wasDescending = Number.isFinite(canonical.iconTiers[i - 1].min) && Number.isFinite(canonical.iconTiers[i].min)
+            && canonical.iconTiers[i].min < canonical.iconTiers[i - 1].min;
+          if (!wasDescending) continue;
+          if (!(projected.iconTiers[i].min < projected.iconTiers[i - 1].min)) {
+            fail(`icon tiers collapse near ${projected.iconTiers[i].min}${unitLabel}`);
+          }
+        }
+      }
     }
 
     _getEntityClassification(entityId, { allowPartial = false } = {}) {
-      // Reads value_color/value_level/value_score/value_zone from HA entity
-      // attributes (see raumklima_classification.jinja). Automatic mode
-      // accepts the source only as a complete, valid color+level pair; the
+      // Reads value_color/value_level/value_score/value_zone attributes an
+      // integration or template sensor may provide. Automatic mode accepts
+      // the source only as a complete, valid color+level pair; the
       // deliberately forced entity mode may request its partial metadata.
       if (!entityId || !this._hass?.states?.[entityId]) return null;
       const attrs = this._hass.states[entityId].attributes;
@@ -4821,7 +5190,7 @@
       const coolest = hasRoomsView ? allRooms[0] : null;
       const warmest = hasRoomsView ? allRooms[allRooms.length - 1] : null;
       // Spread prefers the average entity's spread attribute (computed
-      // server-side by averages.jinja); only recomputed locally when that
+      // server-side by a template sensor); only recomputed locally when that
       // attribute is missing/invalid, or when the average itself is the
       // room-based fallback (avgSource !== "sensor") — the spread attribute
       // belongs to config.entity's own state and would otherwise be a stale
@@ -7939,7 +8308,7 @@
     name: CARD_NAME,
     preview: false,
     description: "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
-    documentationURL: "https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card/",
+    documentationURL: "https://github.com/hyperfelixations/room-climate-card",
   };
 
   if (existingCard) {

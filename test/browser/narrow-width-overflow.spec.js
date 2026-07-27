@@ -34,7 +34,7 @@ const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
-const LANGUAGES = ["en", "de", "pl", "ru"];
+const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 
 // ha-card is never registered as a custom element in the shared offline
 // harness (no real Home Assistant frontend loaded), so it defaults to

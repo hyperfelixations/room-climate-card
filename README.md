@@ -20,7 +20,7 @@ A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card for a co
 - A configurable classification policy: complete `value_color`/`value_level`
   entity attributes, built-in profiles, or a strictly validated custom YAML
   profile. Temperature includes `indoor`, `outdoor`, and `fridge` profiles.
-- Built-in UI in English, German, Dutch, French, Italian, Spanish, Russian, Polish, Korean, Japanese, and Simplified Chinese, following Home Assistant's language setting — falls back to English for any other language
+- Built-in UI in English, German, Dutch, French, Italian, Spanish, Russian, Polish, Korean, Japanese, Simplified Chinese, Norwegian Bokmål, Swedish, and Latvian, following Home Assistant's language setting — falls back to English for any other language
 - Extensive optional YAML customization for views, bands and labels, markers,
   footers, room chips, carousel behavior, language, and tap/hold actions (see
   [Configuration](#configuration))
@@ -49,7 +49,7 @@ With more than one view enabled (here: the scale and room-comparison views), the
 - **Known limitations**:
   - The built-in `outdoor` and `fridge` classification profiles currently
     exist only for temperature.
-  - A `language` other than the eleven built-in ones (see
+  - A `language` other than the built-in ones (see
     [Features](#features)) falls back to English automatically.
   - The room-comparison features (extremes view, coldest/warmest room)
     activate only once at least two rooms currently report a valid value.
@@ -158,7 +158,7 @@ do not add an empty placeholder.
 | `avg_label` | translated default | Replaces the label above the large main value. This is useful when the card represents one room rather than a whole-home average. |
 | `icon` | automatic | Replaces the header icon with an `mdi:*` icon, for example `mdi:home-thermometer`. Without an override, all four metric modes use their profile-driven value icon. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for values such as the average, rooms, daily extremes, spread, and trend. Default per mode: `0` for CO₂, `1` for temperature, humidity, and PM2.5. Scale boundary and comfort/optimal range labels intentionally remain whole numbers. |
-| `language` | `auto` | Uses `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `ko`, `ja`, or `zh`. `auto` follows Home Assistant's language; an unsupported value also falls back to automatic detection. |
+| `language` | `auto` | Uses `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `ko`, `ja`, `zh`, `nb`, `sv`, or `lv`. `auto` follows Home Assistant's language; an unsupported value also falls back to automatic detection. |
 
 #### Room-chip display
 
@@ -416,7 +416,7 @@ classification:
     max: 30
     step: 1
 
-  icons:                 # optional, temperature only
+  icons:                 # optional; shape depends on metric kind, see below
     fire: 35
     high: 30
     normal: 14
@@ -470,9 +470,23 @@ Custom-profile rules:
   contain both. `scale.step` must be greater than zero.
 - Optional `scale.headroom` must be non-negative; `scale.one_sided` is a
   boolean.
-- Optional `icons` must contain descending `fire`, `high`, `normal`, and
-  `low` thresholds. Without it, temperature derives icon thresholds from the
-  custom scale and comfort bounds.
+- `icons` is optional; its shape depends on the profile's metric kind.
+  Temperature takes an object of descending `fire`, `high`, `normal`, and
+  `low` thresholds — without it, temperature derives them from the custom
+  scale and comfort bounds. Humidity, CO₂, and PM2.5 instead take a
+  descending list of `{min, icon}` tiers with a final `{default: true,
+  icon: ...}` entry, the same shape as `tiers` without the color/level/zone
+  fields, for example:
+  ```yaml
+  icons:
+    - min: 60
+      icon: mdi:water-percent-alert
+    - min: 30
+      icon: mdi:water-percent
+    - default: true
+      icon: mdi:water-minus
+  ```
+  Without it, these three metrics keep their fixed default header icon.
 - Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
   `max_inclusive`.
 - Invalid semantic classification configuration fails fast with a

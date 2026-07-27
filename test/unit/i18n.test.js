@@ -20,7 +20,7 @@ const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
 const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "room-climate-card.js");
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
-const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh"];
+const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 
 test("all TRANSLATIONS language blocks stay in sync with en (the file's own load-time self-check never warns)", () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
@@ -83,7 +83,7 @@ test("I18N-01: value is case-insensitive", () => {
   env.cleanup(el);
 });
 
-test("I18N-02: all eleven supported base languages are individually selectable via config", () => {
+test("I18N-02: all supported base languages are individually selectable via config", () => {
   for (const lang of SUPPORTED_LANGUAGES) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
     assert.equal(el._language(), lang);
@@ -277,6 +277,56 @@ test("I18N-02: Korean, Japanese, and Chinese count phrases do not invent grammat
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
     assert.equal(el._t("subtitle.missingRooms", { count: 1 }), one, `lang=${lang}, count=1`);
     assert.equal(el._t("subtitle.missingRooms", { count: 5 }), many, `lang=${lang}, count=5`);
+    env.cleanup(el);
+  }
+});
+
+test("I18N-02: Latvian room/entity grammar follows the zero/one/other plural categories", () => {
+  const el = env.createCard({ entity: "sensor.avg", language: "lv" }, hassDe);
+  // zero: n%10=0 or n%100 in 11..19 (genitive plural "telpu"/"entītiju");
+  // one: n%10=1 and n%100!=11 (nominative singular "telpa"/"entītija");
+  // other: everything else (nominative plural "telpas"/"entītijas").
+  const roomExpected = new Map([
+    [0, " 0 telpu bez datiem."],
+    [1, " 1 telpa bez datiem."],
+    [2, " 2 telpas bez datiem."],
+    [11, " 11 telpu bez datiem."],
+    [20, " 20 telpu bez datiem."],
+    [21, " 21 telpa bez datiem."],
+  ]);
+  for (const [count, expected] of roomExpected) {
+    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+  }
+  assert.match(el._t("empty.hintMissingRooms", { count: 1 }), /^1 konfigurēta entītija trūkst/);
+  assert.match(el._t("empty.hintMissingRooms", { count: 2 }), /^2 konfigurētas entītijas trūkst/);
+  assert.match(el._t("empty.hintMissingRooms", { count: 11 }), /^11 konfigurētu entītiju trūkst/);
+  // The "count/total rooms" comfort sentence depends on v.total's OWN
+  // category, same as the existing Russian test above — v.total >= 2 does
+  // NOT collapse this to a single safe form for a zero/one/other language
+  // (10, 11, 20, 21 are all >= 2 but land in different categories).
+  assert.match(
+    el._t("subtitle.aboveComfort", { diff: "1 °C", count: 1, total: 11, adjective: "siltas" }),
+    /1\/11 telpu ir siltas\.$/,
+    "total=11 must use the genitive-plural zero-category noun form"
+  );
+  assert.match(
+    el._t("subtitle.aboveComfort", { diff: "1 °C", count: 1, total: 21, adjective: "siltas" }),
+    /1\/21 telpa ir siltas\.$/,
+    "total=21 must use the nominative-singular one-category noun form"
+  );
+  env.cleanup(el);
+});
+
+test("I18N-02: Norwegian and Swedish keep 'rom'/'rum' plural-invariant while still inflecting the predicative adjective", () => {
+  const expected = {
+    nb: { one: " 1 rom uten data.", many: " 5 rom uten data.", adjectivePlural: "varme" },
+    sv: { one: " 1 rum utan data.", many: " 5 rum utan data.", adjectivePlural: "varma" },
+  };
+  for (const [lang, text] of Object.entries(expected)) {
+    const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
+    assert.equal(el._t("subtitle.missingRooms", { count: 1 }), text.one, `lang=${lang}, count=1`);
+    assert.equal(el._t("subtitle.missingRooms", { count: 5 }), text.many, `lang=${lang}, count=5`);
+    assert.equal(el._t("adjective.warm"), text.adjectivePlural, `lang=${lang}: adjective must be the plural predicative form`);
     env.cleanup(el);
   }
 });

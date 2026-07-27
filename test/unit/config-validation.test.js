@@ -208,3 +208,18 @@ test("integration: an existing valid card is not left in an inconsistent state b
   assert.equal(card._config.rooms[0].entity, "sensor.r1");
   env.cleanup(card);
 });
+
+// getStubConfig(): the Home Assistant card-picker/editor placeholder. Must
+// stay generic (no maintainer-specific household entities/room names) and
+// must itself be a config setConfig() actually accepts.
+test("getStubConfig() is generic (no household-specific entities/rooms) and is a valid config", () => {
+  const stub = el.constructor.getStubConfig();
+  const serialized = JSON.stringify(stub);
+  for (const forbidden of ["wohnung", "küche", "kü", "schlafzimmer", "arbeitszimmer", "flur", "wc", "az_", "sz_", "wz_", "ba_", "fl_", "ku_"]) {
+    assert.equal(serialized.toLowerCase().includes(forbidden), false, `getStubConfig() must not contain "${forbidden}"`);
+  }
+  const card = env.createCard(stub, hass);
+  assert.equal(card._config.entity, stub.entity);
+  assert.equal(card._config.rooms.length, stub.rooms.length);
+  env.cleanup(card);
+});

@@ -19,7 +19,7 @@
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
 
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh"];
+const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 // Matches the audit's own stated range ("Balkenbreiten 280-500 px"). Widths
 // below ~270px push some mode/language combinations (verified: co2 in
 // en/de/nl) into the already-documented, pre-existing "extreme narrow bar +

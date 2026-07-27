@@ -291,6 +291,63 @@ test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thres
   }
 });
 
+const customHumidityWithIcons = {
+  source: "custom",
+  unit: "%",
+  comparison: ">=",
+  bands: { comfort: { min: 30, max: 70 }, optimal: { min: 40, max: 60 } },
+  scale: { min: 0, max: 100, step: 10 },
+  tiers: [
+    { min: 70, score: 2, level: "Humid", color: "#3388FF", zone: "outside" },
+    { default: true, score: 1, level: "Normal", color: "#33AA33", zone: "comfort" },
+  ],
+  icons: [
+    { min: 60, icon: "mdi:water-percent-alert" },
+    { min: 30, icon: "mdi:water-percent" },
+    { default: true, icon: "mdi:water-minus" },
+  ],
+};
+
+function humidityCardWithIcons(value, classification = customHumidityWithIcons) {
+  return env.createCard(
+    { entity: "sensor.avg", classification },
+    mkHass({ "sensor.avg": mkState("sensor.avg", value, { device_class: "humidity", unit_of_measurement: "%" }) })
+  );
+}
+
+test("a custom non-temperature profile can configure icons as a descending {min, icon} list", () => {
+  const above = humidityCardWithIcons(65);
+  assert.equal(above._computeData().tone.icon, "mdi:water-percent-alert");
+  env.cleanup(above);
+
+  const mid = humidityCardWithIcons(45);
+  assert.equal(mid._computeData().tone.icon, "mdi:water-percent");
+  env.cleanup(mid);
+
+  const low = humidityCardWithIcons(10);
+  assert.equal(low._computeData().tone.icon, "mdi:water-minus");
+  env.cleanup(low);
+});
+
+test("a custom non-temperature profile without icons: keeps the metric's static default icon", () => {
+  const card = humidityCardWithIcons(65, { ...customHumidityWithIcons, icons: undefined });
+  assert.equal(card._computeData().tone.icon, "mdi:water-percent");
+  env.cleanup(card);
+});
+
+test("custom non-temperature icons: validation reuses the shared tiers list contract", () => {
+  const cases = [
+    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:water-percent-alert" }] }, /default tier/],
+    [{ ...customHumidityWithIcons, icons: [{ min: 30, icon: "mdi:a" }, { min: 60, icon: "mdi:b" }, { default: true, icon: "mdi:c" }] }, /descending/],
+    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: 42 }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.icon/],
+    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:a", bogus: true }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.bogus/],
+    [{ ...customHumidityWithIcons, icons: { fire: 90, high: 75, normal: 40, low: 20 } }, /classification\.icons.*non-temperature profile/],
+  ];
+  for (const [classification, expected] of cases) {
+    assert.throws(() => humidityCardWithIcons(65, classification), expected);
+  }
+});
+
 test("outdoor profile is projected atomically into Fahrenheit", () => {
   const card = createTemperatureCard("outdoor");
   const fahrenheit = card._getUnitProfile("temperature", "fahrenheit");
@@ -489,7 +546,8 @@ test("custom profile validation fails fast with path-specific errors", () => {
       ...customProfile,
       unit: "%",
       icons: { fire: 90, high: 75, normal: 40, low: 20 },
-    }, /classification\.icons.*only for temperature/],
+    }, /classification\.icons.*non-temperature profile/],
+    [{ ...customProfile, icons: [{ min: 30, icon: "mdi:fire" }, { default: true, icon: "mdi:snowflake" }] }, /classification\.icons.*temperature profile/],
   ];
 
   for (const [classification, expected] of cases) {

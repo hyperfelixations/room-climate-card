@@ -15,7 +15,7 @@ const { SeededRandom } = require("../helpers/seeded-random.js");
 
 const SEED = 0xc1a6e;
 const ITERATIONS = 30;
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh"];
+const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 const MODES = {
   temperature: { device_class: "temperature", unit: "°C", low: -20, high: 45 },
   humidity: { device_class: "humidity", unit: "%", low: 0, high: 100 },
