@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +30,7 @@ jobs:
         run: npm run test:unit
 
       - name: Install Playwright's Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Browser tests (Playwright)
         run: npm run test:browser
