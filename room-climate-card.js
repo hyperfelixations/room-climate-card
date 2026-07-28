@@ -13,7 +13,7 @@
   // ==== Constants: card metadata, metric mode, language ====
   const CARD_TYPE = "room-climate-card";
   const CARD_NAME = "Room Climate Card";
-  const CARD_VERSION = "2.36.0-generic-config-languages-icons";
+  const CARD_VERSION = "2.36.0";
 
   // Matches a room-chip label that is exactly two Unicode uppercase letters
   // (e.g. "WZ", "KÜ") — the only case where a room's short code is

@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the entity's `device_class`. Will automatically adapt to your dashboard's light or dark mode.
+A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the entity's `device_class`. Will automatically adapt to your dashboard's light or dark mode.
 
 ![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
 ![Room Climate Card in dark mode](screenshot-dark.png)
@@ -47,28 +47,36 @@ With more than one view enabled (here: the scale and room-comparison views), the
   through YAML; see [Quickstart](#quickstart) and
   [Configuration](#configuration) below.
 - **Known limitations**:
-  - The built-in `outdoor` and `fridge` classification profiles currently
-    exist only for temperature.
-  - A `language` other than the built-in ones (see
-    [Features](#features)) falls back to English automatically.
-  - The room-comparison features (extremes view, coldest/warmest room)
-    activate only once at least two rooms currently report a valid value.
+  - Daily range and trend features require separate template sensors that
+    provide the corresponding data. The card cannot derive historical daily
+    minimum/maximum values or a trend from the current room values alone.
+  - In some layouts, four-digit CO₂ values and two- or three-digit PM2.5
+    values can overlap nearby content. This will be fixed in a later release.
 
 ## Installation
 
 ### HACS
 
-Search for "Room Climate Card" in HACS. If it isn't listed in the default
-store yet, add it as a custom repository first:
+[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
 
-1. HACS → the three-dot menu → **Custom repositories**.
-2. Add this repository's URL, category **Lovelace**.
+Until Room Climate Card is included in the default HACS store, add it as a
+custom repository using the button above or manually:
+
+1. Open HACS → the three-dot menu → **Custom repositories**.
+2. Add `https://github.com/hyperfelixations/room-climate-card`, category
+   **Dashboard**.
 3. Install "Room Climate Card" and reload your browser.
+
+Once it is included in the default store, you can search for
+"Room Climate Card" directly in HACS instead.
 
 ### Manual
 
-1. Download `room-climate-card.js` from the [latest release](https://github.com/hyperfelixations/room-climate-card/releases/latest) and copy it into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
-2. Add it as a Lovelace resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
+1. Download `room-climate-card.js` from the
+   [latest release](https://github.com/hyperfelixations/room-climate-card/releases/latest)
+   and copy it into your Home Assistant `www/` folder (e.g.
+   `www/room-climate-card.js`).
+2. Add it as a dashboard resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
 3. Add a card with `type: custom:room-climate-card` to a dashboard.
 
 ## Quickstart
@@ -572,7 +580,7 @@ views:
 ## Troubleshooting
 
 **The card doesn't appear after installing.**
-Confirm the Lovelace resource was actually added (Settings → Dashboards →
+Confirm the dashboard resource was actually added (Settings → Dashboards →
 the three-dot menu → **Resources**) and points at the right path/module
 type, then do a hard browser reload (see below). After a HACS install, a
 normal Home Assistant restart or resource re-registration is usually
@@ -580,7 +588,7 @@ enough; a manual install needs the resource step from
 [Installation](#installation) done explicitly.
 
 **Changes don't show up, or the card looks outdated after an update.**
-Browsers aggressively cache Lovelace resources. Hard-reload the dashboard
+Browsers aggressively cache dashboard resources. Hard-reload the dashboard
 tab (Ctrl+Shift+R / Cmd+Shift+R), or clear the browser cache for your Home
 Assistant URL, after installing or updating the card.
 
