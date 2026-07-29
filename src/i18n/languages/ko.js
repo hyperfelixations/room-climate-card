@@ -1,0 +1,108 @@
+// Korean UI strings.
+//
+// Key set must stay identical to en.js: translate() falls back to English
+// per key, and a module-load self-check (see ../integrity.js) warns about any
+// missing or extra key as soon as the card is loaded.
+//
+// Values are either a string or a function (vars) => string — the function
+// form covers interpolation and plural/conditional branching without pulling
+// in a full ICU parser.
+
+export const ko = {
+  "title.temperature": "온도",
+  "title.humidity": "습도",
+  "title.co2": "CO₂",
+  "title.pm25": "PM2.5",
+
+  "level.veryHot": "매우 더움",
+  "level.hot": "더움",
+  "level.veryWarm": "매우 따뜻함",
+  "level.warm": "따뜻함",
+  "level.slightlyWarm": "약간 따뜻함",
+  "level.optimal": "최적",
+  "level.slightlyCool": "약간 선선함",
+  "level.fresh": "상쾌함",
+  "level.cool": "선선함",
+  "level.cold": "추움",
+  "level.veryCold": "매우 추움",
+
+  "level.criticallyHumid": "습도가 위험하게 높음",
+  "level.tooHumid": "지나치게 습함",
+  "level.veryHumid": "매우 습함",
+  "level.humid": "습함",
+  "level.slightlyHumid": "약간 습함",
+  "level.slightlyDry": "약간 건조함",
+  "level.dry": "건조함",
+  "level.veryDry": "매우 건조함",
+  "level.tooDry": "지나치게 건조함",
+  "level.criticallyDry": "위험하게 건조함",
+
+  "level.critical": "위험",
+  "level.veryHigh": "매우 높음",
+  "level.high": "높음",
+  "level.elevated": "높은 편",
+  "level.slightlyElevated": "약간 높음",
+  "level.invalidReading": "유효하지 않음",
+
+  "adjective.warm": "따뜻함",
+  "adjective.cool": "선선함",
+  "adjective.humid": "습함",
+  "adjective.dry": "건조함",
+  "adjective.elevated": "수치가 높음",
+  "adjective.low": "수치가 낮음",
+
+  "avg.label": "집 전체 평균",
+  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
+  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
+  "avg.ariaOpen": "평균값 열기",
+
+  "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
+  "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,
+  "subtitle.belowComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 낮음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
+  "subtitle.belowComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 낮음.`,
+  "subtitle.inComfortIssue": (v) => `평균은 쾌적 범위 · ${v.name}의 편차가 가장 큼.`,
+  "subtitle.inComfortAllGood": "평균은 쾌적 범위 · 모든 방이 목표 범위 안에 있음.",
+  "subtitle.inComfort": "평균은 쾌적 범위.",
+  "subtitle.missingRooms": (v) => ` ${v.count}개 방은 데이터 없음.`,
+
+  "footer.comfort": (v) => `쾌적 ${v.count}/${v.total}`,
+  "footer.spread": (v) => `편차 ${v.value}`,
+  "footer.trend": (v) => `추세 ${v.value}`,
+  "trend.direction.rising": "상승",
+  "trend.direction.stable": "안정",
+  "trend.direction.falling": "하락",
+  "trend.aria": (v) => `추세 ${v.direction}: ${v.value}`,
+
+  "scale.comfortLabel": (v) => `${v.range} 쾌적 범위`,
+  "scale.comfortLabelShort": (v) => `${v.range} 쾌적 범위`,
+  "scale.optimalLabel": (v) => `${v.range} 최적 범위`,
+  "scale.optimalLabelShort": (v) => `${v.range} 최적 범위`,
+
+  "rangeScale.currentLabel": "현재",
+  "rangeScale.currentLabelShort": "현재",
+  "rangeScale.minLabel": "최저",
+  "rangeScale.maxLabel": "최고",
+  "rangeScale.footer": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} (${v.minTime}) · 최고 ${v.max} (${v.maxTime})`,
+  "rangeScale.footerCompact": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} · 최고 ${v.max}`,
+
+  "card.coldestRoom": "가장 추운 방",
+  "card.warmestRoom": "가장 따뜻한 방",
+  "card.driestRoom": "가장 건조한 방",
+  "card.mostHumidRoom": "가장 습한 방",
+  "card.lowestRoom": "수치가 가장 낮은 방",
+  "card.highestRoom": "수치가 가장 높은 방",
+  "card.dailyMinimum": "일일 최저",
+  "card.dailyMaximum": "일일 최고",
+  "card.ariaOpen": (v) => `${v.label} 열기: ${v.name}`,
+
+  "room.ariaOpen": (v) => `${v.name} 열기`,
+
+  "rotator.hint": "밀어서 보기 전환",
+
+  "views.none": "사용 가능한 보기가 없습니다.",
+
+  "empty.title": "사용 가능한 데이터가 없습니다.",
+  "empty.hintNoRooms": "설정된 평균 엔터티가 숫자 값을 보고하지 않습니다.",
+  "empty.hintMissingRooms": (v) => `설정된 엔터티 ${v.count}개가 없거나 숫자 값을 보고하지 않습니다.`,
+  "empty.hintNoRoomData": "설정된 방 엔터티 중 숫자 값을 보고하는 항목이 없습니다.",
+};

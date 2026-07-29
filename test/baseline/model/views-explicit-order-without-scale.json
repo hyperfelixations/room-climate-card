@@ -1,0 +1,283 @@
+{
+  "avg": 22.4,
+  "avgColor": "#79A86C",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 48.88888888888887,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "27°C",
+    "min": "18°C"
+  },
+  "comfortCenter": 44.44444444444444,
+  "comfortLeft": 22.22222222222222,
+  "comfortMax": 24,
+  "comfortMin": 20,
+  "comfortVisible": true,
+  "comfortWidth": 44.444444444444436,
+  "coolest": {
+    "displayLabel": "R1",
+    "entity": "sensor.room_1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Room 1",
+    "short": "R1",
+    "shortGuaranteed": false,
+    "tap_action": null,
+    "value": 19.2
+  },
+  "coolestColor": "#67A7AE",
+  "coolestPos": 13.333333333333325,
+  "coolestShift": 0,
+  "displayStep": 1,
+  "displayUnitProfile": {
+    "baseDisplayStep": 1,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "°C",
+    "fromCanonical": "[Function]",
+    "key": "celsius",
+    "toCanonical": "[Function]",
+    "units": [
+      "°c",
+      "c",
+      "celsius"
+    ]
+  },
+  "empty": false,
+  "hasRange": true,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 4,
+  "markerPositions": {
+    "avg": 48.88888888888887,
+    "coolest": 13.333333333333325,
+    "room_0": 13.333333333333325,
+    "room_1": 31.111111111111118,
+    "room_2": 40.000000000000014,
+    "room_3": 47.777777777777786,
+    "room_4": 56.666666666666686,
+    "room_5": 71.11111111111109,
+    "room_6": 85.55555555555556,
+    "warmest": 85.55555555555556
+  },
+  "metricType": "temperature",
+  "optimalCenter": 44.44444444444444,
+  "optimalLeft": 33.33333333333333,
+  "optimalMax": 23,
+  "optimalMin": 21,
+  "optimalVisible": true,
+  "optimalWidth": 22.22222222222223,
+  "rangeCurrentPos": 0,
+  "rangeMax": 24.9,
+  "rangeMaxColor": "#C0A752",
+  "rangeMaxPos": 0,
+  "rangeMaxTime": "15:41",
+  "rangeMin": 19.8,
+  "rangeMinColor": "#67A7AE",
+  "rangeMinPos": 0,
+  "rangeMinTime": "06:12",
+  "rangeScaleGeometry": null,
+  "rangeState": 5.1,
+  "roomCount": 7,
+  "roomRows": [
+    {
+      "columnCount": 7,
+      "itemCount": 7
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "R1",
+      "entity": "sensor.room_1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Room 1",
+      "short": "R1",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 19.2
+    },
+    {
+      "displayLabel": "R2",
+      "entity": "sensor.room_2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Room 2",
+      "short": "R2",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 20.8
+    },
+    {
+      "displayLabel": "R3",
+      "entity": "sensor.room_3",
+      "hold_action": null,
+      "index": 2,
+      "name": "Room 3",
+      "short": "R3",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 21.6
+    },
+    {
+      "displayLabel": "R4",
+      "entity": "sensor.room_4",
+      "hold_action": null,
+      "index": 3,
+      "name": "Room 4",
+      "short": "R4",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 22.3
+    },
+    {
+      "displayLabel": "R5",
+      "entity": "sensor.room_5",
+      "hold_action": null,
+      "index": 4,
+      "name": "Room 5",
+      "short": "R5",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 23.1
+    },
+    {
+      "displayLabel": "R6",
+      "entity": "sensor.room_6",
+      "hold_action": null,
+      "index": 5,
+      "name": "Room 6",
+      "short": "R6",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 24.4
+    },
+    {
+      "displayLabel": "R7",
+      "entity": "sensor.room_7",
+      "hold_action": null,
+      "index": 6,
+      "name": "Room 7",
+      "short": "R7",
+      "shortGuaranteed": false,
+      "tap_action": null,
+      "value": 25.7
+    }
+  ],
+  "scaleMax": 27,
+  "scaleMin": 18,
+  "scaleRoomMarkers": [
+    {
+      "color": "#67A7AE",
+      "entity": "sensor.room_1",
+      "index": 0,
+      "name": "Room 1",
+      "position": 13.333333333333325,
+      "value": 19.2
+    },
+    {
+      "color": "#69A78B",
+      "entity": "sensor.room_2",
+      "index": 1,
+      "name": "Room 2",
+      "position": 31.111111111111118,
+      "value": 20.8
+    },
+    {
+      "color": "#79A86C",
+      "entity": "sensor.room_3",
+      "index": 2,
+      "name": "Room 3",
+      "position": 40.000000000000014,
+      "value": 21.6
+    },
+    {
+      "color": "#79A86C",
+      "entity": "sensor.room_4",
+      "index": 3,
+      "name": "Room 4",
+      "position": 47.777777777777786,
+      "value": 22.3
+    },
+    {
+      "color": "#9DA85A",
+      "entity": "sensor.room_5",
+      "index": 4,
+      "name": "Room 5",
+      "position": 56.666666666666686,
+      "value": 23.1
+    },
+    {
+      "color": "#C0A752",
+      "entity": "sensor.room_6",
+      "index": 5,
+      "name": "Room 6",
+      "position": 71.11111111111109,
+      "value": 24.4
+    },
+    {
+      "color": "#C98A67",
+      "entity": "sensor.room_7",
+      "index": 6,
+      "name": "Room 7",
+      "position": 85.55555555555556,
+      "value": 25.7
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 6.5,
+  "subtitle": "Avg. in comfort · Room 7 stands out most.",
+  "title": "Temperature",
+  "tone": {
+    "color": "#79A86C",
+    "icon": "mdi:thermometer",
+    "label": "Optimal",
+    "profileId": "indoor",
+    "score": 6,
+    "soft": "rgba(121,168,108,0.2)",
+    "source": "builtin",
+    "zone": "optimal"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "extremes",
+    "range"
+  ],
+  "warmest": {
+    "displayLabel": "R7",
+    "entity": "sensor.room_7",
+    "hold_action": null,
+    "index": 6,
+    "name": "Room 7",
+    "short": "R7",
+    "shortGuaranteed": false,
+    "tap_action": null,
+    "value": 25.7
+  },
+  "warmestColor": "#C98A67",
+  "warmestPos": 85.55555555555556,
+  "warmestShift": 0
+}

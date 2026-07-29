@@ -1,0 +1,201 @@
+{
+  "avg": 52.4,
+  "avgColor": "#79A86C",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 55.99999999999999,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "70%",
+    "min": "30%"
+  },
+  "comfortCenter": 50,
+  "comfortLeft": 25,
+  "comfortMax": 60,
+  "comfortMin": 40,
+  "comfortVisible": true,
+  "comfortWidth": 50,
+  "coolest": {
+    "displayLabel": "LI",
+    "entity": "sensor.r3",
+    "hold_action": null,
+    "index": 2,
+    "name": "Living",
+    "short": "LI",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 38.9
+  },
+  "coolestColor": "#67A7AE",
+  "coolestPos": 22.249999999999996,
+  "coolestShift": 0,
+  "displayStep": 5,
+  "displayUnitProfile": {
+    "baseDisplayStep": 5,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "%",
+    "fromCanonical": "[Function]",
+    "key": "percent",
+    "toCanonical": "[Function]",
+    "units": [
+      "%"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 1,
+  "markerPositions": {
+    "avg": 55.99999999999999,
+    "coolest": 22.249999999999996,
+    "room_0": 83.75,
+    "room_1": 43.00000000000001,
+    "room_2": 22.249999999999996,
+    "warmest": 83.75
+  },
+  "metricType": "humidity",
+  "optimalCenter": 50,
+  "optimalLeft": 30,
+  "optimalMax": 58,
+  "optimalMin": 42,
+  "optimalVisible": true,
+  "optimalWidth": 40,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 3,
+  "roomRows": [
+    {
+      "columnCount": 3,
+      "itemCount": 3
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "LI",
+      "entity": "sensor.r3",
+      "hold_action": null,
+      "index": 2,
+      "name": "Living",
+      "short": "LI",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 38.9
+    },
+    {
+      "displayLabel": "BE",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Bedroom",
+      "short": "BE",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 47.2
+    },
+    {
+      "displayLabel": "BA",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Bath",
+      "short": "BA",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 63.5
+    }
+  ],
+  "scaleMax": 70,
+  "scaleMin": 30,
+  "scaleRoomMarkers": [
+    {
+      "color": "#67A7AE",
+      "entity": "sensor.r3",
+      "index": 2,
+      "name": "Living",
+      "position": 22.249999999999996,
+      "value": 38.9
+    },
+    {
+      "color": "#79A86C",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Bedroom",
+      "position": 43.00000000000001,
+      "value": 47.2
+    },
+    {
+      "color": "#C0A752",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Bath",
+      "position": 83.75,
+      "value": 63.5
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 24.6,
+  "subtitle": "Avg. in comfort · Living stands out most.",
+  "title": "Humidity",
+  "tone": {
+    "color": "#79A86C",
+    "icon": "mdi:water-percent",
+    "label": "Optimal",
+    "profileId": "indoor",
+    "score": 6,
+    "soft": "rgba(121,168,108,0.2)",
+    "source": "builtin",
+    "zone": "optimal"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "BA",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Bath",
+    "short": "BA",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 63.5
+  },
+  "warmestColor": "#C0A752",
+  "warmestPos": 83.75,
+  "warmestShift": 0
+}

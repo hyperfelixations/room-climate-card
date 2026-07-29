@@ -1,0 +1,41 @@
+# This repository is developed on Windows, where core.autocrlf=true converts
+# LF to CRLF on checkout. Three kinds of file must not be converted, because
+# they take part in byte-for-byte comparisons against freshly generated
+# content:
+#
+#   src/**/*.js       Rollup can carry line endings from source segments into
+#                     the bundle, so a CRLF working copy of the sources would
+#                     produce a CRLF bundle in memory.
+#   dist/*.js         `npm run verify:dist` rebuilds the bundle in memory and
+#                     compares it with the committed artifact.
+#   test/baseline/**  the characterization baselines are written and re-read by
+#                     Node with LF newlines (see test/helpers/characterization.js).
+#
+# There are two independent ways line endings could diverge, which is why
+# sources and artifact are pinned TOGETHER rather than one of them:
+#
+#   1. The separator lines Rollup generates itself are normally LF, but the
+#      code between them comes from the source files, so a CRLF working copy of
+#      src/ yields a bundle that mixes both.
+#   2. Even with LF sources, Git could convert the committed artifact on
+#      checkout, so the file on disk would no longer match what a rebuild
+#      produces in memory.
+#
+# Pinning only one side would leave the other free to drift and reintroduce
+# exactly the mismatch this is meant to prevent. verify-dist detects a
+# remaining case symmetrically and reports it as a checkout problem rather than
+# a stale bundle.
+#
+# Everything else keeps the repository's normal handling.
+src/**/*.js text eol=lf
+dist/*.js text eol=lf
+test/baseline/** text eol=lf
+
+# The characterization baselines are verbatim recordings of what the card
+# actually emits, not hand-written files. The card's template literals do
+# produce trailing whitespace inside the generated markup and CSS, so
+# `git diff --check` would flag ~1500 lines in them on every change. Stripping
+# that whitespace would corrupt the golden masters — the whole point is that
+# they match the real output byte for byte. Exempting them keeps the whitespace
+# check meaningful for the sources it is actually there to protect.
+test/baseline/** -whitespace

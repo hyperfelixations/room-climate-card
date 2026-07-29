@@ -1,0 +1,909 @@
+
+        
+        @keyframes rtc-track-slide {
+          
+          0% {
+            transform: translate3d(0%,0,0);
+            animation-timing-function: linear;
+          }
+          23.33333% {
+            transform: translate3d(0%,0,0);
+            animation-timing-function: cubic-bezier(0.45,0,0.16,1);
+          }
+
+          25% {
+            transform: translate3d(-33.333333333333336%,0,0);
+            animation-timing-function: linear;
+          }
+          48.33333% {
+            transform: translate3d(-33.333333333333336%,0,0);
+            animation-timing-function: cubic-bezier(0.45,0,0.16,1);
+          }
+
+          50% {
+            transform: translate3d(-66.66666666666667%,0,0);
+            animation-timing-function: linear;
+          }
+          73.33333% {
+            transform: translate3d(-66.66666666666667%,0,0);
+            animation-timing-function: cubic-bezier(0.45,0,0.16,1);
+          }
+
+          75% {
+            transform: translate3d(-33.333333333333336%,0,0);
+            animation-timing-function: linear;
+          }
+          98.33333% {
+            transform: translate3d(-33.333333333333336%,0,0);
+            animation-timing-function: cubic-bezier(0.45,0,0.16,1);
+          }
+          100% {
+            transform: translate3d(0%,0,0);
+          }
+        }
+      
+
+        :host {
+          display: block;
+          --rtc-radius: 20px;
+          --rtc-muted: var(--secondary-text-color);
+          --rtc-faint: color-mix(in srgb, var(--secondary-text-color) 72%, transparent);
+          --rtc-hairline: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 42%, transparent);
+          --rtc-panel: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+          --rtc-chip-bg: color-mix(in srgb, var(--primary-text-color) 3%, transparent);
+          --rtc-card-border: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 70%, transparent);
+          --rtc-top-overlay: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .rtc-card {
+          container: rtc-card / inline-size;
+          border-radius: var(--rtc-radius);
+          padding: 0;
+          overflow: hidden;
+          background: linear-gradient(135deg, var(--rtc-top-overlay), transparent), var(--ha-card-background, var(--card-background-color));
+          border: 1px solid var(--rtc-card-border);
+          box-shadow: var(--ha-card-box-shadow, 0 8px 26px rgba(0,0,0,0.18));
+        }
+
+        .rtc-root {
+          position: relative;
+          padding: 15px 16px 16px;
+          display: grid;
+          gap: 11px;
+        }
+
+        .rtc-top-line {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 3px;
+          background: linear-gradient(90deg, var(--tone-color), transparent);
+        }
+
+        .rtc-header {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 11px;
+          align-items: center;
+          min-width: 0;
+        }
+
+        .rtc-icon-badge {
+          width: 39px;
+          height: 39px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--tone-soft);
+          border: 1px solid var(--tone-border);
+        }
+
+        .rtc-icon-badge ha-icon {
+          width: 22px;
+          height: 22px;
+          color: var(--tone-color);
+        }
+
+        .rtc-title-block {
+          min-width: 0;
+        }
+
+        .rtc-title {
+          font-size: 21px;
+          font-weight: 920;
+          line-height: 1.05;
+          color: var(--primary-text-color);
+        }
+
+        .rtc-subtitle {
+          margin-top: 4px;
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1.25;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-status-pill {
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+          color: var(--tone-color);
+          background: var(--tone-soft);
+          border: 1px solid var(--tone-border);
+        }
+
+        .rtc-main-panel {
+          display: grid;
+          grid-template-columns: minmax(94px, 106px) minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          border-radius: 17px;
+          padding: 9px 10px;
+          background: var(--rtc-panel);
+          border: 1px solid var(--rtc-hairline);
+        }
+
+        button {
+          appearance: none;
+          -webkit-appearance: none;
+          font: inherit;
+          color: inherit;
+          border: 0;
+          margin: 0;
+          text-align: left;
+        }
+
+        .rtc-avg-button {
+          position: relative;
+          display: block;
+          width: 100%;
+          min-width: 0;
+          border-radius: 13px;
+          cursor: pointer;
+          background: transparent;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-avg-button-disabled {
+          cursor: default;
+        }
+
+        .rtc-avg-button:focus-visible,
+        .rtc-room-chip:focus-visible,
+        .rtc-extreme-card:focus-visible {
+          outline: 2px solid var(--tone-color);
+          outline-offset: 2px;
+        }
+
+        .rtc-avg-label {
+          display: block;
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .075em;
+          text-transform: uppercase;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-avg-value {
+          display: block;
+          margin-top: 4px;
+          font-size: 33px;
+          font-weight: 950;
+          line-height: .95;
+          color: var(--primary-text-color);
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+        }
+
+        .rtc-avg-unit-wrap {
+          display: inline-block;
+        }
+
+        .rtc-avg-unit-gap {
+          font-size: 14px;
+        }
+
+        .rtc-avg-unit-core {
+          display: inline;
+        }
+
+        .rtc-avg-button.rtc-has-trend .rtc-avg-unit-core {
+          display: inline-grid;
+          grid-template-rows: minmax(0, 1fr) auto;
+          justify-items: center;
+          align-items: center;
+          height: .95em;
+          vertical-align: bottom;
+        }
+
+        .rtc-avg-value-unit {
+          display: inline;
+          font-size: 14px;
+          font-weight: 750;
+          line-height: 1;
+          color: var(--rtc-faint);
+        }
+
+        .rtc-avg-trend-arrow {
+          display: block;
+          align-self: end;
+          width: 10px;
+          height: 10px;
+          color: var(--rtc-muted);
+          transform: translateY(-1px);
+        }
+
+        .rtc-avg-trend-arrow-svg {
+          display: block;
+          width: 10px;
+          height: 10px;
+          overflow: visible;
+          stroke-width: 1.2;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          transform: rotate(0deg);
+          transform-origin: center;
+        }
+
+        .rtc-avg-button[data-trend-direction="stable"] .rtc-avg-trend-arrow-svg {
+          transform: rotate(45deg);
+        }
+
+        .rtc-avg-button[data-trend-direction="falling"] .rtc-avg-trend-arrow-svg {
+          transform: rotate(90deg);
+        }
+
+        .rtc-avg-trend-arrow[hidden] {
+          display: none;
+        }
+
+        .rtc-rotator,
+        .rtc-rotator-solo {
+          min-width: 0;
+          height: 70px;
+          /* Keep the carousel clipped horizontally, but extend its paint
+             viewport upward for RangeScale's collision-only upper label.
+             overflow:hidden and paint containment both clipped at the
+             border box, which cut the label under Home Assistant's real
+             font metrics. The directional clip changes paint only: layout,
+             row heights, and the scale-bar position remain untouched. */
+          overflow: visible;
+          clip-path: inset(-10px 0 0 0);
+          border-radius: 14px;
+          contain: layout style;
+        }
+
+        .rtc-rotator {
+          /* Only the swipeable rotator needs pan-y so vertical scroll still reaches the browser. */
+          touch-action: pan-y;
+        }
+
+        .rtc-no-views {
+          /* _renderNoActiveViews(): a requested-but-unavailable view (e.g.
+             range_scale with no valid range_entity) falls back to this
+             localized one-line hint instead of the usual view content.
+             Previously unstyled — it inherited plain block/left/top text
+             instead of matching the rest of the card's centered, muted
+             typography. Same box as .rtc-rotator-solo above (this class is
+             always combined with it, never alone), so centering here only
+             needs flex on that existing 70px-tall box. */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 0 14px;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.3;
+          color: var(--secondary-text-color);
+        }
+
+        .rtc-track {
+          /* Width is views.length*100% so all views sit correctly side by side. */
+          display: flex;
+          width: 300%;
+          height: 70px;
+          align-items: stretch;
+          animation:rtc-track-slide 60000ms linear infinite;animation-delay:-40000ms;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          will-change: transform;
+        }
+
+        .rtc-track.rtc-manual {
+          animation: none !important;
+        }
+
+        .rtc-view {
+          /* Width is 100/views.length % of the track's own width. */
+          flex: 0 0 33.333333333333336%;
+          width: 33.333333333333336%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .rtc-scale-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          padding: 0 1px;
+        }
+
+        .rtc-scale-comfort-row {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 800;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-scale-comfort-label {
+          position: absolute;
+          top: 0;
+          transform: translateX(-50%);
+        }
+
+        /* "rangeScale" view (optional, requested via views:
+           [{type:"range_scale"}]): same overall
+           layout as .rtc-scale-view, but its top row holds three labels
+           (current/min/max) above their markers instead of one centered
+           "Komfort" pill — positions set/corrected in JS, see
+           _renderRangeScaleView()/_resolveRangeScaleLabels(). */
+        .rtc-range-scale-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          padding: 0 1px;
+        }
+
+        .rtc-range-scale-top-row {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 800;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-range-scale-label-current,
+        .rtc-range-scale-label-min,
+        .rtc-range-scale-label-max {
+          position: absolute;
+          top: 0;
+          /* JS sets style.left to a resolved center px value (see
+             _resolveRangeScaleLabels()), which this transform then centers
+             on. current is a FIXED pivot — always exactly centered on the
+             .rtc-marker-avg current-value marker, never repositioned by
+             collision avoidance. Only min/max drift off-center from their
+             own marker, and only when they'd otherwise overlap current or
+             each other. Ellipsis only actually engages when
+             _resolveRangeScaleLabels()/_layoutSideLabelGroup() sets an
+             explicit max-width (a side group doesn't fit even at natural
+             width, or — rarely — current alone is wider than the whole bar)
+             — harmless no-op otherwise. */
+          transform: translateX(-50%);
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* When one historical label cannot fit between the fixed current
+           pivot and its outer edge, only that colliding label moves to the
+           upper line. Current and any non-colliding historical label share
+           the lower line. The row height itself stays 12px, so the scale
+           bar's grid position never changes. */
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-current,
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-min,
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-max {
+          top: 4px;
+          line-height: 12px;
+        }
+
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-upper {
+          top: -8px;
+          line-height: 12px;
+          /* The generic label rule clips horizontally for the genuine
+             narrow-bar ellipsis fallback. A lifted min/max label instead
+             sits partly outside its normal line box; Home Assistant's real
+             font rasterization can paint glyph ink beyond that tight box
+             (most visibly the i-dot in "min"). Let the short historical
+             label paint freely in both axes so neither min nor max can
+             self-clip. Position, row height, and therefore the bar stay
+             byte-for-byte unchanged. */
+          overflow: visible;
+          text-overflow: clip;
+        }
+
+        .rtc-scale-bar {
+          position: relative;
+          height: 9px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+          overflow: visible;
+          border: 1px solid var(--rtc-hairline);
+        }
+
+        .rtc-comfort-band,
+        .rtc-optimal-band,
+        .rtc-marker {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+        }
+
+        .rtc-comfort-band {
+          background: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+          z-index: 1;
+        }
+
+        .rtc-optimal-band {
+          background: var(--tone-band);
+          z-index: 2;
+        }
+
+        .rtc-marker {
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 4px;
+          height: 17px;
+          border-radius: 999px;
+          background: var(--marker-color);
+          box-shadow: 0 0 0 3px var(--marker-shadow);
+        }
+
+        .rtc-marker-cold { z-index: 4; }
+        .rtc-marker-warm { z-index: 5; }
+        .rtc-marker-room {
+          height: 13px;
+          z-index: 4;
+        }
+        .rtc-marker-avg {
+          height: 15px;
+          z-index: 6;
+        }
+        .rtc-marker-avg.rtc-marker-emphasized {
+          height: 19px;
+        }
+
+        .rtc-scale-labels {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 750;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-scale-labels span {
+          position: absolute;
+          top: 0;
+          /* Ellipsis only actually engages on .rtc-scale-label-center, and
+             only when _resolveOptimalLabelPosition() sets an explicit
+             max-width (no non-overlapping position fits) — harmless no-op
+             on min/max, which never get a max-width. */
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-scale-label-min { left: 0; }
+        .rtc-scale-label-center { transform: translateX(-50%); }
+        .rtc-scale-label-max { right: 0; }
+
+        .rtc-scale-footer {
+          font-size: 10.5px;
+          font-weight: 750;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-extremes-view,
+        .rtc-range-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          padding: 0 1px;
+        }
+
+        .rtc-extreme-card {
+          position: relative;
+          min-width: 0;
+          height: 70px;
+          box-sizing: border-box;
+          border-radius: 14px;
+          padding: 8px 9px 7px;
+          overflow: hidden;
+          display: grid;
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto 1fr;
+          column-gap: 0;
+          row-gap: 1px;
+          background: linear-gradient(135deg, var(--extreme-bg), transparent 72%);
+          border: 1px solid var(--extreme-border);
+          box-shadow: inset 0 1px 0 color-mix(in srgb, var(--extreme-color) 16%, transparent);
+          cursor: pointer;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-extreme-line {
+          position: absolute;
+          left: 0;
+          top: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(90deg, var(--extreme-color), transparent);
+          box-shadow: 0 0 10px var(--extreme-line-shadow);
+          opacity: .98;
+        }
+
+        .rtc-extreme-label {
+          grid-column: 1;
+          grid-row: 1;
+          min-width: 0;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0;
+          color: var(--extreme-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.05;
+          opacity: .94;
+        }
+
+        .rtc-extreme-name {
+          grid-column: 1;
+          grid-row: 2;
+          align-self: start;
+          min-width: 0;
+          max-width: 100%;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.05;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-extreme-value {
+          grid-column: 1;
+          grid-row: 3;
+          align-self: end;
+          justify-self: end;
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-end;
+          font-size: 25px;
+          font-weight: 950;
+          line-height: .88;
+          color: var(--extreme-color);
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+          letter-spacing: -.02em;
+          min-width: 0;
+        }
+
+        .rtc-extreme-value-unit {
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: 0;
+        }
+
+        .rtc-room-grid {
+          /* One .rtc-room-row per row (see _roomGridRows()) — a plain flex
+             column, since native CSS grid can't vary column count per row
+             within a single grid. gap here is the vertical row gap. */
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .rtc-room-row {
+          display: grid;
+          /* grid-template-columns is set inline (repeat(rowSize, ...)) to match that row's chip count. */
+          gap: 6px;
+        }
+
+        .rtc-room-chip {
+          min-width: 0;
+          border-radius: 13px;
+          padding: 7px 7px 8px;
+          background: var(--room-bg);
+          border: 1px solid var(--room-border);
+          cursor: pointer;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-room-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .rtc-room-short {
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .04em;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+
+        /* Guarantees full visibility for an exactly-two-uppercase-letter
+           label (see TWO_UPPER_LETTER_RE / validRooms.shortGuaranteed) --
+           overflow:visible alone would not be enough, since .rtc-room-chip
+           itself clips at narrow widths (see the 460px/600px breakpoints
+           below) and .rtc-room-short competes for space in .rtc-room-top
+           with the fixed 15px .rtc-room-mark and its 4px gap. Presence-only
+           attribute selector: _patchRoomChip() sets/clears this via
+           toggleAttribute(), which does not guarantee the "true" value. */
+        .rtc-room-short[data-short-guaranteed] {
+          flex: 0 0 auto;
+          min-width: max-content;
+          overflow: visible;
+          text-overflow: clip;
+        }
+
+        .rtc-room-mark {
+          flex: 0 0 15px;
+          width: 15px;
+          height: 15px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 9px;
+          font-weight: 900;
+          line-height: 1;
+          color: var(--room-color);
+          background: var(--room-mark-bg);
+        }
+
+        .rtc-room-value {
+          display: flex;
+          align-items: baseline;
+          gap: 1px;
+          margin-top: 5px;
+          font-size: 17px;
+          font-weight: 920;
+          line-height: 1;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .rtc-room-value-unit {
+          flex: 0 0 auto;
+          font-size: 10px;
+          font-weight: 750;
+          color: var(--rtc-faint);
+        }
+
+        .rtc-empty {
+          padding: 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .rtc-empty-icon {
+          width: 38px;
+          height: 38px;
+          flex: 0 0 auto;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--rtc-panel);
+          border: 1px solid var(--rtc-hairline);
+        }
+
+        .rtc-empty-icon ha-icon {
+          width: 22px;
+          height: 22px;
+          color: var(--secondary-text-color);
+        }
+
+        .rtc-empty-copy {
+          min-width: 0;
+        }
+
+        .rtc-empty-title {
+          font-size: 21px;
+          font-weight: 900;
+          color: var(--primary-text-color);
+          line-height: 1.05;
+        }
+
+        .rtc-empty-subtitle {
+          margin-top: 4px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+          line-height: 1.3;
+        }
+
+        @container rtc-card (max-width: 460px) {
+          .rtc-root { padding: 14px; }
+          .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+          .rtc-avg-value { font-size: 29px; }
+          .rtc-room-grid { gap: 5px; }
+          .rtc-room-row { gap: 5px; }
+          .rtc-room-chip {
+            padding-left: 5px;
+            padding-right: 5px;
+            overflow: hidden;
+          }
+          .rtc-room-value {
+            font-size: 14px;
+            gap: 0;
+            letter-spacing: 0;
+            min-width: 0;
+          }
+          .rtc-room-value-unit {
+            font-size: 7.5px;
+            line-height: 1;
+            transform: translateY(-1px);
+          }
+          .rtc-room-short { font-size: 10px; }
+          .rtc-extremes-view,
+          .rtc-range-view { gap: 6px; }
+          .rtc-extreme-card {
+            height: 70px;
+            padding: 8px 7px 7px;
+          }
+          .rtc-extreme-label {
+            grid-column: 1;
+            grid-row: 1;
+            font-size: 9.5px;
+            white-space: nowrap;
+          }
+          .rtc-extreme-name {
+            font-size: 12.5px;
+          }
+          .rtc-extreme-value {
+            font-size: 22px;
+          }
+          .rtc-extreme-value-unit { font-size: 9px; }
+        }
+
+        @container rtc-card (max-width: 360px) {
+          .rtc-main-panel {
+            grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+          }
+          .rtc-rotator,
+          .rtc-rotator-solo,
+          .rtc-track,
+          .rtc-scale-view,
+          .rtc-range-scale-view,
+          .rtc-extremes-view,
+          .rtc-range-view {
+            height: 74px;
+          }
+          .rtc-extreme-card {
+            height: 74px;
+            padding-left: 6px;
+            padding-right: 6px;
+          }
+          .rtc-extreme-label {
+            font-size: 9px;
+          }
+          .rtc-extreme-name {
+            font-size: 12px;
+          }
+          .rtc-extreme-value {
+            font-size: 21px;
+          }
+        }
+
+        @supports not (container-type: inline-size) {
+          @media (max-width: 600px) {
+            .rtc-root { padding: 14px; }
+            .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+            .rtc-avg-value { font-size: 29px; }
+            .rtc-room-grid { gap: 5px; }
+            .rtc-room-row { gap: 5px; }
+            .rtc-room-chip {
+              padding-left: 5px;
+              padding-right: 5px;
+              overflow: hidden;
+            }
+            .rtc-room-value {
+              font-size: 14px;
+              gap: 0;
+              letter-spacing: 0;
+              min-width: 0;
+            }
+            .rtc-room-value-unit {
+              font-size: 7.5px;
+              line-height: 1;
+              transform: translateY(-1px);
+            }
+            .rtc-room-short { font-size: 10px; }
+            .rtc-extremes-view,
+            .rtc-range-view { gap: 6px; }
+            .rtc-extreme-card {
+              height: 70px;
+              padding: 8px 7px 7px;
+            }
+            .rtc-extreme-label {
+              font-size: 9.5px;
+              white-space: nowrap;
+            }
+            .rtc-extreme-name {
+              font-size: 12.5px;
+            }
+            .rtc-extreme-value {
+              font-size: 22px;
+            }
+            .rtc-extreme-value-unit { font-size: 9px; }
+          }
+
+          @media (max-width: 380px) {
+            .rtc-main-panel {
+              grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+            }
+            .rtc-rotator,
+            .rtc-rotator-solo,
+            .rtc-track,
+            .rtc-scale-view,
+            .rtc-range-scale-view,
+            .rtc-extremes-view,
+            .rtc-range-view {
+              height: 74px;
+            }
+            .rtc-extreme-card {
+              height: 74px;
+              padding-left: 6px;
+              padding-right: 6px;
+            }
+            .rtc-extreme-label {
+              font-size: 9px;
+            }
+            .rtc-extreme-name {
+              font-size: 12px;
+            }
+            .rtc-extreme-value {
+              font-size: 21px;
+            }
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          /* Disables the auto animation; transform isn't !important, so manual swiping still works. */
+          .rtc-track {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      

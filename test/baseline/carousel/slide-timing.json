@@ -1,0 +1,575 @@
+{
+  "views=0 rotation=1 slide=0.1": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 1000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 1100,
+      "slideMs": 100,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=0 rotation=14 slide=1": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 14000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 15000,
+      "slideMs": 1000,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=0 rotation=7 slide=2.5": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 7000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 9500,
+      "slideMs": 2500,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=1 rotation=1 slide=0.1": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [
+      []
+    ],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 1000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 1100,
+      "slideMs": 100,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=1 rotation=14 slide=1": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [
+      []
+    ],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 14000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 15000,
+      "slideMs": 1000,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=1 rotation=7 slide=2.5": {
+    "hasAutoSlide": false,
+    "holdSequence": [],
+    "holdWindows": [
+      []
+    ],
+    "maxTrackOffsetPct": "[-0]",
+    "timing": {
+      "cycleMs": 1,
+      "enabled": false,
+      "holdMs": 7000,
+      "phaseMs": 0,
+      "positions": [],
+      "segMs": 9500,
+      "slideMs": 2500,
+      "viewWidthPct": 100
+    },
+    "trackAnimationCss": "animation:none;transform:translate3d(0%,0,0);",
+    "viewWidthPct": 100
+  },
+  "views=2 rotation=1 slide=0.1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 1950,
+          "start": 1250
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -50,
+    "timing": {
+      "cycleMs": 2200,
+      "enabled": true,
+      "holdMs": 1000,
+      "phaseMs": 1000,
+      "positions": [
+        0,
+        1
+      ],
+      "segMs": 1100,
+      "slideMs": 100,
+      "viewWidthPct": 50
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 2200ms linear infinite;animation-delay:-1000ms;",
+    "viewWidthPct": 50
+  },
+  "views=2 rotation=14 slide=1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 13850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 28850,
+          "start": 15150
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -50,
+    "timing": {
+      "cycleMs": 30000,
+      "enabled": true,
+      "holdMs": 14000,
+      "phaseMs": 10000,
+      "positions": [
+        0,
+        1
+      ],
+      "segMs": 15000,
+      "slideMs": 1000,
+      "viewWidthPct": 50
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 30000ms linear infinite;animation-delay:-10000ms;",
+    "viewWidthPct": 50
+  },
+  "views=2 rotation=7 slide=2.5": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 6850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 16350,
+          "start": 9650
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -50,
+    "timing": {
+      "cycleMs": 19000,
+      "enabled": true,
+      "holdMs": 7000,
+      "phaseMs": 3000,
+      "positions": [
+        0,
+        1
+      ],
+      "segMs": 9500,
+      "slideMs": 2500,
+      "viewWidthPct": 50
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 19000ms linear infinite;animation-delay:-3000ms;",
+    "viewWidthPct": 50
+  },
+  "views=3 rotation=1 slide=0.1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 1950,
+          "start": 1250
+        },
+        {
+          "end": 4150,
+          "start": 3450
+        }
+      ],
+      [
+        {
+          "end": 3050,
+          "start": 2350
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -66.66666666666667,
+    "timing": {
+      "cycleMs": 4400,
+      "enabled": true,
+      "holdMs": 1000,
+      "phaseMs": 3200,
+      "positions": [
+        0,
+        1,
+        2,
+        1
+      ],
+      "segMs": 1100,
+      "slideMs": 100,
+      "viewWidthPct": 33.333333333333336
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 4400ms linear infinite;animation-delay:-3200ms;",
+    "viewWidthPct": 33.333333333333336
+  },
+  "views=3 rotation=14 slide=1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 13850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 28850,
+          "start": 15150
+        },
+        {
+          "end": 58850,
+          "start": 45150
+        }
+      ],
+      [
+        {
+          "end": 43850,
+          "start": 30150
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -66.66666666666667,
+    "timing": {
+      "cycleMs": 60000,
+      "enabled": true,
+      "holdMs": 14000,
+      "phaseMs": 40000,
+      "positions": [
+        0,
+        1,
+        2,
+        1
+      ],
+      "segMs": 15000,
+      "slideMs": 1000,
+      "viewWidthPct": 33.333333333333336
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 60000ms linear infinite;animation-delay:-40000ms;",
+    "viewWidthPct": 33.333333333333336
+  },
+  "views=3 rotation=7 slide=2.5": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 6850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 16350,
+          "start": 9650
+        },
+        {
+          "end": 35350,
+          "start": 28650
+        }
+      ],
+      [
+        {
+          "end": 25850,
+          "start": 19150
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -66.66666666666667,
+    "timing": {
+      "cycleMs": 38000,
+      "enabled": true,
+      "holdMs": 7000,
+      "phaseMs": 22000,
+      "positions": [
+        0,
+        1,
+        2,
+        1
+      ],
+      "segMs": 9500,
+      "slideMs": 2500,
+      "viewWidthPct": 33.333333333333336
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 38000ms linear infinite;animation-delay:-22000ms;",
+    "viewWidthPct": 33.333333333333336
+  },
+  "views=4 rotation=1 slide=0.1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      3,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 1950,
+          "start": 1250
+        },
+        {
+          "end": 6350,
+          "start": 5650
+        }
+      ],
+      [
+        {
+          "end": 3050,
+          "start": 2350
+        },
+        {
+          "end": 5250,
+          "start": 4550
+        }
+      ],
+      [
+        {
+          "end": 4150,
+          "start": 3450
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -75,
+    "timing": {
+      "cycleMs": 6600,
+      "enabled": true,
+      "holdMs": 1000,
+      "phaseMs": 1000,
+      "positions": [
+        0,
+        1,
+        2,
+        3,
+        2,
+        1
+      ],
+      "segMs": 1100,
+      "slideMs": 100,
+      "viewWidthPct": 25
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 6600ms linear infinite;animation-delay:-1000ms;",
+    "viewWidthPct": 25
+  },
+  "views=4 rotation=14 slide=1": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      3,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 13850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 28850,
+          "start": 15150
+        },
+        {
+          "end": 88850,
+          "start": 75150
+        }
+      ],
+      [
+        {
+          "end": 43850,
+          "start": 30150
+        },
+        {
+          "end": 73850,
+          "start": 60150
+        }
+      ],
+      [
+        {
+          "end": 58850,
+          "start": 45150
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -75,
+    "timing": {
+      "cycleMs": 90000,
+      "enabled": true,
+      "holdMs": 14000,
+      "phaseMs": 40000,
+      "positions": [
+        0,
+        1,
+        2,
+        3,
+        2,
+        1
+      ],
+      "segMs": 15000,
+      "slideMs": 1000,
+      "viewWidthPct": 25
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 90000ms linear infinite;animation-delay:-40000ms;",
+    "viewWidthPct": 25
+  },
+  "views=4 rotation=7 slide=2.5": {
+    "hasAutoSlide": true,
+    "holdSequence": [
+      0,
+      1,
+      2,
+      3,
+      2,
+      1
+    ],
+    "holdWindows": [
+      [
+        {
+          "end": 6850,
+          "start": 150
+        }
+      ],
+      [
+        {
+          "end": 16350,
+          "start": 9650
+        },
+        {
+          "end": 54350,
+          "start": 47650
+        }
+      ],
+      [
+        {
+          "end": 25850,
+          "start": 19150
+        },
+        {
+          "end": 44850,
+          "start": 38150
+        }
+      ],
+      [
+        {
+          "end": 35350,
+          "start": 28650
+        }
+      ]
+    ],
+    "maxTrackOffsetPct": -75,
+    "timing": {
+      "cycleMs": 57000,
+      "enabled": true,
+      "holdMs": 7000,
+      "phaseMs": 22000,
+      "positions": [
+        0,
+        1,
+        2,
+        3,
+        2,
+        1
+      ],
+      "segMs": 9500,
+      "slideMs": 2500,
+      "viewWidthPct": 25
+    },
+    "trackAnimationCss": "animation:rtc-track-slide 57000ms linear infinite;animation-delay:-22000ms;",
+    "viewWidthPct": 25
+  }
+}

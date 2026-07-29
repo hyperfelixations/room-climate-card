@@ -1,0 +1,181 @@
+{
+  "avg": 12.4,
+  "avgColor": "#9DA85A",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 35.42857142857143,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "35µg/m³",
+    "min": "0µg/m³"
+  },
+  "comfortCenter": 21.428571428571427,
+  "comfortLeft": 0,
+  "comfortMax": 15,
+  "comfortMin": 0,
+  "comfortVisible": true,
+  "comfortWidth": 42.857142857142854,
+  "coolest": {
+    "displayLabel": "LI",
+    "entity": "sensor.r2",
+    "hold_action": null,
+    "index": 1,
+    "name": "Living",
+    "short": "LI",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 4.1
+  },
+  "coolestColor": "#79A86C",
+  "coolestPos": 11.714285714285714,
+  "coolestShift": 0,
+  "displayStep": 5,
+  "displayUnitProfile": {
+    "baseDisplayStep": 5,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "µg/m³",
+    "fromCanonical": "[Function]",
+    "key": "microgram_per_m3",
+    "toCanonical": "[Function]",
+    "units": [
+      "µg/m³"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 1,
+  "markerPositions": {
+    "avg": 35.42857142857143,
+    "coolest": 11.714285714285714,
+    "room_0": 79.42857142857143,
+    "room_1": 11.714285714285714,
+    "warmest": 79.42857142857143
+  },
+  "metricType": "pm25",
+  "optimalCenter": 7.142857142857142,
+  "optimalLeft": 0,
+  "optimalMax": 5,
+  "optimalMin": 0,
+  "optimalVisible": true,
+  "optimalWidth": 14.285714285714285,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 2,
+  "roomRows": [
+    {
+      "columnCount": 2,
+      "itemCount": 2
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "LI",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Living",
+      "short": "LI",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 4.1
+    },
+    {
+      "displayLabel": "KI",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Kitchen",
+      "short": "KI",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 27.8
+    }
+  ],
+  "scaleMax": 35,
+  "scaleMin": 0,
+  "scaleRoomMarkers": [
+    {
+      "color": "#79A86C",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Living",
+      "position": 11.714285714285714,
+      "value": 4.1
+    },
+    {
+      "color": "#C98A67",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Kitchen",
+      "position": 79.42857142857143,
+      "value": 27.8
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 23.700000000000003,
+  "subtitle": "Avg. in comfort · Kitchen stands out most.",
+  "title": "PM2.5",
+  "tone": {
+    "color": "#9DA85A",
+    "icon": "mdi:weather-hazy",
+    "label": "Slightly elevated",
+    "profileId": "indoor",
+    "score": 7,
+    "soft": "rgba(157,168,90,0.2)",
+    "source": "builtin",
+    "zone": "comfort"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "KI",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Kitchen",
+    "short": "KI",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 27.8
+  },
+  "warmestColor": "#C98A67",
+  "warmestPos": 79.42857142857143,
+  "warmestShift": 0
+}

@@ -1,6 +1,7 @@
 # CI for the standalone room-climate-card repository.
-# The workflow validates syntax, unit behavior, and browser behavior for
-# pushes and pull requests targeting main.
+# The workflow validates that the committed distribution artifact still
+# matches its sources, then its syntax, unit behavior, and browser behavior,
+# for pushes and pull requests targeting main.
 
 name: CI
 
@@ -23,17 +24,31 @@ jobs:
 
       - run: npm ci
 
+      # Runs against the untouched checkout and never writes to dist/: it
+      # rebuilds the bundle in memory and compares it with the committed
+      # artifact. Building into dist/ first would compare the build with
+      # itself. Every later step loads that same committed artifact, so this
+      # has to come first.
+      #
+      # The steps after it deliberately use the internal *:run scripts. The
+      # public commands (npm run check / test:unit / test:browser) each verify
+      # the artifact themselves, which is what makes them safe to run on their
+      # own — but in a pipeline that would repeat the same Rollup build four
+      # times for no added guarantee.
+      - name: Verify committed bundle matches src/
+        run: npm run verify:dist
+
       - name: Syntax check
-        run: npm run check
+        run: npm run check:run
 
       - name: Unit tests (node:test + jsdom)
-        run: npm run test:unit
+        run: npm run test:unit:run
 
       - name: Install Playwright's Chromium
         run: npx playwright install chromium
 
       - name: Browser tests (Playwright)
-        run: npm run test:browser
+        run: npm run test:browser:run
 
       - name: Upload Playwright report on failure
         if: failure()

@@ -1,0 +1,183 @@
+{
+  "avg": 21.555555555555557,
+  "avgColor": "#79A86C",
+  "avgEntity": "",
+  "avgLabel": "Home avg.",
+  "avgPos": 42.592592592592624,
+  "avgSource": "calculated",
+  "boundaryLabels": {
+    "max": "25°C",
+    "min": "19°C"
+  },
+  "comfortCenter": 50.00000000000001,
+  "comfortLeft": 16.666666666666664,
+  "comfortMax": 24,
+  "comfortMin": 20,
+  "comfortVisible": true,
+  "comfortWidth": 66.66666666666669,
+  "coolest": {
+    "displayLabel": "RA",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Room A",
+    "short": "RA",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 21.11111111111111
+  },
+  "coolestColor": "#79A86C",
+  "coolestPos": 35.18518518518518,
+  "coolestShift": 0,
+  "displayStep": 1,
+  "displayUnitProfile": {
+    "baseDisplayStep": 1,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "°C",
+    "fromCanonical": "[Function]",
+    "key": "celsius",
+    "toCanonical": "[Function]",
+    "units": [
+      "°c",
+      "c",
+      "celsius"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 2,
+  "markerPositions": {
+    "avg": 42.592592592592624,
+    "coolest": 35.18518518518518,
+    "room_0": 35.18518518518518,
+    "room_1": 50,
+    "warmest": 50
+  },
+  "metricType": "temperature",
+  "optimalCenter": 49.99999999999999,
+  "optimalLeft": 33.33333333333333,
+  "optimalMax": 23,
+  "optimalMin": 21,
+  "optimalVisible": true,
+  "optimalWidth": 33.33333333333333,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 2,
+  "roomRows": [
+    {
+      "columnCount": 2,
+      "itemCount": 2
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "RA",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Room A",
+      "short": "RA",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 21.11111111111111
+    },
+    {
+      "displayLabel": "RB",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Room B",
+      "short": "RB",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 22
+    }
+  ],
+  "scaleMax": 25,
+  "scaleMin": 19,
+  "scaleRoomMarkers": [
+    {
+      "color": "#79A86C",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Room A",
+      "position": 35.18518518518518,
+      "value": 21.11111111111111
+    },
+    {
+      "color": "#79A86C",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Room B",
+      "position": 50,
+      "value": 22
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 0.8888888888888893,
+  "subtitle": "Avg. in comfort · all rooms are within target range.",
+  "title": "Temperature",
+  "tone": {
+    "color": "#79A86C",
+    "icon": "mdi:thermometer",
+    "label": "Optimal",
+    "profileId": "indoor",
+    "score": 6,
+    "soft": "rgba(121,168,108,0.2)",
+    "source": "builtin",
+    "zone": "optimal"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "RB",
+    "entity": "sensor.r2",
+    "hold_action": null,
+    "index": 1,
+    "name": "Room B",
+    "short": "RB",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 22
+  },
+  "warmestColor": "#79A86C",
+  "warmestPos": 50,
+  "warmestShift": 0
+}

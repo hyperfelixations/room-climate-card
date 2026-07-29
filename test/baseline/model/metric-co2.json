@@ -1,0 +1,181 @@
+{
+  "avg": 812,
+  "avgColor": "#9DA85A",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 57.99999999999999,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "1,400ppm",
+    "min": "0ppm"
+  },
+  "comfortCenter": 35.714285714285715,
+  "comfortLeft": 0,
+  "comfortMax": 1000,
+  "comfortMin": 0,
+  "comfortVisible": true,
+  "comfortWidth": 71.42857142857143,
+  "coolest": {
+    "displayLabel": "BE",
+    "entity": "sensor.r2",
+    "hold_action": null,
+    "index": 1,
+    "name": "Bedroom",
+    "short": "BE",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 640
+  },
+  "coolestColor": "#79A86C",
+  "coolestPos": 45.714285714285715,
+  "coolestShift": 0,
+  "displayStep": 200,
+  "displayUnitProfile": {
+    "baseDisplayStep": 200,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "ppm",
+    "fromCanonical": "[Function]",
+    "key": "ppm",
+    "toCanonical": "[Function]",
+    "units": [
+      "ppm"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 1,
+  "markerPositions": {
+    "avg": 57.99999999999999,
+    "coolest": 45.714285714285715,
+    "room_0": 84.28571428571429,
+    "room_1": 45.714285714285715,
+    "warmest": 84.28571428571429
+  },
+  "metricType": "co2",
+  "optimalCenter": 28.57142857142857,
+  "optimalLeft": 0,
+  "optimalMax": 800,
+  "optimalMin": 0,
+  "optimalVisible": true,
+  "optimalWidth": 57.14285714285714,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 2,
+  "roomRows": [
+    {
+      "columnCount": 2,
+      "itemCount": 2
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "BE",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Bedroom",
+      "short": "BE",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 640
+    },
+    {
+      "displayLabel": "OF",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Office",
+      "short": "OF",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 1180
+    }
+  ],
+  "scaleMax": 1400,
+  "scaleMin": 0,
+  "scaleRoomMarkers": [
+    {
+      "color": "#79A86C",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Bedroom",
+      "position": 45.714285714285715,
+      "value": 640
+    },
+    {
+      "color": "#C0A752",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Office",
+      "position": 84.28571428571429,
+      "value": 1180
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 540,
+  "subtitle": "Avg. in comfort · Office stands out most.",
+  "title": "CO₂",
+  "tone": {
+    "color": "#9DA85A",
+    "icon": "mdi:molecule-co2",
+    "label": "Slightly elevated",
+    "profileId": "indoor",
+    "score": 7,
+    "soft": "rgba(157,168,90,0.2)",
+    "source": "builtin",
+    "zone": "comfort"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "OF",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Office",
+    "short": "OF",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 1180
+  },
+  "warmestColor": "#C0A752",
+  "warmestPos": 84.28571428571429,
+  "warmestShift": 0
+}

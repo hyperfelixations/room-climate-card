@@ -1,0 +1,183 @@
+{
+  "avg": 22.4,
+  "avgColor": "#44cc66",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 52.49999999999999,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "30°C",
+    "min": "14°C"
+  },
+  "comfortCenter": 50,
+  "comfortLeft": 31.25,
+  "comfortMax": 25,
+  "comfortMin": 19,
+  "comfortVisible": true,
+  "comfortWidth": 37.5,
+  "coolest": {
+    "displayLabel": "RA",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Room A",
+    "short": "RA",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 17.4
+  },
+  "coolestColor": "#8888cc",
+  "coolestPos": 21.249999999999993,
+  "coolestShift": 0,
+  "displayStep": 2,
+  "displayUnitProfile": {
+    "baseDisplayStep": 1,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "°C",
+    "fromCanonical": "[Function]",
+    "key": "celsius",
+    "toCanonical": "[Function]",
+    "units": [
+      "°c",
+      "c",
+      "celsius"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 0,
+  "markerPositions": {
+    "avg": 52.49999999999999,
+    "coolest": 21.249999999999993,
+    "room_0": 21.249999999999993,
+    "room_1": 80.62499999999999,
+    "warmest": 80.62499999999999
+  },
+  "metricType": "temperature",
+  "optimalCenter": 50,
+  "optimalLeft": 43.75,
+  "optimalMax": 23,
+  "optimalMin": 21,
+  "optimalVisible": true,
+  "optimalWidth": 12.5,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 2,
+  "roomRows": [
+    {
+      "columnCount": 2,
+      "itemCount": 2
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "RA",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Room A",
+      "short": "RA",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 17.4
+    },
+    {
+      "displayLabel": "RB",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Room B",
+      "short": "RB",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 26.9
+    }
+  ],
+  "scaleMax": 30,
+  "scaleMin": 14,
+  "scaleRoomMarkers": [
+    {
+      "color": "#8888cc",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Room A",
+      "position": 21.249999999999993,
+      "value": 17.4
+    },
+    {
+      "color": "#cc4444",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Room B",
+      "position": 80.62499999999999,
+      "value": 26.9
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 9.5,
+  "subtitle": "Avg. in comfort · Room A stands out most.",
+  "title": "Temperature",
+  "tone": {
+    "color": "#44cc66",
+    "icon": "mdi:thermometer",
+    "label": "Custom optimal",
+    "profileId": "custom",
+    "score": 3,
+    "soft": "rgba(68,204,102,0.2)",
+    "source": "custom",
+    "zone": "optimal"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "RB",
+    "entity": "sensor.r2",
+    "hold_action": null,
+    "index": 1,
+    "name": "Room B",
+    "short": "RB",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 26.9
+  },
+  "warmestColor": "#cc4444",
+  "warmestPos": 80.62499999999999,
+  "warmestShift": 0
+}

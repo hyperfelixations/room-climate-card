@@ -1,0 +1,227 @@
+{
+  "views=2 rotation=1 slide=0.1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 1036,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 2136,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=2 rotation=14 slide=1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 14354,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 29354,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=2 rotation=7 slide=2.5": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 7885,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 17385,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=3 rotation=1 slide=0.1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 1036,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 2136,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 3236,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 4336,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=3 rotation=14 slide=1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 14354,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 29354,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 44354,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 59354,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=3 rotation=7 slide=2.5": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 7885,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 17385,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 26885,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 36385,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=4 rotation=1 slide=0.1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 1036,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 2136,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 3236,
+        "to": 3
+      },
+      {
+        "from": 3,
+        "phaseMs": 4336,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 5436,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 6536,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=4 rotation=14 slide=1": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 14354,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 29354,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 44354,
+        "to": 3
+      },
+      {
+        "from": 3,
+        "phaseMs": 59354,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 74354,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 89354,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  },
+  "views=4 rotation=7 slide=2.5": {
+    "flips": [
+      {
+        "from": 0,
+        "phaseMs": 7885,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 17385,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 26885,
+        "to": 3
+      },
+      {
+        "from": 3,
+        "phaseMs": 36385,
+        "to": 2
+      },
+      {
+        "from": 2,
+        "phaseMs": 45885,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "phaseMs": 55385,
+        "to": 0
+      }
+    ],
+    "startsAt": 0
+  }
+}

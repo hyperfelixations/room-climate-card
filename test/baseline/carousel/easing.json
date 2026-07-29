@@ -1,0 +1,31 @@
+{
+  "easing": {
+    "x1": 0.45,
+    "x2": 0.16,
+    "y1": 0,
+    "y2": 1
+  },
+  "samples": [
+    {
+      "easedProgress": 0.1,
+      "timeFraction": 0.19325768624479917
+    },
+    {
+      "easedProgress": 0.25,
+      "timeFraction": 0.2691306846346115
+    },
+    {
+      "easedProgress": 0.5,
+      "timeFraction": 0.3537499999999998
+    },
+    {
+      "easedProgress": 0.75,
+      "timeFraction": 0.4736491322056322
+    },
+    {
+      "easedProgress": 0.9,
+      "timeFraction": 0.6225112773441139
+    }
+  ],
+  "spatialMidpointTimeFraction": 0.3537499999999998
+}

@@ -1,0 +1,113 @@
+{
+  "avg": 22.4,
+  "avgColor": "#79A86C",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 56.66666666666664,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "25°C",
+    "min": "19°C"
+  },
+  "comfortCenter": 50.00000000000001,
+  "comfortLeft": 16.666666666666664,
+  "comfortMax": 24,
+  "comfortMin": 20,
+  "comfortVisible": true,
+  "comfortWidth": 66.66666666666669,
+  "coolest": null,
+  "coolestColor": null,
+  "coolestPos": 0,
+  "coolestShift": 0,
+  "displayStep": 1,
+  "displayUnitProfile": {
+    "baseDisplayStep": 1,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "°C",
+    "fromCanonical": "[Function]",
+    "key": "celsius",
+    "toCanonical": "[Function]",
+    "units": [
+      "°c",
+      "c",
+      "celsius"
+    ]
+  },
+  "empty": false,
+  "hasRange": false,
+  "hasRangeScale": false,
+  "hasRoomsView": false,
+  "inComfort": 0,
+  "markerPositions": {
+    "avg": 56.66666666666664
+  },
+  "metricType": "temperature",
+  "optimalCenter": 49.99999999999999,
+  "optimalLeft": 33.33333333333333,
+  "optimalMax": 23,
+  "optimalMin": 21,
+  "optimalVisible": true,
+  "optimalWidth": 33.33333333333333,
+  "rangeCurrentPos": 0,
+  "rangeMax": null,
+  "rangeMaxColor": null,
+  "rangeMaxPos": 0,
+  "rangeMaxTime": null,
+  "rangeMin": null,
+  "rangeMinColor": null,
+  "rangeMinPos": 0,
+  "rangeMinTime": null,
+  "rangeScaleGeometry": null,
+  "rangeState": null,
+  "roomCount": 0,
+  "roomRows": [],
+  "rooms": [],
+  "scaleMax": 25,
+  "scaleMin": 19,
+  "scaleRoomMarkers": [],
+  "showRoomChips": false,
+  "spread": 0,
+  "subtitle": "Avg. in comfort.",
+  "title": "Temperature",
+  "tone": {
+    "color": "#79A86C",
+    "icon": "mdi:thermometer",
+    "label": "Optimal",
+    "profileId": "indoor",
+    "score": 6,
+    "soft": "rgba(121,168,108,0.2)",
+    "source": "builtin",
+    "zone": "optimal"
+  },
+  "trend": null,
+  "trendUnit": null,
+  "trendValue": null,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "scale"
+  ],
+  "warmest": null,
+  "warmestColor": null,
+  "warmestPos": 0,
+  "warmestShift": 0
+}

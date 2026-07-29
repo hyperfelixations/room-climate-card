@@ -6,19 +6,23 @@
 // "en" reference block. TRANSLATIONS itself is scoped inside the file's own
 // IIFE closure (not exported), so key parity is verified the same way a
 // real user would ever notice it: by spying on console.warn during script
-// load and asserting the file's own self-check (see the "Self-check" block
-// right after TRANSLATIONS in room-climate-card.js) never fires.
+// load and asserting the bundle's own self-check (verifyTranslationKeyParity()
+// from src/i18n/integrity.js, invoked at the end of src/i18n/registry.js)
+// never fires.
+//
+// This test needs its own console-instrumented realm (the shared helper's
+// environment has already evaluated the bundle by the time a test runs), but
+// it takes the artifact PATH from that helper — there is exactly one place in
+// the suite that knows where the build output lives.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
-const path = require("path");
 const vm = require("vm");
 const { JSDOM } = require("jsdom");
-const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
+const { createTestEnvironment, CARD_SOURCE_PATH } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "room-climate-card.js");
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 

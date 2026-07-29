@@ -1,0 +1,20 @@
+{
+  "entity": "sensor.house_temperature",
+  "rooms": [
+    {
+      "entity": "sensor.kitchen_temperature",
+      "name": "Kitchen",
+      "short": "KI"
+    },
+    {
+      "entity": "sensor.bedroom_temperature",
+      "name": "Bedroom",
+      "short": "BE"
+    },
+    {
+      "entity": "sensor.living_room_temperature",
+      "name": "Living Room",
+      "short": "LR"
+    }
+  ]
+}

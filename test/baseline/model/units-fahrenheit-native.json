@@ -1,0 +1,209 @@
+{
+  "avg": 72.5,
+  "avgColor": "#79A86C",
+  "avgEntity": "sensor.avg",
+  "avgLabel": "Home avg.",
+  "avgPos": 54.166666666666664,
+  "avgSource": "sensor",
+  "boundaryLabels": {
+    "max": "78°F",
+    "min": "66°F"
+  },
+  "comfortCenter": 45.83333333333333,
+  "comfortLeft": 16.666666666666664,
+  "comfortMax": 75,
+  "comfortMin": 68,
+  "comfortVisible": true,
+  "comfortWidth": 58.333333333333336,
+  "coolest": {
+    "displayLabel": "RA",
+    "entity": "sensor.r1",
+    "hold_action": null,
+    "index": 0,
+    "name": "Room A",
+    "short": "RA",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 69.8
+  },
+  "coolestColor": "#69A78B",
+  "coolestPos": 31.666666666666643,
+  "coolestShift": 0,
+  "displayStep": 2,
+  "displayUnitProfile": {
+    "baseDisplayStep": 2,
+    "deltaFromCanonical": "[Function]",
+    "deltaToCanonical": "[Function]",
+    "displayUnit": "°F",
+    "dynamicDisplaySteps": [
+      {
+        "maxSpan": 20,
+        "step": 2
+      },
+      {
+        "maxSpan": 40,
+        "step": 5
+      },
+      {
+        "maxSpan": "[Infinity]",
+        "step": 10
+      }
+    ],
+    "fromCanonical": "[Function]",
+    "key": "fahrenheit",
+    "thresholdRounding": "[Function]",
+    "toCanonical": "[Function]",
+    "units": [
+      "°f",
+      "f",
+      "fahrenheit"
+    ]
+  },
+  "empty": false,
+  "hasRange": true,
+  "hasRangeScale": false,
+  "hasRoomsView": true,
+  "inComfort": 1,
+  "markerPositions": {
+    "avg": 54.166666666666664,
+    "coolest": 31.666666666666643,
+    "room_0": 31.666666666666643,
+    "room_1": 76.6666666666667,
+    "warmest": 76.6666666666667
+  },
+  "metricType": "temperature",
+  "optimalCenter": 45.83333333333333,
+  "optimalLeft": 33.33333333333333,
+  "optimalMax": 73,
+  "optimalMin": 70,
+  "optimalVisible": true,
+  "optimalWidth": 25.000000000000007,
+  "rangeCurrentPos": 0,
+  "rangeMax": 77.9,
+  "rangeMaxColor": "#C98A67",
+  "rangeMaxPos": 0,
+  "rangeMaxTime": "16:03",
+  "rangeMin": 64.4,
+  "rangeMinColor": "#76A0C0",
+  "rangeMinPos": 0,
+  "rangeMinTime": "05:48",
+  "rangeScaleGeometry": null,
+  "rangeState": 8.1,
+  "roomCount": 2,
+  "roomRows": [
+    {
+      "columnCount": 2,
+      "itemCount": 2
+    }
+  ],
+  "rooms": [
+    {
+      "displayLabel": "RA",
+      "entity": "sensor.r1",
+      "hold_action": null,
+      "index": 0,
+      "name": "Room A",
+      "short": "RA",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 69.8
+    },
+    {
+      "displayLabel": "RB",
+      "entity": "sensor.r2",
+      "hold_action": null,
+      "index": 1,
+      "name": "Room B",
+      "short": "RB",
+      "shortGuaranteed": true,
+      "tap_action": null,
+      "value": 75.2
+    }
+  ],
+  "scaleMax": 78,
+  "scaleMin": 66,
+  "scaleRoomMarkers": [
+    {
+      "color": "#69A78B",
+      "entity": "sensor.r1",
+      "index": 0,
+      "name": "Room A",
+      "position": 31.666666666666643,
+      "value": 69.8
+    },
+    {
+      "color": "#C0A752",
+      "entity": "sensor.r2",
+      "index": 1,
+      "name": "Room B",
+      "position": 76.6666666666667,
+      "value": 75.2
+    }
+  ],
+  "showRoomChips": true,
+  "spread": 5.4,
+  "subtitle": "Avg. in comfort · Room B stands out most.",
+  "title": "Temperature",
+  "tone": {
+    "color": "#79A86C",
+    "icon": "mdi:thermometer",
+    "label": "Optimal",
+    "profileId": "indoor",
+    "score": 6,
+    "soft": "rgba(121,168,108,0.2)",
+    "source": "builtin",
+    "zone": "optimal"
+  },
+  "trend": {
+    "canonicalValue": 1,
+    "direction": "rising",
+    "directionTranslationKey": "trend.direction.rising",
+    "policy": {
+      "fallingBelow": -0.1,
+      "risingAbove": 0.1
+    },
+    "unit": "°F/h",
+    "value": 1.8
+  },
+  "trendUnit": "°F/h",
+  "trendValue": 1.8,
+  "viewAreaCollapsed": false,
+  "viewOptions": {
+    "extremes": {
+      "show_value": true
+    },
+    "range": {
+      "show_time": true
+    },
+    "range_scale": {
+      "footer": "detailed",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    },
+    "scale": {
+      "footer": true,
+      "markers": "extremes",
+      "show_comfort_band": true,
+      "show_optimal_band": true
+    }
+  },
+  "views": [
+    "range",
+    "scale",
+    "extremes"
+  ],
+  "warmest": {
+    "displayLabel": "RB",
+    "entity": "sensor.r2",
+    "hold_action": null,
+    "index": 1,
+    "name": "Room B",
+    "short": "RB",
+    "shortGuaranteed": true,
+    "tap_action": null,
+    "value": 75.2
+  },
+  "warmestColor": "#C0A752",
+  "warmestPos": 76.6666666666667,
+  "warmestShift": 0
+}

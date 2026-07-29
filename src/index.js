@@ -1,5 +1,79 @@
-(() => {
-  "use strict";
+// Build entry module. Rollup bundles this into the single, dependency-free
+// IIFE that Home Assistant loads (dist/room-climate-card.js) — the IIFE
+// wrapper and "use strict" prologue that used to be written by hand here are
+// now emitted by the build (see rollup.config.mjs), which is why this file
+// starts directly with the module body.
+//
+// dist/room-climate-card.js is generated and committed; never edit it.
+// `npm run build` regenerates it, `npm run verify:dist` proves the committed
+// copy still matches this source.
+//
+// This module is the composition root, and it is shrinking. Already extracted:
+// card identity, numeric/text/colour primitives and the slide easing (core/),
+// the whole i18n subsystem (i18n/), the static configuration foundations
+// (config/), and the measurement domain — unit tokens and conversion, the
+// metric definitions with their unit profiles, the derived metric-kind
+// resolution, the six classification profiles with their registry, and the
+// trend rules (domain/).
+//
+// What is still HERE, to be moved in later, individually verifiable steps:
+//   - configuration orchestration and normalization (setConfig(),
+//     _normalizeConfig() and everything it calls)
+//   - METRIC_META (presentation metadata: title keys, icons, decimals)
+//   - VIEW_REGISTRY (still carries render/update callbacks, so it belongs to
+//     the views/render phase)
+//   - the remaining domain services (classification resolution/projection,
+//     numeric classification, scale geometry)
+//   - _computeData()
+//   - the renderers, _styles(), the runtime (carousel, timers, pointer and
+//     event handling) and the custom element itself
+//
+// Import direction is enforced by test/unit/architecture-imports.test.js:
+//
+//   core -> config / i18n / domain -> application/model
+//        -> presentation/view-model -> views + render
+//        -> controllers/runtime -> element -> this file
+//
+// Nothing below may be imported by a module above it, and Rollup's onwarn
+// (see rollup.config.mjs) turns any cycle or unresolved specifier into a
+// build failure.
+
+import { CARD_NAME, CARD_TYPE, CARD_VERSION } from "./core/card-metadata.js";
+import { isHexColor, rgba } from "./core/color.js";
+import {
+  ceilToStep,
+  clamp,
+  floorToStep,
+  parseConfigNumber,
+  parseNumericState,
+  percentInRange,
+} from "./core/numbers.js";
+import { escapeHtml, isTwoUpperLetterLabel } from "./core/text.js";
+import {
+  A11Y_FLIP_TIME_FRACTION,
+  SLIDE_EASING_CSS,
+  timeFractionForEasedProgress,
+} from "./core/easing.js";
+import { formatNumber, formatTimeOfDay } from "./i18n/formatters.js";
+import { isSupportedLanguage, resolveLanguage, translate } from "./i18n/translate.js";
+import { DEFAULT_CONFIG } from "./config/defaults.js";
+import { isAllowedActionType } from "./config/actions.js";
+import { boolOption, enumOption } from "./config/option-schemas.js";
+import { CLASSIFICATION_PROFILE_REGISTRY } from "./domain/classification/registry.js";
+import { CLASSIFICATION_ZONES } from "./domain/classification/zones.js";
+import { METRIC_DEFINITIONS } from "./domain/metrics/definitions.js";
+import {
+  METRIC_TYPE_BY_DEVICE_CLASS,
+  METRIC_TYPE_BY_UNIT,
+  resolveUnitProfileKey,
+} from "./domain/metrics/resolution.js";
+import { normalizeUnitToken } from "./domain/units/unit-token.js";
+import {
+  convertUnitValue,
+  deriveBandForProfile,
+  deriveThresholdsForProfile,
+} from "./domain/units/conversion.js";
+import { TREND_DIRECTION_META, TREND_POLICY_REGISTRY, classifyTrendRate } from "./domain/trend.js";
 
   // Custom card for Home Assistant room climate data (temperature, humidity,
   // CO2, PM2.5). Public usage documentation lives in this repository's
@@ -10,82 +84,12 @@
   // built-in profiles, or a validated custom YAML profile. A profile owns
   // tiers, score/zone metadata, bands, scale policy, and profile icons together.
 
-  // ==== Constants: card metadata, metric mode, language ====
-  const CARD_TYPE = "room-climate-card";
-  const CARD_NAME = "Room Climate Card";
-  const CARD_VERSION = "2.36.0";
 
-  // Matches a room-chip label that is exactly two Unicode uppercase letters
-  // (e.g. "WZ", "KÜ") — the only case where a room's short code is
-  // guaranteed to never shrink/ellipsize (see validRooms/shortGuaranteed in
-  // _computeData() and .rtc-room-short[data-short-guaranteed] below).
-  const TWO_UPPER_LETTER_RE = /^\p{Lu}\p{Lu}$/u;
 
-  // Card defaults. Mode-dependent title/unit/icon/decimals are not here —
-  // presentation metadata lives in METRIC_META, while every semantic
-  // classification/scale decision lives in CLASSIFICATION_PROFILE_REGISTRY.
-  // No default entities: entity is the only required config field, rooms
-  // is optional (minimal mode), see _normalizeConfig().
-  const DEFAULT_CONFIG = {
-    rotation_seconds: 14, // hold time per view
-    slide_seconds: 1, // transition time between views
-    hold_seconds: 0.5,
-    tap_action: { action: "more-info" },
-    hold_action: { action: "more-info" },
-    auto_slide: true, // AP-C1: automatic rotation between views
-    swipe: true, // AP-C1: manual horizontal drag gesture, independent of auto_slide
-  };
 
-  // HA state values that never represent a usable measurement.
-  const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
 
-  // Accepted shape for the value_color HA attribute; anything else is
-  // rejected in _getEntityClassification() before it can reach a CSS/HTML
-  // context (a public card must not trust arbitrary integration attributes).
-  const HEX_COLOR_PATTERN = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
-  // Known Home Assistant action types accepted for tap_action/hold_action.
-  // Config comes from the dashboard owner (same trust model as any other
-  // card's tap_action), but the action name is still checked against this
-  // list in _normalizeAction() since it ends up in a dispatched
-  // hass-action event — an unknown/missing value falls back safely instead
-  // of being passed through raw.
-  const ACTION_ALLOWLIST = new Set(["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"]);
-
-  // Unit strings arrive from integrations and template sensors, so
-  // semantically identical spellings can differ at the Unicode/text level
-  // (notably PM2.5: micro sign `µ` vs. Greek mu `μ`, superscript `³` vs.
-  // plain `3`, and optional `^`/whitespace). Normalize only representation;
-  // the resulting token must still match an explicitly registered profile.
-  // This preserves the strict "unknown unit is unusable" safety boundary.
-  function normalizeUnitToken(unit) {
-    if (typeof unit !== "string") return "";
-    return unit
-      .trim()
-      .normalize("NFKC")
-      .toLowerCase()
-      .replace(/\s+/g, "")
-      .replace(/[µμ]/g, "u")
-      .replace(/\^3\b/g, "3");
-  }
-
-  // Maps an entity's device_class to a card mode. Primary source for
-  // _metricTypeForEntity(); values match Home Assistant's SensorDeviceClass enum.
-  const METRIC_TYPE_BY_DEVICE_CLASS = {
-    temperature: "temperature",
-    humidity: "humidity",
-    carbon_dioxide: "co2",
-    pm25: "pm25",
-  };
-
-  // Fallback source for _metricType() when device_class is missing/unknown.
-  // Review fix (post-AP-01..03): this used to be a separate, hand-maintained
-  // literal here — now derived atomically from METRIC_DEFINITIONS further
-  // below (declared right after METRIC_DEFINITIONS, since it depends on it)
-  // so there is exactly one place that says "which unit strings belong to
-  // which metric kind". See the derivation site for the full rationale.
-
-  // Display metadata per detected card mode: title key (see TRANSLATIONS),
+  // Display metadata per detected card mode: title key (see i18n/registry.js),
   // icon (normal/empty state), unit fallback (only used when the entity has
   // no unit_of_measurement), default decimal places for _fmt(), the
   // translation keys for the coldest/warmest-equivalent room labels and the
@@ -100,7 +104,7 @@
       titleKey: "title.temperature",
       icon: "mdi:thermometer",
       emptyIcon: "mdi:thermometer-off",
-      unitFallback: "°C",
+      unitFallback: METRIC_DEFINITIONS.temperature.canonicalUnit,
       decimals: 1,
       lowRoomKey: "card.coldestRoom",
       highRoomKey: "card.warmestRoom",
@@ -112,7 +116,7 @@
       titleKey: "title.humidity",
       icon: "mdi:water-percent",
       emptyIcon: "mdi:water-off",
-      unitFallback: "%",
+      unitFallback: METRIC_DEFINITIONS.humidity.canonicalUnit,
       decimals: 1,
       lowRoomKey: "card.driestRoom",
       highRoomKey: "card.mostHumidRoom",
@@ -124,7 +128,7 @@
       titleKey: "title.co2",
       icon: "mdi:molecule-co2",
       emptyIcon: "mdi:molecule-co2",
-      unitFallback: "ppm",
+      unitFallback: METRIC_DEFINITIONS.co2.canonicalUnit,
       decimals: 0,
       lowRoomKey: "card.lowestRoom",
       highRoomKey: "card.highestRoom",
@@ -136,7 +140,7 @@
       titleKey: "title.pm25",
       icon: "mdi:molecule",
       emptyIcon: "mdi:molecule",
-      unitFallback: "µg/m³",
+      unitFallback: METRIC_DEFINITIONS.pm25.canonicalUnit,
       decimals: 1,
       lowRoomKey: "card.lowestRoom",
       highRoomKey: "card.highestRoom",
@@ -146,2021 +150,16 @@
     },
   };
 
-  // Trend direction is a semantic classification of a RATE, independent
-  // from its display unit. Policies therefore live in each metric's
-  // canonical unit (°C/h, percentage points/h, ppm/h, µg/m³/h). Keeping
-  // lower and upper limits separate deliberately permits future asymmetric
-  // YAML or entity-attribute overrides without changing the classifier or
-  // renderer. Values exactly on either boundary remain stable.
-  const TREND_POLICY_REGISTRY = Object.freeze({
-    temperature: Object.freeze({ fallingBelow: -0.1, risingAbove: 0.1 }),
-    humidity: Object.freeze({ fallingBelow: -0.5, risingAbove: 0.5 }),
-    co2: Object.freeze({ fallingBelow: -25, risingAbove: 25 }),
-    pm25: Object.freeze({ fallingBelow: -0.5, risingAbove: 0.5 }),
-  });
 
-  const TREND_DIRECTION_META = Object.freeze({
-    rising: Object.freeze({ translationKey: "trend.direction.rising" }),
-    stable: Object.freeze({ translationKey: "trend.direction.stable" }),
-    falling: Object.freeze({ translationKey: "trend.direction.falling" }),
-  });
 
-  function classifyTrendRate(canonicalValue, policy) {
-    if (!Number.isFinite(canonicalValue) || !policy) return null;
-    // Unit conversion can turn an exact boundary into an adjacent floating-
-    // point representation (0.18°F/h -> 0.1°C/h). Absorb only machine-scale
-    // noise; a materially outside value must still change direction.
-    const epsilon = Number.EPSILON * Math.max(1, Math.abs(canonicalValue), Math.abs(policy.fallingBelow), Math.abs(policy.risingAbove)) * 8;
-    if (canonicalValue < policy.fallingBelow - epsilon) return "falling";
-    if (canonicalValue > policy.risingAbove + epsilon) return "rising";
-    return "stable";
-  }
 
-  // The closed set of tier/invalid-classification zone values. Single
-  // source of truth for both the built-in profiles below and custom-profile
-  // validation (_normalizeCustomClassification()) — anything that needs to
-  // know "which zone values exist" reads this instead of repeating the list.
-  const CLASSIFICATION_ZONES = Object.freeze(["optimal", "comfort", "outside", "invalid"]);
 
-  // One classification profile owns every semantic decision that must stay
-  // coherent: tiers, score/zone metadata, comfort/optimal bands, scale policy,
-  // physical validity, and profile icon thresholds. Unit conversion is
-  // deliberately separate in METRIC_DEFINITIONS (UnitProfile).
-  const CLASSIFICATION_PROFILE_REGISTRY = {
-    temperature: {
-      defaultProfile: "indoor",
-      profiles: {
-        indoor: {
-          id: "indoor",
-          metricKind: "temperature",
-          comparison: ">=",
-          tiers: [
-            { min: 28, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
-            { min: 26, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
-            { min: 25, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
-            { min: 24, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
-            { min: 23, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
-            { min: 21, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 20, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
-            { min: 19, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
-            { min: 18, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
-            { min: 16, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
-            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
-          ],
-          comfort: { min: 20, max: 24 },
-          optimal: { min: 21, max: 23 },
-          scale: { min: 19, max: 25 },
-          step: 1,
-          iconThresholds: { fire: 28, high: 26, normal: 20, low: 18 },
-        },
-        outdoor: {
-          id: "outdoor",
-          metricKind: "temperature",
-          comparison: ">=",
-          tiers: [
-            { min: 35, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
-            { min: 30, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
-            { min: 28, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
-            { min: 26, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
-            { min: 22, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
-            { min: 18, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 14, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
-            { min: 10, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
-            { min: 5, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
-            { min: 0, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
-            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
-          ],
-          comfort: { min: 14, max: 26 },
-          optimal: { min: 18, max: 22 },
-          scale: { min: 10, max: 30 },
-          step: 1,
-          // Outdoor readings are seasonal. Keep the reference scale as
-          // classification metadata, but do not force it into the rendered
-          // axis: _dynamicScale() derives both edges from the live values
-          // plus its normal one-step headroom.
-          anchorScale: false,
-          iconThresholds: { fire: 35, high: 30, normal: 14, low: 5 },
-        },
-        // Appliance profile, not a room: target band follows common food-
-        // safety guidance (e.g. FDA/EU "at or below 5 C", ideal ~3-4 C) —
-        // the internationally cited "danger zone" for holding food starts
-        // at 8 C, so the tiers widen that headroom on the warm side, the
-        // direction that actually risks spoilage. anchorScale stays at its
-        // default (true, unlike outdoor): a fridge's normal operating band
-        // is narrow and well-defined by the compressor's own cycling, so a
-        // fixed reference axis is more useful here than one that floats
-        // with every door-open spike.
-        fridge: {
-          id: "fridge",
-          metricKind: "temperature",
-          comparison: ">=",
-          tiers: [
-            { min: 12, score: 11, levelKey: "level.veryHot", color: "#B85F67", zone: "outside" },
-            { min: 10, score: 10, levelKey: "level.hot", color: "#C67277", zone: "outside" },
-            { min: 8, score: 9, levelKey: "level.veryWarm", color: "#C98A67", zone: "outside" },
-            { min: 6, score: 8, levelKey: "level.warm", color: "#C0A752", zone: "outside" },
-            { min: 5, score: 7, levelKey: "level.slightlyWarm", color: "#9DA85A", zone: "comfort" },
-            { min: 3, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 1, score: 5, levelKey: "level.slightlyCool", color: "#69A78B", zone: "comfort" },
-            { min: 0, score: 4, levelKey: "level.fresh", color: "#67A7AE", zone: "outside" },
-            { min: -2, score: 3, levelKey: "level.cool", color: "#76A0C0", zone: "outside" },
-            { min: -4, score: 2, levelKey: "level.cold", color: "#8192C8", zone: "outside" },
-            { min: -Infinity, score: 1, levelKey: "level.veryCold", color: "#8A88C9", zone: "outside" },
-          ],
-          comfort: { min: 1, max: 6 },
-          optimal: { min: 3, max: 5 },
-          scale: { min: 0, max: 8 },
-          step: 1,
-          iconThresholds: { fire: 12, high: 10, normal: 1, low: -2 },
-        },
-      },
-    },
-    humidity: {
-      defaultProfile: "indoor",
-      profiles: {
-        indoor: {
-          id: "indoor",
-          metricKind: "humidity",
-          comparison: ">=",
-          invalidWhen: (value) => value < 0 || value > 100,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-          tiers: [
-            { min: 75, score: 11, levelKey: "level.criticallyHumid", color: "#B85F67", zone: "outside" },
-            { min: 70, score: 10, levelKey: "level.tooHumid", color: "#C67277", zone: "outside" },
-            { min: 65, score: 9, levelKey: "level.veryHumid", color: "#C98A67", zone: "outside" },
-            { min: 60, score: 8, levelKey: "level.humid", color: "#C0A752", zone: "outside" },
-            { min: 58, score: 7, levelKey: "level.slightlyHumid", color: "#9DA85A", zone: "comfort" },
-            { min: 42, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-            { min: 40, score: 5, levelKey: "level.slightlyDry", color: "#69A78B", zone: "comfort" },
-            { min: 35, score: 4, levelKey: "level.dry", color: "#67A7AE", zone: "outside" },
-            { min: 30, score: 3, levelKey: "level.veryDry", color: "#76A0C0", zone: "outside" },
-            { min: 25, score: 2, levelKey: "level.tooDry", color: "#8192C8", zone: "outside" },
-            { min: -Infinity, score: 1, levelKey: "level.criticallyDry", color: "#8A88C9", zone: "outside" },
-          ],
-          comfort: { min: 40, max: 60 },
-          optimal: { min: 42, max: 58 },
-          scale: { min: 35, max: 65 },
-          step: 5,
-          iconTiers: [
-            { min: 75, icon: "mdi:water-percent-alert" },
-            { min: 60, icon: "mdi:water-plus" },
-            { min: 40, icon: "mdi:water-percent" },
-            { min: -Infinity, icon: "mdi:water-minus" },
-          ],
-        },
-      },
-    },
-    co2: {
-      defaultProfile: "indoor",
-      profiles: {
-        indoor: {
-          id: "indoor",
-          metricKind: "co2",
-          comparison: ">=",
-          invalidWhen: (value) => value <= 0,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-          tiers: [
-            { min: 2000, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "outside" },
-            { min: 1600, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "outside" },
-            { min: 1200, score: 9, levelKey: "level.high", color: "#C98A67", zone: "outside" },
-            { min: 1000, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "outside" },
-            { min: 800, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "comfort" },
-            { min: -Infinity, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-          ],
-          comfort: { min: 0, max: 1000 },
-          optimal: { min: 0, max: 800 },
-          scale: { min: 0, max: 1200 },
-          step: 200,
-          oneSided: true,
-          headroom: 100,
-          iconTiers: [
-            { min: 2000, icon: "mdi:alert-circle-outline" },
-            { min: -Infinity, icon: "mdi:molecule-co2" },
-          ],
-        },
-      },
-    },
-    pm25: {
-      defaultProfile: "indoor",
-      profiles: {
-        indoor: {
-          id: "indoor",
-          metricKind: "pm25",
-          comparison: ">",
-          invalidWhen: (value) => value < 0,
-          invalidClassification: { score: 1, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-          tiers: [
-            { min: 50, score: 11, levelKey: "level.critical", color: "#B85F67", zone: "outside" },
-            { min: 35, score: 10, levelKey: "level.veryHigh", color: "#C67277", zone: "outside" },
-            { min: 25, score: 9, levelKey: "level.high", color: "#C98A67", zone: "outside" },
-            { min: 15, score: 8, levelKey: "level.elevated", color: "#C0A752", zone: "outside" },
-            { min: 5, score: 7, levelKey: "level.slightlyElevated", color: "#9DA85A", zone: "comfort" },
-            { min: -Infinity, score: 6, levelKey: "level.optimal", color: "#79A86C", zone: "optimal" },
-          ],
-          comfort: { min: 0, max: 15 },
-          optimal: { min: 0, max: 5 },
-          scale: { min: 0, max: 20 },
-          step: 5,
-          oneSided: true,
-          iconTiers: [
-            { min: 50, icon: "mdi:alert-circle-outline" },
-            { min: 25, icon: "mdi:weather-dust" },
-            { min: 5, icon: "mdi:weather-hazy" },
-            { min: -Infinity, icon: "mdi:molecule" },
-          ],
-        },
-      },
-    },
-  };
 
-  // ==== MetricDefinition / UnitProfile / QuantityKind registry (AP-01) ====
-  // AP-01 began this generic, extensible foundation for measurement kinds.
-  // It is now live for all four supported metrics: temperature provides
-  // Celsius/Fahrenheit/Kelvin profiles, while humidity/co2/pm25 each use an
-  // identity UnitProfile so unit validation and conversion follow the same
-  // atomic path everywhere. _resolveMetricContext() canonicalizes values;
-  // classification profiles are projected back into the resolved display
-  // profile before classification, scale, or icon decisions.
-  //
-  // A "quantityKind" distinguishes three fundamentally different numeric
-  // semantics that must never share a conversion path:
-  //   absolute — an actual reading (e.g. today's temperature): converts via
-  //              toCanonical()/fromCanonical(), which DOES apply the
-  //              Fahrenheit offset (0 °C = 32 °F).
-  //   delta    — a difference between two readings (e.g. daily spread,
-  //              room-to-room spread): converts via deltaToCanonical()/
-  //              deltaFromCanonical(), which must NEVER apply an offset
-  //              (a 0 °C difference is a 0 °F difference, not 32 °F).
-  //   rate     — a delta per unit time (e.g. a trend in °C/h): uses the
-  //              exact same value-conversion factor as delta — only the
-  //              time unit differs, and this module does not touch time
-  //              units at all, so "rate" and "delta" share one code path.
-  //
-  // Celsius stays the canonical temperature unit. The indoor profile's
-  // tiers and bands are referenced directly below from
-  // CLASSIFICATION_PROFILE_REGISTRY rather than copied into a second table.
-  const METRIC_DEFINITIONS = {
-    temperature: {
-      metricKind: "temperature",
-      canonicalUnit: METRIC_META.temperature.unitFallback, // "°C"
-      // Which unitProfiles key IS the canonical unit — lets AP-02's
-      // measurement pipeline look this up generically instead of
-      // hard-coding the string "celsius" at every call site.
-      canonicalProfileKey: "celsius",
-      canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.tiers,
-      canonicalComfortBand: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.comfort,
-      canonicalOptimalBand: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.optimal,
-      canonicalBaseScaleBand: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.scale,
-      unitProfiles: {
-        celsius: {
-          key: "celsius",
-          units: ["°c", "c", "celsius"],
-          displayUnit: "°C",
-          toCanonical: (v) => v,
-          fromCanonical: (v) => v,
-          deltaToCanonical: (v) => v,
-          deltaFromCanonical: (v) => v,
-          baseDisplayStep: 1,
-          // No thresholdRounding: derivation is a pure identity for the
-          // canonical unit itself (verified in tests).
-        },
-        fahrenheit: {
-          key: "fahrenheit",
-          units: ["°f", "f", "fahrenheit"],
-          displayUnit: "°F",
-          toCanonical: (v) => ((v - 32) * 5) / 9,
-          fromCanonical: (v) => (v * 9) / 5 + 32,
-          deltaToCanonical: (v) => (v * 5) / 9,
-          deltaFromCanonical: (v) => (v * 9) / 5,
-          baseDisplayStep: 2,
-          // Product rule (audit 9.3): Fahrenheit classification/comfort/
-          // optimal/base-scale boundaries are always whole numbers, so a
-          // displayed boundary and the boundary actually used for
-          // classification never disagree.
-          thresholdRounding: (v) => Math.round(v),
-          // AP-03 (audit 9.6): the dynamic scale's rounding step depends on
-          // how wide the actually-displayed span is — a narrow span rounds
-          // to a fine 2°F step, a wide one to a coarse 10°F step, so the
-          // axis never ends up with an absurdly fine or coarse grid.
-          // Celsius/Kelvin omit this field entirely and keep the fixed
-          // baseDisplayStep (1) — "Für Celsius und Kelvin bleibt der
-          // Basisschritt 1" (audit 9.6).
-          dynamicDisplaySteps: [
-            { maxSpan: 20, step: 2 },
-            { maxSpan: 40, step: 5 },
-            { maxSpan: Infinity, step: 10 },
-          ],
-        },
-        kelvin: {
-          key: "kelvin",
-          units: ["k", "kelvin"],
-          displayUnit: "K",
-          toCanonical: (v) => v - 273.15,
-          fromCanonical: (v) => v + 273.15,
-          // Kelvin and Celsius differ by a pure offset (no scale factor),
-          // so a delta/rate is numerically identical in both units.
-          deltaToCanonical: (v) => v,
-          deltaFromCanonical: (v) => v,
-          baseDisplayStep: 1,
-        },
-      },
-    },
-    // Review fix (post-AP-01..03): humidity/co2/pm25 each get a trivial,
-    // single-entry "identity" UnitProfile instead of having no
-    // MetricDefinition at all. Reason: _buildEntityModel() previously had no
-    // way to tell "this reading's unit doesn't even match its own kind" for
-    // these three modes (no registry to check against), only for
-    // temperature — so a stray unit on e.g. a co2 entity was NEVER caught.
-    // Giving every kind exactly one MetricDefinition entry (celsius-style
-    // "one profile, canonicalProfileKey points to it") lets
-    // _buildEntityModel()/_resolveUnitProfileKey() apply the exact same
-    // atomic "resolve metric kind and UnitProfile from the SAME registry, no
-    // canonical fallback for an unresolvable unit" policy uniformly to all
-    // four kinds. Since each has only one profile whose key always equals
-    // canonicalProfileKey, every existing "does the resolved profile differ
-    // from canonical?" short-circuit (_scaleConfigFor(), etc.) still always
-    // takes the "no" branch for these three — zero behavior change to
-    // classification/scale/display, purely additive validation.
-    humidity: {
-      metricKind: "humidity",
-      canonicalUnit: METRIC_META.humidity.unitFallback, // "%"
-      canonicalProfileKey: "percent",
-      canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.tiers,
-      canonicalComfortBand: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.comfort,
-      canonicalOptimalBand: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.optimal,
-      canonicalBaseScaleBand: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.scale,
-      unitProfiles: {
-        percent: {
-          key: "percent",
-          units: ["%"],
-          displayUnit: "%",
-          toCanonical: (v) => v,
-          fromCanonical: (v) => v,
-          deltaToCanonical: (v) => v,
-          deltaFromCanonical: (v) => v,
-          baseDisplayStep: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.step,
-        },
-      },
-    },
-    co2: {
-      metricKind: "co2",
-      canonicalUnit: METRIC_META.co2.unitFallback, // "ppm"
-      canonicalProfileKey: "ppm",
-      canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.tiers,
-      canonicalComfortBand: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.comfort,
-      canonicalOptimalBand: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.optimal,
-      canonicalBaseScaleBand: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.scale,
-      unitProfiles: {
-        ppm: {
-          key: "ppm",
-          units: ["ppm"],
-          displayUnit: "ppm",
-          toCanonical: (v) => v,
-          fromCanonical: (v) => v,
-          deltaToCanonical: (v) => v,
-          deltaFromCanonical: (v) => v,
-          baseDisplayStep: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.step,
-        },
-      },
-    },
-    pm25: {
-      metricKind: "pm25",
-      canonicalUnit: METRIC_META.pm25.unitFallback, // "µg/m³"
-      canonicalProfileKey: "microgram_per_m3",
-      canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor.tiers,
-      canonicalComfortBand: CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor.comfort,
-      canonicalOptimalBand: CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor.optimal,
-      canonicalBaseScaleBand: CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor.scale,
-      unitProfiles: {
-        microgram_per_m3: {
-          key: "microgram_per_m3",
-          units: ["µg/m³"],
-          displayUnit: "µg/m³",
-          toCanonical: (v) => v,
-          fromCanonical: (v) => v,
-          deltaToCanonical: (v) => v,
-          deltaFromCanonical: (v) => v,
-          baseDisplayStep: CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor.step,
-        },
-      },
-    },
-    // Extension point (audit section 10.1): a future kind is added here as
-    // its own key, e.g.:
-    //   absolute_humidity: {
-    //     metricKind: "absolute_humidity",
-    //     canonicalUnit: "g/m³",
-    //     canonicalClassificationTiers: [...],       // once defined
-    //     canonicalComfortBand: {...}, canonicalOptimalBand: {...}, canonicalBaseScaleBand: {...},
-    //     unitProfiles: { gram_per_m3: {...}, milligram_per_m3: {...} },
-    //   }
-    // The conversion/derivation functions below never branch on a specific
-    // metricKind — see metric-definitions.test.js's "extension point" case,
-    // which exercises them against a synthetic profile that is never
-    // registered here at all.
-  };
 
-  // Review fix (post-AP-01..03): atomically DERIVED from METRIC_DEFINITIONS
-  // instead of a separately hand-maintained table — the two had drifted
-  // (word/bare-letter aliases like "c"/"celsius"/"f"/"fahrenheit" were
-  // registered in unitProfiles.units but missing here, so an entity with
-  // one of those units and no device_class could not be recognized as
-  // temperature at all). One registered unit string can only ever belong to
-  // one metric kind, so a plain last-write-wins merge is safe.
-  const METRIC_TYPE_BY_UNIT = Object.fromEntries(
-    Object.values(METRIC_DEFINITIONS).flatMap((definition) =>
-      Object.values(definition.unitProfiles).flatMap((profile) =>
-        profile.units.map((unit) => [normalizeUnitToken(unit), definition.metricKind])
-      )
-    )
-  );
 
-  function convertUnitValue(value, quantityKind, fromProfile, toProfile) {
-    if (quantityKind === "absolute") {
-      return toProfile.fromCanonical(fromProfile.toCanonical(value));
-    }
-    if (quantityKind === "delta" || quantityKind === "rate") {
-      return toProfile.deltaFromCanonical(fromProfile.deltaToCanonical(value));
-    }
-    throw new Error(`convertUnitValue: unknown quantityKind "${quantityKind}"`);
-  }
 
-  function deriveThresholdsForProfile(canonicalTiers, profile) {
-    // Re-expresses a canonical-unit tier list (levelKey/color unchanged) in
-    // profile's display unit; -Infinity/+Infinity survive unchanged (both
-    // Math.round(±Infinity) and a linear fromCanonical() naturally return
-    // ±Infinity, no special-casing needed).
-    const round = profile.thresholdRounding || ((v) => v);
-    return canonicalTiers.map((tier) => ({
-      ...tier,
-      min: Number.isFinite(tier.min) ? round(profile.fromCanonical(tier.min)) : tier.min,
-    }));
-  }
 
-  function deriveBandForProfile(band, profile) {
-    const round = profile.thresholdRounding || ((v) => v);
-    return { min: round(profile.fromCanonical(band.min)), max: round(profile.fromCanonical(band.max)) };
-  }
 
-  // Language: base language code (e.g. "de" from "de-AT") -> translations.
-  // Values are either a string or a function (vars) => string, for
-  // pluralization/conditionals without a full ICU parser. See _t()/_language().
-  // English is the canonical/primary language (card default, HACS audience,
-  // and the fallback _t() uses for any key missing in another language, see
-  // _t()); German, Dutch, French, Italian, Spanish, Russian, Polish,
-  // Korean, Japanese, Chinese, Norwegian Bokmål, Swedish, and Latvian are
-  // fully supported additional languages.
-  //
-  // Adding a new language (including community contributions):
-  //   1. Add its base code to NUMBER_LOCALE_BY_LANGUAGE below, mapped to an
-  //      Intl-compatible locale (used for number/time formatting).
-  //   2. Copy the full "en" block under TRANSLATIONS, rename the key to the
-  //      new base code, and translate every value — including the function
-  //      values (they interpolate variables and handle simple
-  //      singular/plural branching; keep the same variable names). For
-  //      languages with more than two plural categories, use
-  //      getPluralCategory()/selectPlural() rather than hand-written
-  //      one-vs-other rules.
-  //   3. Reload the card once — a module-load-time self-check
-  //      (see below TRANSLATIONS) logs a console.warn() listing any key
-  //      that's missing or extra compared to "en", so incomplete
-  //      translations are caught immediately instead of silently falling
-  //      back at runtime.
-  // No other code changes are needed: _language() and _t() already read
-  // TRANSLATIONS generically by key.
-  const DEFAULT_LANGUAGE = "en";
-  const NUMBER_LOCALE_BY_LANGUAGE = {
-    de: "de-DE",
-    en: "en-US",
-    nl: "nl-NL",
-    fr: "fr-FR",
-    it: "it-IT",
-    es: "es",
-    ru: "ru",
-    pl: "pl",
-    ko: "ko",
-    ja: "ja",
-    zh: "zh",
-    nb: "nb-NO",
-    sv: "sv-SE",
-    lv: "lv-LV",
-  };
-
-  // Escape map for _esc(); hoisted so the replace() callback doesn't
-  // allocate a fresh object per matched character.
-  const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-
-  // Number.prototype.toLocaleString()/Date.prototype.toLocaleTimeString()
-  // each construct a fresh Intl.NumberFormat/Intl.DateTimeFormat internally
-  // on every call; a card with several rooms formats a dozen-plus numbers
-  // per render, so _fmt()/_formatTime() instead reuse one cached formatter
-  // per locale/digits combination (built once, formats many times).
-  const NUMBER_FORMAT_CACHE = new Map();
-  const TIME_FORMAT_CACHE = new Map();
-  const PLURAL_RULES_CACHE = new Map();
-
-  function getNumberFormat(locale, digits) {
-    const key = `${locale}|${digits}`;
-    let fmt = NUMBER_FORMAT_CACHE.get(key);
-    if (!fmt) {
-      fmt = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
-      NUMBER_FORMAT_CACHE.set(key, fmt);
-    }
-    return fmt;
-  }
-
-  function getTimeFormat(locale) {
-    let fmt = TIME_FORMAT_CACHE.get(locale);
-    if (!fmt) {
-      fmt = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
-      TIME_FORMAT_CACHE.set(locale, fmt);
-    }
-    return fmt;
-  }
-
-  function getPluralCategory(language, count) {
-    let rules = PLURAL_RULES_CACHE.get(language);
-    if (!rules) {
-      rules = new Intl.PluralRules(NUMBER_LOCALE_BY_LANGUAGE[language] || language);
-      PLURAL_RULES_CACHE.set(language, rules);
-    }
-    return rules.select(Number(count));
-  }
-
-  function selectPlural(language, count, forms) {
-    return forms[getPluralCategory(language, count)] ?? forms.other;
-  }
-
-  const TRANSLATIONS = {
-    en: {
-      "title.temperature": "Temperature",
-      "title.humidity": "Humidity",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2.5",
-
-      "level.veryHot": "Very hot",
-      "level.hot": "Hot",
-      "level.veryWarm": "Very warm",
-      "level.warm": "Warm",
-      "level.slightlyWarm": "Slightly warm",
-      "level.optimal": "Optimal",
-      "level.slightlyCool": "Slightly cool",
-      "level.fresh": "Fresh",
-      "level.cool": "Cool",
-      "level.cold": "Cold",
-      "level.veryCold": "Very cold",
-
-      "level.criticallyHumid": "Critically humid",
-      "level.tooHumid": "Too humid",
-      "level.veryHumid": "Very humid",
-      "level.humid": "Humid",
-      "level.slightlyHumid": "Slightly humid",
-      "level.slightlyDry": "Slightly dry",
-      "level.dry": "Dry",
-      "level.veryDry": "Very dry",
-      "level.tooDry": "Too dry",
-      "level.criticallyDry": "Critically dry",
-
-      "level.critical": "Critical",
-      "level.veryHigh": "Very high",
-      "level.high": "High",
-      "level.elevated": "Elevated",
-      "level.slightlyElevated": "Slightly elevated",
-      "level.invalidReading": "Invalid",
-
-      "adjective.warm": "warm",
-      "adjective.cool": "cool",
-      "adjective.humid": "humid",
-      "adjective.dry": "dry",
-      "adjective.elevated": "elevated",
-      "adjective.low": "low",
-
-      "avg.label": "Home avg.",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
-      "avg.ariaOpen": "Open average",
-
-      "subtitle.aboveComfort": (v) => `Avg. ${v.diff} above comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Avg. ${v.diff} above comfort.`,
-      "subtitle.belowComfort": (v) => `Avg. ${v.diff} below comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Avg. ${v.diff} below comfort.`,
-      "subtitle.inComfortIssue": (v) => `Avg. in comfort · ${v.name} stands out most.`,
-      "subtitle.inComfortAllGood": "Avg. in comfort · all rooms are within target range.",
-      "subtitle.inComfort": "Avg. in comfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "room" : "rooms"} without data.`,
-
-      "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Spread ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "rising",
-      "trend.direction.stable": "stable",
-      "trend.direction.falling": "falling",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} comfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} comfort`,
-      "scale.optimalLabel": (v) => `${v.range} optimal`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimal`,
-
-      "rangeScale.currentLabel": "now",
-      "rangeScale.currentLabelShort": "now",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Today's span ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Today's span ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Coldest room",
-      "card.warmestRoom": "Warmest room",
-      "card.driestRoom": "Driest room",
-      "card.mostHumidRoom": "Most humid room",
-      "card.lowestRoom": "Lowest room",
-      "card.highestRoom": "Highest room",
-      "card.dailyMinimum": "Daily minimum",
-      "card.dailyMaximum": "Daily maximum",
-      "card.ariaOpen": (v) => `Open ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Open ${v.name}`,
-
-      "rotator.hint": "Swipe to switch between views",
-
-      "views.none": "No view available.",
-
-      "empty.title": "No data available.",
-      "empty.hintNoRooms": "The configured average entity is not reporting a number.",
-      "empty.hintMissingRooms": (v) => `${v.count} configured ${v.count === 1 ? "entity is" : "entities are"} missing or not reporting a number.`,
-      "empty.hintNoRoomData": "No configured room entity is reporting a number.",
-    },
-    de: {
-      "title.temperature": "Temperatur",
-      "title.humidity": "Luftfeuchtigkeit",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Sehr heiß",
-      "level.hot": "Heiß",
-      "level.veryWarm": "Sehr warm",
-      "level.warm": "Warm",
-      "level.slightlyWarm": "Leicht warm",
-      "level.optimal": "Optimal",
-      "level.slightlyCool": "Leicht kühl",
-      "level.fresh": "Frisch",
-      "level.cool": "Kühl",
-      "level.cold": "Kalt",
-      "level.veryCold": "Sehr kalt",
-
-      "level.criticallyHumid": "Kritisch feucht",
-      "level.tooHumid": "Zu feucht",
-      "level.veryHumid": "Sehr feucht",
-      "level.humid": "Feucht",
-      "level.slightlyHumid": "Leicht feucht",
-      "level.slightlyDry": "Leicht trocken",
-      "level.dry": "Trocken",
-      "level.veryDry": "Sehr trocken",
-      "level.tooDry": "Zu trocken",
-      "level.criticallyDry": "Kritisch trocken",
-
-      "level.critical": "Kritisch",
-      "level.veryHigh": "Sehr hoch",
-      "level.high": "Hoch",
-      "level.elevated": "Erhöht",
-      "level.slightlyElevated": "Leicht erhöht",
-      "level.invalidReading": "Ungültig",
-
-      "adjective.warm": "warm",
-      "adjective.cool": "kühl",
-      "adjective.humid": "feucht",
-      "adjective.dry": "trocken",
-      "adjective.elevated": "erhöht",
-      "adjective.low": "niedrig",
-
-      "avg.label": "Ø Wohnung",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
-      "avg.ariaOpen": "Durchschnitt öffnen",
-
-      "subtitle.aboveComfort": (v) => `Ø ${v.diff} über Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} über Komfort.`,
-      "subtitle.belowComfort": (v) => `Ø ${v.diff} unter Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} unter Komfort.`,
-      "subtitle.inComfortIssue": (v) => `Ø im Komfort · ${v.name} fällt am stärksten auf.`,
-      "subtitle.inComfortAllGood": "Ø im Komfort · alle Räume liegen im Zielkorridor.",
-      "subtitle.inComfort": "Ø im Komfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "Raum" : "Räume"} ohne Daten.`,
-
-      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Spanne ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "steigend",
-      "trend.direction.stable": "stabil",
-      "trend.direction.falling": "fallend",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} Komfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} Komfort`,
-      "scale.optimalLabel": (v) => `${v.range} Optimal`,
-      "scale.optimalLabelShort": (v) => `${v.range} Optimal`,
-
-      "rangeScale.currentLabel": "jetzt",
-      "rangeScale.currentLabelShort": "jetzt",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Tagesspanne ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Tagesspanne ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Kältester Raum",
-      "card.warmestRoom": "Wärmster Raum",
-      "card.driestRoom": "Trockenster Raum",
-      "card.mostHumidRoom": "Feuchtester Raum",
-      "card.lowestRoom": "Niedrigster Raum",
-      "card.highestRoom": "Höchster Raum",
-      "card.dailyMinimum": "Tagesminimum",
-      "card.dailyMaximum": "Tagesmaximum",
-      "card.ariaOpen": (v) => `${v.label}: ${v.name} öffnen`,
-
-      "room.ariaOpen": (v) => `${v.name} öffnen`,
-
-      "rotator.hint": "Wischen, um zwischen den Ansichten zu wechseln",
-
-      "views.none": "Keine Ansicht verfügbar.",
-
-      "empty.title": "Keine Daten verfügbar.",
-      "empty.hintNoRooms": "Die konfigurierte Durchschnitts-Entität liefert keine Zahl.",
-      "empty.hintMissingRooms": (v) => `${v.count} konfigurierte Entität${v.count === 1 ? "" : "en"} fehlen oder liefern keine Zahl.`,
-      "empty.hintNoRoomData": "Keine konfigurierte Raum-Entität liefert eine Zahl.",
-    },
-    nl: {
-      "title.temperature": "Temperatuur",
-      "title.humidity": "Luchtvochtigheid",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Zeer heet",
-      "level.hot": "Heet",
-      "level.veryWarm": "Erg warm",
-      "level.warm": "Warm",
-      "level.slightlyWarm": "Licht warm",
-      "level.optimal": "Optimaal",
-      "level.slightlyCool": "Licht koel",
-      "level.fresh": "Fris",
-      "level.cool": "Koel",
-      "level.cold": "Koud",
-      "level.veryCold": "Zeer koud",
-
-      "level.criticallyHumid": "Extreem vochtig",
-      "level.tooHumid": "Te vochtig",
-      "level.veryHumid": "Zeer vochtig",
-      "level.humid": "Vochtig",
-      "level.slightlyHumid": "Licht vochtig",
-      "level.slightlyDry": "Licht droog",
-      "level.dry": "Droog",
-      "level.veryDry": "Zeer droog",
-      "level.tooDry": "Te droog",
-      "level.criticallyDry": "Extreem droog",
-
-      "level.critical": "Kritiek",
-      "level.veryHigh": "Zeer hoog",
-      "level.high": "Hoog",
-      "level.elevated": "Matig verhoogd",
-      "level.slightlyElevated": "Licht verhoogd",
-      "level.invalidReading": "Ongeldig",
-
-      // Predicative fragment ("2/4 kamers warm"); Dutch adjectives here stay
-      // invariant regardless of count, unlike the FR/IT feminine-plural
-      // forms below (see the note there).
-      "adjective.warm": "warm",
-      "adjective.cool": "koel",
-      "adjective.humid": "vochtig",
-      "adjective.dry": "droog",
-      "adjective.elevated": "verhoogd",
-      "adjective.low": "laag",
-
-      "avg.label": "Ø Woning",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
-      "avg.ariaOpen": "Gemiddelde openen",
-
-      "subtitle.aboveComfort": (v) => `Ø ${v.diff} boven comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} boven comfort.`,
-      "subtitle.belowComfort": (v) => `Ø ${v.diff} onder comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} onder comfort.`,
-      "subtitle.inComfortIssue": (v) => `Ø in comfort · ${v.name} valt het meest op.`,
-      "subtitle.inComfortAllGood": "Ø in comfort · alle kamers liggen binnen het streefbereik.",
-      "subtitle.inComfort": "Ø in comfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "kamer" : "kamers"} zonder data.`,
-
-      "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Spreiding ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "stijgend",
-      "trend.direction.stable": "stabiel",
-      "trend.direction.falling": "dalend",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} comfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} comfort`,
-      "scale.optimalLabel": (v) => `${v.range} optimaal`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimaal`,
-
-      "rangeScale.currentLabel": "nu",
-      "rangeScale.currentLabelShort": "nu",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Dagbereik ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Dagbereik ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Koudste kamer",
-      "card.warmestRoom": "Warmste kamer",
-      "card.driestRoom": "Droogste kamer",
-      "card.mostHumidRoom": "Vochtigste kamer",
-      "card.lowestRoom": "Laagste kamer",
-      "card.highestRoom": "Hoogste kamer",
-      "card.dailyMinimum": "Dagminimum",
-      "card.dailyMaximum": "Dagmaximum",
-      "card.ariaOpen": (v) => `${v.label} openen: ${v.name}`,
-
-      "room.ariaOpen": (v) => `${v.name} openen`,
-
-      "rotator.hint": "Swipe om tussen weergaven te wisselen",
-
-      "views.none": "Geen weergave beschikbaar.",
-
-      "empty.title": "Geen gegevens beschikbaar.",
-      "empty.hintNoRooms": "De geconfigureerde gemiddelde-entiteit levert geen getal.",
-      "empty.hintMissingRooms": (v) => `${v.count} geconfigureerde ${v.count === 1 ? "entiteit ontbreekt of levert" : "entiteiten ontbreken of leveren"} geen getal.`,
-      "empty.hintNoRoomData": "Geen geconfigureerde kamer-entiteit levert een getal.",
-    },
-    fr: {
-      "title.temperature": "Température",
-      "title.humidity": "Humidité",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Très chaud",
-      "level.hot": "Chaud",
-      "level.veryWarm": "Assez chaud",
-      "level.warm": "Tiède",
-      "level.slightlyWarm": "Légèrement tiède",
-      "level.optimal": "Optimal",
-      "level.slightlyCool": "Légèrement frais",
-      "level.fresh": "Frais",
-      "level.cool": "Frisquet",
-      "level.cold": "Froid",
-      "level.veryCold": "Très froid",
-
-      "level.criticallyHumid": "Extrêmement humide",
-      "level.tooHumid": "Trop humide",
-      "level.veryHumid": "Très humide",
-      "level.humid": "Humide",
-      "level.slightlyHumid": "Légèrement humide",
-      "level.slightlyDry": "Légèrement sec",
-      "level.dry": "Sec",
-      "level.veryDry": "Très sec",
-      "level.tooDry": "Trop sec",
-      "level.criticallyDry": "Extrêmement sec",
-
-      "level.critical": "Critique",
-      "level.veryHigh": "Très élevé",
-      "level.high": "Élevé",
-      "level.elevated": "Modérément élevé",
-      "level.slightlyElevated": "Légèrement élevé",
-      "level.invalidReading": "Invalide",
-
-      // Predicative fragment ("2/4 pièces chaudes"); "pièce"/"pièces" is
-      // feminine, so these are feminine-plural forms — the only form this
-      // key is actually used with (subtitle.*Comfort's rooms branch is only
-      // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
-      "adjective.warm": "chaudes",
-      "adjective.cool": "fraîches",
-      "adjective.humid": "humides",
-      "adjective.dry": "sèches",
-      "adjective.elevated": "élevées",
-      "adjective.low": "basses",
-
-      "avg.label": "Moy. maison",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
-      "avg.ariaOpen": "Ouvrir la moyenne",
-
-      "subtitle.aboveComfort": (v) => `Moy. ${v.diff} au-dessus du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Moy. ${v.diff} au-dessus du confort.`,
-      "subtitle.belowComfort": (v) => `Moy. ${v.diff} en dessous du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Moy. ${v.diff} en dessous du confort.`,
-      "subtitle.inComfortIssue": (v) => `Moy. dans le confort · ${v.name} se démarque le plus.`,
-      "subtitle.inComfortAllGood": "Moy. dans le confort · toutes les pièces sont dans la plage cible.",
-      "subtitle.inComfort": "Moy. dans le confort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "pièce" : "pièces"} sans données.`,
-
-      "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Écart ${v.value}`,
-      "footer.trend": (v) => `Tendance ${v.value}`,
-      "trend.direction.rising": "en hausse",
-      "trend.direction.stable": "stable",
-      "trend.direction.falling": "en baisse",
-      "trend.aria": (v) => `Tendance ${v.direction} : ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} confort`,
-      "scale.comfortLabelShort": (v) => `${v.range} confort`,
-      "scale.optimalLabel": (v) => `${v.range} optimal`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimal`,
-
-      // Review fix (post-2.27.0): "act." used to be the PRIMARY value here,
-      // permanently truncating "maintenant" for every card width. Restored
-      // to the full word; "act." now only serves as the *Short fallback
-      // the label-short-form resolver substitutes in when the long form
-      // genuinely doesn't fit (see _resolveRangeScaleLabels()).
-      "rangeScale.currentLabel": "maintenant",
-      "rangeScale.currentLabelShort": "act.",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Écart du jour ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Écart du jour ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Pièce la plus froide",
-      "card.warmestRoom": "Pièce la plus chaude",
-      "card.driestRoom": "Pièce la plus sèche",
-      "card.mostHumidRoom": "Pièce la plus humide",
-      "card.lowestRoom": "Pièce la plus basse",
-      "card.highestRoom": "Pièce la plus haute",
-      "card.dailyMinimum": "Minimum journalier",
-      "card.dailyMaximum": "Maximum journalier",
-      "card.ariaOpen": (v) => `Ouvrir ${v.label} : ${v.name}`,
-
-      "room.ariaOpen": (v) => `Ouvrir ${v.name}`,
-
-      "rotator.hint": "Balayez pour changer de vue",
-
-      "views.none": "Aucune vue disponible.",
-
-      "empty.title": "Aucune donnée disponible.",
-      "empty.hintNoRooms": "L'entité de moyenne configurée ne renvoie aucun nombre.",
-      "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entité configurée est manquante ou ne renvoie" : "entités configurées sont manquantes ou ne renvoient"} aucun nombre.`,
-      "empty.hintNoRoomData": "Aucune entité de pièce configurée ne renvoie de nombre.",
-    },
-    it: {
-      "title.temperature": "Temperatura",
-      "title.humidity": "Umidità",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Molto caldo",
-      "level.hot": "Caldo",
-      "level.veryWarm": "Piuttosto caldo",
-      "level.warm": "Tiepido",
-      "level.slightlyWarm": "Leggermente tiepido",
-      "level.optimal": "Ottimale",
-      "level.slightlyCool": "Leggermente fresco",
-      "level.fresh": "Fresco",
-      "level.cool": "Piuttosto fresco",
-      "level.cold": "Freddo",
-      "level.veryCold": "Molto freddo",
-
-      "level.criticallyHumid": "Estremamente umido",
-      "level.tooHumid": "Troppo umido",
-      "level.veryHumid": "Molto umido",
-      "level.humid": "Umido",
-      "level.slightlyHumid": "Leggermente umido",
-      "level.slightlyDry": "Leggermente secco",
-      "level.dry": "Secco",
-      "level.veryDry": "Molto secco",
-      "level.tooDry": "Troppo secco",
-      "level.criticallyDry": "Estremamente secco",
-
-      "level.critical": "Critico",
-      "level.veryHigh": "Molto alto",
-      "level.high": "Alto",
-      "level.elevated": "Moderatamente alto",
-      "level.slightlyElevated": "Leggermente alto",
-      "level.invalidReading": "Non valido",
-
-      // Predicative fragment ("2/4 stanze calde"); "stanza"/"stanze" is
-      // feminine, so these are feminine-plural forms — the only form this
-      // key is actually used with (subtitle.*Comfort's rooms branch is only
-      // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
-      "adjective.warm": "calde",
-      "adjective.cool": "fresche",
-      "adjective.humid": "umide",
-      "adjective.dry": "secche",
-      "adjective.elevated": "alte",
-      "adjective.low": "basse",
-
-      "avg.label": "Media casa",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
-      "avg.ariaOpen": "Apri la media",
-
-      "subtitle.aboveComfort": (v) => `Media ${v.diff} sopra il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} sopra il comfort.`,
-      "subtitle.belowComfort": (v) => `Media ${v.diff} sotto il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Media ${v.diff} sotto il comfort.`,
-      "subtitle.inComfortIssue": (v) => `Media nel comfort · ${v.name} spicca maggiormente.`,
-      "subtitle.inComfortAllGood": "Media nel comfort · tutte le stanze rientrano nell'intervallo obiettivo.",
-      "subtitle.inComfort": "Media nel comfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "stanza" : "stanze"} senza dati.`,
-
-      "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Scarto ${v.value}`,
-      "footer.trend": (v) => `Tendenza ${v.value}`,
-      "trend.direction.rising": "in aumento",
-      "trend.direction.stable": "stabile",
-      "trend.direction.falling": "in calo",
-      "trend.aria": (v) => `Tendenza ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} comfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} comfort`,
-      "scale.optimalLabel": (v) => `${v.range} ottimale`,
-      "scale.optimalLabelShort": (v) => `${v.range} ottimale`,
-
-      "rangeScale.currentLabel": "ora",
-      "rangeScale.currentLabelShort": "ora",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Intervallo di oggi ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Intervallo di oggi ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Stanza più fredda",
-      "card.warmestRoom": "Stanza più calda",
-      "card.driestRoom": "Stanza più secca",
-      "card.mostHumidRoom": "Stanza più umida",
-      "card.lowestRoom": "Stanza più bassa",
-      "card.highestRoom": "Stanza più alta",
-      "card.dailyMinimum": "Minimo giornaliero",
-      "card.dailyMaximum": "Massimo giornaliero",
-      "card.ariaOpen": (v) => `Apri ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Apri ${v.name}`,
-
-      "rotator.hint": "Scorri per cambiare vista",
-
-      "views.none": "Nessuna vista disponibile.",
-
-      "empty.title": "Nessun dato disponibile.",
-      "empty.hintNoRooms": "L'entità della media configurata non restituisce un numero.",
-      "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entità configurata risulta mancante o non restituisce" : "entità configurate risultano mancanti o non restituiscono"} un numero.`,
-      "empty.hintNoRoomData": "Nessuna entità stanza configurata restituisce un numero.",
-    },
-    es: {
-      "title.temperature": "Temperatura",
-      "title.humidity": "Humedad",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Muy caluroso",
-      "level.hot": "Caluroso",
-      "level.veryWarm": "Muy cálido",
-      "level.warm": "Cálido",
-      "level.slightlyWarm": "Ligeramente cálido",
-      "level.optimal": "Óptimo",
-      "level.slightlyCool": "Ligeramente fresco",
-      "level.fresh": "Fresco",
-      "level.cool": "Frío moderado",
-      "level.cold": "Frío",
-      "level.veryCold": "Muy frío",
-
-      "level.criticallyHumid": "Humedad crítica",
-      "level.tooHumid": "Demasiado húmedo",
-      "level.veryHumid": "Muy húmedo",
-      "level.humid": "Húmedo",
-      "level.slightlyHumid": "Ligeramente húmedo",
-      "level.slightlyDry": "Ligeramente seco",
-      "level.dry": "Seco",
-      "level.veryDry": "Muy seco",
-      "level.tooDry": "Demasiado seco",
-      "level.criticallyDry": "Sequedad crítica",
-
-      "level.critical": "Crítico",
-      "level.veryHigh": "Muy alto",
-      "level.high": "Alto",
-      "level.elevated": "Elevado",
-      "level.slightlyElevated": "Ligeramente elevado",
-      "level.invalidReading": "No válido",
-
-      // Predicative fragments agree with feminine plural "habitaciones";
-      // elevated/low use a semantic value phrase rather than describing
-      // the rooms themselves as physically high or low.
-      "adjective.warm": "cálidas",
-      "adjective.cool": "frescas",
-      "adjective.humid": "húmedas",
-      "adjective.dry": "secas",
-      "adjective.elevated": "con valores elevados",
-      "adjective.low": "con valores bajos",
-
-      "avg.label": "Media del hogar",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
-      "avg.ariaOpen": "Abrir la media",
-
-      "subtitle.aboveComfort": (v) => `Media ${v.diff} por encima del confort · ${v.count}/${v.total} ${v.total === 1 ? "habitación" : "habitaciones"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} por encima del confort.`,
-      "subtitle.belowComfort": (v) => `Media ${v.diff} por debajo del confort · ${v.count}/${v.total} ${v.total === 1 ? "habitación" : "habitaciones"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Media ${v.diff} por debajo del confort.`,
-      "subtitle.inComfortIssue": (v) => `Media dentro del intervalo de confort · ${v.name} es la habitación que más se desvía.`,
-      "subtitle.inComfortAllGood": "Media dentro del intervalo de confort · todas las habitaciones están dentro del intervalo objetivo.",
-      "subtitle.inComfort": "Media dentro del intervalo de confort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "habitación" : "habitaciones"} sin datos.`,
-
-      "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Diferencia ${v.value}`,
-      "footer.trend": (v) => `Tendencia ${v.value}`,
-      "trend.direction.rising": "ascendente",
-      "trend.direction.stable": "estable",
-      "trend.direction.falling": "descendente",
-      "trend.aria": (v) => `Tendencia ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} confort`,
-      "scale.comfortLabelShort": (v) => `${v.range} confort`,
-      "scale.optimalLabel": (v) => `${v.range} óptimo`,
-      "scale.optimalLabelShort": (v) => `${v.range} óptimo`,
-
-      "rangeScale.currentLabel": "ahora",
-      "rangeScale.currentLabelShort": "ahora",
-      "rangeScale.minLabel": "mín.",
-      "rangeScale.maxLabel": "máx.",
-      "rangeScale.footer": (v) => `Intervalo de hoy ${v.span} · Mín. ${v.min} (${v.minTime}) · Máx. ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Intervalo de hoy ${v.span} · Mín. ${v.min} · Máx. ${v.max}`,
-
-      "card.coldestRoom": "Habitación más fría",
-      "card.warmestRoom": "Habitación más cálida",
-      "card.driestRoom": "Habitación más seca",
-      "card.mostHumidRoom": "Habitación más húmeda",
-      "card.lowestRoom": "Habitación con el valor más bajo",
-      "card.highestRoom": "Habitación con el valor más alto",
-      "card.dailyMinimum": "Mínimo diario",
-      "card.dailyMaximum": "Máximo diario",
-      "card.ariaOpen": (v) => `Abrir ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Abrir ${v.name}`,
-
-      "rotator.hint": "Desliza para cambiar de vista",
-
-      "views.none": "No hay ninguna vista disponible.",
-
-      "empty.title": "No hay datos disponibles.",
-      "empty.hintNoRooms": "La entidad de media configurada no devuelve un número.",
-      "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entidad configurada no está disponible o no devuelve" : "entidades configuradas no están disponibles o no devuelven"} un número.`,
-      "empty.hintNoRoomData": "Ninguna entidad de habitación configurada devuelve un número.",
-    },
-    ru: {
-      "title.temperature": "Температура",
-      "title.humidity": "Влажность",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Очень жарко",
-      "level.hot": "Жарко",
-      "level.veryWarm": "Очень тепло",
-      "level.warm": "Тепло",
-      "level.slightlyWarm": "Слегка тепло",
-      "level.optimal": "Оптимально",
-      "level.slightlyCool": "Слегка прохладно",
-      "level.fresh": "Свежо",
-      "level.cool": "Прохладно",
-      "level.cold": "Холодно",
-      "level.veryCold": "Очень холодно",
-
-      "level.criticallyHumid": "Критически влажно",
-      "level.tooHumid": "Слишком влажно",
-      "level.veryHumid": "Очень влажно",
-      "level.humid": "Влажно",
-      "level.slightlyHumid": "Слегка влажно",
-      "level.slightlyDry": "Слегка сухо",
-      "level.dry": "Сухо",
-      "level.veryDry": "Очень сухо",
-      "level.tooDry": "Слишком сухо",
-      "level.criticallyDry": "Критически сухо",
-
-      "level.critical": "Критично",
-      "level.veryHigh": "Очень высокий уровень",
-      "level.high": "Высокий уровень",
-      "level.elevated": "Повышенный уровень",
-      "level.slightlyElevated": "Слегка повышенный уровень",
-      "level.invalidReading": "Недопустимое значение",
-
-      // Adverbial/predicative fragments avoid forcing an adjective to
-      // agree with Russian numeral-governed room noun forms.
-      "adjective.warm": "тепло",
-      "adjective.cool": "прохладно",
-      "adjective.humid": "влажно",
-      "adjective.dry": "сухо",
-      "adjective.elevated": "уровень повышен",
-      "adjective.low": "уровень низкий",
-
-      "avg.label": "Среднее по дому",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
-      "avg.ariaOpen": "Открыть среднее значение",
-
-      "subtitle.aboveComfort": (v) => `Среднее на ${v.diff} выше комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Среднее на ${v.diff} выше комфортного диапазона.`,
-      "subtitle.belowComfort": (v) => `Среднее на ${v.diff} ниже комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Среднее на ${v.diff} ниже комфортного диапазона.`,
-      "subtitle.inComfortIssue": (v) => `Среднее в комфортном диапазоне · сильнее всего выделяется ${v.name}.`,
-      "subtitle.inComfortAllGood": "Среднее в комфортном диапазоне · все комнаты находятся в целевом диапазоне.",
-      "subtitle.inComfort": "Среднее в комфортном диапазоне.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("ru", v.count, { one: "комната", few: "комнаты", many: "комнат", other: "комнаты" })} без данных.`,
-
-      "footer.comfort": (v) => `Комфорт ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Разброс ${v.value}`,
-      "footer.trend": (v) => `Тренд ${v.value}`,
-      "trend.direction.rising": "растёт",
-      "trend.direction.stable": "стабильно",
-      "trend.direction.falling": "снижается",
-      "trend.aria": (v) => `Тренд ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} комфорт`,
-      "scale.comfortLabelShort": (v) => `${v.range} комфорт`,
-      "scale.optimalLabel": (v) => `${v.range} оптимум`,
-      "scale.optimalLabelShort": (v) => `${v.range} оптимум`,
-
-      "rangeScale.currentLabel": "сейчас",
-      "rangeScale.currentLabelShort": "сейчас",
-      "rangeScale.minLabel": "мин.",
-      "rangeScale.maxLabel": "макс.",
-      "rangeScale.footer": (v) => `Диапазон за сегодня ${v.span} · Мин. ${v.min} (${v.minTime}) · Макс. ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Диапазон за сегодня ${v.span} · Мин. ${v.min} · Макс. ${v.max}`,
-
-      "card.coldestRoom": "Самая холодная комната",
-      "card.warmestRoom": "Самая тёплая комната",
-      "card.driestRoom": "Самая сухая комната",
-      "card.mostHumidRoom": "Самая влажная комната",
-      "card.lowestRoom": "Комната с самым низким значением",
-      "card.highestRoom": "Комната с самым высоким значением",
-      "card.dailyMinimum": "Минимум за день",
-      "card.dailyMaximum": "Максимум за день",
-      "card.ariaOpen": (v) => `Открыть «${v.label}»: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Открыть ${v.name}`,
-
-      "rotator.hint": "Проведите по экрану, чтобы сменить вид",
-
-      "views.none": "Нет доступных представлений.",
-
-      "empty.title": "Нет доступных данных.",
-      "empty.hintNoRooms": "Настроенная сущность среднего значения не передаёт числовое значение.",
-      "empty.hintMissingRooms": (v) => {
-        const category = getPluralCategory("ru", v.count);
-        if (category === "one") return `${v.count} настроенная сущность отсутствует или не передаёт числовое значение.`;
-        if (category === "few") return `${v.count} настроенные сущности отсутствуют или не передают числовое значение.`;
-        return `${v.count} настроенных сущностей отсутствуют или не передают числовое значение.`;
-      },
-      "empty.hintNoRoomData": "Ни одна настроенная сущность комнаты не передаёт числовое значение.",
-    },
-    pl: {
-      "title.temperature": "Temperatura",
-      "title.humidity": "Wilgotność",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Bardzo gorąco",
-      "level.hot": "Gorąco",
-      "level.veryWarm": "Bardzo ciepło",
-      "level.warm": "Ciepło",
-      "level.slightlyWarm": "Lekko ciepło",
-      "level.optimal": "Optymalnie",
-      "level.slightlyCool": "Lekko chłodno",
-      "level.fresh": "Rześko",
-      "level.cool": "Chłodno",
-      "level.cold": "Zimno",
-      "level.veryCold": "Bardzo zimno",
-
-      "level.criticallyHumid": "Krytycznie wilgotno",
-      "level.tooHumid": "Zbyt wilgotno",
-      "level.veryHumid": "Bardzo wilgotno",
-      "level.humid": "Wilgotno",
-      "level.slightlyHumid": "Lekko wilgotno",
-      "level.slightlyDry": "Lekko sucho",
-      "level.dry": "Sucho",
-      "level.veryDry": "Bardzo sucho",
-      "level.tooDry": "Zbyt sucho",
-      "level.criticallyDry": "Krytycznie sucho",
-
-      "level.critical": "Krytycznie",
-      "level.veryHigh": "Bardzo wysoki poziom",
-      "level.high": "Wysoki poziom",
-      "level.elevated": "Podwyższony poziom",
-      "level.slightlyElevated": "Lekko podwyższony poziom",
-      "level.invalidReading": "Nieprawidłowa wartość",
-
-      // Predicative/adverbial fragments remain valid after Polish
-      // numeral-governed noun forms in the surrounding sentence.
-      "adjective.warm": "jest ciepło",
-      "adjective.cool": "jest chłodno",
-      "adjective.humid": "jest wilgotno",
-      "adjective.dry": "jest sucho",
-      "adjective.elevated": "wartości są podwyższone",
-      "adjective.low": "wartości są niskie",
-
-      "avg.label": "Średnia dla domu",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
-      "avg.ariaOpen": "Otwórz wartość średnią",
-
-      "subtitle.aboveComfort": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu.`,
-      "subtitle.belowComfort": (v) => `Średnia o ${v.diff} poniżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Średnia o ${v.diff} poniżej zakresu komfortu.`,
-      "subtitle.inComfortIssue": (v) => `Średnia w zakresie komfortu · najbardziej wyróżnia się ${v.name}.`,
-      "subtitle.inComfortAllGood": "Średnia w zakresie komfortu · wszystkie pomieszczenia są w zakresie docelowym.",
-      "subtitle.inComfort": "Średnia w zakresie komfortu.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("pl", v.count, { one: "pokój", few: "pokoje", many: "pokoi", other: "pokoju" })} bez danych.`,
-
-      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Rozrzut ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "rosnący",
-      "trend.direction.stable": "stabilny",
-      "trend.direction.falling": "spadający",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} komfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} komfort`,
-      // Review fix (post-2.27.0): "opt." used to be the PRIMARY value here
-      // (a permanent truncation added to fix a real 320px Chromium overlap
-      // on the "optimal" band label). Restored to the full adjective,
-      // consistent with the "${range} <descriptor>" pattern every other
-      // language uses (e.g. de "Optimal", ru "оптимум") and with the
-      // existing level.optimal ("Optymalnie") translation; "opt." now only
-      // serves as the *Short fallback the label-short-form resolver
-      // substitutes in when the long form genuinely doesn't fit (see
-      // _resolveOptimalLabelPosition()) -- the exact narrow-width case this
-      // abbreviation was originally introduced for.
-      "scale.optimalLabel": (v) => `${v.range} optymalny`,
-      "scale.optimalLabelShort": (v) => `${v.range} opt.`,
-
-      "rangeScale.currentLabel": "teraz",
-      "rangeScale.currentLabelShort": "teraz",
-      "rangeScale.minLabel": "min.",
-      "rangeScale.maxLabel": "maks.",
-      "rangeScale.footer": (v) => `Dzisiejszy zakres ${v.span} · Min. ${v.min} (${v.minTime}) · Maks. ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Dzisiejszy zakres ${v.span} · Min. ${v.min} · Maks. ${v.max}`,
-
-      "card.coldestRoom": "Najchłodniejszy pokój",
-      "card.warmestRoom": "Najcieplejszy pokój",
-      "card.driestRoom": "Najbardziej suche pomieszczenie",
-      "card.mostHumidRoom": "Najbardziej wilgotne pomieszczenie",
-      "card.lowestRoom": "Pomieszczenie z najniższą wartością",
-      "card.highestRoom": "Pomieszczenie z najwyższą wartością",
-      "card.dailyMinimum": "Minimum dzienne",
-      "card.dailyMaximum": "Maksimum dzienne",
-      "card.ariaOpen": (v) => `Otwórz ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Otwórz ${v.name}`,
-
-      "rotator.hint": "Przesuń, aby zmienić widok",
-
-      "views.none": "Brak dostępnego widoku.",
-
-      "empty.title": "Brak dostępnych danych.",
-      "empty.hintNoRooms": "Skonfigurowana encja wartości średniej nie zwraca liczby.",
-      "empty.hintMissingRooms": (v) => {
-        const category = getPluralCategory("pl", v.count);
-        if (category === "one") return `${v.count} skonfigurowana encja jest niedostępna lub nie zwraca liczby.`;
-        if (category === "few") return `${v.count} skonfigurowane encje są niedostępne lub nie zwracają liczby.`;
-        return `${v.count} skonfigurowanych encji jest niedostępnych lub nie zwraca liczby.`;
-      },
-      "empty.hintNoRoomData": "Żadna skonfigurowana encja pomieszczenia nie zwraca liczby.",
-    },
-    ko: {
-      "title.temperature": "온도",
-      "title.humidity": "습도",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2.5",
-
-      "level.veryHot": "매우 더움",
-      "level.hot": "더움",
-      "level.veryWarm": "매우 따뜻함",
-      "level.warm": "따뜻함",
-      "level.slightlyWarm": "약간 따뜻함",
-      "level.optimal": "최적",
-      "level.slightlyCool": "약간 선선함",
-      "level.fresh": "상쾌함",
-      "level.cool": "선선함",
-      "level.cold": "추움",
-      "level.veryCold": "매우 추움",
-
-      "level.criticallyHumid": "습도가 위험하게 높음",
-      "level.tooHumid": "지나치게 습함",
-      "level.veryHumid": "매우 습함",
-      "level.humid": "습함",
-      "level.slightlyHumid": "약간 습함",
-      "level.slightlyDry": "약간 건조함",
-      "level.dry": "건조함",
-      "level.veryDry": "매우 건조함",
-      "level.tooDry": "지나치게 건조함",
-      "level.criticallyDry": "위험하게 건조함",
-
-      "level.critical": "위험",
-      "level.veryHigh": "매우 높음",
-      "level.high": "높음",
-      "level.elevated": "높은 편",
-      "level.slightlyElevated": "약간 높음",
-      "level.invalidReading": "유효하지 않음",
-
-      "adjective.warm": "따뜻함",
-      "adjective.cool": "선선함",
-      "adjective.humid": "습함",
-      "adjective.dry": "건조함",
-      "adjective.elevated": "수치가 높음",
-      "adjective.low": "수치가 낮음",
-
-      "avg.label": "집 전체 평균",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
-      "avg.ariaOpen": "평균값 열기",
-
-      "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,
-      "subtitle.belowComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 낮음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 낮음.`,
-      "subtitle.inComfortIssue": (v) => `평균은 쾌적 범위 · ${v.name}의 편차가 가장 큼.`,
-      "subtitle.inComfortAllGood": "평균은 쾌적 범위 · 모든 방이 목표 범위 안에 있음.",
-      "subtitle.inComfort": "평균은 쾌적 범위.",
-      "subtitle.missingRooms": (v) => ` ${v.count}개 방은 데이터 없음.`,
-
-      "footer.comfort": (v) => `쾌적 ${v.count}/${v.total}`,
-      "footer.spread": (v) => `편차 ${v.value}`,
-      "footer.trend": (v) => `추세 ${v.value}`,
-      "trend.direction.rising": "상승",
-      "trend.direction.stable": "안정",
-      "trend.direction.falling": "하락",
-      "trend.aria": (v) => `추세 ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} 쾌적 범위`,
-      "scale.comfortLabelShort": (v) => `${v.range} 쾌적 범위`,
-      "scale.optimalLabel": (v) => `${v.range} 최적 범위`,
-      "scale.optimalLabelShort": (v) => `${v.range} 최적 범위`,
-
-      "rangeScale.currentLabel": "현재",
-      "rangeScale.currentLabelShort": "현재",
-      "rangeScale.minLabel": "최저",
-      "rangeScale.maxLabel": "최고",
-      "rangeScale.footer": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} (${v.minTime}) · 최고 ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} · 최고 ${v.max}`,
-
-      "card.coldestRoom": "가장 추운 방",
-      "card.warmestRoom": "가장 따뜻한 방",
-      "card.driestRoom": "가장 건조한 방",
-      "card.mostHumidRoom": "가장 습한 방",
-      "card.lowestRoom": "수치가 가장 낮은 방",
-      "card.highestRoom": "수치가 가장 높은 방",
-      "card.dailyMinimum": "일일 최저",
-      "card.dailyMaximum": "일일 최고",
-      "card.ariaOpen": (v) => `${v.label} 열기: ${v.name}`,
-
-      "room.ariaOpen": (v) => `${v.name} 열기`,
-
-      "rotator.hint": "밀어서 보기 전환",
-
-      "views.none": "사용 가능한 보기가 없습니다.",
-
-      "empty.title": "사용 가능한 데이터가 없습니다.",
-      "empty.hintNoRooms": "설정된 평균 엔터티가 숫자 값을 보고하지 않습니다.",
-      "empty.hintMissingRooms": (v) => `설정된 엔터티 ${v.count}개가 없거나 숫자 값을 보고하지 않습니다.`,
-      "empty.hintNoRoomData": "설정된 방 엔터티 중 숫자 값을 보고하는 항목이 없습니다.",
-    },
-    ja: {
-      "title.temperature": "温度",
-      "title.humidity": "湿度",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2.5",
-
-      "level.veryHot": "非常に暑い",
-      "level.hot": "暑い",
-      "level.veryWarm": "かなり暖かい",
-      "level.warm": "暖かい",
-      "level.slightlyWarm": "やや暖かい",
-      "level.optimal": "最適",
-      "level.slightlyCool": "やや涼しい",
-      "level.fresh": "さわやか",
-      "level.cool": "涼しい",
-      "level.cold": "寒い",
-      "level.veryCold": "非常に寒い",
-
-      "level.criticallyHumid": "湿度が危険域",
-      "level.tooHumid": "湿度が高すぎる",
-      "level.veryHumid": "湿度が非常に高い",
-      "level.humid": "湿度が高い",
-      "level.slightlyHumid": "湿度がやや高い",
-      "level.slightlyDry": "やや乾燥",
-      "level.dry": "乾燥",
-      "level.veryDry": "非常に乾燥",
-      "level.tooDry": "乾燥しすぎ",
-      "level.criticallyDry": "乾燥が危険域",
-
-      "level.critical": "危険",
-      "level.veryHigh": "非常に高い",
-      "level.high": "高い",
-      "level.elevated": "高め",
-      "level.slightlyElevated": "やや高め",
-      "level.invalidReading": "無効な値",
-
-      "adjective.warm": "暖かめ",
-      "adjective.cool": "涼しめ",
-      "adjective.humid": "湿度が高め",
-      "adjective.dry": "乾燥気味",
-      "adjective.elevated": "数値が高め",
-      "adjective.low": "数値が低め",
-
-      "avg.label": "住宅平均",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
-      "avg.ariaOpen": "平均値を開く",
-
-      "subtitle.aboveComfort": (v) => `平均は快適範囲を ${v.diff} 上回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
-      "subtitle.aboveComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 上回っています。`,
-      "subtitle.belowComfort": (v) => `平均は快適範囲を ${v.diff} 下回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
-      "subtitle.belowComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 下回っています。`,
-      "subtitle.inComfortIssue": (v) => `平均は快適範囲内 · ${v.name}が最も外れています。`,
-      "subtitle.inComfortAllGood": "平均は快適範囲内 · すべての部屋が目標範囲内です。",
-      "subtitle.inComfort": "平均は快適範囲内です。",
-      "subtitle.missingRooms": (v) => ` ${v.count}室はデータなし。`,
-
-      "footer.comfort": (v) => `快適 ${v.count}/${v.total}`,
-      "footer.spread": (v) => `ばらつき ${v.value}`,
-      "footer.trend": (v) => `トレンド ${v.value}`,
-      "trend.direction.rising": "上昇",
-      "trend.direction.stable": "安定",
-      "trend.direction.falling": "下降",
-      "trend.aria": (v) => `傾向 ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} 快適`,
-      "scale.comfortLabelShort": (v) => `${v.range} 快適`,
-      "scale.optimalLabel": (v) => `${v.range} 最適`,
-      "scale.optimalLabelShort": (v) => `${v.range} 最適`,
-
-      "rangeScale.currentLabel": "現在",
-      "rangeScale.currentLabelShort": "現在",
-      "rangeScale.minLabel": "最小",
-      "rangeScale.maxLabel": "最大",
-      "rangeScale.footer": (v) => `今日の範囲 ${v.span} · 最小 ${v.min} (${v.minTime}) · 最大 ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `今日の範囲 ${v.span} · 最小 ${v.min} · 最大 ${v.max}`,
-
-      "card.coldestRoom": "最も寒い部屋",
-      "card.warmestRoom": "最も暖かい部屋",
-      "card.driestRoom": "最も乾燥した部屋",
-      "card.mostHumidRoom": "最も湿度が高い部屋",
-      "card.lowestRoom": "値が最も低い部屋",
-      "card.highestRoom": "値が最も高い部屋",
-      "card.dailyMinimum": "日最低",
-      "card.dailyMaximum": "日最高",
-      "card.ariaOpen": (v) => `${v.label}を開く: ${v.name}`,
-
-      "room.ariaOpen": (v) => `${v.name}を開く`,
-
-      "rotator.hint": "スワイプして表示を切り替え",
-
-      "views.none": "利用可能な表示がありません。",
-
-      "empty.title": "利用可能なデータがありません。",
-      "empty.hintNoRooms": "設定された平均エンティティが数値を返していません。",
-      "empty.hintMissingRooms": (v) => `設定されたエンティティ${v.count}件が見つからないか、数値を返していません。`,
-      "empty.hintNoRoomData": "設定された部屋エンティティのいずれも数値を返していません。",
-    },
-    zh: {
-      "title.temperature": "温度",
-      "title.humidity": "湿度",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2.5",
-
-      "level.veryHot": "非常炎热",
-      "level.hot": "炎热",
-      "level.veryWarm": "很暖",
-      "level.warm": "温暖",
-      "level.slightlyWarm": "略暖",
-      "level.optimal": "最佳",
-      "level.slightlyCool": "略凉",
-      "level.fresh": "清爽",
-      "level.cool": "凉",
-      "level.cold": "冷",
-      "level.veryCold": "非常寒冷",
-
-      "level.criticallyHumid": "湿度严重过高",
-      "level.tooHumid": "过于潮湿",
-      "level.veryHumid": "非常潮湿",
-      "level.humid": "潮湿",
-      "level.slightlyHumid": "略潮湿",
-      "level.slightlyDry": "略干燥",
-      "level.dry": "干燥",
-      "level.veryDry": "非常干燥",
-      "level.tooDry": "过于干燥",
-      "level.criticallyDry": "严重干燥",
-
-      "level.critical": "严重",
-      "level.veryHigh": "非常高",
-      "level.high": "高",
-      "level.elevated": "偏高",
-      "level.slightlyElevated": "略高",
-      "level.invalidReading": "无效值",
-
-      "adjective.warm": "偏暖",
-      "adjective.cool": "偏凉",
-      "adjective.humid": "偏湿",
-      "adjective.dry": "偏干",
-      "adjective.elevated": "数值偏高",
-      "adjective.low": "数值偏低",
-
-      "avg.label": "全屋平均",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
-      "avg.ariaOpen": "打开平均值",
-
-      "subtitle.aboveComfort": (v) => `平均值高于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
-      "subtitle.aboveComfortNoRooms": (v) => `平均值高于舒适范围 ${v.diff}。`,
-      "subtitle.belowComfort": (v) => `平均值低于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
-      "subtitle.belowComfortNoRooms": (v) => `平均值低于舒适范围 ${v.diff}。`,
-      "subtitle.inComfortIssue": (v) => `平均值处于舒适范围 · ${v.name}的偏差最大。`,
-      "subtitle.inComfortAllGood": "平均值处于舒适范围 · 所有房间均在目标范围内。",
-      "subtitle.inComfort": "平均值处于舒适范围。",
-      "subtitle.missingRooms": (v) => ` ${v.count}个房间无数据。`,
-
-      "footer.comfort": (v) => `舒适 ${v.count}/${v.total}`,
-      "footer.spread": (v) => `极差 ${v.value}`,
-      "footer.trend": (v) => `趋势 ${v.value}`,
-      "trend.direction.rising": "上升",
-      "trend.direction.stable": "稳定",
-      "trend.direction.falling": "下降",
-      "trend.aria": (v) => `趋势${v.direction}：${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} 舒适`,
-      "scale.comfortLabelShort": (v) => `${v.range} 舒适`,
-      "scale.optimalLabel": (v) => `${v.range} 最佳`,
-      "scale.optimalLabelShort": (v) => `${v.range} 最佳`,
-
-      "rangeScale.currentLabel": "当前",
-      "rangeScale.currentLabelShort": "当前",
-      "rangeScale.minLabel": "最低",
-      "rangeScale.maxLabel": "最高",
-      "rangeScale.footer": (v) => `今日范围 ${v.span} · 最低 ${v.min} (${v.minTime}) · 最高 ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `今日范围 ${v.span} · 最低 ${v.min} · 最高 ${v.max}`,
-
-      "card.coldestRoom": "最冷房间",
-      "card.warmestRoom": "最暖房间",
-      "card.driestRoom": "最干燥房间",
-      "card.mostHumidRoom": "最潮湿房间",
-      "card.lowestRoom": "数值最低的房间",
-      "card.highestRoom": "数值最高的房间",
-      "card.dailyMinimum": "当日最低",
-      "card.dailyMaximum": "当日最高",
-      "card.ariaOpen": (v) => `打开${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `打开${v.name}`,
-
-      "rotator.hint": "滑动以切换视图",
-
-      "views.none": "暂无可用视图。",
-
-      "empty.title": "暂无可用数据。",
-      "empty.hintNoRooms": "配置的平均值实体未返回数值。",
-      "empty.hintMissingRooms": (v) => `${v.count}个已配置实体缺失或未返回数值。`,
-      "empty.hintNoRoomData": "配置的房间实体均未返回数值。",
-    },
-    nb: {
-      "title.temperature": "Temperatur",
-      "title.humidity": "Luftfuktighet",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Svært hett",
-      "level.hot": "Hett",
-      "level.veryWarm": "Svært varmt",
-      "level.warm": "Varmt",
-      "level.slightlyWarm": "Lett varmt",
-      "level.optimal": "Optimalt",
-      "level.slightlyCool": "Lett kjølig",
-      "level.fresh": "Friskt",
-      "level.cool": "Kjølig",
-      "level.cold": "Kaldt",
-      "level.veryCold": "Svært kaldt",
-
-      "level.criticallyHumid": "Kritisk fuktig",
-      "level.tooHumid": "For fuktig",
-      "level.veryHumid": "Svært fuktig",
-      "level.humid": "Fuktig",
-      "level.slightlyHumid": "Lett fuktig",
-      "level.slightlyDry": "Lett tørt",
-      "level.dry": "Tørt",
-      "level.veryDry": "Svært tørt",
-      "level.tooDry": "For tørt",
-      "level.criticallyDry": "Kritisk tørt",
-
-      "level.critical": "Kritisk",
-      "level.veryHigh": "Svært høyt",
-      "level.high": "Høyt",
-      "level.elevated": "Forhøyet",
-      "level.slightlyElevated": "Lett forhøyet",
-      "level.invalidReading": "Ugyldig",
-
-      // Predicative fragment ("2/4 rom er varme"); Norwegian predicative
-      // adjectives DO inflect for number (unlike German/English/Dutch) — these
-      // are the plural forms, the only ones this key is ever used with
-      // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-      // requires >= 2 rooms, see _computeData()). Note "rom" itself is
-      // plural-invariant ("et rom" / "flere rom"), unlike English
-      // "room"/"rooms" — see the ternaries below, which are correctly
-      // same-value-both-branches for the noun, not a bug.
-      "adjective.warm": "varme",
-      "adjective.cool": "kjølige",
-      "adjective.humid": "fuktige",
-      "adjective.dry": "tørre",
-      "adjective.elevated": "forhøyede",
-      "adjective.low": "lave",
-
-      "avg.label": "Ø bolig",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
-      "avg.ariaOpen": "Åpne gjennomsnitt",
-
-      "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,
-      "subtitle.belowComfort": (v) => `Ø ${v.diff} under komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} under komfort.`,
-      "subtitle.inComfortIssue": (v) => `Ø innenfor komfort · ${v.name} skiller seg mest ut.`,
-      "subtitle.inComfortAllGood": "Ø innenfor komfort · alle rom er innenfor målområdet.",
-      "subtitle.inComfort": "Ø innenfor komfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} rom uten data.`,
-
-      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Spredning ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "stigende",
-      "trend.direction.stable": "stabil",
-      "trend.direction.falling": "fallende",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} komfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} komfort`,
-      "scale.optimalLabel": (v) => `${v.range} optimalt`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimalt`,
-
-      "rangeScale.currentLabel": "nå",
-      "rangeScale.currentLabelShort": "nå",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "maks",
-      "rangeScale.footer": (v) => `Dagens spenn ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Dagens spenn ${v.span} · Min ${v.min} · Maks ${v.max}`,
-
-      "card.coldestRoom": "Kaldeste rommet",
-      "card.warmestRoom": "Varmeste rommet",
-      "card.driestRoom": "Tørreste rommet",
-      "card.mostHumidRoom": "Fuktigste rommet",
-      "card.lowestRoom": "Laveste rommet",
-      "card.highestRoom": "Høyeste rommet",
-      "card.dailyMinimum": "Dagens minimum",
-      "card.dailyMaximum": "Dagens maksimum",
-      "card.ariaOpen": (v) => `Åpne ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Åpne ${v.name}`,
-
-      "rotator.hint": "Sveip for å bytte mellom visninger",
-
-      "views.none": "Ingen visning tilgjengelig.",
-
-      "empty.title": "Ingen data tilgjengelig.",
-      "empty.hintNoRooms": "Den konfigurerte gjennomsnittsenheten rapporterer ikke et tall.",
-      "empty.hintMissingRooms": (v) => `${v.count} konfigurert${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? "" : "er"} mangler eller rapporterer ikke et tall.`,
-      "empty.hintNoRoomData": "Ingen konfigurert rom-enhet rapporterer et tall.",
-    },
-    sv: {
-      "title.temperature": "Temperatur",
-      "title.humidity": "Luftfuktighet",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Mycket hett",
-      "level.hot": "Hett",
-      "level.veryWarm": "Mycket varmt",
-      "level.warm": "Varmt",
-      "level.slightlyWarm": "Lite varmt",
-      "level.optimal": "Optimalt",
-      "level.slightlyCool": "Lite svalt",
-      "level.fresh": "Friskt",
-      "level.cool": "Svalt",
-      "level.cold": "Kallt",
-      "level.veryCold": "Mycket kallt",
-
-      "level.criticallyHumid": "Kritiskt fuktigt",
-      "level.tooHumid": "För fuktigt",
-      "level.veryHumid": "Mycket fuktigt",
-      "level.humid": "Fuktigt",
-      "level.slightlyHumid": "Lite fuktigt",
-      "level.slightlyDry": "Lite torrt",
-      "level.dry": "Torrt",
-      "level.veryDry": "Mycket torrt",
-      "level.tooDry": "För torrt",
-      "level.criticallyDry": "Kritiskt torrt",
-
-      "level.critical": "Kritiskt",
-      "level.veryHigh": "Mycket högt",
-      "level.high": "Högt",
-      "level.elevated": "Förhöjt",
-      "level.slightlyElevated": "Lite förhöjt",
-      "level.invalidReading": "Ogiltigt",
-
-      // Predicative fragment ("2/4 rum är varma"); Swedish predicative
-      // adjectives DO inflect for number (unlike German/English/Dutch) —
-      // these are the plural forms, the only ones this key is ever used with
-      // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-      // requires >= 2 rooms, see _computeData()). Note "rum" itself is
-      // plural-invariant ("ett rum" / "flera rum"), unlike English
-      // "room"/"rooms" — see the ternaries below, which are correctly
-      // same-value-both-branches for the noun, not a bug.
-      "adjective.warm": "varma",
-      "adjective.cool": "svala",
-      "adjective.humid": "fuktiga",
-      "adjective.dry": "torra",
-      "adjective.elevated": "förhöjda",
-      "adjective.low": "låga",
-
-      "avg.label": "Ø hem",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
-      "avg.ariaOpen": "Öppna medelvärde",
-
-      "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,
-      "subtitle.belowComfort": (v) => `Ø ${v.diff} under komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Ø ${v.diff} under komfort.`,
-      "subtitle.inComfortIssue": (v) => `Ø inom komfort · ${v.name} sticker ut mest.`,
-      "subtitle.inComfortAllGood": "Ø inom komfort · alla rum ligger inom målintervallet.",
-      "subtitle.inComfort": "Ø inom komfort.",
-      "subtitle.missingRooms": (v) => ` ${v.count} rum utan data.`,
-
-      "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Spridning ${v.value}`,
-      "footer.trend": (v) => `Trend ${v.value}`,
-      "trend.direction.rising": "stigande",
-      "trend.direction.stable": "stabil",
-      "trend.direction.falling": "fallande",
-      "trend.aria": (v) => `Trend ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} komfort`,
-      "scale.comfortLabelShort": (v) => `${v.range} komfort`,
-      "scale.optimalLabel": (v) => `${v.range} optimalt`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimalt`,
-
-      "rangeScale.currentLabel": "nu",
-      "rangeScale.currentLabelShort": "nu",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "max",
-      "rangeScale.footer": (v) => `Dagens intervall ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Dagens intervall ${v.span} · Min ${v.min} · Max ${v.max}`,
-
-      "card.coldestRoom": "Kallaste rummet",
-      "card.warmestRoom": "Varmaste rummet",
-      "card.driestRoom": "Torraste rummet",
-      "card.mostHumidRoom": "Fuktigaste rummet",
-      "card.lowestRoom": "Lägsta rummet",
-      "card.highestRoom": "Högsta rummet",
-      "card.dailyMinimum": "Dagens minimum",
-      "card.dailyMaximum": "Dagens maximum",
-      "card.ariaOpen": (v) => `Öppna ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Öppna ${v.name}`,
-
-      "rotator.hint": "Svep för att växla mellan vyer",
-
-      "views.none": "Ingen vy tillgänglig.",
-
-      "empty.title": "Inga data tillgängliga.",
-      "empty.hintNoRooms": "Den konfigurerade medelvärdesenheten rapporterar inget tal.",
-      "empty.hintMissingRooms": (v) => `${v.count} konfigurerad${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? " saknas" : "er saknas"} eller rapporterar inget tal.`,
-      "empty.hintNoRoomData": "Ingen konfigurerad rumsenhet rapporterar ett tal.",
-    },
-    lv: {
-      "title.temperature": "Temperatūra",
-      "title.humidity": "Mitrums",
-      "title.co2": "CO₂",
-      "title.pm25": "PM2,5",
-
-      "level.veryHot": "Ļoti karsts",
-      "level.hot": "Karsts",
-      "level.veryWarm": "Ļoti silts",
-      "level.warm": "Silts",
-      "level.slightlyWarm": "Nedaudz silts",
-      "level.optimal": "Optimāls",
-      "level.slightlyCool": "Nedaudz vēss",
-      "level.fresh": "Svaigs",
-      "level.cool": "Vēss",
-      "level.cold": "Auksts",
-      "level.veryCold": "Ļoti auksts",
-
-      "level.criticallyHumid": "Kritiski mitrs",
-      "level.tooHumid": "Pārāk mitrs",
-      "level.veryHumid": "Ļoti mitrs",
-      "level.humid": "Mitrs",
-      "level.slightlyHumid": "Nedaudz mitrs",
-      "level.slightlyDry": "Nedaudz sauss",
-      "level.dry": "Sauss",
-      "level.veryDry": "Ļoti sauss",
-      "level.tooDry": "Pārāk sauss",
-      "level.criticallyDry": "Kritiski sauss",
-
-      "level.critical": "Kritisks",
-      "level.veryHigh": "Ļoti augsts",
-      "level.high": "Augsts",
-      "level.elevated": "Paaugstināts",
-      "level.slightlyElevated": "Nedaudz paaugstināts",
-      "level.invalidReading": "Nederīgs",
-
-      // Predicative fragment ("2/4 telpas ir siltas"); "telpa" (room) is
-      // feminine, so these are feminine-plural forms — the only form this
-      // key is actually used with (subtitle.*Comfort's rooms branch is only
-      // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
-      "adjective.warm": "siltas",
-      "adjective.cool": "vēsas",
-      "adjective.humid": "mitras",
-      "adjective.dry": "sausas",
-      "adjective.elevated": "paaugstinātas",
-      "adjective.low": "zemas",
-
-      "avg.label": "Ø māja",
-      "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-      "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
-      "avg.ariaOpen": "Atvērt vidējo vērtību",
-
-      // Latvian cardinal numbers have a three-way CLDR plural split (zero:
-      // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:
-      // everything else) — e.g. "1 telpa" / "2 telpas" / "11 telpu" / "21
-      // telpa". Unlike the two-way (one/other) languages above, v.total >= 2
-      // does NOT collapse this to a single safe form (10, 11, 20, 21 are all
-      // >= 2 but land in different categories), so this uses selectPlural()
-      // for the noun instead of a plain ternary — same reasoning as the
-      // existing ru/pl blocks.
-      "subtitle.aboveComfort": (v) => `Vidēji ${v.diff} virs komforta zonas · ${v.count}/${v.total} ${selectPlural("lv", v.total, { zero: "telpu", one: "telpa", other: "telpas" })} ir ${v.adjective}.`,
-      "subtitle.aboveComfortNoRooms": (v) => `Vidēji ${v.diff} virs komforta zonas.`,
-      "subtitle.belowComfort": (v) => `Vidēji ${v.diff} zem komforta zonas · ${v.count}/${v.total} ${selectPlural("lv", v.total, { zero: "telpu", one: "telpa", other: "telpas" })} ir ${v.adjective}.`,
-      "subtitle.belowComfortNoRooms": (v) => `Vidēji ${v.diff} zem komforta zonas.`,
-      "subtitle.inComfortIssue": (v) => `Vidēji komforta zonā · ${v.name} izceļas visvairāk.`,
-      "subtitle.inComfortAllGood": "Vidēji komforta zonā · visas telpas ir mērķa diapazonā.",
-      "subtitle.inComfort": "Vidēji komforta zonā.",
-      "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} bez datiem.`,
-
-      "footer.comfort": (v) => `Komforts ${v.count}/${v.total}`,
-      "footer.spread": (v) => `Izkliede ${v.value}`,
-      "footer.trend": (v) => `Tendence ${v.value}`,
-      "trend.direction.rising": "pieaugoša",
-      "trend.direction.stable": "stabila",
-      "trend.direction.falling": "krītoša",
-      "trend.aria": (v) => `Tendence ${v.direction}: ${v.value}`,
-
-      "scale.comfortLabel": (v) => `${v.range} komforts`,
-      "scale.comfortLabelShort": (v) => `${v.range} komforts`,
-      "scale.optimalLabel": (v) => `${v.range} optimāli`,
-      "scale.optimalLabelShort": (v) => `${v.range} optimāli`,
-
-      "rangeScale.currentLabel": "tagad",
-      "rangeScale.currentLabelShort": "tagad",
-      "rangeScale.minLabel": "min",
-      "rangeScale.maxLabel": "maks",
-      "rangeScale.footer": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
-      "rangeScale.footerCompact": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} · Maks ${v.max}`,
-
-      "card.coldestRoom": "Aukstākā telpa",
-      "card.warmestRoom": "Siltākā telpa",
-      "card.driestRoom": "Sausākā telpa",
-      "card.mostHumidRoom": "Mitrākā telpa",
-      "card.lowestRoom": "Zemākā telpa",
-      "card.highestRoom": "Augstākā telpa",
-      "card.dailyMinimum": "Dienas minimums",
-      "card.dailyMaximum": "Dienas maksimums",
-      "card.ariaOpen": (v) => `Atvērt ${v.label}: ${v.name}`,
-
-      "room.ariaOpen": (v) => `Atvērt ${v.name}`,
-
-      "rotator.hint": "Velciet, lai pārslēgtu skatus",
-
-      "views.none": "Nav pieejams neviens skats.",
-
-      "empty.title": "Dati nav pieejami.",
-      "empty.hintNoRooms": "Konfigurētā vidējās vērtības entītija nesniedz skaitli.",
-      "empty.hintMissingRooms": (v) => {
-        const category = getPluralCategory("lv", v.count);
-        if (category === "one") return `${v.count} konfigurēta entītija trūkst vai nesniedz skaitli.`;
-        if (category === "zero") return `${v.count} konfigurētu entītiju trūkst vai nesniedz skaitli.`;
-        return `${v.count} konfigurētas entītijas trūkst vai nesniedz skaitli.`;
-      },
-      "empty.hintNoRoomData": "Neviena konfigurētā telpas entītija nesniedz skaitli.",
-    },
-  };
-
-  // Self-check (module load time only): warns if a language's key set
-  // differs from "en" (the reference), so a missing/extra key in a new or
-  // edited translation block is caught immediately instead of silently
-  // falling back to "en" at runtime (see _t()). Cheap and runs once.
-  {
-    const referenceKeys = new Set(Object.keys(TRANSLATIONS[DEFAULT_LANGUAGE]));
-    for (const lang of Object.keys(TRANSLATIONS)) {
-      if (lang === DEFAULT_LANGUAGE) continue;
-      const keys = new Set(Object.keys(TRANSLATIONS[lang]));
-      const missing = [...referenceKeys].filter((k) => !keys.has(k));
-      const extra = [...keys].filter((k) => !referenceKeys.has(k));
-      if (missing.length || extra.length) {
-        console.warn(
-          `Room Climate Card: TRANSLATIONS["${lang}"] is out of sync with "${DEFAULT_LANGUAGE}"` +
-            (missing.length ? ` — missing: ${missing.join(", ")}` : "") +
-            (extra.length ? ` — extra: ${extra.join(", ")}` : "")
-        );
-      }
-    }
-  }
 
   // Describes each possible carousel view: when it's shown (condition), how
   // to render its initial HTML, and how to patch it on a data-only update.
@@ -2172,26 +171,7 @@
   // anywhere in this list only needs a new entry here plus its render/
   // update functions, in the position where it should appear on screen —
   // nothing else needs to change.
-  // View-customizer "Baukasten" foundation (Teil 2, building on AP-04's
-  // optionsSchema whitelist, audit 14.4): a schema descriptor value used to
-  // be a bare presence-marker (any truthy placeholder) -- boolOption()
-  // upgrades that to a small {default, validate} descriptor so a raw
-  // views:[i].options value can be both defaulted AND type-checked, not
-  // just whitelisted by key. Kept as a small factory (not inlined at each
-  // call site) so every boolean view option shares identical validation
-  // semantics for free.
-  function boolOption(defaultValue) {
-    return { default: defaultValue, validate: (value) => typeof value === "boolean" };
-  }
 
-  function enumOption(defaultValue, allowedValues) {
-    // AP-C3 (audit 23.2): same Baukasten as boolOption() above, for a
-    // view option with a closed set of non-boolean values (e.g.
-    // scale.markers: "average"|"extremes"|"all"). An invalid value is diagnosed and
-    // dropped by _normalizeViewOptions() exactly like an invalid boolean
-    // option, then resolveViewOptions() fills in defaultValue.
-    return { default: defaultValue, validate: (value) => allowedValues.includes(value) };
-  }
 
   const VIEW_REGISTRY = [
     {
@@ -2376,57 +356,6 @@
     return sorted.sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, language)); // value_asc (default)
   }
 
-  // ==== Auto-slide easing: single shared definition (AP-08, audit 17) ====
-  // CSS and JS used to each hardcode "cubic-bezier(.45,0,.16,1)" separately
-  // (_slideKeyframes()'s keyframe animation, _updateTrackTransform()'s
-  // manual-settle transition, _setTrackTransition()'s swipe-settle
-  // transition) while the accessibility flip calculation
-  // (_accessibleViewIndexAt()/_msUntilNextAccessibilityFlip()) used a
-  // completely unrelated number (the raw temporal midpoint, slideMs/2) —
-  // audit 17's A11Y-01: a cubic-bezier easing's TIME axis and its
-  // EASED/spatial-progress axis are different curves, so "50% of the time"
-  // and "50% of the visual motion" land at different moments. The
-  // accessible view must follow whichever view is spatially dominant, not
-  // raw time, so the flip must happen where the EASED progress crosses 50%
-  // — which requires inverting the same curve CSS renders with.
-  const SLIDE_EASING = Object.freeze({ x1: 0.45, y1: 0, x2: 0.16, y2: 1 });
-
-  function cubicBezierPoint(easing, u) {
-    // Standard cubic-bezier evaluation with implicit P0=(0,0)/P3=(1,1) (the
-    // two endpoints every CSS cubic-bezier() curve is anchored to).
-    const mu = 1 - u;
-    return {
-      x: 3 * mu * mu * u * easing.x1 + 3 * mu * u * u * easing.x2 + u * u * u,
-      y: 3 * mu * mu * u * easing.y1 + 3 * mu * u * u * easing.y2 + u * u * u,
-    };
-  }
-
-  function timeFractionForEasedProgress(easing, targetY) {
-    // Inverts a cubic-bezier curve: given the desired EASED/spatial
-    // progress (targetY), finds the TIME fraction at which the curve
-    // produces it. Bisection on the curve parameter u (Y(u) is monotonic
-    // for any valid CSS easing curve) rather than a closed-form cubic
-    // solve — general-purpose, numerically robust, and precise enough
-    // after 50 iterations that the result is exact to well beyond double
-    // precision's useful range.
-    let lo = 0, hi = 1;
-    for (let i = 0; i < 50; i++) {
-      const mid = (lo + hi) / 2;
-      if (cubicBezierPoint(easing, mid).y < targetY) lo = mid; else hi = mid;
-    }
-    return cubicBezierPoint(easing, (lo + hi) / 2).x;
-  }
-
-  // The single, shared CSS string — every place that renders the slide
-  // easing (keyframe animation, manual settle transitions) uses this exact
-  // string, so they can never drift out of sync with each other or with
-  // the flip-fraction calculation below.
-  const SLIDE_EASING_CSS = `cubic-bezier(${SLIDE_EASING.x1},${SLIDE_EASING.y1},${SLIDE_EASING.x2},${SLIDE_EASING.y2})`;
-
-  // Where the slide's SPATIAL midpoint (eased progress = 0.5) falls on the
-  // TIME axis — ~0.35375 for cubic-bezier(.45,0,.16,1) (vs. 0.5 for the
-  // old, wrong temporal-midpoint assumption). Computed once at module load.
-  const A11Y_FLIP_TIME_FRACTION = timeFractionForEasedProgress(SLIDE_EASING, 0.5);
 
   // ==== Card class: lifecycle, configuration, rendering ====
   // Main class for the custom Lovelace card; Home Assistant instantiates it
@@ -3017,7 +946,7 @@
           if (typeof tier.level !== "string" || !tier.level.trim()) {
             this._classificationConfigError(`${path}.level`, "must be a non-empty string");
           }
-          if (typeof tier.color !== "string" || !HEX_COLOR_PATTERN.test(tier.color.trim())) {
+          if (typeof tier.color !== "string" || !isHexColor(tier.color.trim())) {
             this._classificationConfigError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
           }
           if (!zones.has(tier.zone)) {
@@ -3317,30 +1246,20 @@
     _normalizeLanguage(value) {
       // Optional language override; "auto" (the default for anything
       // invalid/missing) means "keep using hass's automatic detection" —
-      // see _language(). Only accepts one of the languages TRANSLATIONS
-      // actually has a block for, so an override can never silently
-      // select a language that would just fall back to English anyway.
+      // see _language(). Only accepts a language that actually has a
+      // translation block, so an override can never silently select a
+      // language that would just fall back to English anyway.
       if (typeof value !== "string") return "auto";
       const normalized = value.trim().toLowerCase();
       if (normalized === "" || normalized === "auto") return "auto";
-      return Object.prototype.hasOwnProperty.call(TRANSLATIONS, normalized) ? normalized : "auto";
+      return isSupportedLanguage(normalized) ? normalized : "auto";
     }
 
     _parseConfigNumber(value) {
       // Strict shared numeric parser for optional cosmetic/layout config
-      // fields: only an actual `number` or a numeric-looking string is
-      // accepted. Number(value) alone would silently coerce booleans
-      // (Number(true) === 1) and other unintended types through, letting a
-      // typo'd YAML value like `room_columns: true` or `decimals: true`
-      // pass as a valid 1 instead of being rejected. Returns null for
-      // anything else (including non-finite results); callers apply their
-      // own range checks on top.
-      if (typeof value === "number") return Number.isFinite(value) ? value : null;
-      if (typeof value !== "string") return null;
-      const text = value.trim();
-      if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(text)) return null;
-      const num = Number(text);
-      return Number.isFinite(num) ? num : null;
+      // fields — see parseConfigNumber() in core/numbers.js for why plain
+      // Number() coercion is not acceptable here.
+      return parseConfigNumber(value);
     }
 
     _normalizeDecimalsOverride(value) {
@@ -3374,11 +1293,11 @@
     }
 
     _normalizeAction(value, fallback) {
-      // Validates a tap_action/hold_action object against ACTION_ALLOWLIST;
+      // Validates a tap_action/hold_action object against the accepted action
       // an invalid/missing value falls back to `fallback` (a card-level
       // default, or null for a per-room override that should inherit the
       // card-level action) instead of being passed through raw.
-      if (this._isPlainObject(value) && typeof value.action === "string" && ACTION_ALLOWLIST.has(value.action)) {
+      if (this._isPlainObject(value) && typeof value.action === "string" && isAllowedActionType(value.action)) {
         return { ...value };
       }
       return fallback ? { ...fallback } : null;
@@ -3545,10 +1464,10 @@
       // deliberately forced entity mode may request its partial metadata.
       if (!entityId || !this._hass?.states?.[entityId]) return null;
       const attrs = this._hass.states[entityId].attributes;
-      // value_color must match HEX_COLOR_PATTERN — it ends up in CSS/style
+      // value_color must be a valid hex colour — it ends up in CSS/style
       // attributes further down the render pipeline, so anything else is
       // treated as absent rather than trusted verbatim.
-      const color = typeof attrs.value_color === "string" && HEX_COLOR_PATTERN.test(attrs.value_color.trim())
+      const color = typeof attrs.value_color === "string" && isHexColor(attrs.value_color.trim())
         ? attrs.value_color.trim()
         : null;
       const level = typeof attrs.value_level === "string" && attrs.value_level.trim()
@@ -3991,21 +1910,9 @@
     }
 
     _parseNum(raw) {
-      // Shared numeric parser for _getNum()/_getAttrNum(): accepts comma
-      // decimals, treats HA's non-numeric states as invalid, and handles
-      // attributes HA already delivers as a real number instead of a string.
-      // Validates the full (normalized) string against a strict numeric
-      // format before parsing, rather than handing it straight to
-      // parseFloat() — parseFloat() happily extracts a numeric prefix from
-      // garbage like "25 °C" or "12abc", which would silently legitimize a
-      // malformed/corrupted sensor value instead of treating it as invalid.
-      if (raw === undefined || raw === null) return null;
-      const rawString = String(raw).trim().toLowerCase();
-      if (INVALID_STATES.has(rawString)) return null;
-      const normalized = rawString.replace(",", ".");
-      if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?$/.test(normalized)) return null;
-      const value = Number(normalized);
-      return Number.isFinite(value) ? value : null;
+      // Shared numeric parser for _getNum()/_getAttrNum() — see
+      // parseNumericState() in core/numbers.js for the parsing rules.
+      return parseNumericState(raw);
     }
 
     _getNum(entityId) {
@@ -4022,7 +1929,7 @@
 
     _language() {
       // Base language code (e.g. "de" from "de-AT"), checked against
-      // TRANSLATIONS. An explicit config.language override (see
+      // the registered translations. An explicit config.language override (see
       // _normalizeLanguage()) wins outright; otherwise locale.language
       // takes priority as HA's most granular, explicitly user-selectable
       // setting, then language/selectedLanguage. A single render calls
@@ -4035,14 +1942,7 @@
       if (this._languageCacheHass === this._hass && this._languageCacheConfigLanguage === configLanguage) {
         return this._languageCacheValue;
       }
-      let value;
-      if (configLanguage && configLanguage !== "auto") {
-        value = configLanguage;
-      } else {
-        const raw = this._hass?.locale?.language || this._hass?.language || this._hass?.selectedLanguage || DEFAULT_LANGUAGE;
-        const base = String(raw).toLowerCase().split("-")[0];
-        value = TRANSLATIONS[base] ? base : DEFAULT_LANGUAGE;
-      }
+      const value = resolveLanguage(configLanguage, this._hass);
       this._languageCacheHass = this._hass;
       this._languageCacheConfigLanguage = configLanguage;
       this._languageCacheValue = value;
@@ -4050,11 +1950,9 @@
     }
 
     _t(key, vars) {
-      // Translates key in the current language, falling back to
-      // DEFAULT_LANGUAGE and finally the key itself; values may be
-      // functions (pluralization/conditionals) or plain strings.
-      const entry = TRANSLATIONS[this._language()]?.[key] ?? TRANSLATIONS[DEFAULT_LANGUAGE]?.[key] ?? key;
-      return typeof entry === "function" ? entry(vars || {}) : entry;
+      // Translates key in the current language — see translate() in
+      // i18n/translate.js for the English fallback and key-fallback rules.
+      return translate(this._language(), key, vars);
     }
 
     _metricMetaFor(metricType) {
@@ -4143,25 +2041,22 @@
     }
 
     _floorToStep(value, step) {
-      return Math.floor(value / step) * step;
+      return floorToStep(value, step);
     }
 
     _ceilToStep(value, step) {
-      return Math.ceil(value / step) * step;
+      return ceilToStep(value, step);
     }
 
     _fmt(value, digits) {
+      // The digit count is resolved here, where the config override and the
+      // metric's own default are known; the formatting itself is locale work.
       const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
-      return getNumberFormat(NUMBER_LOCALE_BY_LANGUAGE[this._language()], d).format(Number(value));
+      return formatNumber(this._language(), value, d);
     }
 
     _formatTime(isoString) {
-      // Formats an ISO timestamp as local "HH:MM" (hour12:false keeps this
-      // consistent across languages); null for a missing/invalid timestamp.
-      if (typeof isoString !== "string" || !isoString.trim()) return null;
-      const date = new Date(isoString);
-      if (Number.isNaN(date.getTime())) return null;
-      return getTimeFormat(NUMBER_LOCALE_BY_LANGUAGE[this._language()]).format(date);
+      return formatTimeOfDay(this._language(), isoString);
     }
 
     _rawUnitForEntity(entityId) {
@@ -4174,17 +2069,8 @@
     }
 
     _resolveUnitProfileKey(metricKind, rawUnit) {
-      // Maps one entity's own raw unit_of_measurement to a METRIC_DEFINITIONS
-      // unitProfile key (e.g. "°F" -> "fahrenheit"); null when metricKind is
-      // unknown or rawUnit doesn't match any registered profile. Both lookup
-      // paths use normalizeUnitToken(), so equivalent Unicode/text spellings map
-      // to the same registered unit without weakening unknown-unit rejection.
-      const definition = METRIC_DEFINITIONS[metricKind];
-      if (!definition || !rawUnit) return null;
-      const normalized = normalizeUnitToken(rawUnit);
-      return Object.keys(definition.unitProfiles).find((key) =>
-        definition.unitProfiles[key].units.some((unit) => normalizeUnitToken(unit) === normalized)
-      ) || null;
+      // See resolveUnitProfileKey() in domain/metrics/resolution.js.
+      return resolveUnitProfileKey(metricKind, rawUnit);
     }
 
     _resolveAuxiliaryUnitProfile(entityId, metricKind, { rateSuffix = false } = {}) {
@@ -4603,18 +2489,16 @@
 
     _esc(value) {
       // HTML-escapes a value before it enters a template string (entity names, room labels).
-      return String(value ?? "").replace(/[&<>"']/g, (char) => ESC_MAP[char]);
+      return escapeHtml(value);
     }
 
     _clamp(value, min, max) {
-      // Clamps a value to a fixed range.
-      return Math.max(min, Math.min(max, value));
+      return clamp(value, min, max);
     }
 
     _pos(value, min, max) {
       // Converts a value into a percentage position on the scale.
-      if (max === min) return 0;
-      return this._clamp(((value - min) / (max - min)) * 100, 0, 100);
+      return percentInRange(value, min, max);
     }
 
     _rangePosition(minValue, maxValue, scaleMin, scaleMax) {
@@ -4915,31 +2799,9 @@
     }
 
     _rgba(color, alpha) {
-      // Builds a semi-transparent color from a hex, rgb(), or CSS variable
-      // input. Accepts all four valid CSS hex lengths (3/4/6/8, matching
-      // HEX_COLOR_PATTERN); for the two with an embedded alpha channel
-      // (4/8), only the RGB part is used — this always applies the given
-      // alpha rather than any alpha already embedded in the source color,
-      // since the contract here is "this color at the requested opacity",
-      // not "this color's own opacity, adjusted".
-      if (typeof color !== "string") return `rgba(255,255,255,${alpha})`;
-      if (color.startsWith("rgba") || color.startsWith("rgb")) return color;
-      if (color.startsWith("var(")) return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
-      const hex = color.replace("#", "").trim();
-      let rgbHex;
-      if (hex.length === 3 || hex.length === 4) {
-        rgbHex = hex.slice(0, 3).split("").map((c) => c + c).join("");
-      } else if (hex.length === 6 || hex.length === 8) {
-        rgbHex = hex.slice(0, 6);
-      } else {
-        return `rgba(255,255,255,${alpha})`;
-      }
-      const int = Number.parseInt(rgbHex, 16);
-      if (!Number.isFinite(int)) return `rgba(255,255,255,${alpha})`;
-      const r = (int >> 16) & 255;
-      const g = (int >> 8) & 255;
-      const b = int & 255;
-      return `rgba(${r},${g},${b},${alpha})`;
+      // Semi-transparent variant of a tone/marker color — see rgba() in
+      // core/color.js for the accepted input shapes.
+      return rgba(color, alpha);
     }
 
     // ==== Data computation ====
@@ -5030,7 +2892,7 @@
           const model = participatingByEntity.get(room.entity);
           if (!model) return null;
           const displayLabel = roomDisplayLabel(room);
-          return { ...room, index, value: toDisplay(model.canonicalValue), displayLabel, shortGuaranteed: TWO_UPPER_LETTER_RE.test(displayLabel) };
+          return { ...room, index, value: toDisplay(model.canonicalValue), displayLabel, shortGuaranteed: isTwoUpperLetterLabel(displayLabel) };
         })
         .filter((room) => room !== null);
 
@@ -5755,7 +3617,7 @@
     _resolveLabelForm(el, longText, shortText, fitsWithWidth) {
       // Long-/short-form label architecture (post-2.27.0 review): a
       // collision-prone label (e.g. scale.optimalLabel, rangeScale.
-      // currentLabel) is never permanently shortened in TRANSLATIONS —
+      // currentLabel) is never permanently shortened in the translations —
       // instead both a canonical long form and a short fallback are
       // available, and the card picks between them here at measure time,
       // based on the ACTUAL rendered width, the same way
@@ -6654,7 +4516,7 @@
       // this view's marker tooltips (see _renderRangeScaleView()).
       // AP-C3 (audit 23.2): "compact" reuses rangeScale.footerCompact — the
       // exact same template with the two timestamp parentheticals dropped,
-      // already translated for every language (see TRANSLATIONS) — rather
+      // already translated for every language (see i18n/languages/) — rather
       // than composing a truncated string here, which would need to
       // guess at each language's own punctuation/connector conventions.
       const key = mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer";
@@ -8318,4 +6180,3 @@
   }
 
   window.roomClimateCardVersion = CARD_VERSION;
-})();

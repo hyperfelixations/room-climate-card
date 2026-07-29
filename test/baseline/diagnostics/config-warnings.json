@@ -1,0 +1,35 @@
+{
+  "views-duplicate-type": [
+    "Room Climate Card: views: duplicate view type \"scale\""
+  ],
+  "views-entry-empty-string": [
+    "Room Climate Card: views[0]: expected a non-empty string or an object"
+  ],
+  "views-entry-missing-type": [
+    "Room Climate Card: views[0]: missing or invalid \"type\""
+  ],
+  "views-entry-wrong-shape": [
+    "Room Climate Card: views[0]: expected a string or an object, got 42"
+  ],
+  "views-invalid-enabled": [
+    "Room Climate Card: views[0] (\"scale\"): invalid \"enabled\" value \"yes\", falling back to \"auto\""
+  ],
+  "views-not-an-array": [
+    "Room Climate Card: views: expected an array, got \"scale\""
+  ],
+  "views-options-invalid-boolean": [
+    "Room Climate Card: views[0] (\"scale\"): invalid \"show_comfort_band\" value \"yes\", falling back to default"
+  ],
+  "views-options-invalid-enum": [
+    "Room Climate Card: views[0] (\"scale\"): invalid \"markers\" value \"some\", falling back to default"
+  ],
+  "views-options-not-an-object": [
+    "Room Climate Card: views[0] (\"scale\"): invalid \"options\" value \"all\", expected an object"
+  ],
+  "views-options-unknown-key": [
+    "Room Climate Card: views[0] (\"scale\"): ignoring unknown \"options\" key(s) \"bogus\", \"also_bogus\""
+  ],
+  "views-unknown-type": [
+    "Room Climate Card: views: unknown view type \"bogus\""
+  ]
+}

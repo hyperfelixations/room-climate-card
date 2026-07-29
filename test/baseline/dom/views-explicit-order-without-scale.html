@@ -1,0 +1,148 @@
+
+        <style>[[css sha256:9c48b264771e4b444c1ac1eb9c64be2e401e392a0de89e9134d1f137c706cb5c]]</style></style>
+        <ha-card class="rtc-card">
+          
+        <div class="rtc-root" data-metric="temperature" style="--tone-color:#79A86C;--tone-soft:rgba(121,168,108,0.2);--tone-border:rgba(121,168,108,0.38);--tone-band:rgba(121,168,108,0.2);" tabindex="-1">
+          <div class="rtc-top-line"></div>
+
+          <div class="rtc-header">
+            <div class="rtc-icon-badge" aria-hidden="true">
+              <ha-icon icon="mdi:thermometer"></ha-icon>
+            </div>
+
+            <div class="rtc-title-block">
+              <div class="rtc-title">Temperature</div>
+              <div class="rtc-subtitle">Avg. in comfort · Room 7 stands out most.</div>
+            </div>
+
+            <div class="rtc-status-pill">Optimal</div>
+          </div>
+
+          <div class="rtc-main-panel">
+            <div class="rtc-average">
+        <button type="button" class="rtc-avg-button" data-entity="sensor.avg" aria-label="Open average" title="Home avg.: 22.4 °C">
+          
+        <span class="rtc-avg-label">Home avg.</span>
+        <span class="rtc-avg-value">
+          <span class="rtc-avg-value-num">22.4</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true" hidden=""><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit">°C</span></span></span>
+        </span>
+      
+        </button>
+      </div>
+
+            
+          <div class="rtc-rotator" aria-live="off" title="Swipe to switch between views">
+            <div class="rtc-track" style="animation: rtc-track-slide 30000ms linear infinite; animation-delay: -10000ms;">
+              <div class="rtc-view">
+        <div class="rtc-extremes-view">
+          
+        
+        <button type="button" class="rtc-extreme-card" data-entity="sensor.room_1" data-room-index="0" style="--extreme-color:#67A7AE;--extreme-bg:rgba(103,167,174,0.09);--extreme-border:rgba(103,167,174,0.36);--extreme-line-shadow:rgba(103,167,174,0.24);" title="Coldest room: Room 1 19.2 °C" aria-label="Open Coldest room: Room 1">
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">Coldest room</span>
+          <span class="rtc-extreme-name">Room 1</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">19.2</span><span class="rtc-extreme-value-unit"> °C</span></span>
+        </button>
+      
+        
+        <button type="button" class="rtc-extreme-card" data-entity="sensor.room_7" data-room-index="6" style="--extreme-color:#C98A67;--extreme-bg:rgba(201,138,103,0.09);--extreme-border:rgba(201,138,103,0.36);--extreme-line-shadow:rgba(201,138,103,0.24);" title="Warmest room: Room 7 25.7 °C" aria-label="Open Warmest room: Room 7">
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">Warmest room</span>
+          <span class="rtc-extreme-name">Room 7</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">25.7</span><span class="rtc-extreme-value-unit"> °C</span></span>
+        </button>
+      
+      
+        </div>
+      </div><div class="rtc-view" aria-hidden="true" inert="">
+        <div class="rtc-range-view">
+          
+        
+        <button type="button" class="rtc-extreme-card" data-entity="sensor.range" style="--extreme-color:#67A7AE;--extreme-bg:rgba(103,167,174,0.09);--extreme-border:rgba(103,167,174,0.36);--extreme-line-shadow:rgba(103,167,174,0.24);" title="Daily minimum: 06:12 19.8 °C" aria-label="Open Daily minimum: 06:12">
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">Daily minimum</span>
+          <span class="rtc-extreme-name">06:12</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">19.8</span><span class="rtc-extreme-value-unit"> °C</span></span>
+        </button>
+      
+        
+        <button type="button" class="rtc-extreme-card" data-entity="sensor.range" style="--extreme-color:#C0A752;--extreme-bg:rgba(192,167,82,0.09);--extreme-border:rgba(192,167,82,0.36);--extreme-line-shadow:rgba(192,167,82,0.24);" title="Daily maximum: 15:41 24.9 °C" aria-label="Open Daily maximum: 15:41">
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">Daily maximum</span>
+          <span class="rtc-extreme-name">15:41</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">24.9</span><span class="rtc-extreme-value-unit"> °C</span></span>
+        </button>
+      
+      
+        </div>
+      </div>
+            </div>
+          </div>
+        
+          </div>
+
+          
+          <div class="rtc-room-grid">
+            <div class="rtc-room-row" style="grid-template-columns:repeat(7, minmax(0, 1fr));">
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_1" data-room-index="0" style="--room-color:#67A7AE;--room-mark-bg:rgba(103,167,174,0.18);--room-bg:rgba(103,167,174,0.1);--room-border:rgba(103,167,174,0.36);" title="Room 1: 19.2 °C" aria-label="Open Room 1">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R1</span>
+            <span class="rtc-room-mark">↓</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">19.2</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_2" data-room-index="1" style="--room-color:#69A78B;--room-mark-bg:rgba(105,167,139,0.18);--room-bg:var(--rtc-chip-bg);--room-border:var(--rtc-hairline);" title="Room 2: 20.8 °C" aria-label="Open Room 2">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R2</span>
+            <span class="rtc-room-mark">•</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">20.8</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_3" data-room-index="2" style="--room-color:#79A86C;--room-mark-bg:rgba(121,168,108,0.18);--room-bg:var(--rtc-chip-bg);--room-border:var(--rtc-hairline);" title="Room 3: 21.6 °C" aria-label="Open Room 3">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R3</span>
+            <span class="rtc-room-mark">•</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">21.6</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_4" data-room-index="3" style="--room-color:#79A86C;--room-mark-bg:rgba(121,168,108,0.18);--room-bg:var(--rtc-chip-bg);--room-border:var(--rtc-hairline);" title="Room 4: 22.3 °C" aria-label="Open Room 4">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R4</span>
+            <span class="rtc-room-mark">•</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">22.3</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_5" data-room-index="4" style="--room-color:#9DA85A;--room-mark-bg:rgba(157,168,90,0.18);--room-bg:var(--rtc-chip-bg);--room-border:var(--rtc-hairline);" title="Room 5: 23.1 °C" aria-label="Open Room 5">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R5</span>
+            <span class="rtc-room-mark">•</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">23.1</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_6" data-room-index="5" style="--room-color:#C0A752;--room-mark-bg:rgba(192,167,82,0.18);--room-bg:rgba(192,167,82,0.1);--room-border:rgba(192,167,82,0.36);" title="Room 6: 24.4 °C" aria-label="Open Room 6">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R6</span>
+            <span class="rtc-room-mark">↑</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">24.4</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      
+        <button type="button" class="rtc-room-chip" data-entity="sensor.room_7" data-room-index="6" style="--room-color:#C98A67;--room-mark-bg:rgba(201,138,103,0.18);--room-bg:rgba(201,138,103,0.1);--room-border:rgba(201,138,103,0.36);" title="Room 7: 25.7 °C" aria-label="Open Room 7">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short">R7</span>
+            <span class="rtc-room-mark">↑</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">25.7</span><span class="rtc-room-value-unit">°C</span></span>
+        </button>
+      </div>
+          </div>
+        
+        </div>
+      
+        </ha-card>
+      

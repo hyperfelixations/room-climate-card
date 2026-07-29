@@ -1,6 +1,5 @@
 {
   "name": "Room Climate Card",
   "filename": "room-climate-card.js",
-  "content_in_root": true,
   "render_readme": true
 }

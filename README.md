@@ -74,8 +74,8 @@ Once it is included in the default store, you can search for
 
 1. Download `room-climate-card.js` from the
    [latest release](https://github.com/hyperfelixations/room-climate-card/releases/latest)
-   and copy it into your Home Assistant `www/` folder (e.g.
-   `www/room-climate-card.js`).
+   (in the repository it lives at `dist/room-climate-card.js`) and copy it
+   into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
 2. Add it as a dashboard resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
 3. Add a card with `type: custom:room-climate-card` to a dashboard.
 
@@ -618,6 +618,76 @@ If none of this helps, please open a
 - your browser and its version;
 - the relevant part of your card's YAML configuration;
 - any error message from the browser console.
+
+## Development
+
+The card that Home Assistant loads is a single, dependency-free file. It is
+built from ES-module sources rather than edited directly:
+
+```text
+src/
+  index.js                 composition root (still holds the renderers and the element)
+  core/                    numbers, text, colour, easing, card metadata
+  config/                  defaults, allowed action types, option schemas
+  i18n/
+    languages/<code>.js    one file per supported language
+    registry.js            assembles the translation table
+    translate.js           language resolution and key lookup
+    formatters.js          Intl number/time formatting, plural helpers
+  domain/
+    trend.js               trend deadbands and direction tokens
+    units/                 unit tokens and value conversion
+    metrics/               metric definitions, unit profiles, kind resolution
+    classification/
+      profiles/<kind>/     one file per classification profile
+      registry.js          which profiles exist per metric kind
+dist/room-climate-card.js  the built card — generated, committed, never edited by hand
+```
+
+Import direction is enforced by a test. The layers, lowest first, are
+`core` → `config`/`i18n`/`domain` → `application/model` →
+`presentation/view-model` → `views`/`render` → `controllers/runtime` →
+`element` → `index.js`. `core` has no project-internal dependencies, no module
+may import from a layer above it, and there are no cycles or external runtime
+imports.
+
+Adding a language means adding one file under `src/i18n/languages/`, a locale
+entry in `src/i18n/locales.js`, and one line in `src/i18n/registry.js`. Adding
+a classification profile means adding one file under
+`src/domain/classification/profiles/<kind>/` and one entry in
+`src/domain/classification/registry.js`.
+
+The bundle is not a concatenation of these files: Rollup bundles the ES
+modules, drops import/export statements, and may move or rename top-level
+declarations. What the build guarantees is that it is deterministic,
+unminified, self-contained, dependency-free, and covered by the full test
+suite.
+
+`dist/` is committed on purpose: HACS serves the file straight out of the
+repository, so it has to be there. `npm run verify:dist` rebuilds the bundle
+in memory and compares it with the committed copy, which is also the first
+thing CI does — a bundle that no longer matches its sources fails the build.
+
+```bash
+npm install          # rollup, jsdom, @playwright/test
+npm run test:install # once: Playwright's own Chromium
+
+npm run build        # src/ -> dist/room-climate-card.js
+npm run verify:dist  # committed bundle still matches src/?
+npm test             # verify:dist + syntax check + unit + browser tests
+npm run test:unit    # fast Node/jsdom layer only
+npm run test:browser # real-Chromium layer only (layout, gestures, screenshots)
+npm run test:fuzz    # the seeded randomized property test on its own
+```
+
+Every command that loads the bundle verifies first that it is up to date, so
+none of them can silently test a stale artifact. `npm test` uses the internal
+`*:run` variants to run that check exactly once instead of once per step.
+
+After changing anything under `src/`, run `npm run build` and commit the
+regenerated `dist/room-climate-card.js` together with the source change. The
+test suite loads the built artifact, not the sources, so it tests exactly what
+users run.
 
 ## Links
 

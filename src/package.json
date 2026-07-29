@@ -1,0 +1,4 @@
+{
+  "//": "Scopes src/**/*.js to ES modules while the repository root stays CommonJS for the existing test suite. Node's nearest-package-json rule makes this the least invasive way to run ESM sources next to CommonJS tests; the root package can be flipped to \"type\": \"module\" later, together with the test migration.",
+  "type": "module"
+}

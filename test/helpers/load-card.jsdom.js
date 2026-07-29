@@ -1,15 +1,22 @@
 "use strict";
 
-// Runs room-climate-card.js (an unmodified browser IIFE, no bundler, no
-// exports) inside a fresh jsdom window per test file, so unit tests can
-// instantiate the real custom element and call its real methods directly —
-// the same technique used for manual verification throughout this project's
-// history, now automated. jsdom has no real layout engine (getBoundingClientRect
-// always returns zeros, no font metrics) — anything that depends on actual
-// rendered geometry belongs in test/browser/ (Playwright/Chromium) instead.
+// Runs the built distribution artifact (dist/room-climate-card.js — a
+// dependency-free browser IIFE with no exports, exactly the bytes Home
+// Assistant loads) inside a fresh jsdom window per test file, so unit tests
+// can instantiate the real custom element and call its real methods directly.
+//
+// Testing the ARTIFACT rather than the sources is deliberate: it is the only
+// thing users ever execute, and it keeps the whole suite honest about the
+// build. dist/ is generated and committed; `npm run verify:dist` proves it
+// still matches src/, and the test script runs that check first, so a stale
+// bundle fails the suite instead of being silently tested.
+//
+// jsdom has no real layout engine (getBoundingClientRect always returns zeros,
+// no font metrics) — anything that depends on actual rendered geometry belongs
+// in test/browser/ (Playwright/Chromium) instead.
 //
 // jsdom does not implement ResizeObserver, matchMedia, or the CSS Font
-// Loading API (document.fonts) at all; room-climate-card.js is defensive
+// Loading API (document.fonts) at all; the card is defensive
 // about ResizeObserver/document.fonts (feature-detected/optional-chained)
 // but calls window.matchMedia unconditionally through optional chaining, so
 // it degrades safely without a stub too — the stubs below exist so those
@@ -21,7 +28,16 @@ const path = require("path");
 const vm = require("vm");
 const { JSDOM } = require("jsdom");
 
-const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "room-climate-card.js");
+// The single place in the test suite that knows where the built artifact
+// lives. Everything else (including test/unit/i18n.test.js, which loads the
+// bundle a second time to observe its module-load self-check) imports this
+// constant rather than rebuilding the path.
+const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "dist", "room-climate-card.js");
+if (!fs.existsSync(CARD_SOURCE_PATH)) {
+  throw new Error(
+    `Missing build artifact ${CARD_SOURCE_PATH}. Run "npm run build" (it is generated from src/ and committed).`
+  );
+}
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 const CARD_TAG = "room-climate-card";
 
@@ -70,7 +86,7 @@ function createTestEnvironment() {
   vm.runInContext(CARD_SOURCE, context, { filename: CARD_SOURCE_PATH });
 
   if (!window.customElements.get(CARD_TAG)) {
-    throw new Error(`room-climate-card.js did not register <${CARD_TAG}> in the jsdom environment`);
+    throw new Error(`${CARD_SOURCE_PATH} did not register <${CARD_TAG}> in the jsdom environment`);
   }
 
   const liveCards = new Set();
