@@ -47,7 +47,7 @@ export const it = {
   // Predicative fragment ("2/4 stanze calde"); "stanza"/"stanze" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
+  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "calde",
   "adjective.cool": "fresche",
   "adjective.humid": "umide",

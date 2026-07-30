@@ -714,7 +714,7 @@ const fr = {
   // Predicative fragment ("2/4 pièces chaudes"); "pièce"/"pièces" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
+  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "chaudes",
   "adjective.cool": "fraîches",
   "adjective.humid": "humides",
@@ -832,7 +832,7 @@ const it = {
   // Predicative fragment ("2/4 stanze calde"); "stanza"/"stanze" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
+  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "calde",
   "adjective.cool": "fresche",
   "adjective.humid": "umide",
@@ -1629,7 +1629,7 @@ const nb = {
   // adjectives DO inflect for number (unlike German/English/Dutch) — these
   // are the plural forms, the only ones this key is ever used with
   // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-  // requires >= 2 rooms, see _computeData()). Note "rom" itself is
+  // requires >= 2 rooms, see buildCardDomainModel()). Note "rom" itself is
   // plural-invariant ("et rom" / "flere rom"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
   // same-value-both-branches for the noun, not a bug.
@@ -1746,7 +1746,7 @@ const sv = {
   // adjectives DO inflect for number (unlike German/English/Dutch) —
   // these are the plural forms, the only ones this key is ever used with
   // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-  // requires >= 2 rooms, see _computeData()). Note "rum" itself is
+  // requires >= 2 rooms, see buildCardDomainModel()). Note "rum" itself is
   // plural-invariant ("ett rum" / "flera rum"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
   // same-value-both-branches for the noun, not a bug.
@@ -1863,7 +1863,7 @@ const lv = {
   // Predicative fragment ("2/4 telpas ir siltas"); "telpa" (room) is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see _computeData()).
+  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "siltas",
   "adjective.cool": "vēsas",
   "adjective.humid": "mitras",
@@ -2017,26 +2017,6 @@ const DEFAULT_CONFIG = {
   swipe: true, // AP-C1: manual horizontal drag gesture, independent of auto_slide
 };
 
-// The accepted Home Assistant action types for tap_action/hold_action.
-//
-// Trust model: the configuration comes from the dashboard owner, the same as
-// for any other Lovelace card, and URL/navigate/service parameters stay
-// dashboard-owner-trusted by design. The action NAME is nevertheless checked
-// against this list, because it ends up in a dispatched `hass-action` event —
-// an unknown or missing value has to fall back safely rather than being passed
-// through raw. This is a name allowlist, not full payload validation.
-
-const ACTION_ALLOWLIST = new Set(["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"]);
-
-function isAllowedActionType(action) {
-  return ACTION_ALLOWLIST.has(action);
-}
-
-// Exposed for documentation/diagnostics that need to name the accepted set.
-function allowedActionTypes() {
-  return [...ACTION_ALLOWLIST];
-}
-
 // Building blocks for declaring a validated, defaulted configuration option.
 //
 // A schema descriptor used to be a bare presence marker (any truthy
@@ -2059,6 +2039,1031 @@ function boolOption(defaultValue) {
 // fallback an invalid boolean gets.
 function enumOption(defaultValue, allowedValues) {
   return { default: defaultValue, validate: (value) => allowedValues.includes(value) };
+}
+
+// Configuration errors that name the offending path.
+//
+// Every rejected configuration produces a message beginning with "Invalid
+// configuration: ", because Home Assistant surfaces whatever setConfig() throws
+// directly in the dashboard and that prefix is what tells the user it is their
+// YAML rather than a card bug. The exact wording is a user-facing contract and
+// is quoted in the public README's troubleshooting section.
+//
+// The handful of top-level messages that read as a full sentence on their own
+// ("card configuration must be an object.", "rooms must be an array.") are
+// thrown at their own call site rather than through a second helper here: they
+// carry no path, so a shared wrapper would only obscure where they come from.
+
+const PREFIX = "Invalid configuration: ";
+
+function pathError(path, message) {
+  throw new Error(`${PREFIX}${path} ${message}.`);
+}
+
+// The value-level building blocks every configuration field is built from.
+//
+// Two deliberately different failure modes run through this file, and the split
+// is a product decision rather than an implementation detail:
+//
+//   throw    a structurally invalid value the card cannot work around — a
+//            missing or malformed entity id, a malformed classification block.
+//   fall back  a malformed OPTIONAL value — a typo in `decimals` or
+//            `room_columns` degrades to the built-in default instead of taking
+//            the whole dashboard card down with it.
+//
+// Which fields belong to which category is fixed by the public contract; see
+// each function.
+
+
+// Strict object check: arrays don't count as a config object.
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// Required entity id (e.g. rooms[i].entity or the average entity).
+function requiredEntity(value, name) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Invalid configuration: ${name} must be a non-empty entity id.`);
+  }
+  return value.trim();
+}
+
+// Optional entity id with a fixed fallback (range_entity/trend_entity use null).
+function optionalEntity(value, fallback, name) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Invalid configuration: ${name} must be an entity id string.`);
+  }
+  return value.trim();
+}
+
+// Optional free-text override (avg_label/title/icon); a non-string or empty
+// value means "use the built-in default" rather than throwing.
+function optionalString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+// String helper for optional display names.
+function stringOrDefault(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return String(fallback ?? "");
+  }
+  return String(value);
+}
+
+// Generic closed-set config value: an unrecognized value silently falls back to
+// defaultValue, the same non-warning convention every other optional top-level
+// field uses — a typo degrades to "use the default" rather than breaking the
+// card.
+function normalizeEnum(value, allowedValues, defaultValue) {
+  return allowedValues.includes(value) ? value : defaultValue;
+}
+
+// Optional decimals override (0-2); anything else means "use the mode's
+// default".
+function decimalsOverride(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const num = parseConfigNumber(value);
+  return num !== null && Number.isInteger(num) && num >= 0 && num <= 2 ? num : null;
+}
+
+// Optional room_columns/room_rows override; anything invalid — not a positive
+// integer, or an unreasonably large value that couldn't possibly be a
+// deliberate layout choice — means "decide the grid automatically" rather than
+// throwing or building an absurdly large grid.
+function positiveInteger(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const num = parseConfigNumber(value);
+  return num !== null && Number.isInteger(num) && num >= 1 && num <= 20 ? num : null;
+}
+
+// rotation_seconds/slide_seconds: an invalid, missing, or out-of-range value
+// falls back to the built-in default instead of throwing — this only affects
+// cosmetic timing, not correctness. min/max are practical per-field bounds:
+// without an upper bound, an extreme value could overflow the
+// animation-duration/setTimeout millisecond math it feeds into.
+function positiveSeconds(value, fallback, min, max) {
+  const num = parseConfigNumber(value);
+  return num !== null && num >= min && num <= max ? num : fallback;
+}
+
+// A number at a named config path. Unlike the optional fields above, a
+// malformed value here throws: it appears inside classification blocks, where
+// silently substituting a default would produce a profile the user never asked
+// for and cannot see.
+function numberAtPath(value, path) {
+  const parsed = parseConfigNumber(value);
+  if (parsed === null) pathError(path, "must be a finite number");
+  return parsed;
+}
+
+// Rejects any key the schema does not know. Unknown keys are an error rather
+// than being ignored, because a typo'd classification key would otherwise
+// silently produce a different profile than intended.
+function assertAllowedKeys(value, allowed, path) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) pathError(`${path}.${key}`, "is not a supported option");
+  }
+}
+
+// The accepted Home Assistant action types for tap_action/hold_action.
+//
+// Trust model: the configuration comes from the dashboard owner, the same as
+// for any other Lovelace card, and URL/navigate/service parameters stay
+// dashboard-owner-trusted by design. The action NAME is nevertheless checked
+// against this list, because it ends up in a dispatched `hass-action` event —
+// an unknown or missing value has to fall back safely rather than being passed
+// through raw. This is a name allowlist, not full payload validation.
+
+
+const ACTION_ALLOWLIST = new Set(["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"]);
+
+function isAllowedActionType(action) {
+  return ACTION_ALLOWLIST.has(action);
+}
+
+// Exposed for documentation/diagnostics that need to name the accepted set.
+function allowedActionTypes() {
+  return [...ACTION_ALLOWLIST];
+}
+
+// Validates a tap_action/hold_action object; an invalid or missing value falls
+// back to `fallback` (a card-level default, or null for a per-room override
+// that should inherit the card-level action) instead of being passed through
+// raw. The object is copied so a later mutation cannot reach back into the
+// user's config or the defaults.
+function normalizeAction(value, fallback) {
+  if (isPlainObject(value) && typeof value.action === "string" && isAllowedActionType(value.action)) {
+    return { ...value };
+  }
+  return fallback ? { ...fallback } : null;
+}
+
+// Normalizing the `rooms:` list.
+//
+// A room is rejected outright when it is structurally unusable, because every
+// downstream stage indexes rooms by their entity id: the keyed chip patching
+// maps DOM nodes by data-entity, and the per-room action overrides are looked up
+// by list index. A duplicate entity would silently overwrite one node in that
+// map, leaving one room unpatched or two models fighting over one chip — hence
+// the explicit uniqueness check rather than an occurrence-suffixed secondary key
+// that every consumer would have to special-case.
+
+
+// Converts one config room entry into an internal room object.
+function normalizeRoom(room, index) {
+  if (!isPlainObject(room)) {
+    throw new Error(`Invalid configuration: rooms[${index}] must be an object.`);
+  }
+
+  const entity = requiredEntity(room.entity, `rooms[${index}].entity`);
+  const name = stringOrDefault(room.name, room.short || entity);
+  const short = stringOrDefault(room.short, name || entity);
+
+  return {
+    name,
+    short,
+    entity,
+    // Per-room action overrides; null means "inherit the card-level
+    // tap_action/hold_action".
+    tap_action: normalizeAction(room.tap_action, null),
+    hold_action: normalizeAction(room.hold_action, null),
+  };
+}
+
+// The whole list, in declaration order, with the uniqueness guarantee applied.
+function normalizeRooms(roomsInput) {
+  if (!Array.isArray(roomsInput)) {
+    throw new Error("Invalid configuration: rooms must be an array.");
+  }
+  const rooms = roomsInput.map((room, index) => normalizeRoom(room, index));
+
+  const seenRoomEntities = new Set();
+  for (const room of rooms) {
+    if (seenRoomEntities.has(room.entity)) {
+      throw new Error(`Invalid configuration: duplicate rooms[].entity "${room.entity}" — each room must reference a unique entity.`);
+    }
+    seenRoomEntities.add(room.entity);
+  }
+  return rooms;
+}
+
+// Normalizing the `views:` list.
+//
+// This whole file is deliberately NON-DESTRUCTIVE and never throws: a malformed
+// views: config degrades to "ignored" or "auto" rather than breaking the card.
+// But it no longer does so invisibly — every fallback records a diagnostic
+// string, which the orchestrating element surfaces exactly once per config
+// change. Printing them is not this module's job: a pure normalizer must not
+// write to the console, and the deduplication needs state that only the caller
+// has.
+//
+// The view types and their option schemas are INJECTED. The registry that owns
+// them also owns render/update callbacks, so importing it here would drag the
+// rendering layer into the configuration layer.
+
+
+// A non-array views: value. `undefined`/`null` (genuinely omitted from the YAML)
+// is NOT diagnosed — that is the normal "not configured" case, and it resolves
+// to "one auto entry per registered view". Any OTHER non-array value (a string,
+// number, plain object, ...) is a real misconfiguration and IS diagnosed, then
+// normalizes to the same null sentinel.
+function normalizeViewsConfig(value, { optionSchemaForView }) {
+  if (!Array.isArray(value)) {
+    if (value === undefined || value === null) return { views: null, diagnostics: [] };
+    return { views: null, diagnostics: [`views: expected an array, got ${JSON.stringify(value)}`] };
+  }
+  const views = [];
+  const diagnostics = [];
+  value.forEach((entry, index) => {
+    const { request, diagnostics: entryDiagnostics } = normalizeViewRequest(entry, index, { optionSchemaForView });
+    diagnostics.push(...entryDiagnostics);
+    if (request) views.push(request);
+  });
+  return { views, diagnostics };
+}
+
+// One views: list entry. A bare non-empty string is shorthand for
+// {type, enabled:true}; an object needs at least a non-empty `type`. An entry
+// with no resolvable type at all is dropped WITH a diagnostic.
+//
+// `enabled`: listing a view is itself an explicit request, regardless of which
+// syntax was used, so an omitted field normalizes to true; only an explicitly
+// written "auto" delegates to the view's own default. Any other value (a typo
+// like "yes", a stray 1, explicit null) is diagnosed but still falls back to
+// "auto" rather than dropping the entry — a typo in enabled: must not make a
+// view disappear as completely as an unknown type would.
+function normalizeViewRequest(entry, index, { optionSchemaForView }) {
+  if (typeof entry === "string") {
+    const type = entry.trim();
+    if (!type) return { request: null, diagnostics: [`views[${index}]: expected a non-empty string or an object`] };
+    return { request: { type, enabled: true, options: {} }, diagnostics: [] };
+  }
+  if (!isPlainObject(entry)) {
+    return { request: null, diagnostics: [`views[${index}]: expected a string or an object, got ${JSON.stringify(entry)}`] };
+  }
+  const type = optionalString(entry.type);
+  if (!type) {
+    return { request: null, diagnostics: [`views[${index}]: missing or invalid "type"`] };
+  }
+  const diagnostics = [];
+  let enabled;
+  if (entry.enabled === true || entry.enabled === false) {
+    enabled = entry.enabled;
+  } else if (entry.enabled === undefined) {
+    enabled = true;
+  } else if (entry.enabled === "auto") {
+    enabled = "auto";
+  } else {
+    enabled = "auto";
+    diagnostics.push(`views[${index}] ("${type}"): invalid "enabled" value ${JSON.stringify(entry.enabled)}, falling back to "auto"`);
+  }
+  const { options, diagnostics: optionsDiagnostics } = normalizeViewOptions(type, entry.options, index, { optionSchemaForView });
+  diagnostics.push(...optionsDiagnostics);
+  return { request: { type, enabled, options }, diagnostics };
+}
+
+// views:[i].options against the requested view's own schema. Only keys the view
+// actually implements survive — a renderer must never end up trusting an
+// arbitrary user-supplied key. A known key's VALUE is validated too when its
+// schema entry declares a validate(); an invalid value is diagnosed and dropped,
+// so the schema default applies instead.
+function normalizeViewOptions(type, rawOptions, index, { optionSchemaForView }) {
+  const schema = optionSchemaForView(type) || {};
+  if (rawOptions === undefined || rawOptions === null) return { options: {}, diagnostics: [] };
+  if (!isPlainObject(rawOptions)) {
+    return { options: {}, diagnostics: [`views[${index}] ("${type}"): invalid "options" value ${JSON.stringify(rawOptions)}, expected an object`] };
+  }
+  const result = {};
+  const unknownKeys = [];
+  const diagnostics = [];
+  for (const key of Object.keys(rawOptions)) {
+    if (!Object.prototype.hasOwnProperty.call(schema, key)) {
+      unknownKeys.push(key);
+      continue;
+    }
+    const value = rawOptions[key];
+    const validate = schema[key].validate;
+    if (typeof validate === "function" && !validate(value)) {
+      diagnostics.push(`views[${index}] ("${type}"): invalid "${key}" value ${JSON.stringify(value)}, falling back to default`);
+      continue;
+    }
+    result[key] = value;
+  }
+  if (unknownKeys.length) {
+    diagnostics.push(`views[${index}] ("${type}"): ignoring unknown "options" key(s) ${unknownKeys.map((k) => JSON.stringify(k)).join(", ")}`);
+  }
+  return { options: result, diagnostics };
+}
+
+// The shared "descending min + exactly one final default" list contract.
+//
+// Two different YAML lists use it — classification.tiers (score/level/color/zone
+// per item) and a non-temperature classification.icons list (icon per item) —
+// and they differ only in their per-item extra fields. validateItem(item, path)
+// checks those and returns the extra fields to merge onto the normalized
+// {min, ...} entry.
+//
+// Why the contract is this strict: the classifier walks the list top-down and
+// takes the first tier whose threshold the value passes. Without strictly
+// descending, unique thresholds a tier could be unreachable; without exactly one
+// open-ended final tier a reading could match nothing at all.
+
+
+function normalizeDescendingTierList(list, basePath, extraKeys, validateItem) {
+  if (!Array.isArray(list) || list.length === 0) {
+    pathError(basePath, "must be a non-empty array");
+  }
+  let defaultCount = 0;
+  let previousMin = Infinity;
+  const normalized = list.map((item, index) => {
+    const path = `${basePath}[${index}]`;
+    if (!isPlainObject(item)) pathError(path, "must be an object");
+    assertAllowedKeys(item, new Set(["min", "default", ...extraKeys]), path);
+    const isDefault = item.default === true;
+    if (item.default !== undefined && item.default !== true) {
+      pathError(`${path}.default`, "must be true when present");
+    }
+    if (isDefault) {
+      defaultCount += 1;
+      if (index !== list.length - 1) pathError(path, "default tier must be the final tier");
+      if (item.min !== undefined) pathError(`${path}.min`, "must be omitted on the default tier");
+    } else if (item.min === undefined) {
+      pathError(`${path}.min`, "is required for every non-default tier");
+    }
+
+    const min = isDefault ? -Infinity : numberAtPath(item.min, `${path}.min`);
+    if (!isDefault && min >= previousMin) {
+      pathError(basePath, "must use unique min values in strictly descending order");
+    }
+    previousMin = min;
+
+    return { min, ...validateItem(item, path) };
+  });
+  if (defaultCount !== 1) pathError(basePath, "must contain exactly one final default tier");
+  return normalized;
+}
+
+// The individual parts of a custom classification profile.
+//
+// Each function validates one YAML block and returns it in the unit the user
+// wrote it in; converting to the canonical unit happens once, at the end, in
+// normalize.js. Splitting it this way keeps every validation rule next to the
+// error message it produces, and the messages are a user-facing contract.
+//
+// The accepted zone vocabulary is INJECTED rather than imported: it belongs to
+// the domain, and the configuration layer must not reach into the domain
+// registry.
+
+
+// A {min, max} band, optionally carrying extra sibling keys that the caller
+// validates itself (classification.scale reuses this for step/headroom/one_sided).
+function normalizeBand(value, path, extraKeys = []) {
+  if (!isPlainObject(value)) pathError(path, "must be an object");
+  assertAllowedKeys(value, new Set(["min", "max", ...extraKeys]), path);
+  const min = numberAtPath(value.min, `${path}.min`);
+  const max = numberAtPath(value.max, `${path}.max`);
+  if (min >= max) pathError(path, "must have min < max");
+  return { min, max };
+}
+
+// classification.bands: comfort plus a fully contained optimal band.
+function normalizeBands(value) {
+  if (!isPlainObject(value)) pathError("classification.bands", "must be an object");
+  assertAllowedKeys(value, new Set(["comfort", "optimal"]), "classification.bands");
+  const comfort = normalizeBand(value.comfort, "classification.bands.comfort");
+  const optimal = normalizeBand(value.optimal, "classification.bands.optimal");
+  if (optimal.min < comfort.min || optimal.max > comfort.max) {
+    pathError("classification.bands.optimal", "must be fully contained in classification.bands.comfort");
+  }
+  return { comfort, optimal };
+}
+
+// classification.scale: the reference axis, its rounding step, and the two
+// optional switches that change how the axis grows around live values.
+function normalizeScale(value, comfort) {
+  if (!isPlainObject(value)) pathError("classification.scale", "must be an object");
+  assertAllowedKeys(value, new Set(["min", "max", "step", "headroom", "one_sided"]), "classification.scale");
+  const scale = normalizeBand(value, "classification.scale", ["step", "headroom", "one_sided"]);
+  const step = numberAtPath(value.step, "classification.scale.step");
+  if (step <= 0) pathError("classification.scale.step", "must be greater than zero");
+  if (scale.min > comfort.min || scale.max < comfort.max) {
+    pathError("classification.scale", "must fully contain the comfort and optimal bands");
+  }
+  const headroom = value.headroom === undefined ? null : numberAtPath(value.headroom, "classification.scale.headroom");
+  if (headroom !== null && headroom < 0) {
+    pathError("classification.scale.headroom", "must be zero or greater");
+  }
+  if (value.one_sided !== undefined && typeof value.one_sided !== "boolean") {
+    pathError("classification.scale.one_sided", "must be a boolean");
+  }
+  return { scale, step, headroom };
+}
+
+// classification.tiers, with the per-tier semantic fields.
+function normalizeTiers(value, classificationZones) {
+  const zones = new Set(classificationZones);
+  return normalizeDescendingTierList(value, "classification.tiers", ["score", "level", "color", "zone"], (tier, path) => {
+    const score = numberAtPath(tier.score, `${path}.score`);
+    if (typeof tier.level !== "string" || !tier.level.trim()) {
+      pathError(`${path}.level`, "must be a non-empty string");
+    }
+    if (typeof tier.color !== "string" || !isHexColor(tier.color.trim())) {
+      pathError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
+    }
+    if (!zones.has(tier.zone)) {
+      const quoted = classificationZones.map((zone) => `"${zone}"`);
+      const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
+      pathError(`${path}.zone`, `must be one of ${list}`);
+    }
+    return { score, level: tier.level.trim(), color: tier.color.trim(), zone: tier.zone };
+  });
+}
+
+// classification.valid_range: the optional physical-validity window. Either
+// bound may be omitted, and each is inclusive unless explicitly turned off.
+function normalizeValidRange(value) {
+  if (value === undefined) return null;
+  if (!isPlainObject(value)) pathError("classification.valid_range", "must be an object");
+  assertAllowedKeys(value, new Set(["min", "max", "min_inclusive", "max_inclusive"]), "classification.valid_range");
+  if (value.min === undefined && value.max === undefined) {
+    pathError("classification.valid_range", "must define min and/or max");
+  }
+  for (const key of ["min_inclusive", "max_inclusive"]) {
+    if (value[key] !== undefined && typeof value[key] !== "boolean") {
+      pathError(`classification.valid_range.${key}`, "must be a boolean");
+    }
+  }
+  const validRange = {
+    min: value.min === undefined ? null : numberAtPath(value.min, "classification.valid_range.min"),
+    max: value.max === undefined ? null : numberAtPath(value.max, "classification.valid_range.max"),
+    minInclusive: value.min_inclusive !== false,
+    maxInclusive: value.max_inclusive !== false,
+  };
+  if (validRange.min !== null && validRange.max !== null && validRange.min >= validRange.max) {
+    pathError("classification.valid_range", "must have min < max");
+  }
+  return validRange;
+}
+
+// classification.icons has two distinct shapes, chosen by metric kind, mirroring
+// the built-in profiles: temperature uses a fixed fire/high/normal/low threshold
+// object, the other kinds use a descending {min, icon} list. Omitted for
+// temperature, the thresholds are derived from the scale and comfort bands.
+function normalizeIcons(value, metricKind, { scale, comfort }) {
+  if (value === undefined) {
+    if (metricKind !== "temperature") return { iconThresholds: null, iconTiers: null };
+    return {
+      iconThresholds: {
+        fire: scale.max,
+        high: comfort.max,
+        normal: comfort.min,
+        low: scale.min,
+      },
+      iconTiers: null,
+    };
+  }
+
+  if (metricKind === "temperature") {
+    if (!isPlainObject(value)) {
+      pathError("classification.icons", "must be an object with fire/high/normal/low thresholds for a temperature profile");
+    }
+    assertAllowedKeys(value, new Set(["fire", "high", "normal", "low"]), "classification.icons");
+    const iconThresholds = {};
+    let previous = Infinity;
+    for (const key of ["fire", "high", "normal", "low"]) {
+      const threshold = numberAtPath(value[key], `classification.icons.${key}`);
+      if (threshold >= previous) pathError("classification.icons", "must descend from fire to low");
+      previous = threshold;
+      iconThresholds[key] = threshold;
+    }
+    return { iconThresholds, iconTiers: null };
+  }
+
+  if (!Array.isArray(value)) {
+    pathError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry for a non-temperature profile");
+  }
+  const iconTiers = normalizeDescendingTierList(value, "classification.icons", ["icon"], (item, path) => {
+    if (typeof item.icon !== "string" || !item.icon.trim()) {
+      pathError(`${path}.icon`, "must be a non-empty string");
+    }
+    return { icon: item.icon.trim() };
+  });
+  return { iconThresholds: null, iconTiers };
+}
+
+// The `classification:` policy, in all four of its forms.
+//
+//   auto     use complete entity attributes when present, else the built-in
+//            profile (the default)
+//   entity   entity attributes only, even partial ones
+//   profile  force a named built-in profile
+//   custom   a fully user-defined profile from YAML
+//
+// A custom profile is written in the user's own unit and converted to the
+// metric's canonical unit here, once, so everything downstream compares against
+// one unit. The unit lookup is INJECTED: resolving a unit string to a metric kind
+// and unit profile is domain knowledge, and the configuration layer must not
+// import the domain registry.
+
+
+const AUTO_POLICY = { source: "auto", profile: null, custom: null };
+
+function normalizeClassificationConfig(value, collaborators) {
+  if (value === undefined || value === null || value === "") {
+    return { ...AUTO_POLICY };
+  }
+  if (typeof value === "string") {
+    const shorthand = value.trim().toLowerCase();
+    if (!shorthand) return { ...AUTO_POLICY };
+    if (shorthand === "auto" || shorthand === "entity") {
+      return { source: shorthand, profile: null, custom: null };
+    }
+    if (shorthand === "profile" || shorthand === "custom") {
+      pathError("classification", `"${shorthand}" requires the object form`);
+    }
+    return { source: "auto", profile: shorthand, custom: null };
+  }
+  if (!isPlainObject(value)) pathError("classification", "must be a string or object");
+
+  // A block carrying `tiers` is a custom profile even without an explicit
+  // source, because that is the only form in which tiers can appear.
+  const inferredSource = value.source ?? (value.tiers !== undefined ? "custom" : "auto");
+  if (!["auto", "entity", "profile", "custom"].includes(inferredSource)) {
+    pathError("classification.source", 'must be "auto", "entity", "profile", or "custom"');
+  }
+  if (inferredSource === "custom") {
+    return { source: "custom", profile: null, custom: normalizeCustomClassification(value, collaborators) };
+  }
+
+  assertAllowedKeys(value, new Set(["source", "profile"]), "classification");
+  if (inferredSource === "entity" && value.profile !== undefined) {
+    pathError("classification.profile", "cannot be combined with source entity");
+  }
+  const profile = value.profile === undefined ? null : optionalString(value.profile);
+  if (value.profile !== undefined && !profile) {
+    pathError("classification.profile", "must be a non-empty string");
+  }
+  return { source: inferredSource, profile: profile?.toLowerCase() ?? null, custom: null };
+}
+
+function normalizeCustomClassification(value, { metricKindForUnit, unitProfileForUnit, classificationZones }) {
+  const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"]);
+  assertAllowedKeys(value, allowed, "classification");
+
+  if (typeof value.unit !== "string" || !value.unit.trim()) {
+    pathError("classification.unit", "must be a recognized unit string");
+  }
+  const metricKind = metricKindForUnit(value.unit);
+  if (!metricKind) pathError("classification.unit", `"${value.unit}" is not recognized`);
+  const sourceUnitProfile = unitProfileForUnit(metricKind, value.unit);
+  if (!sourceUnitProfile) pathError("classification.unit", `"${value.unit}" has no registered UnitProfile`);
+
+  const comparison = value.comparison ?? ">=";
+  if (comparison !== ">=" && comparison !== ">") {
+    pathError("classification.comparison", 'must be ">=" or ">"');
+  }
+
+  const { comfort: sourceComfort, optimal: sourceOptimal } = normalizeBands(value.bands);
+  const { scale: sourceScale, step: sourceStep, headroom: sourceHeadroom } = normalizeScale(value.scale, sourceComfort);
+  const sourceTiers = normalizeTiers(value.tiers, classificationZones);
+  const sourceValidRange = normalizeValidRange(value.valid_range);
+  const { iconThresholds: sourceIcons, iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind, {
+    scale: sourceScale,
+    comfort: sourceComfort,
+  });
+
+  // Everything above is in the user's own unit. From here on it is canonical:
+  // absolute readings via toCanonical(), the rounding step and the headroom via
+  // deltaToCanonical(), because a difference must never pick up a unit offset.
+  const toCanonical = sourceUnitProfile.toCanonical;
+  const deltaToCanonical = sourceUnitProfile.deltaToCanonical;
+  const convertBand = (band) => ({ min: toCanonical(band.min), max: toCanonical(band.max) });
+  const canonicalValidRange = sourceValidRange && {
+    min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min),
+    max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max),
+    minInclusive: sourceValidRange.minInclusive,
+    maxInclusive: sourceValidRange.maxInclusive,
+  };
+  const invalidWhen = canonicalValidRange
+    ? (reading) =>
+        (canonicalValidRange.min !== null && (canonicalValidRange.minInclusive ? reading < canonicalValidRange.min : reading <= canonicalValidRange.min)) ||
+        (canonicalValidRange.max !== null && (canonicalValidRange.maxInclusive ? reading > canonicalValidRange.max : reading >= canonicalValidRange.max))
+    : null;
+
+  return {
+    id: "custom",
+    metricKind,
+    comparison,
+    tiers: sourceTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
+    comfort: convertBand(sourceComfort),
+    optimal: convertBand(sourceOptimal),
+    scale: convertBand(sourceScale),
+    step: deltaToCanonical(sourceStep),
+    headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
+    oneSided: value.scale.one_sided === true,
+    invalidWhen,
+    validRange: canonicalValidRange,
+    invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
+    iconThresholds: sourceIcons && Object.fromEntries(
+      Object.entries(sourceIcons).map(([key, threshold]) => [key, toCanonical(threshold)])
+    ),
+    iconTiers: sourceIconTiers?.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
+  };
+}
+
+// The whole `setConfig()` contract, as one pure function.
+//
+// normalizeConfig(userConfig, collaborators) either returns the normalized
+// config or throws exactly the error the user needs to see. It has no `this`, no
+// hass, no DOM and no console output: a malformed views: entry records a
+// diagnostic string on the returned config (_viewsDiagnostics) and the caller
+// decides when and how often to surface it. That separation is what lets the
+// element deduplicate warnings per config change without the normalizer knowing
+// anything about it.
+//
+// Injected collaborators, because the configuration layer must not import the
+// domain, i18n or view registries:
+//   classificationZones   the accepted zone vocabulary
+//   isSupportedLanguage   whether a language code has translations
+//   optionSchemaForView   a view type's option schema, or undefined
+//   metricKindForUnit     a unit string -> metric kind
+//   unitProfileForUnit    a metric kind + unit string -> unit profile
+
+
+// Optional language override; "auto" (the default for anything invalid or
+// missing) keeps the automatic hass-based detection. Only a language that
+// actually has a translation block is accepted, so an override can never
+// silently select one that would just fall back to English anyway.
+function normalizeLanguage(value, isSupportedLanguage) {
+  if (typeof value !== "string") return "auto";
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "" || normalized === "auto") return "auto";
+  return isSupportedLanguage(normalized) ? normalized : "auto";
+}
+
+function normalizeConfig(config, collaborators) {
+  const { isSupportedLanguage, optionSchemaForView } = collaborators;
+  const userConfig = config ?? {};
+  if (!isPlainObject(userConfig)) {
+    throw new Error("Invalid configuration: card configuration must be an object.");
+  }
+
+  // entity (average value) is the only required config field.
+  const entity = requiredEntity(userConfig.entity, "entity");
+
+  // rooms is optional; below two valid room values the card stays in minimal
+  // mode.
+  const rooms = normalizeRooms(userConfig.rooms === undefined ? [] : userConfig.rooms);
+
+  // Optional daily-range/trend entities, as produced by a template sensor.
+  const rangeEntity = optionalEntity(userConfig.range_entity, null, "range_entity");
+  const trendEntity = optionalEntity(userConfig.trend_entity, null, "trend_entity");
+
+  const { views, diagnostics: viewsDiagnostics } = normalizeViewsConfig(userConfig.views, { optionSchemaForView });
+  const classification = normalizeClassificationConfig(userConfig.classification, collaborators);
+
+  return {
+    entity,
+    // Cosmetic/optional overrides: a malformed value falls back to the previous
+    // default rather than throwing, so a typo in an optional field can't break
+    // the whole card the way a bad entity id would.
+    avg_label: optionalString(userConfig.avg_label),
+    title: optionalString(userConfig.title),
+    icon: optionalString(userConfig.icon),
+    decimals: decimalsOverride(userConfig.decimals),
+    language: normalizeLanguage(userConfig.language, isSupportedLanguage),
+    hide_footer: userConfig.hide_footer === true,
+    rotation_seconds: positiveSeconds(userConfig.rotation_seconds, DEFAULT_CONFIG.rotation_seconds, 1, 3600),
+    slide_seconds: positiveSeconds(userConfig.slide_seconds, DEFAULT_CONFIG.slide_seconds, 0.1, 10),
+    hold_seconds: DEFAULT_CONFIG.hold_seconds,
+    // Independent of each other: auto_slide only gates the automatic rotation
+    // timer, swipe only gates the manual horizontal drag gesture. Both default
+    // true; either can be turned off without affecting the other.
+    auto_slide: userConfig.auto_slide !== false,
+    swipe: userConfig.swipe !== false,
+    tap_action: normalizeAction(userConfig.tap_action, DEFAULT_CONFIG.tap_action),
+    hold_action: normalizeAction(userConfig.hold_action, DEFAULT_CONFIG.hold_action),
+    // Optional room-chip grid override; null means "decide automatically".
+    room_columns: positiveInteger(userConfig.room_columns),
+    room_rows: positiveInteger(userConfig.room_rows),
+    // Purely presentation decisions: room_sort only reorders the rendered chips,
+    // never the value-sorted list every calculation uses; room_label picks
+    // between the existing short/name pair; show_rooms hides the chip grid only,
+    // rooms stay full data sources either way.
+    room_sort: normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
+    room_label: normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
+    show_rooms: userConfig.show_rooms !== false,
+    // views: is the single public view-composition surface. null is the "not
+    // configured at all" sentinel, which resolves to one auto entry per
+    // registered view; a present-but-possibly-empty array is authoritative even
+    // when empty. Unknown or duplicate view types are not rejected here — a YAML
+    // typo degrades to "ignored" and is reported through the diagnostics below.
+    views,
+    // Internal-only field (the underscore signals "not a YAML key") carrying the
+    // diagnostics forward to whoever is responsible for surfacing them once per
+    // config change.
+    _viewsDiagnostics: viewsDiagnostics,
+    start_view: optionalString(userConfig.start_view),
+    classification,
+    rooms,
+    range_entity: rangeEntity,
+    trend_entity: trendEntity,
+  };
+}
+
+// The closed set of tier/invalid-classification zone values.
+//
+// Single source of truth for both the built-in profiles and custom-profile
+// validation: anything that needs to know "which zone values exist" reads this
+// instead of repeating the list.
+
+const CLASSIFICATION_ZONES = Object.freeze(["optimal", "comfort", "outside", "invalid"]);
+
+// Reading a classification an integration or template sensor provides itself.
+//
+// This is a trust boundary. The attributes come from arbitrary third-party
+// integrations and end up in CSS custom properties, inline styles and visible
+// text, so each field is validated on its own and anything that fails is treated
+// as ABSENT rather than passed through:
+//
+//   value_color  must be a valid hex colour (it reaches a style attribute)
+//   value_level  a non-empty string, kept VERBATIM — it is the integration's own
+//                wording and is deliberately not translated
+//   value_score  a finite number, with "" and null rejected before Number()
+//                turns them into 0
+//   value_zone   a non-empty string
+//
+// allowPartial distinguishes the two modes. Automatic mode accepts the entity as
+// the source only when it supplies a complete colour+level pair, because a
+// half-filled attribute set would render worse than the card's own numeric
+// classification. Forced `entity` mode asks for whatever is there.
+
+
+function readEntityClassification(attributes, { allowPartial = false } = {}) {
+  if (!attributes) return null;
+
+  const color = typeof attributes.value_color === "string" && isHexColor(attributes.value_color.trim())
+    ? attributes.value_color.trim()
+    : null;
+  const level = typeof attributes.value_level === "string" && attributes.value_level.trim()
+    ? attributes.value_level.trim()
+    : null;
+  const numericScore = Number(attributes.value_score);
+  const score = attributes.value_score !== undefined && attributes.value_score !== null && attributes.value_score !== "" && Number.isFinite(numericScore)
+    ? numericScore
+    : null;
+  const zone = typeof attributes.value_zone === "string" && attributes.value_zone.trim() ? attributes.value_zone.trim() : null;
+
+  if (allowPartial ? (!color && !level && score === null && !zone) : (!color || !level)) return null;
+  return {
+    color,
+    level,
+    score,
+    zone,
+    source: "entity",
+    profileId: null,
+  };
+}
+
+// Classifying a numeric reading against a profile.
+//
+// Returns TOKENS, never rendered text: a built-in tier carries a `levelKey` that
+// the presentation layer translates, while a custom profile carries a `level`
+// string the user wrote and that must stay verbatim. Both are returned as they
+// are and the caller picks — `level || t(levelKey)` — so translation stays out of
+// the domain entirely.
+//
+// The profile handed in must already be projected into the unit the value is
+// expressed in; comparing a Fahrenheit reading against Celsius thresholds is the
+// one mistake this whole layer is built to prevent.
+
+const FALLBACK_INVALID = {
+  score: null,
+  levelKey: "level.invalidReading",
+  color: "#B4B2A9",
+  zone: "invalid",
+};
+
+// First tier whose threshold the value passes, using the profile's own
+// comparison operator. ">=" makes a boundary belong to the tier above it, ">"
+// makes it belong to the tier below — PM2.5 uses the latter so a reading of
+// exactly 5 is still optimal.
+function selectTier(profile, value) {
+  return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
+}
+
+function classifyNumericValue(profile, value) {
+  if (profile.invalidWhen?.(value)) {
+    const invalid = profile.invalidClassification || FALLBACK_INVALID;
+    return {
+      level: invalid.level || null,
+      levelKey: invalid.levelKey,
+      color: invalid.color,
+      score: invalid.score ?? null,
+      zone: invalid.zone ?? "invalid",
+    };
+  }
+  const tier = selectTier(profile, value);
+  return {
+    level: tier.level || null,
+    levelKey: tier.levelKey,
+    color: tier.color,
+    score: tier.score ?? null,
+    zone: tier.zone ?? null,
+  };
+}
+
+// The header icon that belongs to a reading.
+//
+// Icons are part of the active classification profile, exactly like colours and
+// levels — a fridge at 10 °C should not get the same icon as a living room at
+// 10 °C. Two shapes exist, mirroring how the profiles themselves are authored:
+//
+//   temperature  a fixed fire/high/normal/low threshold contract, which is also
+//                the public contract for custom temperature profiles
+//   other kinds  generic descending {min, icon} tiers
+//
+// A metric kind with no icon tiers returns null, and the caller falls back to the
+// metric's stable default icon. That way adding another kind never forces a
+// semantically dubious icon family onto it.
+
+
+const TEMPERATURE_ICONS = {
+  fire: "mdi:fire-alert",
+  high: "mdi:thermometer-high",
+  normal: "mdi:thermometer",
+  low: "mdi:thermometer-low",
+  below: "mdi:snowflake",
+};
+
+// The profile must already be projected into the unit `temp` is expressed in.
+function temperatureIconForProfile(temp, profile) {
+  const thresholds = profile.iconThresholds;
+  if (temp >= thresholds.fire) return TEMPERATURE_ICONS.fire;
+  if (temp >= thresholds.high) return TEMPERATURE_ICONS.high;
+  if (temp >= thresholds.normal) return TEMPERATURE_ICONS.normal;
+  if (temp >= thresholds.low) return TEMPERATURE_ICONS.low;
+  return TEMPERATURE_ICONS.below;
+}
+
+// Returns null when the profile declares no icon tiers, so the caller can apply
+// the metric's own default icon.
+function profileIconForValue(value, metricKind, profile) {
+  if (metricKind === "temperature") return temperatureIconForProfile(value, profile);
+  if (!profile.iconTiers) return null;
+  const tier = selectTier({ tiers: profile.iconTiers, comparison: profile.comparison }, value);
+  return tier?.icon ?? null;
+}
+
+// The axis parameters a profile contributes.
+//
+// Takes an already-projected display profile and pulls out exactly the fields the
+// scale maths needs, with the two defaults made explicit rather than left to
+// `undefined` checks scattered across call sites:
+//
+//   oneSided     the metric has no "too low" end (CO2, PM2.5), so the lower
+//                bound never grows away from the reference scale
+//   anchorScale  true unless a profile opts out. Outdoor temperature does opt
+//                out: its readings are seasonal, so the axis follows the live
+//                data instead of being pinned to a reference range that would be
+//                wrong for most of the year.
+
+function scaleConfigFor(displayProfile) {
+  return {
+    comfort: displayProfile.comfort,
+    optimal: displayProfile.optimal,
+    scale: displayProfile.scale,
+    step: displayProfile.step,
+    oneSided: displayProfile.oneSided === true,
+    headroom: displayProfile.headroom,
+    anchorScale: displayProfile.anchorScale !== false,
+  };
+}
+
+// Where the rendered axis actually starts and ends.
+//
+// The axis is never just "the data range": markers sitting exactly on an edge are
+// unreadable, and an axis that jumps on every sensor update is worse than one that
+// is slightly too wide. So the range is expanded by a buffer and then rounded
+// outwards to a step, and — unless the profile opts out — it never shrinks below
+// the profile's own reference scale.
+//
+// Pure numbers only. No units, no formatting, no translated text.
+
+
+// How coarsely to round the axis. A fixed step suits Celsius, Kelvin, humidity,
+// CO2 and PM2.5, but Fahrenheit spans roughly 1.8x as many units for the same
+// physical range: a fixed fine step would produce an absurd number of gridlines
+// on a wide range, a fixed coarse one would flatten a narrow range. Profiles that
+// need it therefore declare span-dependent steps, and only those.
+function resolveDynamicStep(staticStep, dynamicDisplaySteps, low, high, baseMin, baseMax, anchorScale = true) {
+  if (!dynamicDisplaySteps) return staticStep;
+  const dataMin = Number.isFinite(low) ? low : baseMin;
+  const dataMax = Number.isFinite(high) ? high : baseMax;
+  const spanMin = anchorScale ? Math.min(dataMin, baseMin) : dataMin;
+  const spanMax = anchorScale ? Math.max(dataMax, baseMax) : dataMax;
+  const span = spanMax - spanMin;
+  const tier = dynamicDisplaySteps.find((candidate) => span <= candidate.maxSpan);
+  return (tier || dynamicDisplaySteps[dynamicDisplaySteps.length - 1]).step;
+}
+
+// Expands the anchored reference scale — or, for an unanchored profile, only the
+// live data range — to leave headroom around real values. The buffer defaults to
+// one full step when the profile does not specify its own headroom.
+//
+// A one-sided metric never expands its lower bound: there is no "too little CO2"
+// in a room, so the axis stays rooted at the reference minimum.
+function dynamicScale(coolestValue, warmestValue, scaleConfig, dynamicDisplaySteps) {
+  const { scale, step: staticStep, oneSided, headroom, anchorScale } = scaleConfig;
+  const baseMin = scale.min;
+  const baseMax = scale.max;
+  const numericLow = Number(coolestValue);
+  const numericHigh = Number(warmestValue);
+  const low = Number.isFinite(numericLow) ? numericLow : baseMin;
+  const high = Number.isFinite(numericHigh) ? numericHigh : baseMax;
+  const step = resolveDynamicStep(
+    staticStep,
+    dynamicDisplaySteps,
+    oneSided ? baseMin : low,
+    high,
+    baseMin,
+    baseMax,
+    anchorScale
+  );
+  const buffer = headroom ?? step;
+
+  const warmLimit = ceilToStep(high + buffer, step);
+  let max = anchorScale ? Math.max(baseMax, warmLimit) : warmLimit;
+  max = ceilToStep(max, step);
+  if (!Number.isFinite(max)) max = baseMax;
+
+  let min = baseMin;
+  if (!oneSided) {
+    const coldLimit = floorToStep(low - buffer, step);
+    min = anchorScale ? Math.min(baseMin, coldLimit) : coldLimit;
+    min = floorToStep(min, step);
+    if (!Number.isFinite(min)) min = baseMin;
+  }
+
+  // A degenerate axis would divide by zero in every position calculation.
+  if (min >= max) max = min + step;
+  return { min, max, step };
+}
+
+// Turning values into positions on the axis, as percentages.
+//
+// Percentages rather than pixels: the card's width is decided by the dashboard
+// layout, so the only stable description of "where does this marker go" is a
+// fraction of the bar. Everything here is a pure number — the pixel-level
+// collision avoidance for LABELS is a rendering concern and lives elsewhere.
+
+
+// Left edge and width for a band, tolerant of an inverted pair.
+function rangePosition(minValue, maxValue, scaleMin, scaleMax) {
+  const left = percentInRange(minValue, scaleMin, scaleMax);
+  const right = percentInRange(maxValue, scaleMin, scaleMax);
+  return {
+    left: Math.min(left, right),
+    width: Math.abs(right - left),
+  };
+}
+
+// Everything needed to draw one scale bar's bands and edges. Both scale views use
+// this same function with different bounds, which is what structurally guarantees
+// identical geometry for identical input rather than leaving it to convention.
+function scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
+  const comfortBand = rangePosition(comfortMin, comfortMax, scaleMin, scaleMax);
+  const optimalBand = rangePosition(optimalMin, optimalMax, scaleMin, scaleMax);
+  return {
+    scaleMin,
+    scaleMax,
+    optimalMin,
+    optimalMax,
+    comfortLeft: comfortBand.left,
+    comfortWidth: comfortBand.width,
+    comfortCenter: comfortBand.left + comfortBand.width / 2,
+    optimalLeft: optimalBand.left,
+    optimalWidth: optimalBand.width,
+    optimalCenter: optimalBand.left + optimalBand.width / 2,
+    // A data-anchored axis can legitimately sit wholly outside the semantic bands
+    // (a winter outdoor scale at -3..9 °C, say). Their configured bounds stay in
+    // the model, but a zero-width band or a label pinned to an axis edge would be
+    // actively misleading, so visibility is reported separately.
+    comfortVisible: comfortMax > scaleMin && comfortMin < scaleMax,
+    optimalVisible: optimalMax > scaleMin && optimalMin < scaleMax,
+  };
+}
+
+// One position per named marker, against the same axis the geometry above uses.
+function markerPositions(markers, scaleMin, scaleMax) {
+  const positions = {};
+  for (const key of Object.keys(markers || {})) {
+    positions[key] = percentInRange(markers[key], scaleMin, scaleMax);
+  }
+  return positions;
 }
 
 // Indoor room temperature — the default temperature profile.
@@ -2338,14 +3343,6 @@ const CLASSIFICATION_PROFILE_REGISTRY = {
     },
   },
 };
-
-// The closed set of tier/invalid-classification zone values.
-//
-// Single source of truth for both the built-in profiles and custom-profile
-// validation: anything that needs to know "which zone values exist" reads this
-// instead of repeating the list.
-
-const CLASSIFICATION_ZONES = Object.freeze(["optimal", "comfort", "outside", "invalid"]);
 
 // MetricDefinition / UnitProfile / QuantityKind registry (AP-01).
 //
@@ -2648,7 +3645,7 @@ function convertUnitValue(value, quantityKind, fromProfile, toProfile) {
   throw new Error(`convertUnitValue: unknown quantityKind "${quantityKind}"`);
 }
 
-function deriveThresholdsForProfile(canonicalTiers, profile) {
+function deriveThresholdsForProfile$1(canonicalTiers, profile) {
   // Re-expresses a canonical-unit tier list (levelKey/color unchanged) in
   // profile's display unit; -Infinity/+Infinity survive unchanged (both
   // Math.round(±Infinity) and a linear fromCanonical() naturally return
@@ -2660,9 +3657,664 @@ function deriveThresholdsForProfile(canonicalTiers, profile) {
   }));
 }
 
-function deriveBandForProfile(band, profile) {
+function deriveBandForProfile$1(band, profile) {
   const round = profile.thresholdRounding || ((v) => v);
   return { min: round(profile.fromCanonical(band.min)), max: round(profile.fromCanonical(band.max)) };
+}
+
+// Registry-aware convenience over METRIC_DEFINITIONS.
+//
+// The primitives in domain/units/ deliberately take profile and tier OBJECTS, with
+// no registry lookup, so they stay usable for a metric kind that is not registered
+// yet. These wrappers add the lookup for the common case, and they THROW rather
+// than returning undefined: an unknown metric kind or unit profile at this point
+// means a caller resolved something wrong, and a silent undefined would surface
+// much later as a NaN in a rendered value.
+
+
+function getMetricDefinition(metricKind) {
+  const definition = METRIC_DEFINITIONS[metricKind];
+  if (!definition) throw new Error(`No MetricDefinition registered for metricKind "${metricKind}"`);
+  return definition;
+}
+
+function getUnitProfile(metricKind, profileKey) {
+  const profile = getMetricDefinition(metricKind).unitProfiles[profileKey];
+  if (!profile) throw new Error(`Unknown unitProfile "${profileKey}" for metricKind "${metricKind}"`);
+  return profile;
+}
+
+function convertMetricValue(value, { metricKind, quantityKind, fromProfileKey, toProfileKey }) {
+  return convertUnitValue(
+    value,
+    quantityKind,
+    getUnitProfile(metricKind, fromProfileKey),
+    getUnitProfile(metricKind, toProfileKey)
+  );
+}
+
+// The kind's canonical classification tiers, re-expressed in one of its display
+// units.
+function deriveThresholdsForProfile(metricKind, profileKey) {
+  return deriveThresholdsForProfile$1(
+    getMetricDefinition(metricKind).canonicalClassificationTiers,
+    getUnitProfile(metricKind, profileKey)
+  );
+}
+
+// One of the kind's canonical bands ("comfort", "optimal", "baseScale"),
+// re-expressed in one of its display units.
+function deriveBandForProfile(metricKind, profileKey, bandName) {
+  const definition = getMetricDefinition(metricKind);
+  const bandKey = `canonical${bandName[0].toUpperCase()}${bandName.slice(1)}Band`;
+  const band = definition[bandKey];
+  if (!band) throw new Error(`Unknown band "${bandName}" for metricKind "${metricKind}"`);
+  return deriveBandForProfile$1(band, getUnitProfile(metricKind, profileKey));
+}
+
+// Rejects a profile that becomes degenerate when projected into a display unit.
+//
+// Projection rounds every boundary independently (integer Fahrenheit, so that a
+// displayed boundary and the boundary actually used for classification can never
+// disagree). Rounding is order-preserving but not injective: two canonical values
+// that are still distinct in Celsius can round to the SAME Fahrenheit value,
+// collapsing a band to zero width or making a tier permanently unreachable. The
+// classifier compares against these exact rounded numbers, so a collapse is a
+// real classification bug, not a cosmetic one.
+//
+// Every property checked here is already guaranteed in the canonical profile —
+// by the custom-profile validation for YAML profiles, by hand for the built-in
+// ones. This only catches what ROUNDING introduced, which is why each check first
+// confirms the canonical values were actually ordered. Built-in profiles never
+// trigger it in practice (their gaps are >= 1 °C, well above the ~0.56 °C needed
+// to survive integer Fahrenheit rounding); it exists for custom profiles with
+// narrow, freely configured gaps.
+
+function assertProjectedGeometry(canonical, projected, metricKind, displayProfile) {
+  const unitLabel = displayProfile.displayUnit || displayProfile.key;
+  const fail = (detail) => {
+    throw new Error(
+      `Invalid configuration: classification profile for "${metricKind}" becomes degenerate when rounded to ${unitLabel} (${detail}) — configure wider gaps, or set classification.unit to "${unitLabel}" directly to avoid rounding.`
+    );
+  };
+  if (!(projected.comfort.min < projected.comfort.max)) fail("comfort band collapses");
+  if (!(projected.optimal.min < projected.optimal.max)) fail("optimal band collapses");
+  if (!(projected.scale.min < projected.scale.max)) fail("scale collapses");
+  for (let i = 1; i < canonical.tiers.length; i++) {
+    const wasDescending = Number.isFinite(canonical.tiers[i - 1].min) && Number.isFinite(canonical.tiers[i].min)
+      && canonical.tiers[i].min < canonical.tiers[i - 1].min;
+    if (!wasDescending) continue;
+    if (!(projected.tiers[i].min < projected.tiers[i - 1].min)) {
+      fail(`tier thresholds collapse near ${projected.tiers[i].min}${unitLabel}`);
+    }
+  }
+  if (projected.iconThresholds) {
+    const order = ["fire", "high", "normal", "low"];
+    for (let i = 1; i < order.length; i++) {
+      const prevKey = order[i - 1];
+      const curKey = order[i];
+      if (!(canonical.iconThresholds[curKey] < canonical.iconThresholds[prevKey])) continue;
+      if (!(projected.iconThresholds[curKey] < projected.iconThresholds[prevKey])) {
+        fail(`icon thresholds collapse near ${projected.iconThresholds[curKey]}${unitLabel}`);
+      }
+    }
+  }
+  if (projected.iconTiers) {
+    for (let i = 1; i < canonical.iconTiers.length; i++) {
+      const wasDescending = Number.isFinite(canonical.iconTiers[i - 1].min) && Number.isFinite(canonical.iconTiers[i].min)
+        && canonical.iconTiers[i].min < canonical.iconTiers[i - 1].min;
+      if (!wasDescending) continue;
+      if (!(projected.iconTiers[i].min < projected.iconTiers[i - 1].min)) {
+        fail(`icon tiers collapse near ${projected.iconTiers[i].min}${unitLabel}`);
+      }
+    }
+  }
+}
+
+// Re-expressing a canonical profile in the unit the card actually displays.
+//
+// Profiles are authored and stored in each metric's canonical unit. Every
+// comparison the card makes — tier selection, comfort counting, scale geometry,
+// icon choice — happens against the DISPLAYED value, so the profile has to be
+// projected first. Doing it the other way round (converting the reading back to
+// canonical for each comparison) would compare against unrounded boundaries and
+// let a displayed "68 °F comfort" edge classify as if it were 67.9 °F.
+//
+// Absolute boundaries go through fromCanonical() plus the profile's own rounding;
+// the step and headroom are DELTAS and go through deltaFromCanonical(), which must
+// never pick up a unit offset.
+
+
+function projectProfileToDisplayUnit(canonical, definition, unitProfile, metricKind) {
+  const displayProfile = unitProfile || definition.unitProfiles[definition.canonicalProfileKey];
+  if (displayProfile.key === definition.canonicalProfileKey) return canonical;
+
+  const projectAbsolute = (value) => {
+    const converted = displayProfile.fromCanonical(value);
+    return (displayProfile.thresholdRounding || ((v) => v))(converted);
+  };
+  const projectBand = (band) => ({ min: projectAbsolute(band.min), max: projectAbsolute(band.max) });
+  const projectedValidRange = canonical.validRange && {
+    min: canonical.validRange.min === null ? null : projectAbsolute(canonical.validRange.min),
+    max: canonical.validRange.max === null ? null : projectAbsolute(canonical.validRange.max),
+    minInclusive: canonical.validRange.minInclusive,
+    maxInclusive: canonical.validRange.maxInclusive,
+  };
+  // A validity window has to be re-derived in the display unit; a built-in
+  // profile without one keeps its own predicate, which is already expressed in
+  // terms the projected values satisfy.
+  const invalidWhen = projectedValidRange
+    ? (reading) =>
+        (projectedValidRange.min !== null && (projectedValidRange.minInclusive ? reading < projectedValidRange.min : reading <= projectedValidRange.min)) ||
+        (projectedValidRange.max !== null && (projectedValidRange.maxInclusive ? reading > projectedValidRange.max : reading >= projectedValidRange.max))
+    : canonical.invalidWhen;
+
+  const projected = {
+    ...canonical,
+    tiers: canonical.tiers.map((tier) => ({
+      ...tier,
+      min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,
+    })),
+    comfort: projectBand(canonical.comfort),
+    optimal: projectBand(canonical.optimal),
+    scale: projectBand(canonical.scale),
+    step: displayProfile.deltaFromCanonical(canonical.step),
+    headroom: canonical.headroom === undefined ? undefined : displayProfile.deltaFromCanonical(canonical.headroom),
+    invalidWhen,
+    validRange: projectedValidRange,
+    iconThresholds: canonical.iconThresholds && Object.fromEntries(
+      Object.entries(canonical.iconThresholds).map(([key, threshold]) => [key, projectAbsolute(threshold)])
+    ),
+    iconTiers: canonical.iconTiers?.map((tier) => ({
+      ...tier,
+      min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,
+    })),
+  };
+  assertProjectedGeometry(canonical, projected, metricKind, displayProfile);
+  return projected;
+}
+
+// Which classification profile applies, and how a value is classified against
+// it once it has been chosen.
+//
+// Two separate decisions live here:
+//
+//   resolveClassificationProfile()  the card-wide policy: a custom profile from
+//                                  YAML, a named built-in, or the metric kind's
+//                                  default.
+//   resolveValueClassification()    the per-value priority: forced entity
+//                                  attributes, then complete entity attributes
+//                                  in automatic mode, then the numeric profile.
+//
+// The second one takes the numeric path as a THUNK rather than a value. That is
+// not a style choice: the numeric path projects the profile into the display unit
+// and can legitimately throw on a degenerate custom profile. Computing it eagerly
+// would make a card in `entity` mode start failing on a profile it never looks
+// at.
+
+
+const NEUTRAL_COLOR$1 = "#B4B2A9";
+const NO_LEVEL = "—";
+
+// lenient: an entity's OWN metric kind has to be probed before kind-based
+// filtering has run, so at that point a card-wide profile scoped to a DIFFERENT
+// kind (e.g. an outdoor temperature profile, probed for an incidental humidity
+// room) is not yet known to be irrelevant. Falling back to that kind's own
+// default instead of throwing lets the later kind filter do its job. Every other
+// caller passes the card's actually-resolved kind, so a genuine mismatch between
+// the primary entity's kind and the configured profile still surfaces as the
+// documented config error.
+function resolveClassificationProfile(registryForKind, policy, metricKind, { lenient = false } = {}) {
+  if (!registryForKind) throw new Error(`No classification profiles registered for metric kind "${metricKind}"`);
+  if (policy.source === "custom") {
+    if (policy.custom.metricKind !== metricKind) {
+      if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
+      throw new Error(
+        `Invalid configuration: custom classification unit belongs to "${policy.custom.metricKind}", not detected metric kind "${metricKind}".`
+      );
+    }
+    return policy.custom;
+  }
+  const profileId = policy.profile || registryForKind.defaultProfile;
+  const profile = registryForKind.profiles[profileId];
+  if (!profile) {
+    if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
+    throw new Error(`Invalid configuration: classification profile "${profileId}" is not available for metric kind "${metricKind}".`);
+  }
+  return profile;
+}
+
+// The per-value priority. `attributes` is the entity's raw attribute object (or
+// null when the entity does not exist); `numericFallback` is the thunk described
+// above.
+//
+// In forced `entity` mode the card shows whatever the integration provides and
+// never falls back to a numeric tier — a neutral colour and an em dash stand in
+// for missing metadata, so it stays visible that the entity, not the card, owns
+// the classification.
+function resolveValueClassification({ policy, attributes, numericFallback }) {
+  if (policy.source === "entity") {
+    const entity = readEntityClassification(attributes, { allowPartial: true });
+    return {
+      color: entity?.color || NEUTRAL_COLOR$1,
+      level: entity?.level || NO_LEVEL,
+      score: entity?.score ?? null,
+      zone: entity?.zone ?? null,
+      source: "entity",
+      profileId: null,
+    };
+  }
+  if (policy.source === "auto") {
+    const entity = readEntityClassification(attributes);
+    if (entity) return entity;
+  }
+  return numericFallback();
+}
+
+// Whether a reading is physically possible at all.
+//
+// Separate from classification on purpose: an impossible value must be excluded
+// from averaging and metric-kind consensus BEFORE anything tries to give it a
+// tier. A stuck "0 ppm" CO2 sensor or a negative particulate concentration is not
+// a cold room — it is a broken reading, and treating it as data was the root cause
+// of a whole class of earlier bugs.
+//
+// A metric kind with no registered profile has no validity concept and is treated
+// as valid, so an unknown kind degrades to "show it" rather than "hide
+// everything".
+
+function isPhysicallyValid(profile, value) {
+  if (!profile) return true;
+  return !profile.invalidWhen?.(value);
+}
+
+// The application layer's access to classification.
+//
+// Every classification decision the pipeline makes needs the same two inputs
+// resolved first: which profile the card-wide policy selects, and which unit that
+// profile has to be expressed in. Doing that in one place keeps the rest of the
+// pipeline from re-deriving it, and keeps the ORDER right — the physical-validity
+// check has to run against the canonical profile, everything the user sees against
+// the projected one.
+//
+// Results are returned in TOKEN form (levelKey for a built-in tier, a verbatim
+// level string for a custom profile). Translation happens in the presentation
+// layer; a wrong split here would put German UI text into the model.
+
+
+// The policy a card falls back to when no classification block is configured.
+const DEFAULT_CLASSIFICATION_POLICY = { source: "auto", profile: null, custom: null };
+
+function classificationPolicyOf(config) {
+  return config?.classification || DEFAULT_CLASSIFICATION_POLICY;
+}
+
+// The profile in its authored (canonical) unit.
+function resolveCanonicalProfile(policy, metricKind, { lenient = false } = {}) {
+  return resolveClassificationProfile(CLASSIFICATION_PROFILE_REGISTRY[metricKind], policy, metricKind, { lenient });
+}
+
+// The profile re-expressed in the unit the card displays.
+function resolveDisplayProfile(policy, metricKind, unitProfile) {
+  return projectProfileToDisplayUnit(
+    resolveCanonicalProfile(policy, metricKind),
+    METRIC_DEFINITIONS[metricKind],
+    unitProfile,
+    metricKind
+  );
+}
+
+// Physical validity. With no unit profile this deliberately uses the CANONICAL
+// profile: an entity's reading is canonicalized before this runs, and comparing a
+// converted value against projected-and-rounded limits would reject valid data at
+// the edges.
+function isValuePhysicallyValid(policy, metricKind, unitProfile, value, { lenient = false } = {}) {
+  if (!CLASSIFICATION_PROFILE_REGISTRY[metricKind]) return true;
+  const profile = unitProfile
+    ? resolveDisplayProfile(policy, metricKind, unitProfile)
+    : resolveCanonicalProfile(policy, metricKind, { lenient });
+  return isPhysicallyValid(profile, value);
+}
+
+// The axis parameters, in the displayed unit.
+function resolveScaleConfig(policy, metricKind, unitProfile) {
+  return scaleConfigFor(resolveDisplayProfile(policy, metricKind, unitProfile));
+}
+
+// The purely numeric tier of a value, ignoring any entity-provided
+// classification. The single implementation of "which tier does this value fall
+// into", used by classifyValue() below and by the icon path.
+function classifyNumericTier(policy, metricKind, unitProfile, value) {
+  return classifyNumericValue(resolveDisplayProfile(policy, metricKind, unitProfile), value);
+}
+
+// One value's classification, honouring the entity/auto/profile/custom priority.
+// `attributes` is the entity's own attribute object, or null when there is no
+// entity to read from (historical range extremes deliberately pass null so they
+// classify numerically instead of inheriting the entity's current colour).
+//
+// The numeric branch stays lazy: projecting the profile can throw on a degenerate
+// custom profile, and a card in forced `entity` mode must not start failing on a
+// profile it never looks at.
+function classifyValue(policy, metricKind, unitProfile, value, attributes) {
+  return resolveValueClassification({
+    policy,
+    attributes,
+    numericFallback: () => {
+      const numeric = classifyNumericTier(policy, metricKind, unitProfile, value);
+      const profile = resolveCanonicalProfile(policy, metricKind);
+      return {
+        ...numeric,
+        source: profile.id === "custom" ? "custom" : "builtin",
+        profileId: profile.id,
+      };
+    },
+  });
+}
+
+// Just the colour, for the many places that only tint something.
+function classificationColorOf(policy, metricKind, unitProfile, value, attributes) {
+  return classifyValue(policy, metricKind, unitProfile, value, attributes).color;
+}
+
+// The profile's own icon token, or null when the profile declares none — the
+// presentation layer then falls back to the metric's stable default icon.
+function resolveProfileIcon(policy, metricKind, unitProfile, value) {
+  return profileIconForValue(value, metricKind, resolveDisplayProfile(policy, metricKind, unitProfile));
+}
+
+// One EntityModel per participating entity.
+//
+// Everything needed to decide whether an entity may determine the card's metric
+// kind or contribute to the average is resolved ONCE, here, from the same state
+// object. That atomicity is the whole point: metric kind, unit and value used to
+// be derived independently along three different paths, and the disagreements
+// between them were the shared root cause of a family of bugs (a humidity room
+// averaged into a temperature card, a "1013 hPa" primary reading displayed as
+// °C, an unavailable room out-voting an available one).
+//
+// The unit rule is deliberately strict and symmetric: a unit is trusted only when
+// it is BOTH present AND resolves to a registered profile. A missing
+// unit_of_measurement is NOT assumed to be the canonical unit — missing and
+// unknown both yield unitProfile:null, exclude the measurement, and get
+// diagnosed. metricKind itself is still resolved in that case, so the empty state
+// can show the right title and icon.
+//
+// `states` is Home Assistant's own states object, read but never written.
+
+
+function hasEntity(states, entityId) {
+  return Boolean(entityId && states?.[entityId]);
+}
+
+function readNumericState(states, entityId) {
+  if (!entityId) return null;
+  return parseNumericState(states?.[entityId]?.state);
+}
+
+function readNumericAttribute(states, entityId, attributeName) {
+  if (!entityId || !attributeName) return null;
+  return parseNumericState(states?.[entityId]?.attributes?.[attributeName]);
+}
+
+function readAttributes(states, entityId) {
+  if (!entityId) return null;
+  return states?.[entityId]?.attributes ?? null;
+}
+
+// One entity's own unit_of_measurement, with no metric-kind fallback — the
+// counterpart to metricKindForEntity(), so kind and unit always come from the
+// SAME entity.
+function rawUnitForEntity(states, entityId) {
+  const entityUnit = states?.[entityId]?.attributes?.unit_of_measurement;
+  return typeof entityUnit === "string" && entityUnit.trim() ? entityUnit.trim() : null;
+}
+
+// device_class first (Home Assistant's own declaration), unit_of_measurement as
+// the fallback; null when neither is present or recognized.
+function metricKindForEntity(states, entityId) {
+  const state = states?.[entityId];
+  if (!state) return null;
+  const deviceClass = state.attributes?.device_class;
+  if (typeof deviceClass === "string" && deviceClass.trim()) {
+    const metric = METRIC_TYPE_BY_DEVICE_CLASS[deviceClass.trim().toLowerCase()];
+    if (metric) return metric;
+  }
+  const unit = normalizeUnitToken(state.attributes?.unit_of_measurement);
+  return METRIC_TYPE_BY_UNIT[unit] || null;
+}
+
+// range_entity and trend_entity are auxiliary sensors, not participants in metric
+// kind resolution, but their readings still need a unit profile before they can be
+// converted. The same strict rule applies: a missing unit is as unusable as an
+// unknown one, never a silent canonical assumption.
+//
+// rateSuffix: a rate is conventionally reported with "/h" appended to the
+// absolute unit ("°C/h", "ppm/h" — Home Assistant's own derivative helpers use
+// exactly that). The suffix is stripped before matching; a trend entity using the
+// bare absolute unit still resolves, since stripping a non-matching suffix is a
+// no-op.
+function resolveAuxiliaryUnitProfileKey(states, entityId, metricKind, { rateSuffix = false } = {}) {
+  if (!entityId) return null;
+  if (!METRIC_DEFINITIONS[metricKind]) return null;
+  let rawUnit = rawUnitForEntity(states, entityId);
+  if (!rawUnit) return null;
+  if (rateSuffix) rawUnit = rawUnit.replace(/\s*\/\s*h$/i, "");
+  return resolveUnitProfileKey(metricKind, rawUnit);
+}
+
+function buildEntityModel(states, config, entityId, sourceRole) {
+  const policy = classificationPolicyOf(config);
+  const stateObject = entityId ? states?.[entityId] || null : null;
+  const rawValue = readNumericState(states, entityId);
+  const rawUnit = rawUnitForEntity(states, entityId);
+  const rawDeviceClass = stateObject?.attributes?.device_class;
+  const deviceClass = typeof rawDeviceClass === "string" && rawDeviceClass.trim() ? rawDeviceClass.trim() : null;
+  const metricKind = metricKindForEntity(states, entityId);
+  const validNumeric = rawValue !== null;
+
+  let unitProfile = null;
+  let canonicalValue = rawValue;
+  let validUnit = true;
+  if (validNumeric && metricKind) {
+    const definition = METRIC_DEFINITIONS[metricKind]; // every registered kind has one
+    if (rawUnit) {
+      unitProfile = resolveUnitProfileKey(metricKind, rawUnit);
+      if (!unitProfile) validUnit = false;
+    } else {
+      validUnit = false;
+    }
+    if (unitProfile) {
+      canonicalValue = convertMetricValue(rawValue, {
+        metricKind,
+        quantityKind: "absolute",
+        fromProfileKey: unitProfile,
+        toProfileKey: definition.canonicalProfileKey,
+      });
+    }
+  }
+
+  // Validity limits are defined in the profile's canonical unit, so this runs
+  // only AFTER unit resolution and conversion — comparing a raw Fahrenheit value
+  // against canonical Celsius limits would reject perfectly good data.
+  //
+  // lenient: this entity's own kind may not be the kind the card-wide policy is
+  // scoped to (a humidity room on a temperature card configured with the outdoor
+  // profile). Falling back to that kind's default profile here lets the later
+  // kind filter do its job instead of throwing during a probe.
+  const validPhysical = validNumeric && (!validUnit || isValuePhysicallyValid(policy, metricKind, null, canonicalValue, { lenient: true }));
+
+  return {
+    entityId,
+    sourceRole,
+    stateObject,
+    rawValue,
+    rawUnit,
+    deviceClass,
+    metricKind,
+    unitProfile,
+    quantityKind: "absolute",
+    canonicalValue,
+    validNumeric,
+    validPhysical,
+    validUnit,
+    errors: [],
+  };
+}
+
+// The atomic MeasurementContext: metric kind, average source and display unit,
+// decided together from the same EntityModels.
+//
+// The arbitration rules, in order:
+//
+//   1. A USABLE primary (numeric + physically valid + resolvable unit + resolvable
+//      kind) alone determines the metric kind and is the average source. Rooms of
+//      the same kind participate; rooms of a different kind, or with an unusable
+//      unit, are excluded AND diagnosed — never silently dropped, never averaged
+//      in with an assumed unit.
+//   2. No usable primary -> only rooms that are themselves fully valid are
+//      candidates, so an unavailable room can never out-vote an available one.
+//      - No candidates: no average source. The metric kind still falls back
+//        sensibly (the primary's own kind if it has one, else temperature) purely
+//        so the empty state can show the right title and icon.
+//      - All candidates share one kind: room consensus, averaging their CANONICAL
+//        values so compatible units mix correctly.
+//      - Candidates span several kinds: NO majority vote. Kind and average source
+//        are null and the state is diagnosed as mixed_metric_kinds. That is a
+//        defined configuration state, not an arbitrary winner picked by count.
+//
+// Diagnostics are returned as data, in a stable order. This function does not log:
+// deduplicating a warning needs state, and state belongs to the caller.
+//
+// There is no cache in here either. The element memoizes by hass/config identity,
+// where those identities are actually observable.
+
+
+// Used only for the title/icon fallback when nothing at all resolves.
+const FALLBACK_METRIC_KIND = "temperature";
+
+function resolveMeasurementContext(states, config) {
+  const primary = buildEntityModel(states, config, config?.entity, "primary");
+  const rooms = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
+  const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
+
+  let metricKind;
+  let averageSource;
+  let participatingRooms;
+  let excludedRoomIds;
+  let consistent;
+  let diagnostics;
+  let sourceEntity;
+  let sourceKind;
+  let displayUnitProfileKey;
+
+  if (primaryUsable) {
+    metricKind = primary.metricKind;
+    participatingRooms = [];
+    excludedRoomIds = [];
+    diagnostics = [];
+    for (const room of rooms) {
+      if (!room.validNumeric || room.metricKind === null) continue;
+      if (room.metricKind !== metricKind) {
+        excludedRoomIds.push(room.entityId);
+        diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
+        continue;
+      }
+      if (!room.validUnit) {
+        excludedRoomIds.push(room.entityId);
+        diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
+        continue;
+      }
+      if (room.validPhysical) participatingRooms.push(room);
+    }
+    averageSource = { kind: "primary", entityId: primary.entityId, canonicalValue: primary.canonicalValue, unitProfile: primary.unitProfile };
+    consistent = true;
+    sourceEntity = primary.entityId;
+    sourceKind = "primary";
+    displayUnitProfileKey = primary.unitProfile;
+  } else {
+    const candidates = rooms.filter((room) => room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null);
+    // Rooms that are otherwise fine but whose own unit resolves to nothing are
+    // diagnosed in this branch too, so they never disappear from the candidate
+    // pool without a trace regardless of which sub-branch is reached.
+    const unusableUnitRooms = rooms.filter((room) => room.validNumeric && room.validPhysical && !room.validUnit && room.metricKind !== null);
+    const unusableUnitIds = unusableUnitRooms.map((room) => room.entityId);
+    const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind }));
+    participatingRooms = [];
+    excludedRoomIds = unusableUnitIds;
+    if (candidates.length === 0) {
+      metricKind = primary.metricKind || FALLBACK_METRIC_KIND;
+      averageSource = null;
+      diagnostics = unusableUnitDiagnostics;
+      consistent = true;
+      sourceEntity = primary.metricKind ? primary.entityId : null;
+      sourceKind = primary.metricKind ? "primary" : "default";
+      displayUnitProfileKey = null;
+    } else {
+      const kinds = new Set(candidates.map((room) => room.metricKind));
+      if (kinds.size > 1) {
+        metricKind = null;
+        averageSource = null;
+        diagnostics = [{ code: "mixed_metric_kinds", metricKinds: [...kinds] }, ...unusableUnitDiagnostics];
+        consistent = false;
+        sourceEntity = null;
+        sourceKind = "mixed";
+        displayUnitProfileKey = null;
+      } else {
+        metricKind = candidates[0].metricKind;
+        participatingRooms = candidates;
+        diagnostics = unusableUnitDiagnostics;
+        consistent = true;
+        sourceEntity = candidates[0].entityId;
+        sourceKind = "roomConsensus";
+        // A room-consensus average has no single "the" display unit unless every
+        // participating room agrees on one. A °F room mixed among °C rooms still
+        // averages correctly (each canonicalValue already is canonical), but
+        // display falls back to canonical rather than arbitrarily preferring one
+        // disagreeing room's unit.
+        displayUnitProfileKey = candidates.every((room) => room.unitProfile === candidates[0].unitProfile)
+          ? candidates[0].unitProfile
+          : null;
+        averageSource = {
+          kind: "roomConsensus",
+          entityIds: candidates.map((room) => room.entityId),
+          canonicalValue: candidates.reduce((sum, room) => sum + room.canonicalValue, 0) / candidates.length,
+          unitProfile: null,
+        };
+      }
+    }
+  }
+
+  const definition = METRIC_DEFINITIONS[metricKind];
+  // With no resolvable kind (the mixed state) there is no definition to ask, so
+  // the fallback kind's canonical unit stands in — enough for the empty state's
+  // title and icon, never used for a measurement.
+  const canonicalUnit = definition ? definition.canonicalUnit : METRIC_DEFINITIONS[FALLBACK_METRIC_KIND].canonicalUnit;
+  const displayUnitProfile = definition
+    ? definition.unitProfiles[displayUnitProfileKey || definition.canonicalProfileKey]
+    : null;
+
+  return {
+    metricKind,
+    canonicalUnit,
+    unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit,
+    displayUnitProfile,
+    averageSource,
+    participatingRooms,
+    excludedRoomIds,
+    consistent,
+    diagnostics,
+    // Aliases kept because existing consumers and tests read these names.
+    metricType: metricKind,
+    sourceEntity,
+    sourceKind,
+  };
+}
+
+// The metric kind every consumer can safely assume, with the documented
+// temperature default for the mixed-kind state.
+function effectiveMetricKind(context) {
+  return context.metricType || FALLBACK_METRIC_KIND;
 }
 
 // Trend direction: the semantic classification of a RATE of change.
@@ -2703,6 +4355,4201 @@ function classifyTrendRate(canonicalValue, policy) {
   return "stable";
 }
 
+// The two optional auxiliary sensors: today's range and the hourly trend.
+//
+// Both exist only if configured, currently numeric, AND reporting a unit that
+// resolves to a registered profile. That last condition is not pedantry: without
+// it, a Celsius-configured card would happily display a Fahrenheit "18" as 18 °C.
+//
+// The quantity kinds matter and are deliberately different:
+//
+//   range state      a DELTA (today's width) — must never pick up a unit offset
+//   range min/max    ABSOLUTE readings
+//   trend            a RATE — same conversion factor as a delta
+//
+// Timestamps are returned raw. Formatting them is a presentation decision.
+
+
+// Single policy-resolution seam: today it returns registry defaults, and a later
+// release can layer validated YAML or entity attributes here without touching the
+// classifier or any renderer.
+function resolveTrendPolicy(metricKind) {
+  return TREND_POLICY_REGISTRY[metricKind] || null;
+}
+
+function buildTrendModel(metricKind, canonicalValue, displayValue, displayUnit) {
+  const policy = resolveTrendPolicy(metricKind);
+  const direction = classifyTrendRate(canonicalValue, policy);
+  const directionMeta = direction ? TREND_DIRECTION_META[direction] : null;
+  if (!directionMeta || !Number.isFinite(displayValue) || !displayUnit) return null;
+  return {
+    canonicalValue,
+    value: displayValue,
+    unit: displayUnit,
+    direction,
+    directionTranslationKey: directionMeta.translationKey,
+    policy,
+  };
+}
+
+function buildRangeModel({ states, config, policy, metricKind, displayUnitProfile, toDisplay, toDisplayDelta }) {
+  const definition = METRIC_DEFINITIONS[metricKind];
+  const profileKey = resolveAuxiliaryUnitProfileKey(states, config.range_entity, metricKind);
+
+  let state = profileKey ? readNumericState(states, config.range_entity) : null;
+  if (state !== null) {
+    state = toDisplayDelta(
+      convertMetricValue(state, {
+        metricKind,
+        quantityKind: "delta",
+        fromProfileKey: profileKey,
+        toProfileKey: definition.canonicalProfileKey,
+      })
+    );
+  }
+  // A negative width is physically impossible. Checked on the DISPLAY value, like
+  // every other validity check once the projection has happened.
+  const hasRange = state !== null && state >= 0;
+
+  let min = hasRange ? readNumericAttribute(states, config.range_entity, "minimum") : null;
+  let max = hasRange ? readNumericAttribute(states, config.range_entity, "maximum") : null;
+  if (min !== null) {
+    min = toDisplay(
+      convertMetricValue(min, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+    );
+  }
+  if (max !== null) {
+    max = toDisplay(
+      convertMetricValue(max, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+    );
+  }
+  if (min !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, min)) min = null;
+  if (max !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, max)) max = null;
+
+  const attributes = hasRange ? states?.[config.range_entity]?.attributes : undefined;
+  const minTimestamp = hasRange ? attributes?.minimum_zeitpunkt ?? null : null;
+  const maxTimestamp = hasRange ? attributes?.maximum_zeitpunkt ?? null : null;
+
+  // No attributes are passed to the classifier on purpose. min/max are HISTORICAL
+  // readings taken from attributes, not the entity's current state — letting them
+  // see range_entity's own live value_color/value_level would make both inherit
+  // one current classification instead of their own numeric tier.
+  const minColor = min !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, min, null) : null;
+  const maxColor = max !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, max, null) : null;
+
+  return {
+    hasRange,
+    state,
+    min,
+    max,
+    minTimestamp,
+    maxTimestamp,
+    minColor,
+    maxColor,
+    // Pure availability, with no config gate baked in: whether an available
+    // range_scale view is actually requested is a view-composition decision.
+    // hasRange alone is not enough — that only says the entity's own state is
+    // valid, not that both attributes are present and the pair is not inverted.
+    rangeScaleAvailable: hasRange && min !== null && max !== null && min <= max,
+  };
+}
+
+function buildTrendContext({ states, config, metricKind, unit, toDisplayDelta }) {
+  const definition = METRIC_DEFINITIONS[metricKind];
+  const profileKey = resolveAuxiliaryUnitProfileKey(states, config.trend_entity, metricKind, { rateSuffix: true });
+  const rawValue = profileKey ? readNumericState(states, config.trend_entity) : null;
+
+  let canonicalValue = null;
+  let value = null;
+  if (rawValue !== null) {
+    canonicalValue = convertMetricValue(rawValue, {
+      metricKind,
+      quantityKind: "rate",
+      fromProfileKey: profileKey,
+      toProfileKey: definition.canonicalProfileKey,
+    });
+    value = toDisplayDelta(canonicalValue);
+  }
+  // Always "<display unit>/h" rather than the entity's own raw unit: once the
+  // NUMBER has been converted, labelling it with the pre-conversion unit would be
+  // a label/number mismatch.
+  const displayUnit = config.trend_entity ? `${unit}/h` : null;
+
+  return {
+    value,
+    unit: displayUnit,
+    model: buildTrendModel(metricKind, canonicalValue, value, displayUnit),
+  };
+}
+
+// Room models, extrema, comfort counting, spread and the semantic subtitle.
+//
+// The one invariant that runs through all of it: every calculation here uses EVERY
+// valid room. A room hidden by a grid override is still a full data source — the
+// cap is a display decision and must never change the average, the extrema, the
+// spread, the comfort count or the subtitle.
+//
+// The subtitle is returned as a SEMANTIC descriptor, not a sentence: which branch
+// applies plus the numbers it needs. Turning that into localized text is the
+// presentation layer's job.
+//
+// `language` is passed in as a plain locale string, not a translator. It is needed
+// for one thing only: the name tie-break when two rooms report the same value. That
+// tie-break is part of the business ordering (the extrema and the "stands out most"
+// room must agree on it), so it cannot move to the presentation layer without
+// changing which room gets named.
+
+// Value order, with a locale-aware name tie-break. This is the business order:
+// extrema, comfort counting and spread all read it.
+function sortRoomsByValue(rooms, language) {
+  return [...rooms].sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, language));
+}
+
+// One room model per participating room, in config-declaration order.
+//
+// Only rooms the measurement context actually accepted appear here: same metric
+// kind as the resolved context, numerically and physically valid, entity currently
+// available. `value` is the DISPLAY value, so every comparison against the
+// comfort band (also resolved into the display unit) is correct no matter which
+// unit each entity reports in.
+// Deliberately carries no colour and no label: those are per-consumer decisions
+// resolved later, and adding them here would change the shape every renderer
+// already reads.
+function buildRoomModels({ config, context, toDisplay }) {
+  const participatingByEntity = new Map(context.participatingRooms.map((model) => [model.entityId, model]));
+  const declared = [];
+  for (const [index, room] of (config.rooms || []).entries()) {
+    const model = participatingByEntity.get(room.entity);
+    if (!model) continue;
+    declared.push({
+      name: room.name,
+      short: room.short,
+      entity: room.entity,
+      tap_action: room.tap_action,
+      hold_action: room.hold_action,
+      index,
+      value: toDisplay(model.canonicalValue),
+    });
+  }
+  return declared;
+}
+
+function computeComfortCounts(rooms, comfort, hasRoomsView) {
+  if (!hasRoomsView) return { inComfort: 0, tooWarm: 0, tooCool: 0 };
+  return {
+    inComfort: rooms.filter((room) => room.value >= comfort.min && room.value <= comfort.max).length,
+    tooWarm: rooms.filter((room) => room.value > comfort.max).length,
+    tooCool: rooms.filter((room) => room.value < comfort.min).length,
+  };
+}
+
+// Spread prefers the primary entity's own spread attribute, which a template
+// sensor computes server-side over the full day rather than over the current
+// snapshot. It is only recomputed locally when that attribute is missing or
+// invalid, or when the average itself is the room-based fallback — the attribute
+// belongs to the primary entity's state and would otherwise be a stale reading
+// from a broken one.
+//
+// The attribute is a DELTA in the primary's own unit, so it is canonicalized and
+// then projected with the delta path; using the absolute path would add the
+// Fahrenheit offset to a difference.
+function computeSpread({ attributeValue, hasRoomsView, coolest, warmest }) {
+  // A negative room-to-room range is physically impossible; treat it exactly like
+  // a missing attribute.
+  const attrSpread = attributeValue !== null && attributeValue >= 0 ? attributeValue : null;
+  const computedSpread = hasRoomsView ? warmest.value - coolest.value : 0;
+  return attrSpread !== null ? attrSpread : computedSpread;
+}
+
+// Which subtitle sentence applies, and the numbers it needs.
+//
+// The "stands out most" room is always the coolest or the warmest: the average
+// sits between the global minimum and maximum, so |value - avg| is maximized at
+// one of those two endpoints. Reusing those already-computed objects instead of a
+// second, independent sort is what keeps the named room and the extreme-value
+// cards from disagreeing on an exact value tie.
+function buildSubtitleModel({ avg, comfort, hasRoomsView, counts, roomCount, coolest, warmest, missingRooms }) {
+  let sentence;
+  if (avg > comfort.max) {
+    sentence = hasRoomsView
+      ? { kind: "aboveComfort", diff: avg - comfort.max, count: counts.tooWarm, total: roomCount, adjective: "above" }
+      : { kind: "aboveComfortNoRooms", diff: avg - comfort.max };
+  } else if (avg < comfort.min) {
+    sentence = hasRoomsView
+      ? { kind: "belowComfort", diff: comfort.min - avg, count: counts.tooCool, total: roomCount, adjective: "below" }
+      : { kind: "belowComfortNoRooms", diff: comfort.min - avg };
+  } else if (hasRoomsView && counts.tooWarm + counts.tooCool > 0) {
+    const warmestOut = warmest.value > comfort.max;
+    const coolestOut = coolest.value < comfort.min;
+    const issue = warmestOut && coolestOut
+      ? (Math.abs(warmest.value - avg) >= Math.abs(coolest.value - avg) ? warmest : coolest)
+      : warmestOut ? warmest : coolest;
+    sentence = { kind: "inComfortIssue", name: issue.name };
+  } else if (hasRoomsView) {
+    sentence = { kind: "inComfortAllGood" };
+  } else {
+    sentence = { kind: "inComfort" };
+  }
+  return { ...sentence, missingRooms };
+}
+
+// The CardDomainModel: everything the card knows about the current reading,
+// expressed in numbers and semantic tokens.
+//
+// No translated text, no formatted numbers, no HTML, no CSS, no DOM measurement,
+// and no rendering geometry — no percentages, no pixel offsets, no view-specific
+// marker objects. Those are all statements about a rendered bar, not about the
+// measurement, and they live in presentation/view-model.
+//
+// The model is NOT colour-free, and deliberately so. A classification result
+// carries the hex colour its tier (or the entity's own value_color attribute)
+// declares, because that colour is part of the classification itself — a
+// SEMANTIC CLASSIFICATION VALUE, authored in a profile or validated out of an
+// entity attribute. What the model never carries is a CSS-READY colour: no
+// rgba() derivation, no custom-property string, no alpha applied for a soft
+// background. Those are presentation decisions.
+//
+// Structure of the result:
+//   metric        kind, canonical unit, display unit, unit profile
+//   context       the MeasurementContext and its diagnostics
+//   average       value, source kind, the entity it may be attributed to
+//   rooms         declared order and business (value) order, plus availability
+//   roomColors    one semantic classification colour per participating room
+//   extremes      coolest/warmest and their semantic classification colours
+//   comfort       band bounds plus the three counts
+//   optimal       band bounds
+//   scaleConfig   the axis POLICY (preferred bounds, step, anchoring) — no geometry
+//   spread        the resolved value, whichever source won
+//   range         today's width, min/max, raw timestamps, colours, availability
+//   trend         value, unit and the semantic direction
+//   classification the average's own tokens plus the profile icon token
+//   subtitle      which sentence applies, and its numbers
+//   state         empty / configuration state
+
+
+function buildCardDomainModel({ states, config, context, language }) {
+  const policy = classificationPolicyOf(config);
+  const metricKind = effectiveMetricKind(context);
+  const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
+  const comfort = scaleConfig.comfort;
+  const optimal = scaleConfig.optimal;
+
+  // No usable average source at all: either nothing resolvable anywhere, or rooms
+  // reporting genuinely incompatible metric kinds with no usable primary to
+  // arbitrate. Exposed as a configuration state so a future release can surface it
+  // more specifically; today it renders as the empty state, never as a
+  // cross-metric-kind average.
+  if (context.averageSource === null) {
+    return {
+      empty: true,
+      metric: { kind: metricKind },
+      missingRooms: (config.rooms || []).filter((room) => !hasEntity(states, room.entity)).length,
+      configurationState: context.diagnostics[0]?.code ?? null,
+    };
+  }
+
+  // From here on every number is projected into the resolved display unit exactly
+  // once. Comfort, classification and scale decisions must be made against the
+  // SAME unit as the number that is rendered, or a rounded Fahrenheit boundary
+  // would be compared against an unrounded Celsius one. Identity for
+  // humidity/co2/pm25 and whenever the display unit already is canonical.
+  const displayProfile = context.displayUnitProfile;
+  const toDisplay = displayProfile ? displayProfile.fromCanonical : (v) => v;
+  const toDisplayDelta = displayProfile ? displayProfile.deltaFromCanonical : (v) => v;
+
+  const declaredRooms = buildRoomModels({ config, context, toDisplay });
+  const roomsByValue = sortRoomsByValue(declaredRooms, language);
+
+  // Extended mode (chips, extreme-value view, auto-slide) needs at least two valid
+  // rooms. Driven by the complete list, never by the possibly capped visible
+  // subset: a grid override that hides chips must not turn off the room-comparison
+  // features it does not otherwise affect.
+  const hasRoomsView = roomsByValue.length >= 2;
+  const coolest = hasRoomsView ? roomsByValue[0] : null;
+  const warmest = hasRoomsView ? roomsByValue[roomsByValue.length - 1] : null;
+
+  const average = toDisplay(context.averageSource.canonicalValue);
+  // The single source of truth for whether the displayed average came from the
+  // primary entity's own state. Everything attributed to that entity — the
+  // average's clickability, its colour, the spread attribute — must follow it
+  // exactly; a looser "the entity exists" check would keep the average clickable
+  // and colour it from a stale entity while showing the room-based fallback.
+  const averageSourceKind = context.averageSource.kind === "primary" ? "sensor" : "calculated";
+  const averageEntity = averageSourceKind === "sensor" ? config.entity : "";
+
+  const range = buildRangeModel({ states, config, policy, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
+  const trend = buildTrendContext({ states, config, metricKind, unit: context.unit, toDisplayDelta });
+
+  const counts = computeComfortCounts(roomsByValue, comfort, hasRoomsView);
+
+  let spreadAttribute = averageSourceKind === "sensor" ? readNumericAttribute(states, config.entity, "spread") : null;
+  if (spreadAttribute !== null && context.averageSource.unitProfile && METRIC_DEFINITIONS[metricKind]) {
+    spreadAttribute = toDisplayDelta(
+      convertMetricValue(spreadAttribute, {
+        metricKind,
+        quantityKind: "delta",
+        fromProfileKey: context.averageSource.unitProfile,
+        toProfileKey: METRIC_DEFINITIONS[metricKind].canonicalProfileKey,
+      })
+    );
+  }
+  const spread = computeSpread({ attributeValue: spreadAttribute, hasRoomsView, coolest, warmest });
+
+  // One classification colour per participating room, keyed by the room's original
+  // YAML index. Every consumer that tints something per room — the chips, the
+  // `markers:all` marker set, the extreme-value cards — reads the SAME entry, so a
+  // room can never appear in two colours within one render. Keyed rather than
+  // attached to the room objects themselves: the room model is a shared, stable
+  // shape that several consumers compare by identity.
+  const roomColors = {};
+  for (const room of roomsByValue) {
+    roomColors[room.index] = classificationColorOf(
+      policy,
+      metricKind,
+      displayProfile,
+      room.value,
+      states?.[room.entity]?.attributes ?? null
+    );
+  }
+
+  const averageClassification = classifyValue(
+    policy,
+    metricKind,
+    displayProfile,
+    average,
+    averageEntity ? states?.[averageEntity]?.attributes ?? null : null
+  );
+
+  const missingRooms = (config.rooms || []).length - roomsByValue.length;
+
+  return {
+    empty: false,
+    metric: {
+      kind: metricKind,
+      canonicalUnit: context.canonicalUnit,
+      unit: context.unit,
+      displayUnitProfile: displayProfile,
+    },
+    context: {
+      diagnostics: context.diagnostics,
+      consistent: context.consistent,
+      excludedRoomIds: context.excludedRoomIds,
+      sourceKind: context.sourceKind,
+      sourceEntity: context.sourceEntity,
+    },
+    average: {
+      value: average,
+      source: averageSourceKind,
+      entity: averageEntity,
+    },
+    rooms: {
+      declared: declaredRooms,
+      byValue: roomsByValue,
+      count: roomsByValue.length,
+      hasRoomsView,
+      missing: missingRooms,
+    },
+    roomColors,
+    extremes: hasRoomsView
+      ? {
+          coolest,
+          warmest,
+          coolestColor: roomColors[coolest.index],
+          warmestColor: roomColors[warmest.index],
+        }
+      : null,
+    comfort: { min: comfort.min, max: comfort.max, ...counts },
+    optimal: { min: optimal.min, max: optimal.max },
+    // The axis POLICY, not an axis: which bounds a profile prefers, which step it
+    // rounds to and whether it anchors. Turning that into a concrete axis needs the
+    // values it has to cover, which is a rendering decision (see
+    // presentation/view-model/scale-view-model.js).
+    scaleConfig,
+    spread,
+    range,
+    trend,
+    classification: {
+      average: averageClassification,
+      profileIcon: resolveProfileIcon(policy, metricKind, displayProfile, average),
+    },
+    subtitle: buildSubtitleModel({
+      avg: average,
+      comfort,
+      hasRoomsView,
+      counts,
+      roomCount: roomsByValue.length,
+      coolest,
+      warmest,
+      missingRooms,
+    }),
+  };
+}
+
+// Presentation metadata per metric kind.
+//
+// Everything here is about how a reading is PRESENTED — which title to translate,
+// which icon to show, how many decimals to print, which noun to use for the
+// coldest/warmest-equivalent room, how many chips fit in a row. None of it is a
+// measurement fact, which is why it lives in the presentation layer and not next
+// to the metric definitions.
+//
+// unitFallback is the one exception in the other direction: the canonical unit IS
+// a measurement fact, so it is read from the metric definition rather than spelled
+// out a second time. It is only used when an entity reports no unit of its own.
+//
+// Comfort, optimal and base-scale bands deliberately do NOT appear here. They are
+// semantic decisions and belong to the classification profiles.
+
+
+const METRIC_META = {
+  temperature: {
+    titleKey: "title.temperature",
+    icon: "mdi:thermometer",
+    emptyIcon: "mdi:thermometer-off",
+    unitFallback: METRIC_DEFINITIONS.temperature.canonicalUnit,
+    decimals: 1,
+    lowRoomKey: "card.coldestRoom",
+    highRoomKey: "card.warmestRoom",
+    aboveAdjectiveKey: "adjective.warm",
+    belowAdjectiveKey: "adjective.cool",
+    autoRoomColumns: 7,
+  },
+  humidity: {
+    titleKey: "title.humidity",
+    icon: "mdi:water-percent",
+    emptyIcon: "mdi:water-off",
+    unitFallback: METRIC_DEFINITIONS.humidity.canonicalUnit,
+    decimals: 1,
+    lowRoomKey: "card.driestRoom",
+    highRoomKey: "card.mostHumidRoom",
+    aboveAdjectiveKey: "adjective.humid",
+    belowAdjectiveKey: "adjective.dry",
+    autoRoomColumns: 7,
+  },
+  co2: {
+    titleKey: "title.co2",
+    icon: "mdi:molecule-co2",
+    emptyIcon: "mdi:molecule-co2",
+    unitFallback: METRIC_DEFINITIONS.co2.canonicalUnit,
+    decimals: 0,
+    lowRoomKey: "card.lowestRoom",
+    highRoomKey: "card.highestRoom",
+    aboveAdjectiveKey: "adjective.elevated",
+    belowAdjectiveKey: "adjective.low",
+    autoRoomColumns: 5,
+  },
+  pm25: {
+    titleKey: "title.pm25",
+    icon: "mdi:molecule",
+    emptyIcon: "mdi:molecule",
+    unitFallback: METRIC_DEFINITIONS.pm25.canonicalUnit,
+    decimals: 1,
+    lowRoomKey: "card.lowestRoom",
+    highRoomKey: "card.highestRoom",
+    aboveAdjectiveKey: "adjective.elevated",
+    belowAdjectiveKey: "adjective.low",
+    autoRoomColumns: 5,
+  },
+};
+
+// An unknown or missing metric kind resolves to temperature, so a card in the
+// mixed-kind state still has a sensible title and icon instead of blanks.
+function metricMetaFor(metricKind) {
+  return METRIC_META[metricKind] || METRIC_META.temperature;
+}
+
+// Max chips per row in fully automatic grid mode. Kept conservative enough that a
+// chip's number plus unit never has to shrink to fit.
+function autoRoomColumnsFor(metricKind) {
+  return metricMetaFor(metricKind).autoRoomColumns || 7;
+}
+
+// The noun for the coldest/warmest-equivalent room. "cold"/"warm" are the two
+// structural roles; the wording itself is metric-specific ("driest room" for
+// humidity, "lowest" for co2 and pm25), which is why the caller passes a role and
+// not a translation key.
+function extremeRoomLabel(role, metricKind, texts) {
+  const meta = metricMetaFor(metricKind);
+  return texts.t(role === "cold" ? meta.lowRoomKey : meta.highRoomKey);
+}
+
+// How the room chips are labelled, ordered and laid out.
+//
+// All three are presentation decisions and none of them may reach the
+// calculations: the grid cap only limits how many chips are DRAWN, and room_sort
+// only reorders those chips. Average, extrema, spread, comfort counting and the
+// subtitle always use every valid room.
+
+
+// The alphas a chip's own custom properties are derived at. A chip outside the
+// comfort band gets a tinted background and a coloured border; one inside keeps the
+// theme's neutral chip surface.
+const CHIP_MARK_ALPHA = 0.18;
+const CHIP_OUT_BG_ALPHA = 0.10;
+const CHIP_OUT_BORDER_ALPHA = 0.36;
+
+// room_label picks which of the configured short/name pair a chip shows. "auto"
+// and "short" both resolve to the short code; "name" shows the full name and
+// relies on the same CSS ellipsis every other label does.
+//
+// shortGuaranteed marks the one case where the label provably never has to shrink
+// or ellipsize: exactly two Unicode uppercase letters. It is a check against the
+// RESOLVED label, independent of whether `short` was configured or derived.
+function decorateRoomForDisplay(room, roomLabelMode) {
+  const displayLabel = roomLabelMode === "name" ? room.name : room.short;
+  return { ...room, displayLabel, shortGuaranteed: isTwoUpperLetterLabel(displayLabel) };
+}
+
+// The rendered chip order. Never on the calculation path.
+function resolveRoomDisplayOrder(list, sortMode, language) {
+  const sorted = [...list];
+  if (sortMode === "name") return sorted.sort((a, b) => a.name.localeCompare(b.name, language));
+  if (sortMode === "value_desc") return sorted.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, language));
+  if (sortMode === "configured") return sorted.sort((a, b) => a.index - b.index);
+  return sorted.sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, language)); // value_asc (default)
+}
+
+// Splits `count` chips into row descriptors {itemCount, columnCount}.
+//
+// columnCount is what drives grid-template-columns for that row. It equals
+// itemCount unless `columns` is explicitly fixed, in which case every row —
+// including a shorter last one — keeps the same column count, so chip widths stay
+// consistent instead of a short last row stretching its chips wider.
+//
+// `capacity` is how many chips are actually shown. It is only below `count` when
+// BOTH columns and rows are explicitly configured and their product is smaller: an
+// explicit override wins over showing every configured room.
+function roomGridRows(count, columns, rows, autoMaxColumns = 7) {
+  if (count <= 0) return { rowSizes: [], capacity: 0 };
+
+  // Both fixed: a literal columns x rows grid, filled row-major; excess rooms
+  // beyond capacity are dropped rather than growing the grid. rowCount is capped to
+  // what `count` can actually fill, so an over-large row count never produces
+  // empty trailing rows.
+  if (columns && rows) {
+    const capacity = columns * rows;
+    const shown = Math.min(count, capacity);
+    const rowCount = Math.min(rows, Math.ceil(shown / columns));
+    const rowSizes = [];
+    let remaining = shown;
+    for (let i = 0; i < rowCount; i++) {
+      const itemCount = Math.min(columns, remaining);
+      rowSizes.push({ itemCount, columnCount: columns });
+      remaining -= itemCount;
+    }
+    return { rowSizes, capacity: shown };
+  }
+
+  // Only columns fixed: rows grow automatically, no capping.
+  if (columns) {
+    const rowCount = Math.ceil(count / columns);
+    const rowSizes = [];
+    let remaining = count;
+    for (let i = 0; i < rowCount; i++) {
+      const itemCount = Math.min(columns, remaining);
+      rowSizes.push({ itemCount, columnCount: columns });
+      remaining -= itemCount;
+    }
+    return { rowSizes, capacity: count };
+  }
+
+  // Only rows fixed, or fully automatic (rows derived from the metric-specific
+  // autoMaxColumns): distribute as evenly as possible, extra items going to the
+  // earliest rows — 9 rooms over 2 rows becomes [5, 4], 13 over 2 becomes [7, 6].
+  // The row count is capped to `count` so an over-large explicit row count never
+  // produces empty rows.
+  const rowCount = Math.min(rows || Math.max(1, Math.ceil(count / autoMaxColumns)), count);
+  const base = Math.floor(count / rowCount);
+  const remainder = count % rowCount;
+  const rowSizes = [];
+  for (let i = 0; i < rowCount; i++) {
+    const itemCount = base + (i < remainder ? 1 : 0);
+    rowSizes.push({ itemCount, columnCount: itemCount });
+  }
+  return { rowSizes, capacity: count };
+}
+
+// The complete chip layout: which rooms are visible, in which order, in how many
+// rows.
+//
+// The cap is applied in CONFIG-DECLARATION order, before the display sort. Capping
+// after a value sort would make the visible chip set drift through the day — a
+// room silently vanishing once it is no longer among the N coldest — which is
+// confusing. Declaration order keeps it stable and predictable.
+function buildRoomLayout({ declaredRooms, config, metricKind, language }) {
+  const grid = roomGridRows(declaredRooms.length, config.room_columns, config.room_rows, autoRoomColumnsFor(metricKind));
+  const capped = grid.capacity < declaredRooms.length ? declaredRooms.slice(0, grid.capacity) : declaredRooms;
+  return {
+    visible: resolveRoomDisplayOrder(capped, config.room_sort, language),
+    rowSizes: grid.rowSizes,
+  };
+}
+
+// One chip, fully resolved: every string, every colour and every custom property
+// the render path and the patch path both need. `room` is carried through by
+// reference so a consumer that already holds a room object can match it by
+// identity.
+//
+// The mark is a direction glyph, not a translation: it means the same thing in
+// every language.
+function buildRoomChipModel({ room, color, comfort, unit, texts }) {
+  const out = room.value < comfort.min || room.value > comfort.max;
+  return {
+    room,
+    entity: room.entity,
+    index: room.index,
+    displayLabel: room.displayLabel,
+    shortGuaranteed: room.shortGuaranteed,
+    color,
+    mark: room.value > comfort.max ? "↑" : room.value < comfort.min ? "↓" : "•",
+    out,
+    markBackground: rgba(color, CHIP_MARK_ALPHA),
+    background: out ? rgba(color, CHIP_OUT_BG_ALPHA) : "var(--rtc-chip-bg)",
+    border: out ? rgba(color, CHIP_OUT_BORDER_ALPHA) : "var(--rtc-hairline)",
+    valueText: texts.fmt(room.value),
+    unitText: unit,
+    title: `${room.name}: ${texts.fmtWithUnit(room.value)}`,
+    ariaLabel: texts.t("room.ariaOpen", { name: room.name }),
+  };
+}
+
+// The visible chips grouped into their rows, so the renderer walks a structure
+// instead of slicing with a running cursor it has to keep in step with rowSizes.
+function buildRoomChipRows(chips, rowSizes) {
+  let cursor = 0;
+  return rowSizes.map(({ itemCount, columnCount }) => {
+    const rowChips = chips.slice(cursor, cursor + itemCount);
+    cursor += itemCount;
+    return { columnCount, chips: rowChips };
+  });
+}
+
+// What the carousel shows: the view DEFINITIONS and the resolution of a
+// configuration against them.
+//
+// A definition here is purely semantic — a key, when the view CAN be shown, whether
+// it is on by default, and which options it accepts. It carries no render or update
+// callback. Those are wired separately by the composition root, which is what lets
+// this file be reasoned about (and tested) without any rendering code, and what
+// will let the eventual views layer consume the same definitions.
+//
+// Declaration order is the only thing that decides on-screen left-to-right order.
+// The resolved list is also the auto-slide order, so adding a view means adding an
+// entry in the position it should appear — nothing else.
+
+
+const VIEW_DEFINITIONS = [
+  {
+    key: "range",
+    // Available whenever the daily-range entity reports a usable width.
+    condition: (availability) => availability.hasRange,
+    // "auto" mirrors availability for every view except range_scale.
+    defaultEnabled: (availability) => availability.hasRange,
+    // show_time toggles whether the daily min/max cards show their timestamp; the
+    // value itself is unaffected either way.
+    optionsSchema: { show_time: boolOption(true) },
+  },
+  {
+    key: "range_scale",
+    // Pure availability: whether an available range_scale view is actually wanted
+    // is a configuration decision, not a data one.
+    condition: (availability) => availability.rangeScaleAvailable,
+    // The one view that is off unless explicitly listed. It duplicates the main
+    // scale's shape with different markers, so showing it unasked would be noise.
+    defaultEnabled: () => false,
+    // The band toggles suppress both the coloured band and its descriptive label,
+    // independently per view. footer has three states: "detailed" (with the min/max
+    // timestamps), "compact" (the same sentence without them), or false for no
+    // footer at all in THIS view — ANDed with the global hide_footer.
+    optionsSchema: {
+      show_comfort_band: boolOption(true),
+      show_optimal_band: boolOption(true),
+      footer: enumOption("detailed", ["compact", "detailed", false]),
+    },
+  },
+  {
+    key: "scale",
+    condition: () => true,
+    // Unconditionally true only because condition() is: there is no special
+    // protection against a views: list that omits scale, and omitting it genuinely
+    // omits it.
+    defaultEnabled: () => true,
+    // The band toggles are purely visual — the comfort/optimal bounds, the
+    // classification, the footer text and the marker colours are all computed
+    // independently and never read them. markers:"extremes" is the established
+    // coldest+warmest+average set; "average" leaves only the average; "all" adds
+    // every valid room.
+    optionsSchema: {
+      show_comfort_band: boolOption(true),
+      show_optimal_band: boolOption(true),
+      footer: boolOption(true),
+      markers: enumOption("extremes", ["average", "extremes", "all"]),
+    },
+  },
+  {
+    key: "extremes",
+    condition: (availability) => availability.hasRoomsView,
+    defaultEnabled: (availability) => availability.hasRoomsView,
+    // show_value toggles the numeric value on the coldest/warmest cards; the
+    // label, room name and colour stay regardless.
+    optionsSchema: { show_value: boolOption(true) },
+  },
+];
+
+function optionSchemaForView(type) {
+  return VIEW_DEFINITIONS.find((definition) => definition.key === type)?.optionsSchema;
+}
+
+// Resolves the final ordered list of active views.
+//
+// views: is the single public view-composition surface and is fully AUTHORITATIVE
+// the moment it is present — even as an explicit empty list. Only listed types can
+// appear, in exactly the listed order; a type the list does not mention is simply
+// never shown. There is no "append whatever is missing" fallback.
+//
+// Without views: configured (the null sentinel), the request list defaults to one
+// "auto" entry per definition, in declaration order.
+//
+// Each request stays separated along three axes, because the null-view state needs
+// to tell them apart: `requested` (did the configuration ask for it), `available`
+// (could it show), `active` (both). `keys` is the ordered list of active ones.
+function resolveActiveViews(definitions, availability, config) {
+  const requests = Array.isArray(config?.views)
+    ? config.views
+    : definitions.map((definition) => ({ type: definition.key, enabled: "auto", options: {} }));
+  const diagnostics = [];
+  const seen = new Set();
+  const entries = [];
+  for (const request of requests) {
+    const definition = definitions.find((candidate) => candidate.key === request.type);
+    if (!definition) {
+      diagnostics.push(`views: unknown view type "${request.type}"`);
+      continue;
+    }
+    if (seen.has(request.type)) {
+      diagnostics.push(`views: duplicate view type "${request.type}"`);
+      continue;
+    }
+    seen.add(request.type);
+    const available = definition.condition(availability);
+    const requested = request.enabled === "auto" ? definition.defaultEnabled(availability) : request.enabled === true;
+    entries.push({ type: request.type, requested, available, active: requested && available, options: request.options });
+  }
+
+  return { keys: entries.filter((entry) => entry.active).map((entry) => entry.type), entries, diagnostics };
+}
+
+// One view's fully resolved options: every schema key gets either the
+// already-validated configured value or its default. Callers never need to know
+// which keys exist, so a future option flows through here with no changes.
+function resolveViewOptions(definition, providedOptions) {
+  const schema = definition?.optionsSchema || {};
+  const resolved = {};
+  for (const key of Object.keys(schema)) {
+    const provided = providedOptions ? providedOptions[key] : undefined;
+    resolved[key] = provided === undefined ? schema[key].default : provided;
+  }
+  return resolved;
+}
+
+// The complete view state for one render.
+//
+// The two null-view states are deliberately different: a configuration that
+// genuinely asks for nothing collapses the view area entirely, while a view that
+// WAS requested but is systemically unavailable shows a hint instead — so the user
+// can tell "nothing to show by design" from "something is misconfigured".
+function buildViewState({ availability, config }) {
+  const { keys, entries } = resolveActiveViews(VIEW_DEFINITIONS, availability, config);
+
+  // Resolved for every definition, not just the active ones: it is cheap, and a
+  // consumer checking an inactive view's would-be options needs no special case.
+  const options = {};
+  for (const definition of VIEW_DEFINITIONS) {
+    const entry = entries.find((candidate) => candidate.type === definition.key);
+    options[definition.key] = resolveViewOptions(definition, entry?.options);
+  }
+
+  const anyRequestedButUnavailable = entries.some((entry) => entry.requested && !entry.available);
+  return {
+    keys,
+    entries,
+    options,
+    collapsed: keys.length === 0 && !anyRequestedButUnavailable,
+    hasRangeScale: keys.includes("range_scale"),
+  };
+}
+
+// A scale bar, from axis to labels.
+//
+// Everything on a scale bar is presentation: the axis bounds are chosen so the
+// rendered bar covers the values it has to show, the band rectangles are
+// percentages of that bar's width, the marker positions are percentages of the
+// same, and the edge labels are formatted and unit-bearing. None of it is a fact
+// about the measurement — a card showing the same reading on a narrower axis is
+// showing the same reading.
+//
+// What the domain contributes is the axis POLICY (a profile's preferred bounds,
+// step and anchoring) and the numbers to place on it. This module turns that into
+// geometry.
+//
+// Both scale-shaped views call buildScaleAxis() with different bounds and markers,
+// which is what structurally guarantees identical geometry for identical input.
+
+
+// How close two markers may sit before they are nudged apart, and by how much.
+// A pixel nudge cannot exist in the domain: it is a statement about a rendered
+// marker's width, not about the values behind it.
+const MARKER_OVERLAP_PCT = 1.6;
+const MARKER_NUDGE_PX = 4;
+
+function buildScaleAxis({ scaleConfig, displayUnitProfile, comfort, optimal, low, high, markers, formatBoundary }) {
+  const axis = dynamicScale(low, high, scaleConfig, displayUnitProfile?.dynamicDisplaySteps);
+  return {
+    ...scaleGeometry(comfort.min, comfort.max, optimal.min, optimal.max, axis.min, axis.max),
+    displayStep: axis.step,
+    markerPositions: markerPositions(markers, axis.min, axis.max),
+    boundaryLabels: {
+      min: formatBoundary(axis.min),
+      max: formatBoundary(axis.max),
+    },
+  };
+}
+
+// Two markers closer together than MARKER_OVERLAP_PCT would visually merge, so
+// they are pushed apart symmetrically. Returns the two pixel offsets, never a
+// changed percentage: the percentages stay value-derived, the nudge is purely
+// optical.
+function resolveMarkerNudge(firstPosition, secondPosition) {
+  const overlapping = Math.abs(secondPosition - firstPosition) < MARKER_OVERLAP_PCT;
+  return { first: overlapping ? -MARKER_NUDGE_PX : 0, second: overlapping ? MARKER_NUDGE_PX : 0 };
+}
+
+// A classification turned into the tone the card actually paints with.
+//
+// This is exactly where a SEMANTIC CLASSIFICATION VALUE becomes a CSS-ready one.
+// The classification arriving here carries the hex colour its tier or the entity's
+// value_color attribute declared — a fact about the classification. What comes out
+// carries rgba() derivations for the soft background, the border and the band,
+// which are facts about how the card looks. The domain never crosses that line.
+//
+// The label follows the same rule: a built-in tier carries a translation key, a
+// custom profile carries the verbatim level the user wrote, and an entity-provided
+// classification carries the integration's own wording. Only the first is
+// translated.
+
+
+// The four alphas the tone is derived at. Named because each one appears in both a
+// render path and a patch path, and a silent drift between the two would be a
+// visual bug no test shape would catch.
+const TONE_SOFT_ALPHA = 0.20;
+const TONE_BORDER_ALPHA = 0.38;
+const TONE_BAND_ALPHA = 0.20;
+
+function toneLabel(classification, texts) {
+  return classification.level || texts.t(classification.levelKey);
+}
+
+// The purely numeric part of a classification, with its level translated. Kept
+// separate from buildTone() because the physical-validity and fallback paths need
+// the tier without an icon or a soft colour.
+function numericTone(classification, texts) {
+  return {
+    level: toneLabel(classification, texts),
+    color: classification.color,
+    score: classification.score,
+    zone: classification.zone,
+  };
+}
+
+function buildTone({ classification, icon, texts }) {
+  return {
+    label: toneLabel(classification, texts),
+    color: classification.color,
+    score: classification.score,
+    zone: classification.zone,
+    source: classification.source,
+    profileId: classification.profileId,
+    icon,
+    soft: rgba(classification.color, TONE_SOFT_ALPHA),
+  };
+}
+
+// The card root's own custom properties. One string, built once per render and
+// reused by the patch path, so the two can never disagree.
+function toneStyleDeclaration(tone) {
+  return `--tone-color:${tone.color};--tone-soft:${tone.soft};--tone-border:${rgba(tone.color, TONE_BORDER_ALPHA)};--tone-band:${rgba(tone.color, TONE_BAND_ALPHA)};`;
+}
+
+// One marker on a scale bar.
+//
+// A marker is a position, a colour, its own drop shadow and a tooltip. The shadow
+// is an rgba() derivation of the colour, which is exactly why markers are built
+// here and not in the domain: the position is a percentage of a rendered bar and
+// the shadow is a CSS value, neither of which is a fact about the reading.
+//
+// shiftPx exists only for the two extrema markers, which are nudged apart when they
+// would otherwise visually merge (see resolveMarkerNudge()). It is always 0 for
+// every other marker, so the render and patch paths need no special case.
+
+
+// The two shadow alphas. Room markers are deliberately fainter: with `markers:all`
+// there can be a dozen of them, and the extrema plus the average stay the ones the
+// eye is drawn to.
+const MARKER_SHADOW_ALPHA = 0.28;
+const ROOM_MARKER_SHADOW_ALPHA = 0.22;
+
+function buildMarker({ position, color, title, shiftPx = 0, shadowAlpha = MARKER_SHADOW_ALPHA }) {
+  return {
+    position,
+    shiftPx,
+    color,
+    shadow: rgba(color, shadowAlpha),
+    title,
+  };
+}
+
+function buildRoomMarker({ room, position, color, title }) {
+  return {
+    ...buildMarker({ position, color, title, shadowAlpha: ROOM_MARKER_SHADOW_ALPHA }),
+    index: room.index,
+    entity: room.entity,
+    name: room.name,
+    value: room.value,
+  };
+}
+
+// The card shape both the daily-range view and the extreme-value view use.
+//
+// One model, two callers, so the two views can never drift apart visually. Every
+// string and every custom property is resolved here: the render path interpolates
+// them into markup, the patch path assigns the same values to an existing node, and
+// neither decides anything of its own.
+//
+// The two visibility flags are independent and both default to shown. A hidden
+// field is omitted from the tooltip and the ARIA label too, not just from the
+// visible text — otherwise it would still be exposed on hover.
+
+
+// The four alphas a card's own custom properties are derived at.
+const CARD_BG_ALPHA = 0.09;
+const CARD_BORDER_ALPHA = 0.36;
+const CARD_LINE_SHADOW_ALPHA = 0.24;
+
+// The placeholder for a value or a name that is configured but currently absent.
+// The card stays clickable — a missing reading is not a broken card.
+const MISSING = "–";
+
+// The neutral colour a card falls back to when nothing classified it. A CSS
+// variable rather than a hex, so it follows the dashboard theme.
+const NEUTRAL_COLOR = "var(--rtc-muted)";
+
+function buildMetricCardModel({
+  label,
+  name,
+  value,
+  entity,
+  color,
+  roomIndex,
+  unit,
+  texts,
+  showName = true,
+  showValue = true,
+}) {
+  const cardColor = color || NEUTRAL_COLOR;
+  const hasValue = typeof value === "number" && Number.isFinite(value);
+  const nameText = showName ? name || MISSING : "";
+  const numText = showValue ? (hasValue ? texts.fmt(value) : MISSING) : "";
+  const unitText = showValue && hasValue ? ` ${unit}` : "";
+  const titleValueText = showValue ? (hasValue ? texts.fmtWithUnit(value) : MISSING) : "";
+
+  return {
+    label,
+    nameText,
+    numText,
+    unitText,
+    // undefined/null both mean "not a real room", so the action layer falls back to
+    // the card's default actions instead of a nonexistent room index.
+    roomIndex: roomIndex ?? null,
+    entity: entity ?? "",
+    color: cardColor,
+    background: rgba(cardColor, CARD_BG_ALPHA),
+    border: rgba(cardColor, CARD_BORDER_ALPHA),
+    lineShadow: rgba(cardColor, CARD_LINE_SHADOW_ALPHA),
+    title: [label, [nameText, titleValueText].filter(Boolean).join(" ")].filter(Boolean).join(": "),
+    ariaLabel: texts.t("card.ariaOpen", { label, name: nameText }),
+  };
+}
+
+// The daily-range view's content model: two cards for today's minimum and maximum.
+//
+// Both cards read the same entity — minimum and maximum are attributes of the one
+// configured range entity, not two separate sensors — so neither card carries a room
+// index and the action layer falls back to the card's default actions.
+//
+// show_time drives the cards' name slot, which is where their timestamp goes. The
+// value itself is unaffected either way.
+
+
+function buildRangeViewContent(shared, options) {
+  const { texts, range, unit, rangeEntity } = shared;
+  const showName = options.show_time;
+  const card = (labelKey, name, value, color) =>
+    buildMetricCardModel({ label: texts.t(labelKey), name, value, entity: rangeEntity, color, unit, texts, showName });
+
+  return {
+    key: "range",
+    // Order is structural, and the patch path relies on it: minimum first, maximum
+    // second.
+    cards: [
+      card("card.dailyMinimum", range.minTime, range.min, range.minColor),
+      card("card.dailyMaximum", range.maxTime, range.max, range.maxColor),
+    ],
+  };
+}
+
+// What the two scale-shaped views have in common.
+//
+// The comfort band, the optimal band, the optimal label and the two edge labels are
+// identical between the main scale and the daily-range scale — same markup, same
+// geometry contract, different bounds. Building them once here is what structurally
+// guarantees the two views cannot drift apart.
+//
+// The optimal label is resolved as a PAIR of texts, not one. A collision-prone label
+// is never permanently shortened in the translations; instead both a canonical long
+// form and a short fallback exist, and the layout pass picks between them at measure
+// time against the actual rendered width. Choosing here would mean guessing from
+// character counts.
+
+function buildScaleBarContent({ geometry, texts, showComfortBand, showOptimalBand, footerText }) {
+  const range = `${texts.fmt(geometry.optimalMin, 0)}–${texts.fmtWithUnit(geometry.optimalMax, 0, false)}`;
+  return {
+    geometry,
+    showComfortBand,
+    showOptimalBand,
+    optimalLabel: showOptimalBand
+      ? {
+          long: texts.t("scale.optimalLabel", { range }),
+          short: texts.t("scale.optimalLabelShort", { range }),
+          center: geometry.optimalCenter,
+          visible: geometry.optimalVisible,
+        }
+      : null,
+    boundaryLabels: geometry.boundaryLabels,
+    footerText,
+  };
+}
+
+// The daily-range scale view's content model.
+//
+// Same bar as the main scale view, different meaning: the markers show today's
+// minimum and maximum instead of the coldest and warmest room, and the top row
+// carries three labels above their own markers instead of a single comfort pill.
+//
+// The three top labels overlap easily, so this model carries what the layout pass
+// needs to declutter them without formatting anything itself:
+//
+//   current  a fixed pivot, never repositioned — it is the primary live value and
+//            has no visual identity distinct from the marker above it, so a drifted
+//            current label would read as belonging to whichever marker it ended up
+//            nearest. Long and short form, chosen at measure time.
+//   min/max  historical context values that can absorb a shift. Each carries its
+//            numeric value for ordering and a sortKey for tie detection.
+//
+// sortKey is compared for EQUALITY only and never parsed back into a number: a
+// grouped display value ("1,200") is not valid numeric input, and an earlier version
+// that re-parsed it compared as NaN for every value above 999. Actual ordering uses
+// the raw numeric value.
+
+
+// The placeholder for a missing timestamp. minimum_zeitpunkt/maximum_zeitpunkt can
+// be absent even when the numeric attributes are present.
+const NO_TIME = "–";
+
+// Today's span (the range entity's own state, never max - min), plus the daily
+// extremes and their timestamps. "compact" is the same sentence with the two
+// timestamp parentheticals dropped — a separate translation per language rather than
+// a string truncated here, which would have to guess each language's punctuation.
+function buildFooterText$1(shared, mode) {
+  const { texts, range } = shared;
+  return texts.t(mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer", {
+    span: texts.fmtWithUnit(range.state),
+    min: texts.fmtWithUnit(range.min),
+    minTime: range.minTime || NO_TIME,
+    max: texts.fmtWithUnit(range.max),
+    maxTime: range.maxTime || NO_TIME,
+  });
+}
+
+function buildRangeScaleViewContent(shared, options, axis) {
+  const { texts, average, range } = shared;
+  const positions = axis.markerPositions;
+
+  return {
+    key: "range_scale",
+    ...buildScaleBarContent({
+      geometry: axis,
+      texts,
+      showComfortBand: options.show_comfort_band,
+      showOptimalBand: options.show_optimal_band,
+      // Deliberately NOT tied to hasRoomsView, unlike the main scale's footer: this
+      // view must show its daily span with zero rooms configured.
+      footerText: options.footer === false || shared.hideFooter ? null : buildFooterText$1(shared, options.footer),
+    }),
+    topLabels: {
+      current: {
+        long: texts.t("rangeScale.currentLabel"),
+        short: texts.t("rangeScale.currentLabelShort"),
+        position: positions.current,
+        sortKey: texts.fmt(average.value),
+        value: average.value,
+      },
+      // Ordered min-before-max, which is also the tie-break order: semanticRank
+      // places min left of current and max right of it when their displayed values
+      // are indistinguishable.
+      sides: [
+        { role: "min", text: texts.t("rangeScale.minLabel"), position: positions.min, value: range.min, sortKey: texts.fmt(range.min), semanticRank: 0 },
+        { role: "max", text: texts.t("rangeScale.maxLabel"), position: positions.max, value: range.max, sortKey: texts.fmt(range.max), semanticRank: 2 },
+      ],
+    },
+    markers: {
+      // Reuses the cold/warm marker shapes for min/max: identical CSS, different
+      // meaning in this view.
+      min: buildMarker({
+        position: positions.min,
+        color: range.minColor,
+        title: `${texts.t("card.dailyMinimum")}: ${range.minTime || NO_TIME} ${texts.fmtWithUnit(range.min)}`,
+      }),
+      max: buildMarker({
+        position: positions.max,
+        color: range.maxColor,
+        title: `${texts.t("card.dailyMaximum")}: ${range.maxTime || NO_TIME} ${texts.fmtWithUnit(range.max)}`,
+      }),
+      average: buildMarker({
+        position: positions.current,
+        color: average.color,
+        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: texts.t("rangeScale.currentLabel") }),
+      }),
+    },
+  };
+}
+
+// The main scale view's content model.
+//
+// A dynamic axis with a comfort band, an optimal band and one to N markers. The
+// marker set is an option: "average" leaves only the average, "extremes" is the
+// established coldest+warmest+average set, "all" adds every valid room.
+//
+// The band toggles are purely visual. The comfort and optimal bounds, the
+// classification, the footer text and the marker colours are all computed
+// independently and never read them, so switching a band off changes what is drawn
+// and nothing else.
+
+
+// The room-bound footer: how many rooms sit inside the comfort band, how far apart
+// the extremes are, and — only when a trend entity is configured and reporting — the
+// signed rate as an independently optional third segment.
+function buildFooterText(shared) {
+  const { texts, comfort, rooms, spread, trend } = shared;
+  const segments = [
+    texts.t("footer.comfort", { count: comfort.inComfort, total: rooms.count }),
+    texts.t("footer.spread", { value: texts.fmtWithUnit(spread) }),
+  ];
+  if (trend.model) segments.push(texts.t("footer.trend", { value: trend.text }));
+  return segments.join(" · ");
+}
+
+function buildScaleViewContent(shared, options) {
+  const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind, hideFooter } = shared;
+  const markersMode = options.markers;
+  // With every room marked, the average needs extra visual weight to stay findable
+  // among them.
+  const emphasizeAverage = markersMode === "all" && Boolean(extremes);
+
+  return {
+    key: "scale",
+    ...buildScaleBarContent({
+      geometry: scale,
+      texts,
+      showComfortBand: options.show_comfort_band,
+      showOptimalBand: options.show_optimal_band,
+      // Deliberately tied to hasRoomsView: two of the three segments are statements
+      // about rooms. The global hide_footer and this view's own footer option are
+      // ANDed with it.
+      footerText: rooms.hasRoomsView && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
+    }),
+    comfortLabel: options.show_comfort_band
+      ? {
+          text: texts.t("scale.comfortLabel", {
+            range: `${texts.fmt(comfort.min, 0)}–${texts.fmtWithUnit(comfort.max, 0, false)}`,
+          }),
+          center: scale.comfortCenter,
+          visible: scale.comfortVisible,
+        }
+      : null,
+    emphasizeAverage,
+    markers: {
+      // Gated on the extremes object itself, never on hasRoomsView: one source of
+      // truth for "there are two rooms to compare", and no branch that could read a
+      // position off null.
+      extremes:
+        extremes && markersMode === "extremes"
+          ? {
+              cold: buildMarker({
+                position: extremes.coolestPosition,
+                shiftPx: extremes.coolestShift,
+                color: extremes.coolestColor,
+                title: `${extremeRoomLabel("cold", metricKind, texts)}: ${extremes.coolest.name} ${texts.fmtWithUnit(extremes.coolest.value)}`,
+              }),
+              warm: buildMarker({
+                position: extremes.warmestPosition,
+                shiftPx: extremes.warmestShift,
+                color: extremes.warmestColor,
+                title: `${extremeRoomLabel("warm", metricKind, texts)}: ${extremes.warmest.name} ${texts.fmtWithUnit(extremes.warmest.value)}`,
+              }),
+            }
+          : null,
+      rooms: markersMode === "all" ? roomMarkers : [],
+      average: buildMarker({
+        position: average.position,
+        color: average.color,
+        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: average.label }),
+      }),
+    },
+  };
+}
+
+// The extreme-value view's content model: two cards for the coldest and the warmest
+// room (or the driest and most humid, or the lowest and highest — the noun is
+// metric-specific).
+//
+// The two slots are role-keyed, not entity-keyed. When a different room becomes the
+// coldest, the SAME slot shows the new room — the slot is continuously "the coldest
+// room", the way a value display is continuously "the current reading" regardless of
+// which sensor briefly backs it. That is also what lets the patch path reuse the
+// node and keep focus.
+
+
+function buildExtremesViewContent(shared, options) {
+  const { texts, extremes, metricKind, roomColors, unit } = shared;
+  const showValue = options.show_value;
+  const card = (role, room) =>
+    buildMetricCardModel({
+      label: extremeRoomLabel(role, metricKind, texts),
+      name: room.name,
+      value: room.value,
+      entity: room.entity,
+      color: roomColors[room.index],
+      roomIndex: room.index,
+      unit,
+      texts,
+      showValue,
+    });
+
+  return {
+    key: "extremes",
+    // Order is structural, and the patch path relies on it: coldest first.
+    cards: [card("cold", extremes.coolest), card("warm", extremes.warmest)],
+  };
+}
+
+// Which view gets a content model, and in which order.
+//
+// The table is keyed by view key and composed by walking VIEW_DEFINITIONS, so
+// declaration order stays the ONE place on-screen order is decided. A definition
+// without a builder here, or a builder without a definition, fails at module load
+// (see assertContentBuildersMatchDefinitions() below) rather than silently producing
+// a view that renders nothing.
+//
+// Only ACTIVE views get a content model; every inactive one is null. That is not an
+// optimization detail, it is the contract: the daily-range scale is available
+// whenever the range entity reports a usable min/max pair, but it is off unless
+// explicitly listed, and building its axis, its markers and its three decluttered
+// labels for a view nobody asked for is work with no observable result. The axis
+// therefore arrives as a thunk that is only ever called from inside the range-scale
+// branch.
+
+
+const CONTENT_BUILDERS = {
+  range: (shared, options) => buildRangeViewContent(shared, options),
+  range_scale: (shared, options) => buildRangeScaleViewContent(shared, options, shared.buildRangeScaleAxis()),
+  scale: (shared, options) => buildScaleViewContent(shared, options),
+  extremes: (shared, options) => buildExtremesViewContent(shared, options),
+};
+
+// Runs once, at module load. A mismatch here is a wiring mistake that would
+// otherwise surface as an empty carousel slot at runtime.
+function assertContentBuildersMatchDefinitions() {
+  const definitionKeys = VIEW_DEFINITIONS.map((definition) => definition.key);
+  const duplicates = definitionKeys.filter((key, index) => definitionKeys.indexOf(key) !== index);
+  if (duplicates.length) {
+    throw new Error(`view content: duplicate view key(s) in VIEW_DEFINITIONS: ${duplicates.join(", ")}`);
+  }
+  const missing = definitionKeys.filter((key) => typeof CONTENT_BUILDERS[key] !== "function");
+  if (missing.length) {
+    throw new Error(`view content: no content builder for view(s): ${missing.join(", ")}`);
+  }
+  const orphaned = Object.keys(CONTENT_BUILDERS).filter((key) => !definitionKeys.includes(key));
+  if (orphaned.length) {
+    throw new Error(`view content: content builder without a definition for view(s): ${orphaned.join(", ")}`);
+  }
+}
+
+assertContentBuildersMatchDefinitions();
+
+// The declaration-ordered key list, exported so the rendering layer can compose its
+// own registry against the same single source of order.
+const VIEW_CONTENT_KEYS = VIEW_DEFINITIONS.map((definition) => definition.key);
+
+function buildViewContent({ shared, viewState }) {
+  const byKey = {};
+  for (const key of VIEW_CONTENT_KEYS) {
+    byKey[key] = viewState.keys.includes(key) ? CONTENT_BUILDERS[key](shared, viewState.options[key]) : null;
+  }
+  return byKey;
+}
+
+// The CardViewModel: the domain model projected into everything the renderers
+// need, and nothing they do not.
+//
+// This is where language, locale and CSS enter the pipeline. Below this line a
+// reading is numbers and semantic tokens; from here on it is titles, labels,
+// formatted values, percentages, pixel offsets and rgba() colours. Keeping that
+// boundary sharp is what lets the whole data path be tested once,
+// language-independently, instead of once per locale.
+//
+// The contract with the rendering layer is that a renderer NEVER translates,
+// formats, resolves a profile, classifies a value, recomputes a tone, reads a view
+// option or reaches into the configuration. Everything a renderer or a DOM patcher
+// interpolates is a finished value on this model. That is what makes the render path
+// a pure function of this object, and what makes the render path testable without a
+// hass object.
+//
+// `texts` is the only collaborator, and it is deliberately narrow — a translator, a
+// number formatter, a unit-aware formatter and a time formatter. It is not a service
+// locator: it cannot reach the card, the DOM or the configuration.
+
+
+function buildSubtitleText(subtitle, texts, metricKind) {
+  const meta = metricMetaFor(metricKind);
+  let text;
+  if (subtitle.kind === "aboveComfort") {
+    text = texts.t("subtitle.aboveComfort", {
+      diff: texts.fmtWithUnit(subtitle.diff),
+      count: subtitle.count,
+      total: subtitle.total,
+      adjective: texts.t(meta.aboveAdjectiveKey),
+    });
+  } else if (subtitle.kind === "aboveComfortNoRooms") {
+    text = texts.t("subtitle.aboveComfortNoRooms", { diff: texts.fmtWithUnit(subtitle.diff) });
+  } else if (subtitle.kind === "belowComfort") {
+    text = texts.t("subtitle.belowComfort", {
+      diff: texts.fmtWithUnit(subtitle.diff),
+      count: subtitle.count,
+      total: subtitle.total,
+      adjective: texts.t(meta.belowAdjectiveKey),
+    });
+  } else if (subtitle.kind === "belowComfortNoRooms") {
+    text = texts.t("subtitle.belowComfortNoRooms", { diff: texts.fmtWithUnit(subtitle.diff) });
+  } else if (subtitle.kind === "inComfortIssue") {
+    text = texts.t("subtitle.inComfortIssue", { name: subtitle.name });
+  } else if (subtitle.kind === "inComfortAllGood") {
+    text = texts.t("subtitle.inComfortAllGood");
+  } else {
+    text = texts.t("subtitle.inComfort");
+  }
+  // Appended rather than folded into the sentence above: it is an independent
+  // statement, and every language phrases it as its own clause.
+  if (subtitle.missingRooms > 0) {
+    text += texts.t("subtitle.missingRooms", { count: subtitle.missingRooms });
+  }
+  return text;
+}
+
+// The signed hourly rate, as displayed. -0 is normalized to 0 so a rate that rounds
+// to zero from below does not render as "-0.0". `trend` is the trend MODEL, which is
+// null whenever there is no usable rate — the empty string is the right answer then,
+// because the footer segment and the ARIA clause are both omitted.
+function buildTrendText(trend, texts) {
+  if (!trend) return "";
+  const value = Object.is(trend.value, -0) ? 0 : trend.value;
+  return `${value > 0 ? "+" : ""}${texts.fmt(value)} ${trend.unit}`;
+}
+
+function buildAverage({ domainModel, config, texts, tone, position, trendText }) {
+  const { value, entity, source } = domainModel.average;
+  const trend = domainModel.trend.model;
+  // A calculated average gets its own tooltip wording: it is not a reading of the
+  // configured entity, and saying so is the honest thing to show on hover.
+  const tooltip = texts.t(source === "sensor" ? "avg.tooltip" : "avg.tooltipCalculated", {
+    value: texts.fmtWithUnit(value),
+    label: config.avg_label || texts.t("avg.label"),
+  });
+  const ariaBase = entity ? texts.t("avg.ariaOpen") : tooltip;
+  const trendAria = trend
+    ? texts.t("trend.aria", { direction: texts.t(trend.directionTranslationKey), value: trendText })
+    : "";
+  return {
+    value,
+    valueText: texts.fmt(value),
+    unitText: domainModel.metric.unit,
+    label: config.avg_label || texts.t("avg.label"),
+    entity,
+    source,
+    color: tone.color,
+    position,
+    tooltip,
+    ariaLabel: trend ? `${ariaBase}. ${trendAria}` : ariaBase,
+    trendDirection: trend ? trend.direction : null,
+  };
+}
+
+// The empty state is its own small model: a title, one hint sentence and an icon.
+// The wording distinguishes "no rooms are configured" from "configured rooms report
+// nothing", because those need different fixes.
+function buildEmptyViewModel({ domainModel, config, texts, title, metricKind }) {
+  const hint = (config.rooms || []).length === 0
+    ? texts.t("empty.hintNoRooms")
+    : domainModel.missingRooms
+      ? texts.t("empty.hintMissingRooms", { count: domainModel.missingRooms })
+      : texts.t("empty.hintNoRoomData");
+  return {
+    empty: true,
+    metric: { kind: metricKind },
+    title,
+    missingRooms: domainModel.missingRooms,
+    configurationState: domainModel.configurationState,
+    emptyState: {
+      icon: metricMetaFor(metricKind).emptyIcon,
+      title,
+      subtitle: `${texts.t("empty.title")} ${hint}`,
+    },
+  };
+}
+
+function buildCardViewModel({ domainModel, config, texts }) {
+  const metricKind = domainModel.metric.kind;
+  const meta = metricMetaFor(metricKind);
+  const title = config.title || texts.t(meta.titleKey);
+
+  if (domainModel.empty) {
+    return buildEmptyViewModel({ domainModel, config, texts, title, metricKind });
+  }
+
+  const unit = domainModel.metric.unit;
+  const formatBoundary = (value) => texts.fmtWithUnit(value, 0, false);
+  const classification = domainModel.classification.average;
+  const tone = buildTone({
+    classification,
+    // config.icon wins outright; then the active profile's own icon; then the
+    // metric's stable default, so a kind without icon tiers is never forced into a
+    // semantically dubious icon family.
+    icon: config.icon || domainModel.classification.profileIcon || meta.icon,
+    texts,
+  });
+
+  // Decorated once, in declaration order, then reused for both the visible chip list
+  // and the extremes — so a room object is the same object wherever it appears.
+  const decoratedByIndex = new Map();
+  const decoratedDeclared = domainModel.rooms.declared.map((room) => {
+    const decorated = decorateRoomForDisplay(room, config.room_label);
+    decoratedByIndex.set(room.index, decorated);
+    return decorated;
+  });
+  const layout = buildRoomLayout({ declaredRooms: decoratedDeclared, config, metricKind, language: texts.language });
+
+  const average = domainModel.average.value;
+  const rooms = domainModel.rooms;
+  // Everything that dereferences an extreme is gated on the extremes object itself
+  // rather than on hasRoomsView. The domain guarantees the two agree; keying off the
+  // object means a single place decides, and no branch can read `.value` off null.
+  const hasExtremes = Boolean(domainModel.extremes);
+  const coolest = hasExtremes ? domainModel.extremes.coolest : null;
+  const warmest = hasExtremes ? domainModel.extremes.warmest : null;
+
+  // The main axis must cover the average as well as the room extrema: an
+  // independently sourced average can fall outside [coolest, warmest], and an axis
+  // built from the rooms alone would clamp its marker to an edge.
+  const scaleMarkerValues = { avg: average };
+  if (hasExtremes) {
+    scaleMarkerValues.coolest = coolest.value;
+    scaleMarkerValues.warmest = warmest.value;
+    for (const room of rooms.byValue) scaleMarkerValues[`room_${room.index}`] = room.value;
+  }
+  const axisInputs = {
+    scaleConfig: domainModel.scaleConfig,
+    displayUnitProfile: domainModel.metric.displayUnitProfile,
+    comfort: domainModel.comfort,
+    optimal: domainModel.optimal,
+    formatBoundary,
+  };
+  const scale = buildScaleAxis({
+    ...axisInputs,
+    low: hasExtremes ? Math.min(coolest.value, average) : average,
+    high: hasExtremes ? Math.max(warmest.value, average) : average,
+    markers: scaleMarkerValues,
+  });
+
+  const range = {
+    hasRange: domainModel.range.hasRange,
+    state: domainModel.range.state,
+    min: domainModel.range.min,
+    max: domainModel.range.max,
+    minTime: texts.formatTime(domainModel.range.minTimestamp),
+    maxTime: texts.formatTime(domainModel.range.maxTimestamp),
+    minColor: domainModel.range.minColor,
+    maxColor: domainModel.range.maxColor,
+  };
+
+  const trendText = buildTrendText(domainModel.trend.model, texts);
+  const averageModel = buildAverage({
+    domainModel,
+    config,
+    texts,
+    tone,
+    position: scale.markerPositions.avg,
+    trendText,
+  });
+
+  // One marker per participating room, always built when there are rooms — the
+  // `markers:all` option decides whether the scale view USES them, not whether they
+  // exist, and the extreme-value view needs the same colours.
+  const roomMarkers = hasExtremes
+    ? rooms.byValue.map((room) =>
+        buildRoomMarker({
+          room,
+          position: scale.markerPositions[`room_${room.index}`],
+          color: domainModel.roomColors[room.index],
+          title: `${room.name}: ${texts.fmtWithUnit(room.value)}`,
+        })
+      )
+    : [];
+
+  let extremes = null;
+  if (hasExtremes) {
+    const coolestPosition = scale.markerPositions.coolest;
+    const warmestPosition = scale.markerPositions.warmest;
+    const nudge = resolveMarkerNudge(coolestPosition, warmestPosition);
+    extremes = {
+      coolest: decoratedByIndex.get(coolest.index),
+      warmest: decoratedByIndex.get(warmest.index),
+      coolestPosition,
+      warmestPosition,
+      coolestShift: nudge.first,
+      warmestShift: nudge.second,
+      coolestColor: domainModel.extremes.coolestColor,
+      warmestColor: domainModel.extremes.warmestColor,
+    };
+  }
+
+  const viewState = buildViewState({
+    availability: {
+      hasRange: domainModel.range.hasRange,
+      hasRoomsView: rooms.hasRoomsView,
+      rangeScaleAvailable: domainModel.range.rangeScaleAvailable,
+    },
+    config,
+  });
+
+  // Everything the four per-view content builders share. Assembled once so no
+  // builder needs the domain model, the config or a formatter of its own.
+  //
+  // buildRangeScaleAxis is a thunk on purpose: the daily-range axis is only ever
+  // computed from inside the range-scale branch, so an available-but-not-requested
+  // view costs nothing.
+  const shared = {
+    metricKind,
+    unit,
+    texts,
+    comfort: domainModel.comfort,
+    optimal: domainModel.optimal,
+    spread: domainModel.spread,
+    hideFooter: Boolean(config.hide_footer),
+    rangeEntity: config.range_entity,
+    average: { ...averageModel },
+    rooms: { hasRoomsView: rooms.hasRoomsView, count: rooms.count, byValue: rooms.byValue },
+    roomColors: domainModel.roomColors,
+    extremes,
+    roomMarkers,
+    range,
+    trend: { ...domainModel.trend, text: trendText },
+    scale,
+    buildRangeScaleAxis: () =>
+      buildScaleAxis({
+        ...axisInputs,
+        // The daily-range axis has the same requirement as the main one and for the
+        // same reason: the average can sit outside [min, max] when the range entity
+        // updates less often than the primary, and the edge labels would then
+        // contradict a clamped marker.
+        low: Math.min(domainModel.range.min, average),
+        high: Math.max(domainModel.range.max, average),
+        markers: { current: average, min: domainModel.range.min, max: domainModel.range.max },
+      }),
+  };
+
+  const byKey = buildViewContent({ shared, viewState });
+  const subtitle = buildSubtitleText(domainModel.subtitle, texts, metricKind);
+
+  const chips = layout.visible.map((room) =>
+    buildRoomChipModel({
+      room,
+      color: domainModel.roomColors[room.index],
+      comfort: domainModel.comfort,
+      unit,
+      texts,
+    })
+  );
+
+  return {
+    empty: false,
+    metric: {
+      kind: metricKind,
+      unit,
+      displayUnitProfile: domainModel.metric.displayUnitProfile,
+    },
+    title,
+    subtitle,
+    tone,
+    // The card root's own custom properties, built once and reused by the patch path.
+    toneStyle: toneStyleDeclaration(tone),
+    // The header's four slots, referencing the same strings rather than recomputing
+    // them — a cohesive group for the renderer, not a second copy.
+    header: { icon: tone.icon, title, subtitle, statusLabel: tone.label },
+    average: averageModel,
+    rooms: {
+      visible: layout.visible,
+      rowSizes: layout.rowSizes,
+      count: rooms.count,
+      hasRoomsView: rooms.hasRoomsView,
+      // show_rooms hides the chip grid only. Everything derived from the rooms —
+      // extrema, comfort count, spread, the scale's markers — stays exactly as it
+      // would with the chips visible, because the rooms remain full data sources.
+      showChips: rooms.hasRoomsView && config.show_rooms !== false,
+      chips,
+      chipRows: buildRoomChipRows(chips, layout.rowSizes),
+    },
+    extremes,
+    roomMarkers,
+    comfort: domainModel.comfort,
+    spread: domainModel.spread,
+    range,
+    trend: { ...domainModel.trend, text: trendText },
+    scale,
+    rangeScale: byKey.range_scale ? byKey.range_scale.geometry : null,
+    views: {
+      keys: viewState.keys,
+      entries: viewState.entries,
+      options: viewState.options,
+      collapsed: viewState.collapsed,
+      hasRangeScale: viewState.hasRangeScale,
+      byKey,
+    },
+    carousel: {
+      hint: texts.t("rotator.hint"),
+      // Shown instead of the view area when a view WAS requested but is systemically
+      // unavailable — a state the user can actually fix. A deliberately empty views:
+      // list collapses instead (views.collapsed), so a card configured with no views
+      // does not display a hint that looks like a misconfiguration.
+      noActiveViewsHint: texts.t("views.none"),
+    },
+  };
+}
+
+// The compatibility adapter: CardViewModel -> the flat `data` object the
+// characterization suite and a large part of the element-level tests still read.
+//
+// TEMPORARY, and by now only that. The production render path no longer touches this
+// shape at all: the card shell, every view module and every DOM patcher consume the
+// structured CardViewModel directly (see src/render/ and src/views/), and no module
+// in either layer imports this file — an architecture test enforces that. What still
+// depends on the flat shape is the test suite: 32 committed DTO baselines and a large
+// number of element-level assertions were written against it, and rewriting those in
+// the same round as the extraction would have made a refactoring mistake
+// indistinguishable from an intended change.
+//
+// It is scaffolding with a planned end: the element/test cleanup round removes this
+// file and the flat shape together. Until then, nothing may be added to it — an extra
+// field here would be an untested new contract, and the baselines would have to be
+// re-recorded to accept it.
+
+// The three marker positions of the daily-range axis default to 0 when that view is
+// not active, because the flat shape exposes them unconditionally.
+const NO_RANGE_SCALE_POSITION = 0;
+
+// The room-marker shape the flat object has always exposed. The structured model
+// carries a shadow colour and a tooltip too, which are rendering values; projecting
+// explicitly here keeps the frozen shape frozen instead of widening it whenever the
+// marker model grows.
+function toLegacyRoomMarker({ index, entity, name, value, position, color }) {
+  return { index, entity, name, value, position, color };
+}
+
+function toLegacyData(viewModel) {
+  if (viewModel.empty) {
+    return {
+      empty: true,
+      metricType: viewModel.metric.kind,
+      title: viewModel.title,
+      missingRooms: viewModel.missingRooms,
+      configurationState: viewModel.configurationState,
+    };
+  }
+
+  const { scale, rangeScale, extremes, range, trend, rooms, views } = viewModel;
+
+  return {
+    empty: false,
+    hasRoomsView: rooms.hasRoomsView,
+    showRoomChips: rooms.showChips,
+    hasRange: range.hasRange,
+    rangeState: range.state,
+    hasRangeScale: views.hasRangeScale,
+    views: views.keys,
+    viewOptions: views.options,
+    viewAreaCollapsed: views.collapsed,
+    metricType: viewModel.metric.kind,
+    displayUnitProfile: viewModel.metric.displayUnitProfile,
+    title: viewModel.title,
+    avg: viewModel.average.value,
+    avgLabel: viewModel.average.label,
+    avgEntity: viewModel.average.entity,
+    avgSource: viewModel.average.source,
+    rooms: rooms.visible,
+    roomCount: rooms.count,
+    roomRows: rooms.rowSizes,
+    coolest: extremes ? extremes.coolest : null,
+    warmest: extremes ? extremes.warmest : null,
+    spread: viewModel.spread,
+    rangeMin: range.min,
+    rangeMax: range.max,
+    rangeMinTime: range.minTime,
+    rangeMaxTime: range.maxTime,
+    rangeMinColor: range.minColor,
+    rangeMaxColor: range.maxColor,
+    trendValue: trend.value,
+    trendUnit: trend.unit,
+    trend: trend.model,
+    inComfort: viewModel.comfort.inComfort,
+    comfortMin: viewModel.comfort.min,
+    comfortMax: viewModel.comfort.max,
+    // The scale model is spread flat: scaleMin/scaleMax, optimalMin/optimalMax, the
+    // comfort and optimal band geometry, displayStep, markerPositions and
+    // boundaryLabels all become top-level fields.
+    ...scale,
+    avgPos: viewModel.average.position,
+    coolestPos: extremes ? extremes.coolestPosition : 0,
+    warmestPos: extremes ? extremes.warmestPosition : 0,
+    coolestShift: extremes ? extremes.coolestShift : 0,
+    warmestShift: extremes ? extremes.warmestShift : 0,
+    coolestColor: extremes ? extremes.coolestColor : null,
+    warmestColor: extremes ? extremes.warmestColor : null,
+    scaleRoomMarkers: viewModel.roomMarkers.map(toLegacyRoomMarker),
+    avgColor: viewModel.average.color,
+    tone: viewModel.tone,
+    subtitle: viewModel.subtitle,
+    rangeScaleGeometry: rangeScale,
+    rangeCurrentPos: rangeScale ? rangeScale.markerPositions.current : NO_RANGE_SCALE_POSITION,
+    rangeMinPos: rangeScale ? rangeScale.markerPositions.min : NO_RANGE_SCALE_POSITION,
+    rangeMaxPos: rangeScale ? rangeScale.markerPositions.max : NO_RANGE_SCALE_POSITION,
+  };
+}
+
+// The RenderContext: the only way a render module reaches the DOM.
+//
+// Deliberately tiny. It carries the two things that genuinely vary by realm — the
+// document the card lives in and that document's window — plus the two element
+// operations derived from them. Nothing else: not the custom element, not hass, not
+// the configuration, not a domain service, not controller state, and no timer or
+// clock. A renderer that could reach any of those could change what the card shows
+// after being asked to render one view model, which is exactly the shape this
+// refactoring exists to remove.
+//
+// Escaping is NOT injected. There is exactly one escaping function in the card
+// (core/text.js), it is pure, and every render module imports it directly — routing
+// it through a context would suggest a call site could be handed a different one.
+//
+// The full platform contract (timers, the clock, events, ResizeObserver,
+// requestAnimationFrame) belongs to the controller layer and is defined in its own
+// round. This context covers only what DOM creation and layout measurement need.
+
+function createRenderContext(ownerDocument) {
+  return {
+    ownerDocument,
+    // Read once, on creation: a detached document has no defaultView, and failing
+    // here is far easier to diagnose than an undefined dereference deep in a layout
+    // pass.
+    defaultView: ownerDocument.defaultView,
+    createElement: (tagName) => ownerDocument.createElement(tagName),
+    htmlToElement: (html) => htmlToElementIn(ownerDocument, html),
+  };
+}
+
+// Parses an already-escaped HTML string (the output of one of the render functions
+// in this directory) into a single detached element.
+//
+// This is the ONLY place the update path parses HTML, and only ever for genuinely
+// NEW nodes — a room appearing, an element's shape changing. An existing node that
+// merely needs new content is patched in place with setAttribute/textContent
+// instead. Reusing the same already-escaped builders is what keeps one description
+// of each element's markup rather than two that can drift.
+function htmlToElementIn(ownerDocument, html) {
+  const wrapper = ownerDocument.createElement("div");
+  wrapper.innerHTML = html.trim();
+  return wrapper.firstElementChild;
+}
+
+// The two DOM reads that must not go through a global.
+//
+// A card can be rendered into a document that is not the ambient one — a second
+// dashboard realm, a test harness with its own jsdom instance. Reading
+// `window.getComputedStyle` would silently mix realms: the style resolved would
+// belong to a different document than the element measured. Both helpers below take
+// the element and derive its own realm from it.
+
+function computedStyleOf(element) {
+  return element.ownerDocument.defaultView.getComputedStyle(element);
+}
+
+// The element's rendered width in CSS pixels. Every layout decision in
+// render/layout/ is expressed in these, because a percentage cannot know how wide a
+// label's text is.
+function measuredWidth(element) {
+  return element.getBoundingClientRect().width;
+}
+
+// Where focus goes when the element that had it disappears.
+//
+// The keyed patchers exist so this almost never happens, but two cases remain
+// genuinely structural: a room whose entity vanished, and the average flipping
+// between its interactive and its disabled shape. Leaving focus to fall back to the
+// shadow root, the host or the body would drop a keyboard user out of the card
+// entirely, so a deterministic target is chosen instead.
+//
+// The average button is preferred when it exists AND is the interactive shape — the
+// disabled div variant is not focusable and would silently do nothing. `.rtc-root`
+// carries tabindex="-1" for exactly this purpose: out of the tab order, but a valid
+// programmatic target.
+
+function focusFallbackTarget(root) {
+  if (!root) return null;
+  const averageButton = root.querySelector("button.rtc-avg-button");
+  if (averageButton) return averageButton;
+  return root.querySelector(".rtc-root");
+}
+
+function applyFocusFallback(root) {
+  const target = focusFallbackTarget(root);
+  if (target) target.focus();
+}
+
+// The metric card: one large tappable card with a label, a name and a value.
+//
+// Used by the daily-range view (today's minimum and maximum) and by the
+// extreme-value view (the coldest and warmest room). Both get the identical shape
+// from the identical model, which is why the two views cannot drift apart visually.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+function renderMetricCard(model) {
+  // Only real rooms carry an index, so the action layer falls back to the card's
+  // default actions for a daily-range card instead of a nonexistent room.
+  const roomIndexAttr = model.roomIndex !== null ? ` data-room-index="${model.roomIndex}"` : "";
+
+  return `
+        <button
+          type="button"
+          class="rtc-extreme-card"
+          data-entity="${escapeHtml(model.entity)}"${roomIndexAttr}
+          style="--extreme-color:${model.color};--extreme-bg:${model.background};--extreme-border:${model.border};--extreme-line-shadow:${model.lineShadow};"
+          title="${escapeHtml(model.title)}"
+          aria-label="${escapeHtml(model.ariaLabel)}"
+        >
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">${escapeHtml(model.label)}</span>
+          <span class="rtc-extreme-name">${escapeHtml(model.nameText)}</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">${escapeHtml(model.numText)}</span><span class="rtc-extreme-value-unit">${escapeHtml(model.unitText)}</span></span>
+        </button>
+      `;
+}
+
+// Field-for-field mirror of renderMetricCard(). The four custom properties are set
+// through style.setProperty() rather than by reassembling one style string, so an
+// update never re-parses a value as CSS.
+function patchMetricCard(element, model) {
+  element.setAttribute("data-entity", model.entity);
+  if (model.roomIndex !== null) element.setAttribute("data-room-index", String(model.roomIndex));
+  else element.removeAttribute("data-room-index");
+  element.style.setProperty("--extreme-color", model.color);
+  element.style.setProperty("--extreme-bg", model.background);
+  element.style.setProperty("--extreme-border", model.border);
+  element.style.setProperty("--extreme-line-shadow", model.lineShadow);
+  element.setAttribute("title", model.title);
+  element.setAttribute("aria-label", model.ariaLabel);
+  element.querySelector(".rtc-extreme-label").textContent = model.label;
+  element.querySelector(".rtc-extreme-name").textContent = model.nameText;
+  element.querySelector(".rtc-extreme-value-num").textContent = model.numText;
+  element.querySelector(".rtc-extreme-value-unit").textContent = model.unitText;
+}
+
+// The shared patch path for both two-card views. The pair is positionally fixed by
+// its render function, so index 0 and index 1 are stable slots — which is what lets
+// a focused card survive the room behind it changing. Falls back to a full
+// re-render only as a defensive guard if the DOM does not actually hold two cards;
+// these views only appear or disappear through a full rebuild, never mid-patch.
+function patchMetricCardPair(element, models, renderPairHtml) {
+  if (!element) return;
+  const cards = element.querySelectorAll(".rtc-extreme-card");
+  if (cards.length !== models.length) {
+    element.innerHTML = renderPairHtml();
+    return;
+  }
+  models.forEach((model, index) => patchMetricCard(cards[index], model));
+}
+
+function renderMetricCards(models) {
+  return `
+        ${models.map(renderMetricCard).join("\n        ")}
+      `;
+}
+
+// Long form or short form: decided at measure time, never in the translations.
+//
+// A collision-prone label is not permanently shortened for every language and every
+// card width. Instead both a canonical long form and a short fallback exist, and the
+// card picks between them here against the ACTUAL rendered width — the same way the
+// position resolvers measure real geometry rather than guessing from character
+// counts.
+//
+// The long form is always tried FIRST, and reverted to whenever there is room again.
+// This runs on every resolve pass — resize, font-ready, every data update — so
+// growing the card back out restores the long form on the very next pass rather than
+// staying shortened until a reload.
+//
+// The short form is a deliberate intermediate step BEFORE the CSS ellipsis fallback
+// the caller applies when even the short form does not fit: a real word beats a
+// truncated one whenever a real word fits.
+
+
+function resolveLabelForm(element, longText, shortText, fitsWithWidth) {
+  element.textContent = longText;
+  // Most languages have no distinct short form. Short-circuiting here is what keeps
+  // them from paying for the extra reflows the fits() closure would trigger.
+  if (longText === shortText) return measuredWidth(element);
+  const longWidth = measuredWidth(element);
+  if (fitsWithWidth(longWidth)) return longWidth;
+  element.textContent = shortText;
+  return measuredWidth(element);
+}
+
+// The average: the card's headline number, on the left of the main panel.
+//
+// Two shapes, one content block. With an average entity it is a button that opens
+// more-info; without one it stays visible but is a plain div, because a control that
+// looks clickable and does nothing is worse than one that does not look clickable.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literals below is shipped
+// markup. It is captured verbatim by the DOM characterization baselines, so it is
+// deliberately not re-indented to match this module's nesting.
+
+
+function contentHtml(average) {
+  const hidden = average.trendDirection ? "" : " hidden";
+  return `
+        <span class="rtc-avg-label">${escapeHtml(average.label)}</span>
+        <span class="rtc-avg-value">
+          <span class="rtc-avg-value-num">${average.valueText}</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true"${hidden}><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit">${escapeHtml(average.unitText)}</span></span></span>
+        </span>
+      `;
+}
+
+function renderAverage(viewModel) {
+  const average = viewModel.average;
+  const trendClass = average.trendDirection ? " rtc-has-trend" : "";
+  const trendDirection = average.trendDirection ? ` data-trend-direction="${escapeHtml(average.trendDirection)}"` : "";
+  const content = contentHtml(average);
+
+  if (!average.entity) {
+    return `
+          <div
+            class="rtc-avg-button rtc-avg-button-disabled${trendClass}"
+            ${trendDirection}
+            title="${escapeHtml(average.tooltip)}"
+            aria-label="${escapeHtml(average.ariaLabel)}"
+          >
+            ${content}
+          </div>
+        `;
+  }
+
+  return `
+        <button
+          type="button"
+          class="rtc-avg-button${trendClass}"
+          ${trendDirection}
+          data-entity="${escapeHtml(average.entity)}"
+          aria-label="${escapeHtml(average.ariaLabel)}"
+          title="${escapeHtml(average.tooltip)}"
+        >
+          ${content}
+        </button>
+      `;
+}
+
+// Field-for-field mirror of renderAverage()'s two branches. Uses setAttribute and
+// textContent exclusively — no interpolated string is ever re-parsed as HTML for an
+// update that only changes a value.
+function patchAverage(element, viewModel) {
+  const average = viewModel.average;
+  element.setAttribute("title", average.tooltip);
+  if (average.entity) {
+    element.setAttribute("data-entity", average.entity);
+  }
+  element.setAttribute("aria-label", average.ariaLabel);
+  element.querySelector(".rtc-avg-label").textContent = average.label;
+  element.querySelector(".rtc-avg-value-num").textContent = average.valueText;
+  element.querySelector(".rtc-avg-value-unit").textContent = average.unitText;
+  const hasTrend = Boolean(average.trendDirection);
+  element.classList.toggle("rtc-has-trend", hasTrend);
+  if (hasTrend) {
+    element.setAttribute("data-trend-direction", average.trendDirection);
+  } else {
+    element.removeAttribute("data-trend-direction");
+  }
+  element.querySelector(".rtc-avg-trend-arrow").hidden = !hasTrend;
+}
+
+// Patches in place while the shape is unchanged — the common case, once per state
+// update. Falls back to a full replace only when the interactive-vs-disabled shape
+// itself has to change, or on the very first call when the slot is still empty.
+function updateAverage(context, root, averageEl, viewModel) {
+  if (!averageEl) return;
+  const wantsButton = Boolean(viewModel.average.entity);
+  const child = averageEl.firstElementChild;
+  const existing =
+    child &&
+    (wantsButton
+      ? child.tagName === "BUTTON" && child.classList.contains("rtc-avg-button")
+      : child.classList.contains("rtc-avg-button-disabled"))
+      ? child
+      : null;
+  if (existing) {
+    patchAverage(existing, viewModel);
+    return;
+  }
+
+  const focusedWithin = root?.activeElement && averageEl.contains(root.activeElement);
+  averageEl.replaceChildren(context.htmlToElement(renderAverage(viewModel)));
+  if (focusedWithin) applyFocusFallback(root);
+}
+
+// The empty state: what the card shows when neither the primary entity nor any room
+// reports a usable number.
+//
+// It is a real state, not an error screen — the icon still reflects the metric kind,
+// so a card that is temporarily without data still looks like the card it is.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+function renderEmptyState(viewModel) {
+  const empty = viewModel.emptyState;
+  return `
+        <div class="rtc-empty">
+          <div class="rtc-empty-icon"><ha-icon icon="${escapeHtml(empty.icon)}"></ha-icon></div>
+          <div class="rtc-empty-copy">
+            <div class="rtc-empty-title">${escapeHtml(empty.title)}</div>
+            <div class="rtc-empty-subtitle">${escapeHtml(empty.subtitle)}</div>
+          </div>
+        </div>
+      `;
+}
+
+// An empty-to-empty update still has to follow the metric kind: a configured entity
+// swapped for a different mode while both stay unavailable would otherwise keep the
+// previous mode's icon.
+function patchEmptyState(root, viewModel) {
+  if (!root) return;
+  const empty = viewModel.emptyState;
+  const titleEl = root.querySelector(".rtc-empty-title");
+  if (titleEl) titleEl.textContent = empty.title;
+  const subtitleEl = root.querySelector(".rtc-empty-subtitle");
+  if (subtitleEl) subtitleEl.textContent = empty.subtitle;
+  const iconEl = root.querySelector(".rtc-empty-icon ha-icon");
+  if (iconEl) iconEl.setAttribute("icon", empty.icon);
+}
+
+// The room chips, and the grid they sit in.
+//
+// Each row is its own CSS grid with its own column count, because a single native
+// grid cannot vary the column count per row. A single row — the unconfigured default
+// up to seven rooms — renders identically to a flat grid, just wrapped one level
+// deeper.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+function renderRoomChip(chip) {
+  const style = `--room-color:${chip.color};--room-mark-bg:${chip.markBackground};--room-bg:${chip.background};--room-border:${chip.border};`;
+  const shortGuaranteedAttr = chip.shortGuaranteed ? ' data-short-guaranteed="true"' : "";
+
+  return `
+        <button
+          type="button"
+          class="rtc-room-chip"
+          data-entity="${escapeHtml(chip.entity)}"
+          data-room-index="${chip.index}"
+          style="${style}"
+          title="${escapeHtml(chip.title)}"
+          aria-label="${escapeHtml(chip.ariaLabel)}"
+        >
+          <span class="rtc-room-top">
+            <span class="rtc-room-short"${shortGuaranteedAttr}>${escapeHtml(chip.displayLabel)}</span>
+            <span class="rtc-room-mark">${chip.mark}</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">${chip.valueText}</span><span class="rtc-room-value-unit">${escapeHtml(chip.unitText)}</span></span>
+        </button>
+      `;
+}
+
+// Field-for-field mirror of renderRoomChip(). Used for BOTH reused chips and freshly
+// created ones: a new chip is first parsed for its skeleton shape and then patched
+// here too, so exactly one place knows which fields a chip has.
+function patchRoomChip(element, chip) {
+  element.setAttribute("data-entity", chip.entity);
+  element.setAttribute("data-room-index", String(chip.index));
+  element.style.setProperty("--room-color", chip.color);
+  element.style.setProperty("--room-mark-bg", chip.markBackground);
+  element.style.setProperty("--room-bg", chip.background);
+  element.style.setProperty("--room-border", chip.border);
+  element.setAttribute("title", chip.title);
+  element.setAttribute("aria-label", chip.ariaLabel);
+  const shortEl = element.querySelector(".rtc-room-short");
+  shortEl.textContent = chip.displayLabel;
+  // toggleAttribute rather than a conditional setAttribute: chip nodes are reused
+  // across renders, so a stale "true" from a previous configuration has to be
+  // actively removed once the label no longer qualifies.
+  shortEl.toggleAttribute("data-short-guaranteed", chip.shortGuaranteed);
+  element.querySelector(".rtc-room-mark").textContent = chip.mark;
+  element.querySelector(".rtc-room-value-num").textContent = chip.valueText;
+  element.querySelector(".rtc-room-value-unit").textContent = chip.unitText;
+}
+
+function renderRoomGridRows(viewModel) {
+  return viewModel.rooms.chipRows
+    .map(
+      (row) =>
+        `<div class="rtc-room-row" style="grid-template-columns:repeat(${row.columnCount}, minmax(0, 1fr));">${row.chips
+          .map(renderRoomChip)
+          .join("")}</div>`
+    )
+    .join("");
+}
+
+// Entity-keyed reconciliation instead of rebuilding the grid on every update.
+//
+// The row wrappers are cheap, unkeyed, non-focusable layout containers; only the chip
+// buttons carry identity and focus, and they are reused by data-entity wherever in
+// the new row structure they end up.
+//
+// A real browser blurs a focused node the instant appendChild/insertBefore is called
+// on it, EVEN when the node is already exactly where it is being moved to: the DOM
+// insert algorithm unconditionally removes and reinserts an already-connected node,
+// and the focus fixup rule fires on that removal step alone. The fix is to never
+// issue the move at all for a chip that is already correctly positioned — by far the
+// common case, since a plain value update touches zero positions. Row wrappers are
+// only ever GROWN before repositioning (a detached wrapper would blur through the
+// same rule) and trimmed afterwards, once guaranteed empty.
+function updateRoomGrid(context, root, roomGridEl, viewModel) {
+  if (!roomGridEl) return;
+
+  const activeBefore = root?.activeElement;
+  const focusedChip = activeBefore?.classList?.contains("rtc-room-chip") ? activeBefore : null;
+  const rows = viewModel.rooms.chipRows;
+  const presentEntities = new Set(viewModel.rooms.chips.map((chip) => chip.entity));
+
+  const existingChips = new Map();
+  roomGridEl.querySelectorAll(".rtc-room-chip").forEach((chip) => {
+    const entity = chip.getAttribute("data-entity");
+    if (presentEntities.has(entity)) existingChips.set(entity, chip);
+    else chip.remove();
+  });
+
+  while (roomGridEl.children.length < rows.length) roomGridEl.appendChild(context.createElement("div"));
+
+  rows.forEach((row, rowIndex) => {
+    const rowEl = roomGridEl.children[rowIndex];
+    rowEl.className = "rtc-room-row";
+    rowEl.style.gridTemplateColumns = `repeat(${row.columnCount}, minmax(0, 1fr))`;
+    row.chips.forEach((chip, indexInRow) => {
+      const chipEl = existingChips.get(chip.entity) || context.htmlToElement(renderRoomChip(chip));
+      patchRoomChip(chipEl, chip);
+      if (rowEl.children[indexInRow] !== chipEl) rowEl.insertBefore(chipEl, rowEl.children[indexInRow] || null);
+    });
+  });
+
+  while (roomGridEl.children.length > rows.length) roomGridEl.removeChild(roomGridEl.lastElementChild);
+
+  // Covers both ways a focused chip can lose focus: its room disappeared, or it
+  // genuinely had to move. Comparing before and after catches both uniformly instead
+  // of trying to predict which happened.
+  if (focusedChip && root?.activeElement !== focusedChip) applyFocusFallback(root);
+}
+
+// The card shell: the frame every view is mounted into.
+//
+// Header, average, view area, room chips. The shell knows the SHAPE of the card and
+// nothing about any individual view — it never names "scale" or "range_scale", never
+// imports the view registry, and cannot: the registry is a separate group of the same
+// architectural layer, so the only way it arrives here is as an argument from the
+// composition root. That is what makes adding a view a change in two places
+// (a definition and a module) rather than three.
+//
+// The layout hook works the same way. A view MAY declare resolveLayout(); the shell
+// calls it on whichever views declare one, in registry order, without knowing what any
+// of them measure.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+// The two null-view states are deliberately different. A configuration that genuinely
+// asks for nothing collapses the view area entirely — no markup at all, so a card
+// intentionally configured without views does not display a hint that looks like a
+// misconfiguration. A view that WAS requested but is systemically unavailable shows a
+// localized hint instead, because that case genuinely is something the user should
+// notice and can fix.
+function renderViewArea(context, viewModel, viewRenderers) {
+  const keys = viewModel.views.keys;
+  const byKey = new Map(viewRenderers.map((view) => [view.key, view]));
+  const renderView = (key) => byKey.get(key).render(context, viewModel);
+
+  if (keys.length >= 2) {
+    return `
+          <div class="rtc-rotator" aria-live="off" title="${escapeHtml(viewModel.carousel.hint)}">
+            <div class="rtc-track">
+              ${keys.map((key) => `<div class="rtc-view">${renderView(key)}</div>`).join("")}
+            </div>
+          </div>
+        `;
+  }
+  if (keys.length === 1) {
+    // The solo path uses the same generic lookup as the carousel path: one view, one
+    // renderer call, no special-casing of which view it happens to be. Hardcoding a
+    // view here would break the moment a configuration omits it.
+    return `
+          <div class="rtc-rotator-solo">${renderView(keys[0])}</div>
+        `;
+  }
+  if (viewModel.views.collapsed) return "";
+  return `<div class="rtc-rotator-solo rtc-no-views">${escapeHtml(viewModel.carousel.noActiveViewsHint)}</div>`;
+}
+
+// What the card's MARKUP looks like, as one comparable value.
+//
+// A DOM patcher can only change nodes that exist. Every optional part of the markup is
+// therefore a structural decision: when its presence changes, patching cannot express
+// it and the card has to be rebuilt. This composes exactly those decisions — the
+// shell's own, plus whatever each view declares about itself — so that _render() can
+// compare one value instead of maintaining a list of booleans that silently omits
+// whatever nobody remembered to add.
+//
+// The rule for a view's own contribution is precise: list the optional nodes the view
+// does NOT reconcile in its patch(). Anything it does reconcile must stay out, or a
+// routine data change would cost a full rebuild and reset the carousel.
+//
+// A view without a structureSignature() is declaring that it reconciles everything.
+function cardStructureSignature(viewModel, viewRenderers) {
+  if (viewModel.empty) return "empty";
+  const parts = [
+    `chips:${viewModel.rooms.showChips ? 1 : 0}`,
+    `views:${viewModel.views.keys.join(",")}`,
+    `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
+  ];
+  for (const view of viewRenderers) {
+    const content = viewModel.views.byKey[view.key];
+    if (!content || typeof view.structureSignature !== "function") continue;
+    parts.push(`${view.key}:${view.structureSignature(content)}`);
+  }
+  return parts.join("|");
+}
+
+function renderCardBody(context, viewModel, viewRenderers) {
+  if (viewModel.empty) return renderEmptyState(viewModel);
+
+  const roomGrid = viewModel.rooms.showChips
+    ? `
+          <div class="rtc-room-grid">
+            ${renderRoomGridRows(viewModel)}
+          </div>
+        `
+    : "";
+
+  // tabindex="-1": out of the normal tab order, but focusable programmatically — the
+  // last-resort focus fallback target when a focused element disappears and no average
+  // button exists to fall back to instead.
+  return `
+        <div class="rtc-root" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
+          <div class="rtc-top-line"></div>
+
+          <div class="rtc-header">
+            <div class="rtc-icon-badge" aria-hidden="true">
+              <ha-icon icon="${escapeHtml(viewModel.header.icon)}"></ha-icon>
+            </div>
+
+            <div class="rtc-title-block">
+              <div class="rtc-title">${escapeHtml(viewModel.header.title)}</div>
+              <div class="rtc-subtitle">${escapeHtml(viewModel.header.subtitle)}</div>
+            </div>
+
+            <div class="rtc-status-pill">${escapeHtml(viewModel.header.statusLabel)}</div>
+          </div>
+
+          <div class="rtc-main-panel">
+            <div class="rtc-average">${renderAverage(viewModel)}</div>
+
+            ${renderViewArea(context, viewModel, viewRenderers)}
+          </div>
+
+          ${roomGrid}
+        </div>
+      `;
+}
+
+// The partial update: only text, colours, markers and the dynamic subsections change,
+// so the slide animation never restarts. Each view patches its own subsection; a view
+// that is not currently mounted is a no-op through its own container guard.
+function patchCardBody(context, root, viewModel, viewRenderers) {
+  if (!root) return;
+
+  const contentRoot = root.querySelector(".rtc-root");
+  if (contentRoot) {
+    contentRoot.setAttribute("style", viewModel.toneStyle);
+    contentRoot.setAttribute("data-metric", viewModel.metric.kind);
+  }
+
+  const iconEl = root.querySelector(".rtc-icon-badge ha-icon");
+  if (iconEl) iconEl.setAttribute("icon", viewModel.header.icon);
+
+  const titleEl = root.querySelector(".rtc-title");
+  if (titleEl) titleEl.textContent = viewModel.header.title;
+
+  const subtitleEl = root.querySelector(".rtc-subtitle");
+  if (subtitleEl) subtitleEl.textContent = viewModel.header.subtitle;
+
+  const statusEl = root.querySelector(".rtc-status-pill");
+  if (statusEl) statusEl.textContent = viewModel.header.statusLabel;
+
+  updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
+  updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);
+
+  for (const view of viewRenderers) view.patch(context, root, viewModel);
+}
+
+function patchEmptyCardBody(root, viewModel) {
+  patchEmptyState(root, viewModel);
+}
+
+// Re-resolves every mounted view's own measured layout. The single entry point for
+// triggers that neither know nor care which views currently exist: the initial render,
+// a resize, and the web font finishing loading.
+function resolveViewLayouts(context, root, viewModel, viewRenderers) {
+  if (!root || !viewModel || viewModel.empty) return;
+  for (const view of viewRenderers) {
+    if (typeof view.resolveLayout === "function") view.resolveLayout(context, root, viewModel);
+  }
+}
+
+// The daily-range view: two metric cards for today's minimum and maximum.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+const CONTAINER_SELECTOR$3 = ".rtc-range-view";
+
+const rangeView = {
+  key: "range",
+
+  render(context, viewModel) {
+    return `
+        <div class="rtc-range-view">
+          ${renderMetricCards(viewModel.views.byKey.range.cards)}
+        </div>
+      `;
+  },
+
+  patch(context, root, viewModel) {
+    const content = viewModel.views.byKey.range;
+    if (!content) return;
+    patchMetricCardPair(root.querySelector(CONTAINER_SELECTOR$3), content.cards, () => renderMetricCards(content.cards));
+  },
+};
+
+// A marker on a scale bar: a coloured pin at a percentage of the bar's width.
+//
+// Two style forms exist, and the difference is not cosmetic. The two extrema markers
+// can be nudged apart by a few pixels when their values are nearly identical, so
+// their offset is a calc() of a percentage plus a pixel shift. Every other marker
+// sits exactly where its value puts it and uses the plain percentage — emitting a
+// calc() with "+ 0px" for those would change the shipped markup for no reason.
+
+
+function markerStyle(marker, { useShift = false } = {}) {
+  const left = useShift ? `calc(${marker.position}% + ${marker.shiftPx}px)` : `${marker.position}%`;
+  return `left:${left};--marker-color:${marker.color};--marker-shadow:${marker.shadow};`;
+}
+
+// `extraAttributes` is inserted between the class and the style attribute, which is
+// where the room markers' data-room-marker-index sits in the shipped markup.
+function renderMarker(marker, { classNames, extraAttributes = "", useShift = false }) {
+  return `<div class="${classNames}"${extraAttributes} style="${markerStyle(marker, { useShift })}" title="${escapeHtml(marker.title)}"></div>`;
+}
+
+function patchMarker(element, marker, { useShift = false } = {}) {
+  if (!element) return;
+  element.setAttribute("style", markerStyle(marker, { useShift }));
+  element.setAttribute("title", marker.title);
+}
+
+// The scale bar every scale-shaped view is built from.
+//
+// One markup template, two callers: the main scale (room-based bounds) and the
+// daily-range scale (min/max-based bounds). Only three things differ between them and
+// all three are passed in — the top row, the markers and the wrapper class. The
+// comfort band, the optimal band, the two edge labels and the footer are shared, and
+// that sharing is what makes the two views structurally identical.
+//
+// Switching a band off is purely a markup omission: neither the band div nor its
+// descriptive label is emitted, and the patch path's querySelector guards already
+// no-op on their absence.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+function renderScaleBar({ content, viewClass, topRowHtml, markersHtml }) {
+  const geometry = content.geometry;
+  const footer = content.footerText ? `<div class="rtc-scale-footer">${escapeHtml(content.footerText)}</div>` : "";
+  const comfortBandHtml = content.showComfortBand
+    ? `<div class="rtc-comfort-band" style="left:${geometry.comfortLeft}%;width:${geometry.comfortWidth}%;"${geometry.comfortVisible ? "" : " hidden"}></div>`
+    : "";
+  const optimalBandHtml = content.showOptimalBand
+    ? `<div class="rtc-optimal-band" style="left:${geometry.optimalLeft}%;width:${geometry.optimalWidth}%;"${geometry.optimalVisible ? "" : " hidden"}></div>`
+    : "";
+  // The long form is emitted first, always. The layout pass may swap in the short
+  // form once it can measure the real rendered width (see render/layout/).
+  const optimalLabelHtml = content.optimalLabel
+    ? `<span class="rtc-scale-label-center" style="left:${content.optimalLabel.center}%"${content.optimalLabel.visible ? "" : " hidden"}>${escapeHtml(content.optimalLabel.long)}</span>`
+    : "";
+
+  return `
+        <div class="${viewClass}">
+          ${topRowHtml}
+
+          <div class="rtc-scale-bar">
+            ${comfortBandHtml}
+            ${optimalBandHtml}
+            ${markersHtml}
+          </div>
+
+          <div class="rtc-scale-labels">
+            <span class="rtc-scale-label-min">${escapeHtml(content.boundaryLabels.min)}</span>
+            ${optimalLabelHtml}
+            <span class="rtc-scale-label-max rtc-scale-max">${escapeHtml(content.boundaryLabels.max)}</span>
+          </div>
+
+          ${footer}
+        </div>
+      `;
+}
+
+// The shared partial update: band positions, band visibility, the footer text and the
+// two edge labels. Scoped to the view's own container rather than the whole root,
+// because both scale-shaped views can be mounted at once — the carousel keeps every
+// view in the DOM — and they share the same inner class names.
+//
+// The optimal label's own text and position are deliberately NOT touched here. They
+// are owned by the layout pass, which picks between the long and short form against
+// the measured width, so there is exactly one place that decides them.
+function patchScaleBar(containerEl, content) {
+  if (!containerEl) return;
+  const geometry = content.geometry;
+
+  const comfortBandEl = containerEl.querySelector(".rtc-comfort-band");
+  if (comfortBandEl) {
+    comfortBandEl.style.left = `${geometry.comfortLeft}%`;
+    comfortBandEl.style.width = `${geometry.comfortWidth}%`;
+    comfortBandEl.hidden = !geometry.comfortVisible;
+  }
+
+  const optimalBandEl = containerEl.querySelector(".rtc-optimal-band");
+  if (optimalBandEl) {
+    optimalBandEl.style.left = `${geometry.optimalLeft}%`;
+    optimalBandEl.style.width = `${geometry.optimalWidth}%`;
+    optimalBandEl.hidden = !geometry.optimalVisible;
+  }
+
+  // A footer only exists in the DOM when this view's own render pass decided to show
+  // one, so the guard doubles as the "no footer in this view" case.
+  const footerEl = containerEl.querySelector(".rtc-scale-footer");
+  if (footerEl) footerEl.textContent = content.footerText;
+
+  const optimalLabelEl = containerEl.querySelector(".rtc-scale-label-center");
+  if (optimalLabelEl) optimalLabelEl.hidden = !geometry.optimalVisible;
+
+  const labelMinEl = containerEl.querySelector(".rtc-scale-label-min");
+  if (labelMinEl) labelMinEl.textContent = content.boundaryLabels.min;
+
+  const labelMaxEl = containerEl.querySelector(".rtc-scale-label-max");
+  if (labelMaxEl) labelMaxEl.textContent = content.boundaryLabels.max;
+}
+
+// Positions a small group of labels inside a horizontal span without overlaps.
+//
+// A deterministic four-step declutter: anchor each item on its own value, push
+// forwards to clear the previous one, clamp the group back inside the right edge,
+// then push backwards and clamp inside the left edge. The result depends only on the
+// inputs, so repeated calls converge instead of drifting.
+//
+// Mutates each item's .left and .width in place and does not touch the DOM except to
+// cap a width that cannot fit — the caller applies el.style.left once, after every
+// group has been laid out.
+
+
+function layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
+  if (items.length === 0) return;
+  const available = edgeMax - edgeMin;
+  const requiredWidth = items.reduce((sum, item) => sum + item.width, 0) + gap * (items.length - 1);
+  if (requiredWidth > available) {
+    const maxWidthEach = Math.max(0, (available - gap * (items.length - 1)) / items.length);
+    for (const item of items) {
+      item.el.style.maxWidth = `${maxWidthEach}px`;
+      item.width = Math.min(item.width, measuredWidth(item.el));
+    }
+  }
+
+  for (const item of items) item.left = item.anchor - item.width / 2;
+
+  for (let i = 1; i < items.length; i++) {
+    items[i].left = Math.max(items[i].left, items[i - 1].left + items[i - 1].width + gap);
+  }
+  const overflow = items[items.length - 1].left + items[items.length - 1].width - edgeMax;
+  if (overflow > 0) {
+    for (const item of items) item.left -= overflow;
+  }
+  for (let i = items.length - 2; i >= 0; i--) {
+    items[i].left = Math.min(items[i].left, items[i + 1].left - gap - items[i].width);
+  }
+  const underflow = Math.min(0, items[0].left - edgeMin);
+  if (underflow < 0) {
+    for (const item of items) item.left -= underflow;
+  }
+}
+
+// The minimum visual gap between two adjacent labels, in CSS pixels. Shared by every
+// layout pass so the spacing is consistent across the two scale-shaped views.
+const LABEL_GAP_PX = 4;
+
+// Positions the optimal-band label under a scale bar.
+//
+// The label is centred on a percentage, but text width is fixed in pixels while the
+// bar's rendered width varies with the card and the viewport — a percentage alone
+// cannot guarantee it will not visually collide with the min/max edge labels in the
+// same row. That is most acute for CO2 and PM2.5, whose optimal band starts at the
+// bar's left edge.
+//
+// The desired position is always derived fresh from the geometry — the one
+// authoritative source — never read back from this function's own previous (already
+// pixel-valued) output, so repeated calls cannot drift.
+//
+// Scoped to the view's own container rather than the whole root: both scale-shaped
+// views can be mounted at once and share the same inner class names, so a root-wide
+// query would only ever find the first.
+
+
+function resolveOptimalLabelPosition(containerEl, content) {
+  if (!containerEl || !content?.optimalLabel) return;
+  const bar = containerEl.querySelector(".rtc-scale-bar");
+  const minEl = containerEl.querySelector(".rtc-scale-label-min");
+  const centerEl = containerEl.querySelector(".rtc-scale-label-center");
+  const maxEl = containerEl.querySelector(".rtc-scale-label-max");
+  if (!bar || !minEl || !centerEl || !maxEl) return;
+
+  // A previous call may have constrained centerEl's width (see maxWidth below).
+  // Clearing it first guarantees this call measures the natural, unconstrained width.
+  // Without it, a second call shortly after the first would measure the already-shrunk
+  // box, wrongly conclude it now fits, clear maxWidth again, and let the text spring
+  // back — an infinite narrow/widen loop between repeated calls, which the resize
+  // observer can legitimately trigger.
+  centerEl.style.maxWidth = "";
+
+  const barWidth = measuredWidth(bar);
+  if (!barWidth) return;
+  const minWidth = measuredWidth(minEl);
+  const maxWidth = measuredWidth(maxEl);
+  const gap = LABEL_GAP_PX;
+
+  // "Fits" is the exact same lowLimit <= highLimit criterion computed below, just
+  // evaluated for whichever candidate form actually measures at that width.
+  const centerWidth = resolveLabelForm(
+    centerEl,
+    content.optimalLabel.long,
+    content.optimalLabel.short,
+    (width) => minWidth + gap + width / 2 <= barWidth - maxWidth - gap - width / 2
+  );
+
+  const desiredPx = (barWidth * content.optimalLabel.center) / 100;
+  const lowLimit = minWidth + gap + centerWidth / 2;
+  const highLimit = barWidth - maxWidth - gap - centerWidth / 2;
+  // With no room anywhere even for the short form (a very narrow bar, a very long
+  // label), centring is the fairest fallback — better than pinning fully against one
+  // side. The label's own width is then also capped to the space actually available,
+  // so it visibly truncates instead of overlapping its neighbours: the centring
+  // fallback alone only prevents anchoring off-centre, not overlap caused by the
+  // label's own width. Since the label is centred at barWidth/2, the space available
+  // to it is bounded by whichever side is tighter, applied on BOTH sides — not by
+  // minWidth + maxWidth combined, which would only be safe for an asymmetric split a
+  // centred box cannot have.
+  const fits = lowLimit <= highLimit;
+  const targetPx = fits ? clamp(desiredPx, lowLimit, highLimit) : barWidth / 2;
+  centerEl.style.left = `${targetPx}px`;
+  centerEl.style.maxWidth = fits ? "" : `${Math.max(0, barWidth - 2 * Math.max(minWidth, maxWidth) - gap * 2)}px`;
+}
+
+// Positions the three top labels of the daily-range scale bar.
+//
+// The policy, and why it is not a symmetric declutter: `current` is a FIXED pivot,
+// never repositioned. Only min and max are ever allowed to drift from their own
+// anchors to avoid overlapping a neighbour.
+//
+// An earlier version modelled all three labels as equally free-floating items in one
+// shared forward/backward declutter group. That shared group also included an
+// edge-clamp step — shift the WHOLE group if any member ran past the bar's edge —
+// which could silently drag `current` away from its own marker even without a direct
+// collision, for instance when min or max naturally anchored right at 0% or 100% of a
+// wide value range. `current` has no visual identity distinct from the marker directly
+// above it, so a drifted `current` label reads as belonging to whichever marker it
+// ends up nearest, typically max. `current` is the primary live value; min and max are
+// historical context values that can absorb a shift without creating a misleading
+// reading.
+
+
+const SIDE_LABEL_SELECTOR = {
+  min: ".rtc-range-scale-label-min",
+  max: ".rtc-range-scale-label-max",
+};
+
+function resolveRangeScaleLabels(containerEl, content) {
+  if (!containerEl || !content) return;
+  const bar = containerEl.querySelector(".rtc-scale-bar");
+  const currentEl = containerEl.querySelector(".rtc-range-scale-label-current");
+  const topRow = containerEl.querySelector(".rtc-range-scale-top-row");
+  if (!bar || !currentEl || !topRow) return;
+  const sideElements = content.topLabels.sides.map((side) => containerEl.querySelector(SIDE_LABEL_SELECTOR[side.role]));
+  if (sideElements.some((element) => !element)) return;
+  const barWidth = measuredWidth(bar);
+  if (!barWidth) return;
+
+  const gap = LABEL_GAP_PX;
+  // Reset any previous shrink before measuring natural widths — otherwise a
+  // still-applied maxWidth from an earlier narrow-bar pass would be measured as if it
+  // were the label's natural size, the same measure-before-shrink idempotency the
+  // optimal label depends on.
+  for (const element of [currentEl, ...sideElements]) element.style.maxWidth = "";
+
+  // Step 1: fix current's own centre. The long/short choice happens first, because
+  // current reserves [currentLeft - gap, currentRight + gap] exclusively for itself
+  // and a long current label eating too much of the bar can starve min and max of
+  // room. "Fits" is deliberately the WORST case — min and max both landing on the same
+  // side, which happens when the average sits outside [min, max] — so current's
+  // reserved width plus the standard gaps must still leave room for BOTH side labels'
+  // natural widths stacked together, even though they usually split across both sides
+  // and have far more room than that. This is never a consequence of an actual
+  // min-versus-max collision; that stays layoutSideLabelGroup()'s job via its own
+  // ellipsis fallback. The side labels are measured lazily inside the closure, so the
+  // many languages whose short form equals the long form never pay for the extra
+  // reflows at all.
+  let currentWidth = resolveLabelForm(
+    currentEl,
+    content.topLabels.current.long,
+    content.topLabels.current.short,
+    (width) => barWidth - width - 2 * gap >= measuredWidth(sideElements[0]) + gap + measuredWidth(sideElements[1])
+  );
+  if (currentWidth > barWidth) {
+    currentEl.style.maxWidth = `${barWidth}px`;
+    currentWidth = measuredWidth(currentEl);
+  }
+  const currentAnchor = (barWidth * content.topLabels.current.position) / 100;
+  const currentCenter = clamp(currentAnchor, currentWidth / 2, barWidth - currentWidth / 2);
+  const currentLeft = currentCenter - currentWidth / 2;
+  const currentRight = currentCenter + currentWidth / 2;
+  currentEl.style.left = `${currentCenter}px`;
+
+  // Step 2: assign min and max to a side of the fixed pivot.
+  //
+  // The tie-detection key (sortKey) is compared for EQUALITY only and never parsed
+  // back into a number: a grouped display value such as "1,200" is not valid numeric
+  // input, and an earlier version that re-parsed it compared as NaN, which made the
+  // tie-break fall through to "right" for every value above 999. Actual ordering when
+  // not tied uses the raw numeric value.
+  //
+  // This is also what makes "current outside [min, max]" — which happens when the
+  // range entity updates less often than the primary — fall out naturally: if both min
+  // and max are numerically below (or both above) current, both land on the same side
+  // and are packed there, preserving their own min-before-max order. No separate
+  // branch is needed.
+  const currentKey = content.topLabels.current.sortKey;
+  const currentValue = content.topLabels.current.value;
+  const sideItems = content.topLabels.sides.map((side, index) => ({
+    el: sideElements[index],
+    anchor: (barWidth * side.position) / 100,
+    value: side.value,
+    semanticRank: side.semanticRank,
+    side:
+      side.sortKey !== currentKey
+        ? side.value < currentValue
+          ? "left"
+          : "right"
+        : side.semanticRank < 1
+          ? "left"
+          : "right",
+    width: measuredWidth(sideElements[index]),
+  }));
+  const leftItems = sideItems.filter((item) => item.side === "left").sort((a, b) => a.value - b.value);
+  const rightItems = sideItems.filter((item) => item.side === "right").sort((a, b) => a.value - b.value);
+
+  // Step 3: keep as many historical labels as possible on current's own line. If a side
+  // group does not fit naturally between the fixed pivot and its outer edge, lift ONLY
+  // the item nearest current (last on the left, first on the right), then re-check —
+  // targeting the actual collision instead of also moving the unrelated label on the
+  // opposite side. Lifted items are laid out over the full bar width; the ones that
+  // stay keep the independent per-side packing. No label geometry ever feeds back into
+  // the value-derived scale, and current never moves horizontally.
+  const fitsNaturally = (items, edgeMin, edgeMax) =>
+    items.length === 0 ||
+    items.reduce((sum, item) => sum + item.width, 0) + gap * (items.length - 1) <= edgeMax - edgeMin;
+  const liftUntilFit = (items, edgeMin, edgeMax, side) => {
+    const lower = [...items];
+    const upper = [];
+    while (lower.length && !fitsNaturally(lower, edgeMin, edgeMax)) {
+      upper.push(side === "left" ? lower.pop() : lower.shift());
+    }
+    return { lower, upper };
+  };
+  const leftLayout = liftUntilFit(leftItems, 0, currentLeft - gap, "left");
+  const rightLayout = liftUntilFit(rightItems, currentRight + gap, barWidth, "right");
+  const upperItems = [...leftLayout.upper, ...rightLayout.upper].sort(
+    (a, b) => a.value - b.value || a.semanticRank - b.semanticRank
+  );
+
+  topRow.classList.toggle("rtc-range-scale-has-upper", upperItems.length > 0);
+  for (const item of sideItems) {
+    item.el.classList.toggle("rtc-range-scale-label-upper", upperItems.includes(item));
+  }
+  layoutSideLabelGroup(leftLayout.lower, 0, currentLeft - gap, gap);
+  layoutSideLabelGroup(rightLayout.lower, currentRight + gap, barWidth, gap);
+  layoutSideLabelGroup(upperItems, 0, barWidth, gap);
+
+  for (const item of sideItems) {
+    item.el.style.left = `${item.left + item.width / 2}px`;
+  }
+}
+
+// The daily-range scale view.
+//
+// The same bar as the main scale view, with today's minimum and maximum as markers
+// instead of the coldest and warmest room, and a top row of three labels above their
+// own markers instead of a single comfort pill. The cold and warm marker classes are
+// reused for min and max: identical shape and CSS, a different meaning in this view.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+const VIEW_CLASS$1 = "rtc-range-scale-view";
+const CONTAINER_SELECTOR$2 = `.${VIEW_CLASS$1}`;
+
+// The initial percentage lefts. The layout pass converts them to pixels once it can
+// measure the rendered widths; until then the percentage is the honest approximation.
+const SIDE_LABEL_CLASS = { min: "rtc-range-scale-label-min", max: "rtc-range-scale-label-max" };
+
+function renderTopRow$1(content) {
+  const current = content.topLabels.current;
+  const sidesHtml = content.topLabels.sides
+    .map(
+      (side) =>
+        `<span class="${SIDE_LABEL_CLASS[side.role]}" style="left:${side.position}%">${escapeHtml(side.text)}</span>`
+    )
+    .join("\n            ");
+  return `
+          <div class="rtc-range-scale-top-row">
+            <span class="rtc-range-scale-label-current" style="left:${current.position}%">${escapeHtml(current.long)}</span>
+            ${sidesHtml}
+          </div>
+      `;
+}
+
+function renderMarkers$1(content) {
+  return `
+            ${renderMarker(content.markers.min, { classNames: "rtc-marker rtc-marker-cold" })}
+            ${renderMarker(content.markers.max, { classNames: "rtc-marker rtc-marker-warm" })}
+            ${renderMarker(content.markers.average, { classNames: "rtc-marker rtc-marker-avg" })}
+      `;
+}
+
+const rangeScaleView = {
+  key: "range_scale",
+
+  // The optional nodes of this view's markup (see scaleView.structureSignature()).
+  // The three top labels and the three markers are always emitted here, so only the
+  // two bands, the optimal label and the footer can appear or disappear.
+  structureSignature(content) {
+    return [
+      content.showComfortBand ? "c" : "-", // .rtc-comfort-band
+      content.showOptimalBand ? "o" : "-", // .rtc-optimal-band
+      content.optimalLabel ? "O" : "-", //    .rtc-scale-label-center
+      content.footerText === null ? "-" : "f", // .rtc-scale-footer
+    ].join("");
+  },
+
+  render(context, viewModel) {
+    const content = viewModel.views.byKey.range_scale;
+    return renderScaleBar({
+      content,
+      viewClass: VIEW_CLASS$1,
+      topRowHtml: renderTopRow$1(content),
+      markersHtml: renderMarkers$1(content),
+    });
+  },
+
+  patch(context, root, viewModel) {
+    const content = viewModel.views.byKey.range_scale;
+    if (!content) return;
+    const containerEl = root.querySelector(CONTAINER_SELECTOR$2);
+    if (!containerEl) return;
+    patchScaleBar(containerEl, content);
+    resolveOptimalLabelPosition(containerEl, content);
+
+    const currentLabelEl = containerEl.querySelector(".rtc-range-scale-label-current");
+    if (currentLabelEl) currentLabelEl.style.left = `${content.topLabels.current.position}%`;
+    for (const side of content.topLabels.sides) {
+      const sideEl = containerEl.querySelector(`.${SIDE_LABEL_CLASS[side.role]}`);
+      if (sideEl) sideEl.style.left = `${side.position}%`;
+    }
+
+    patchMarker(containerEl.querySelector(".rtc-marker-cold"), content.markers.min);
+    patchMarker(containerEl.querySelector(".rtc-marker-warm"), content.markers.max);
+    patchMarker(containerEl.querySelector(".rtc-marker-avg"), content.markers.average);
+
+    resolveRangeScaleLabels(containerEl, content);
+  },
+
+  resolveLayout(context, root, viewModel) {
+    const content = viewModel.views.byKey.range_scale;
+    if (!content) return;
+    const containerEl = root.querySelector(CONTAINER_SELECTOR$2);
+    if (!containerEl) return;
+    // This view has two label groups to resolve: the shared optimal label under the
+    // bar, and its own three top labels. Resolving only the second would leave the
+    // first at its unresolved initial percentage through the first render, a resize
+    // and font-ready, catching up only on the next data update.
+    resolveOptimalLabelPosition(containerEl, content);
+    resolveRangeScaleLabels(containerEl, content);
+  },
+};
+
+// The main scale view.
+//
+// A dynamic axis with a comfort band, an optimal band and one to N markers. This
+// module knows how those are drawn and patched; it decides nothing about what they
+// mean. Every string, colour, percentage and pixel offset it interpolates is already
+// finished on the view model.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+const VIEW_CLASS = "rtc-scale-view";
+const CONTAINER_SELECTOR$1 = `.${VIEW_CLASS}`;
+
+function renderMarkers(content) {
+  const extremaHtml = content.markers.extremes
+    ? `
+            ${renderMarker(content.markers.extremes.cold, { classNames: "rtc-marker rtc-marker-cold", useShift: true })}
+            ${renderMarker(content.markers.extremes.warm, { classNames: "rtc-marker rtc-marker-warm", useShift: true })}
+          `
+    : "";
+  const roomsHtml = content.markers.rooms
+    .map(
+      (marker) => `
+            ${renderMarker(marker, {
+              classNames: "rtc-marker rtc-marker-room",
+              extraAttributes: ` data-room-marker-index="${marker.index}"`,
+            })}
+          `
+    )
+    .join("");
+  const averageClass = content.emphasizeAverage ? " rtc-marker-emphasized" : "";
+
+  return `
+            ${extremaHtml}
+            ${roomsHtml}
+            ${renderMarker(content.markers.average, { classNames: `rtc-marker rtc-marker-avg${averageClass}` })}
+      `;
+}
+
+function renderTopRow(content) {
+  const comfortLabelHtml = content.comfortLabel
+    ? `<span class="rtc-scale-comfort-label" style="left:${content.comfortLabel.center}%"${content.comfortLabel.visible ? "" : " hidden"}>${escapeHtml(content.comfortLabel.text)}</span>`
+    : "";
+  return `
+          <div class="rtc-scale-comfort-row">
+            ${comfortLabelHtml}
+          </div>
+      `;
+}
+
+// `markers: all` is a keyed, data-driven marker set. Room availability can change
+// while the view itself stays mounted, so the markers are patched by the room's
+// original YAML index rather than by assuming the initial count is stable. These
+// markers are non-interactive, so adding and removing them cannot disturb focus.
+function patchRoomMarkers(context, containerEl, content) {
+  const bar = containerEl.querySelector(".rtc-scale-bar");
+  if (!bar) return;
+  const existing = new Map(
+    [...bar.querySelectorAll(".rtc-marker-room")].map((element) => [Number(element.dataset.roomMarkerIndex), element])
+  );
+  const averageMarkerEl = bar.querySelector(".rtc-marker-avg");
+  for (const marker of content.markers.rooms) {
+    let markerEl = existing.get(marker.index);
+    if (!markerEl) {
+      markerEl = context.createElement("div");
+      markerEl.className = "rtc-marker rtc-marker-room";
+      markerEl.dataset.roomMarkerIndex = String(marker.index);
+      bar.insertBefore(markerEl, averageMarkerEl);
+    }
+    patchMarker(markerEl, marker);
+    existing.delete(marker.index);
+  }
+  for (const stale of existing.values()) stale.remove();
+}
+
+const scaleView = {
+  key: "scale",
+
+  // Which parts of this view's markup are OPTIONAL and NOT reconciled by patch().
+  //
+  // A patcher can only change nodes that exist, so a change here means the view has to
+  // be rebuilt rather than patched. The list enumerates the optional NODES rather than
+  // the conditions behind them — two of them happen to share a condition today, and
+  // listing them separately means a later divergence between a band and its label is
+  // already covered without editing this function.
+  //
+  // The room markers are deliberately absent: patchRoomMarkers() creates and removes
+  // them itself, so listing them would cost a full rebuild — and a reset carousel —
+  // every time a single room came or went.
+  structureSignature(content) {
+    return [
+      content.showComfortBand ? "c" : "-", // .rtc-comfort-band
+      content.comfortLabel ? "C" : "-", //    .rtc-scale-comfort-label
+      content.showOptimalBand ? "o" : "-", // .rtc-optimal-band
+      content.optimalLabel ? "O" : "-", //    .rtc-scale-label-center
+      content.footerText === null ? "-" : "f", // .rtc-scale-footer
+      content.markers.extremes ? "x" : "-", // .rtc-marker-cold + .rtc-marker-warm
+    ].join("");
+  },
+
+  // The string renderers ignore the context — they produce markup, not nodes. The
+  // parameter is part of the registry's uniform contract.
+  render(context, viewModel) {
+    const content = viewModel.views.byKey.scale;
+    return renderScaleBar({
+      content,
+      viewClass: VIEW_CLASS,
+      topRowHtml: renderTopRow(content),
+      markersHtml: renderMarkers(content),
+    });
+  },
+
+  patch(context, root, viewModel) {
+    const content = viewModel.views.byKey.scale;
+    if (!content) return;
+    const containerEl = root.querySelector(CONTAINER_SELECTOR$1);
+    patchScaleBar(containerEl, content);
+    resolveOptimalLabelPosition(containerEl, content);
+    if (!containerEl) return;
+
+    const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
+    if (comfortLabelEl && content.comfortLabel) {
+      comfortLabelEl.style.left = `${content.comfortLabel.center}%`;
+      comfortLabelEl.textContent = content.comfortLabel.text;
+      comfortLabelEl.hidden = !content.comfortLabel.visible;
+    }
+
+    // The extrema markers only exist in room mode; the guards simply no-op otherwise.
+    if (content.markers.extremes) {
+      patchMarker(containerEl.querySelector(".rtc-marker-cold"), content.markers.extremes.cold, { useShift: true });
+      patchMarker(containerEl.querySelector(".rtc-marker-warm"), content.markers.extremes.warm, { useShift: true });
+    }
+    patchRoomMarkers(context, containerEl, content);
+    const averageMarkerEl = containerEl.querySelector(".rtc-marker-avg");
+    if (averageMarkerEl) {
+      patchMarker(averageMarkerEl, content.markers.average);
+      averageMarkerEl.classList.toggle("rtc-marker-emphasized", content.emphasizeAverage);
+    }
+  },
+
+  resolveLayout(context, root, viewModel) {
+    const content = viewModel.views.byKey.scale;
+    if (!content) return;
+    resolveOptimalLabelPosition(root.querySelector(CONTAINER_SELECTOR$1), content);
+  },
+};
+
+// The extreme-value view: two metric cards for the coldest and the warmest room.
+//
+// The two slots are role-keyed, not entity-keyed: when a different room becomes the
+// coldest, the same card node is patched with the new room's data rather than being
+// replaced. A focused card therefore never loses focus just because the room behind
+// it changed.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+const CONTAINER_SELECTOR = ".rtc-extremes-view";
+
+const extremesView = {
+  key: "extremes",
+
+  render(context, viewModel) {
+    return `
+        <div class="rtc-extremes-view">
+          ${renderMetricCards(viewModel.views.byKey.extremes.cards)}
+        </div>
+      `;
+  },
+
+  patch(context, root, viewModel) {
+    const content = viewModel.views.byKey.extremes;
+    if (!content) return;
+    patchMetricCardPair(root.querySelector(CONTAINER_SELECTOR), content.cards, () => renderMetricCards(content.cards));
+  },
+};
+
+// The view registry: which view is rendered by which module, in which order.
+//
+// Composed by walking VIEW_DEFINITIONS, so declaration order remains the ONE place
+// on-screen left-to-right order (and therefore auto-slide order) is decided. There is
+// deliberately no second array to keep in step: an implementation table keyed by view
+// key is looked up per definition, and every way the two can disagree fails at module
+// load rather than as an empty carousel slot at runtime.
+//
+// The registry is not imported by the card shell. The composition root hands it in, so
+// the shell has no way to name a view and no way to acquire an opinion about one.
+
+
+const IMPLEMENTATIONS = [rangeView, rangeScaleView, scaleView, extremesView];
+
+// Runs once, at module load.
+function composeRegistry() {
+  const definitionKeys = VIEW_DEFINITIONS.map((definition) => definition.key);
+  const duplicateDefinitions = definitionKeys.filter((key, index) => definitionKeys.indexOf(key) !== index);
+  if (duplicateDefinitions.length) {
+    throw new Error(`view registry: duplicate key(s) in VIEW_DEFINITIONS: ${duplicateDefinitions.join(", ")}`);
+  }
+
+  const byKey = new Map();
+  for (const implementation of IMPLEMENTATIONS) {
+    if (byKey.has(implementation.key)) {
+      throw new Error(`view registry: two implementations claim the key "${implementation.key}"`);
+    }
+    if (typeof implementation.render !== "function" || typeof implementation.patch !== "function") {
+      throw new Error(`view registry: view "${implementation.key}" must export both a render and a patch function`);
+    }
+    if (implementation.resolveLayout !== undefined && typeof implementation.resolveLayout !== "function") {
+      throw new Error(`view registry: view "${implementation.key}" declares a non-function resolveLayout`);
+    }
+    byKey.set(implementation.key, implementation);
+  }
+
+  const orphaned = [...byKey.keys()].filter((key) => !definitionKeys.includes(key));
+  if (orphaned.length) {
+    throw new Error(`view registry: implementation without a definition for view(s): ${orphaned.join(", ")}`);
+  }
+
+  return definitionKeys.map((key) => {
+    const implementation = byKey.get(key);
+    if (!implementation) throw new Error(`view registry: no implementation for view "${key}"`);
+    return implementation;
+  });
+}
+
+const VIEW_RENDERERS = composeRegistry();
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The design tokens, and the auto-slide keyframes that precede them.
+
+function tokensCss({ keyframes }) {
+  return `
+        ${keyframes}
+
+        :host {
+          display: block;
+          --rtc-radius: 20px;
+          --rtc-muted: var(--secondary-text-color);
+          --rtc-faint: color-mix(in srgb, var(--secondary-text-color) 72%, transparent);
+          --rtc-hairline: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 42%, transparent);
+          --rtc-panel: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+          --rtc-chip-bg: color-mix(in srgb, var(--primary-text-color) 3%, transparent);
+          --rtc-card-border: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 70%, transparent);
+          --rtc-top-overlay: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          -webkit-tap-highlight-color: transparent;
+        }
+
+`;
+}
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The card surface, its content root and the accent line across the top.
+
+const CARD_CSS = `        .rtc-card {
+          container: rtc-card / inline-size;
+          border-radius: var(--rtc-radius);
+          padding: 0;
+          overflow: hidden;
+          background: linear-gradient(135deg, var(--rtc-top-overlay), transparent), var(--ha-card-background, var(--card-background-color));
+          border: 1px solid var(--rtc-card-border);
+          box-shadow: var(--ha-card-box-shadow, 0 8px 26px rgba(0,0,0,0.18));
+        }
+
+        .rtc-root {
+          position: relative;
+          padding: 15px 16px 16px;
+          display: grid;
+          gap: 11px;
+        }
+
+        .rtc-top-line {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 3px;
+          background: linear-gradient(90deg, var(--tone-color), transparent);
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The header row: icon badge, title block, status pill — and the main panel it sits above.
+
+const HEADER_CSS = `        .rtc-header {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 11px;
+          align-items: center;
+          min-width: 0;
+        }
+
+        .rtc-icon-badge {
+          width: 39px;
+          height: 39px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--tone-soft);
+          border: 1px solid var(--tone-border);
+        }
+
+        .rtc-icon-badge ha-icon {
+          width: 22px;
+          height: 22px;
+          color: var(--tone-color);
+        }
+
+        .rtc-title-block {
+          min-width: 0;
+        }
+
+        .rtc-title {
+          font-size: 21px;
+          font-weight: 920;
+          line-height: 1.05;
+          color: var(--primary-text-color);
+        }
+
+        .rtc-subtitle {
+          margin-top: 4px;
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1.25;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-status-pill {
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+          color: var(--tone-color);
+          background: var(--tone-soft);
+          border: 1px solid var(--tone-border);
+        }
+
+        .rtc-main-panel {
+          display: grid;
+          grid-template-columns: minmax(94px, 106px) minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          border-radius: 17px;
+          padding: 9px 10px;
+          background: var(--rtc-panel);
+          border: 1px solid var(--rtc-hairline);
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The average: its button and disabled shapes, the value, the unit and the trend arrow.
+
+const AVERAGE_CSS = `        button {
+          appearance: none;
+          -webkit-appearance: none;
+          font: inherit;
+          color: inherit;
+          border: 0;
+          margin: 0;
+          text-align: left;
+        }
+
+        .rtc-avg-button {
+          position: relative;
+          display: block;
+          width: 100%;
+          min-width: 0;
+          border-radius: 13px;
+          cursor: pointer;
+          background: transparent;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-avg-button-disabled {
+          cursor: default;
+        }
+
+        .rtc-avg-button:focus-visible,
+        .rtc-room-chip:focus-visible,
+        .rtc-extreme-card:focus-visible {
+          outline: 2px solid var(--tone-color);
+          outline-offset: 2px;
+        }
+
+        .rtc-avg-label {
+          display: block;
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .075em;
+          text-transform: uppercase;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-avg-value {
+          display: block;
+          margin-top: 4px;
+          font-size: 33px;
+          font-weight: 950;
+          line-height: .95;
+          color: var(--primary-text-color);
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+        }
+
+        .rtc-avg-unit-wrap {
+          display: inline-block;
+        }
+
+        .rtc-avg-unit-gap {
+          font-size: 14px;
+        }
+
+        .rtc-avg-unit-core {
+          display: inline;
+        }
+
+        .rtc-avg-button.rtc-has-trend .rtc-avg-unit-core {
+          display: inline-grid;
+          grid-template-rows: minmax(0, 1fr) auto;
+          justify-items: center;
+          align-items: center;
+          height: .95em;
+          vertical-align: bottom;
+        }
+
+        .rtc-avg-value-unit {
+          display: inline;
+          font-size: 14px;
+          font-weight: 750;
+          line-height: 1;
+          color: var(--rtc-faint);
+        }
+
+        .rtc-avg-trend-arrow {
+          display: block;
+          align-self: end;
+          width: 10px;
+          height: 10px;
+          color: var(--rtc-muted);
+          transform: translateY(-1px);
+        }
+
+        .rtc-avg-trend-arrow-svg {
+          display: block;
+          width: 10px;
+          height: 10px;
+          overflow: visible;
+          stroke-width: 1.2;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          transform: rotate(0deg);
+          transform-origin: center;
+        }
+
+        .rtc-avg-button[data-trend-direction="stable"] .rtc-avg-trend-arrow-svg {
+          transform: rotate(45deg);
+        }
+
+        .rtc-avg-button[data-trend-direction="falling"] .rtc-avg-trend-arrow-svg {
+          transform: rotate(90deg);
+        }
+
+        .rtc-avg-trend-arrow[hidden] {
+          display: none;
+        }
+
+        .rtc-rotator,
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The view carousel: the rotator, the track and one view's slot in it.
+
+function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
+  return `        .rtc-rotator-solo {
+          min-width: 0;
+          height: 70px;
+          /* Keep the carousel clipped horizontally, but extend its paint
+             viewport upward for RangeScale's collision-only upper label.
+             overflow:hidden and paint containment both clipped at the
+             border box, which cut the label under Home Assistant's real
+             font metrics. The directional clip changes paint only: layout,
+             row heights, and the scale-bar position remain untouched. */
+          overflow: visible;
+          clip-path: inset(-10px 0 0 0);
+          border-radius: 14px;
+          contain: layout style;
+        }
+
+        .rtc-rotator {
+          /* Only the swipeable rotator needs pan-y so vertical scroll still reaches the browser. */
+          touch-action: pan-y;
+        }
+
+        .rtc-no-views {
+          /* _renderNoActiveViews(): a requested-but-unavailable view (e.g.
+             range_scale with no valid range_entity) falls back to this
+             localized one-line hint instead of the usual view content.
+             Previously unstyled — it inherited plain block/left/top text
+             instead of matching the rest of the card's centered, muted
+             typography. Same box as .rtc-rotator-solo above (this class is
+             always combined with it, never alone), so centering here only
+             needs flex on that existing 70px-tall box. */
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 0 14px;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.3;
+          color: var(--secondary-text-color);
+        }
+
+        .rtc-track {
+          /* Width is views.length*100% so all views sit correctly side by side. */
+          display: flex;
+          width: ${Math.max(1, viewCount) * 100}%;
+          height: 70px;
+          align-items: stretch;
+          ${trackAnimationCss}
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          will-change: transform;
+        }
+
+        .rtc-track.rtc-manual {
+          animation: none !important;
+        }
+
+        .rtc-view {
+          /* Width is 100/views.length % of the track's own width. */
+          flex: 0 0 ${viewWidthPct}%;
+          width: ${viewWidthPct}%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+`;
+}
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The main scale view's own layout and its comfort pill.
+
+const SCALE_VIEW_CSS = `        .rtc-scale-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          padding: 0 1px;
+        }
+
+        .rtc-scale-comfort-row {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 800;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-scale-comfort-label {
+          position: absolute;
+          top: 0;
+          transform: translateX(-50%);
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The daily-range scale view: its three top labels and the lifted-label row.
+
+const RANGE_SCALE_VIEW_CSS = `        /* "rangeScale" view (optional, requested via views:
+           [{type:"range_scale"}]): same overall
+           layout as .rtc-scale-view, but its top row holds three labels
+           (current/min/max) above their markers instead of one centered
+           "Komfort" pill — positions set/corrected in JS, see
+           _renderRangeScaleView()/_resolveRangeScaleLabels(). */
+        .rtc-range-scale-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          padding: 0 1px;
+        }
+
+        .rtc-range-scale-top-row {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 800;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-range-scale-label-current,
+        .rtc-range-scale-label-min,
+        .rtc-range-scale-label-max {
+          position: absolute;
+          top: 0;
+          /* JS sets style.left to a resolved center px value (see
+             _resolveRangeScaleLabels()), which this transform then centers
+             on. current is a FIXED pivot — always exactly centered on the
+             .rtc-marker-avg current-value marker, never repositioned by
+             collision avoidance. Only min/max drift off-center from their
+             own marker, and only when they'd otherwise overlap current or
+             each other. Ellipsis only actually engages when
+             _resolveRangeScaleLabels()/_layoutSideLabelGroup() sets an
+             explicit max-width (a side group doesn't fit even at natural
+             width, or — rarely — current alone is wider than the whole bar)
+             — harmless no-op otherwise. */
+          transform: translateX(-50%);
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* When one historical label cannot fit between the fixed current
+           pivot and its outer edge, only that colliding label moves to the
+           upper line. Current and any non-colliding historical label share
+           the lower line. The row height itself stays 12px, so the scale
+           bar's grid position never changes. */
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-current,
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-min,
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-max {
+          top: 4px;
+          line-height: 12px;
+        }
+
+        .rtc-range-scale-top-row.rtc-range-scale-has-upper
+          .rtc-range-scale-label-upper {
+          top: -8px;
+          line-height: 12px;
+          /* The generic label rule clips horizontally for the genuine
+             narrow-bar ellipsis fallback. A lifted min/max label instead
+             sits partly outside its normal line box; Home Assistant's real
+             font rasterization can paint glyph ink beyond that tight box
+             (most visibly the i-dot in "min"). Let the short historical
+             label paint freely in both axes so neither min nor max can
+             self-clip. Position, row height, and therefore the bar stay
+             byte-for-byte unchanged. */
+          overflow: visible;
+          text-overflow: clip;
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The bar itself: bands, markers, edge labels and the footer — shared by both scale views.
+
+const SCALE_BAR_CSS = `        .rtc-scale-bar {
+          position: relative;
+          height: 9px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+          overflow: visible;
+          border: 1px solid var(--rtc-hairline);
+        }
+
+        .rtc-comfort-band,
+        .rtc-optimal-band,
+        .rtc-marker {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+        }
+
+        .rtc-comfort-band {
+          background: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+          z-index: 1;
+        }
+
+        .rtc-optimal-band {
+          background: var(--tone-band);
+          z-index: 2;
+        }
+
+        .rtc-marker {
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: 4px;
+          height: 17px;
+          border-radius: 999px;
+          background: var(--marker-color);
+          box-shadow: 0 0 0 3px var(--marker-shadow);
+        }
+
+        .rtc-marker-cold { z-index: 4; }
+        .rtc-marker-warm { z-index: 5; }
+        .rtc-marker-room {
+          height: 13px;
+          z-index: 4;
+        }
+        .rtc-marker-avg {
+          height: 15px;
+          z-index: 6;
+        }
+        .rtc-marker-avg.rtc-marker-emphasized {
+          height: 19px;
+        }
+
+        .rtc-scale-labels {
+          position: relative;
+          height: 12px;
+          font-size: 10px;
+          font-weight: 750;
+          color: var(--rtc-faint);
+          white-space: nowrap;
+        }
+
+        .rtc-scale-labels span {
+          position: absolute;
+          top: 0;
+          /* Ellipsis only actually engages on .rtc-scale-label-center, and
+             only when _resolveOptimalLabelPosition() sets an explicit
+             max-width (no non-overlapping position fits) — harmless no-op
+             on min/max, which never get a max-width. */
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-scale-label-min { left: 0; }
+        .rtc-scale-label-center { transform: translateX(-50%); }
+        .rtc-scale-label-max { right: 0; }
+
+        .rtc-scale-footer {
+          font-size: 10.5px;
+          font-weight: 750;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-extremes-view,
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The metric cards used by the daily-range and extreme-value views.
+
+const CARDS_CSS = `        .rtc-range-view {
+          height: 70px;
+          box-sizing: border-box;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          padding: 0 1px;
+        }
+
+        .rtc-extreme-card {
+          position: relative;
+          min-width: 0;
+          height: 70px;
+          box-sizing: border-box;
+          border-radius: 14px;
+          padding: 8px 9px 7px;
+          overflow: hidden;
+          display: grid;
+          grid-template-columns: 1fr;
+          grid-template-rows: auto auto 1fr;
+          column-gap: 0;
+          row-gap: 1px;
+          background: linear-gradient(135deg, var(--extreme-bg), transparent 72%);
+          border: 1px solid var(--extreme-border);
+          box-shadow: inset 0 1px 0 color-mix(in srgb, var(--extreme-color) 16%, transparent);
+          cursor: pointer;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-extreme-line {
+          position: absolute;
+          left: 0;
+          top: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(90deg, var(--extreme-color), transparent);
+          box-shadow: 0 0 10px var(--extreme-line-shadow);
+          opacity: .98;
+        }
+
+        .rtc-extreme-label {
+          grid-column: 1;
+          grid-row: 1;
+          min-width: 0;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0;
+          color: var(--extreme-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.05;
+          opacity: .94;
+        }
+
+        .rtc-extreme-name {
+          grid-column: 1;
+          grid-row: 2;
+          align-self: start;
+          min-width: 0;
+          max-width: 100%;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.05;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rtc-extreme-value {
+          grid-column: 1;
+          grid-row: 3;
+          align-self: end;
+          justify-self: end;
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-end;
+          font-size: 25px;
+          font-weight: 950;
+          line-height: .88;
+          color: var(--extreme-color);
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+          letter-spacing: -.02em;
+          min-width: 0;
+        }
+
+        .rtc-extreme-value-unit {
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: 0;
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The room chip grid: rows, chips, labels, marks and values.
+
+const ROOMS_CSS = `        .rtc-room-grid {
+          /* One .rtc-room-row per row (see _roomGridRows()) — a plain flex
+             column, since native CSS grid can't vary column count per row
+             within a single grid. gap here is the vertical row gap. */
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .rtc-room-row {
+          display: grid;
+          /* grid-template-columns is set inline (repeat(rowSize, ...)) to match that row's chip count. */
+          gap: 6px;
+        }
+
+        .rtc-room-chip {
+          min-width: 0;
+          border-radius: 13px;
+          padding: 7px 7px 8px;
+          background: var(--room-bg);
+          border: 1px solid var(--room-border);
+          cursor: pointer;
+          touch-action: manipulation;
+          user-select: none;
+          outline: none;
+        }
+
+        .rtc-room-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .rtc-room-short {
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .04em;
+          color: var(--rtc-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+
+        /* Guarantees full visibility for an exactly-two-uppercase-letter
+           label (see TWO_UPPER_LETTER_RE / validRooms.shortGuaranteed) --
+           overflow:visible alone would not be enough, since .rtc-room-chip
+           itself clips at narrow widths (see the 460px/600px breakpoints
+           below) and .rtc-room-short competes for space in .rtc-room-top
+           with the fixed 15px .rtc-room-mark and its 4px gap. Presence-only
+           attribute selector: _patchRoomChip() sets/clears this via
+           toggleAttribute(), which does not guarantee the "true" value. */
+        .rtc-room-short[data-short-guaranteed] {
+          flex: 0 0 auto;
+          min-width: max-content;
+          overflow: visible;
+          text-overflow: clip;
+        }
+
+        .rtc-room-mark {
+          flex: 0 0 15px;
+          width: 15px;
+          height: 15px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 9px;
+          font-weight: 900;
+          line-height: 1;
+          color: var(--room-color);
+          background: var(--room-mark-bg);
+        }
+
+        .rtc-room-value {
+          display: flex;
+          align-items: baseline;
+          gap: 1px;
+          margin-top: 5px;
+          font-size: 17px;
+          font-weight: 920;
+          line-height: 1;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .rtc-room-value-unit {
+          flex: 0 0 auto;
+          font-size: 10px;
+          font-weight: 750;
+          color: var(--rtc-faint);
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The empty state.
+
+const EMPTY_CSS = `        .rtc-empty {
+          padding: 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .rtc-empty-icon {
+          width: 38px;
+          height: 38px;
+          flex: 0 0 auto;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--rtc-panel);
+          border: 1px solid var(--rtc-hairline);
+        }
+
+        .rtc-empty-icon ha-icon {
+          width: 22px;
+          height: 22px;
+          color: var(--secondary-text-color);
+        }
+
+        .rtc-empty-copy {
+          min-width: 0;
+        }
+
+        .rtc-empty-title {
+          font-size: 21px;
+          font-weight: 900;
+          color: var(--primary-text-color);
+          line-height: 1.05;
+        }
+
+        .rtc-empty-subtitle {
+          margin-top: 4px;
+          font-size: 12px;
+          color: var(--secondary-text-color);
+          line-height: 1.3;
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The container queries, plus the width-based fallback for browsers without container support.
+
+const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
+          .rtc-root { padding: 14px; }
+          .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+          .rtc-avg-value { font-size: 29px; }
+          .rtc-room-grid { gap: 5px; }
+          .rtc-room-row { gap: 5px; }
+          .rtc-room-chip {
+            padding-left: 5px;
+            padding-right: 5px;
+            overflow: hidden;
+          }
+          .rtc-room-value {
+            font-size: 14px;
+            gap: 0;
+            letter-spacing: 0;
+            min-width: 0;
+          }
+          .rtc-room-value-unit {
+            font-size: 7.5px;
+            line-height: 1;
+            transform: translateY(-1px);
+          }
+          .rtc-room-short { font-size: 10px; }
+          .rtc-extremes-view,
+          .rtc-range-view { gap: 6px; }
+          .rtc-extreme-card {
+            height: 70px;
+            padding: 8px 7px 7px;
+          }
+          .rtc-extreme-label {
+            grid-column: 1;
+            grid-row: 1;
+            font-size: 9.5px;
+            white-space: nowrap;
+          }
+          .rtc-extreme-name {
+            font-size: 12.5px;
+          }
+          .rtc-extreme-value {
+            font-size: 22px;
+          }
+          .rtc-extreme-value-unit { font-size: 9px; }
+        }
+
+        @container rtc-card (max-width: 360px) {
+          .rtc-main-panel {
+            grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+          }
+          .rtc-rotator,
+          .rtc-rotator-solo,
+          .rtc-track,
+          .rtc-scale-view,
+          .rtc-range-scale-view,
+          .rtc-extremes-view,
+          .rtc-range-view {
+            height: 74px;
+          }
+          .rtc-extreme-card {
+            height: 74px;
+            padding-left: 6px;
+            padding-right: 6px;
+          }
+          .rtc-extreme-label {
+            font-size: 9px;
+          }
+          .rtc-extreme-name {
+            font-size: 12px;
+          }
+          .rtc-extreme-value {
+            font-size: 21px;
+          }
+        }
+
+        @supports not (container-type: inline-size) {
+          @media (max-width: 600px) {
+            .rtc-root { padding: 14px; }
+            .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+            .rtc-avg-value { font-size: 29px; }
+            .rtc-room-grid { gap: 5px; }
+            .rtc-room-row { gap: 5px; }
+            .rtc-room-chip {
+              padding-left: 5px;
+              padding-right: 5px;
+              overflow: hidden;
+            }
+            .rtc-room-value {
+              font-size: 14px;
+              gap: 0;
+              letter-spacing: 0;
+              min-width: 0;
+            }
+            .rtc-room-value-unit {
+              font-size: 7.5px;
+              line-height: 1;
+              transform: translateY(-1px);
+            }
+            .rtc-room-short { font-size: 10px; }
+            .rtc-extremes-view,
+            .rtc-range-view { gap: 6px; }
+            .rtc-extreme-card {
+              height: 70px;
+              padding: 8px 7px 7px;
+            }
+            .rtc-extreme-label {
+              font-size: 9.5px;
+              white-space: nowrap;
+            }
+            .rtc-extreme-name {
+              font-size: 12.5px;
+            }
+            .rtc-extreme-value {
+              font-size: 22px;
+            }
+            .rtc-extreme-value-unit { font-size: 9px; }
+          }
+
+          @media (max-width: 380px) {
+            .rtc-main-panel {
+              grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+            }
+            .rtc-rotator,
+            .rtc-rotator-solo,
+            .rtc-track,
+            .rtc-scale-view,
+            .rtc-range-scale-view,
+            .rtc-extremes-view,
+            .rtc-range-view {
+              height: 74px;
+            }
+            .rtc-extreme-card {
+              height: 74px;
+              padding-left: 6px;
+              padding-right: 6px;
+            }
+            .rtc-extreme-label {
+              font-size: 9px;
+            }
+            .rtc-extreme-name {
+              font-size: 12px;
+            }
+            .rtc-extreme-value {
+              font-size: 21px;
+            }
+          }
+        }
+
+`;
+
+// PART OF THE SHIPPED STYLESHEET.
+//
+// Every byte below — including the indentation, the blank lines and the comments —
+// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
+// file is a contiguous slice of one stylesheet, not a self-contained block: the
+// sections are concatenated in the order styles/index.js lists them, and reordering,
+// reindenting or reformatting any of them changes the shipped CSS.
+
+// The reduced-motion overrides.
+
+const MOTION_CSS = `        @media (prefers-reduced-motion: reduce) {
+          /* Disables the auto animation; transform isn't !important, so manual swiping still works. */
+          .rtc-track {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      `;
+
+// The card's complete stylesheet, assembled from its sections.
+//
+// The sections are contiguous slices of one original stylesheet and are joined with
+// NOTHING between them: each slice already carries the blank line that separated it
+// from the next. That is what makes this composition byte-identical to the single
+// template it replaced, and why the order below is normative rather than cosmetic.
+//
+// Only four values vary per render, and all four come from the carousel: the
+// generated auto-slide keyframes, the track's animation declarations, how many views
+// are mounted, and how wide one view is inside the track. Everything else is static.
+//
+// Deliberately NOT adoptedStyleSheets: the card ships one <style> element inside its
+// shadow root, which is what the DOM characterization baselines capture and what makes
+// the stylesheet inspectable in the browser's element panel.
+
+
+function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) {
+  return [
+    tokensCss({ keyframes }),
+    CARD_CSS,
+    HEADER_CSS,
+    AVERAGE_CSS,
+    carouselCss({ trackAnimationCss, viewCount, viewWidthPct }),
+    SCALE_VIEW_CSS,
+    RANGE_SCALE_VIEW_CSS,
+    SCALE_BAR_CSS,
+    CARDS_CSS,
+    ROOMS_CSS,
+    EMPTY_CSS,
+    RESPONSIVE_CSS,
+    MOTION_CSS,
+  ].join("");
+}
+
 // Build entry module. Rollup bundles this into the single, dependency-free
 // IIFE that Home Assistant loads (dist/room-climate-card.js) — the IIFE
 // wrapper and "use strict" prologue that used to be written by hand here are
@@ -2713,31 +8560,42 @@ function classifyTrendRate(canonicalValue, policy) {
 // `npm run build` regenerates it, `npm run verify:dist` proves the committed
 // copy still matches this source.
 //
-// This module is the composition root, and it is shrinking. Already extracted:
-// card identity, numeric/text/colour primitives and the slide easing (core/),
-// the whole i18n subsystem (i18n/), the static configuration foundations
-// (config/), and the measurement domain — unit tokens and conversion, the
-// metric definitions with their unit profiles, the derived metric-kind
-// resolution, the six classification profiles with their registry, and the
-// trend rules (domain/).
+// This module is the composition root, and it is shrinking. The whole data path is
+// now extracted:
 //
-// What is still HERE, to be moved in later, individually verifiable steps:
-//   - configuration orchestration and normalization (setConfig(),
-//     _normalizeConfig() and everything it calls)
-//   - METRIC_META (presentation metadata: title keys, icons, decimals)
-//   - VIEW_REGISTRY (still carries render/update callbacks, so it belongs to
-//     the views/render phase)
-//   - the remaining domain services (classification resolution/projection,
-//     numeric classification, scale geometry)
-//   - _computeData()
-//   - the renderers, _styles(), the runtime (carousel, timers, pointer and
-//     event handling) and the custom element itself
+//   core/                     card identity, numbers, text, colour, easing
+//   config/                   the complete YAML normalization
+//   i18n/                     languages, registry, formatting, translation
+//   domain/                   units and conversion, metric definitions and kind
+//                             resolution, classification profiles and services,
+//                             scale geometry, trend rules
+//   application/model/        EntityModel, MeasurementContext, aggregates,
+//                             auxiliary models, the CardDomainModel
+//   presentation/view-model/  METRIC_META, tone, room layout, view state, the
+//                             per-view content models, the CardViewModel and the
+//                             temporary legacy DTO adapter
+//   render/primitives/        the RenderContext plus the average, room grid, metric
+//                             card, marker, scale bar, empty state and focus fallback
+//   render/layout/            long/short label resolution and collision-free label
+//                             placement, measured against the real rendered widths
+//   render/composition/       the card shell: header, average, view area, chips
+//   views/                    one module per view, plus the registry composed from
+//                             the view definitions' own order
+//   styles/                   the stylesheet
+//
+// What is still HERE, for the platform/controller/element step that follows:
+//   - the carousel timing, the auto-slide keyframes and the accessibility sync
+//   - the pointer gestures, the timers, the resize observer and the event wiring
+//   - the custom element itself: lifecycle, render scheduling, memoization and
+//     the stateful, deduplicated console diagnostics
+//   - thin delegations that existing element-level tests still call directly;
+//     each forwards to a module and holds no logic of its own
 //
 // Import direction is enforced by test/unit/architecture-imports.test.js:
 //
 //   core -> config / i18n / domain -> application/model
-//        -> presentation/view-model -> views + render
-//        -> controllers/runtime -> element -> this file
+//        -> presentation/view-model -> render/primitives + render/layout + styles
+//        -> views + render/composition -> controllers/runtime -> element -> this file
 //
 // Nothing below may be imported by a module above it, and Rollup's onwarn
 // (see rollup.config.mjs) turns any cycle or unresolved specifier into a
@@ -2753,278 +8611,24 @@ function classifyTrendRate(canonicalValue, policy) {
   // built-in profiles, or a validated custom YAML profile. A profile owns
   // tiers, score/zone metadata, bands, scale policy, and profile icons together.
 
-
-
-
-
-
-  // Display metadata per detected card mode: title key (see i18n/registry.js),
-  // icon (normal/empty state), unit fallback (only used when the entity has
-  // no unit_of_measurement), default decimal places for _fmt(), the
-  // translation keys for the coldest/warmest-equivalent room labels and the
-  // above/below-comfort subtitle adjective (see _extremeRoomLabel()), and
-  // autoRoomColumns (the metric-specific max chips per row used by
-  // _roomGridRows() in fully automatic mode — see _autoRoomColumnsFor()).
-  // This registry intentionally contains presentation metadata only. Comfort,
-  // optimal and base-scale bands belong to CLASSIFICATION_PROFILE_REGISTRY
-  // and are selected atomically by _resolveClassificationProfile().
-  const METRIC_META = {
-    temperature: {
-      titleKey: "title.temperature",
-      icon: "mdi:thermometer",
-      emptyIcon: "mdi:thermometer-off",
-      unitFallback: METRIC_DEFINITIONS.temperature.canonicalUnit,
-      decimals: 1,
-      lowRoomKey: "card.coldestRoom",
-      highRoomKey: "card.warmestRoom",
-      aboveAdjectiveKey: "adjective.warm",
-      belowAdjectiveKey: "adjective.cool",
-      autoRoomColumns: 7,
-    },
-    humidity: {
-      titleKey: "title.humidity",
-      icon: "mdi:water-percent",
-      emptyIcon: "mdi:water-off",
-      unitFallback: METRIC_DEFINITIONS.humidity.canonicalUnit,
-      decimals: 1,
-      lowRoomKey: "card.driestRoom",
-      highRoomKey: "card.mostHumidRoom",
-      aboveAdjectiveKey: "adjective.humid",
-      belowAdjectiveKey: "adjective.dry",
-      autoRoomColumns: 7,
-    },
-    co2: {
-      titleKey: "title.co2",
-      icon: "mdi:molecule-co2",
-      emptyIcon: "mdi:molecule-co2",
-      unitFallback: METRIC_DEFINITIONS.co2.canonicalUnit,
-      decimals: 0,
-      lowRoomKey: "card.lowestRoom",
-      highRoomKey: "card.highestRoom",
-      aboveAdjectiveKey: "adjective.elevated",
-      belowAdjectiveKey: "adjective.low",
-      autoRoomColumns: 5,
-    },
-    pm25: {
-      titleKey: "title.pm25",
-      icon: "mdi:molecule",
-      emptyIcon: "mdi:molecule",
-      unitFallback: METRIC_DEFINITIONS.pm25.canonicalUnit,
-      decimals: 1,
-      lowRoomKey: "card.lowestRoom",
-      highRoomKey: "card.highestRoom",
-      aboveAdjectiveKey: "adjective.elevated",
-      belowAdjectiveKey: "adjective.low",
-      autoRoomColumns: 5,
+  // ==== Composition: what the configuration layer is handed ====
+  // config/ deliberately imports neither the domain, the i18n registry nor the
+  // view registry — it normalizes input shapes, it does not own semantics. The
+  // few facts it nevertheless needs are injected from here, which keeps the
+  // dependency pointing one way and keeps a single copy of every registry.
+  //
+  // The lookups are wrapped rather than passed through so the configuration
+  // layer never sees a registry object it could index into directly.
+  const CONFIG_COLLABORATORS = {
+    classificationZones: CLASSIFICATION_ZONES,
+    isSupportedLanguage,
+    optionSchemaForView,
+    metricKindForUnit: (unit) => METRIC_TYPE_BY_UNIT[normalizeUnitToken(unit)],
+    unitProfileForUnit: (metricKind, unit) => {
+      const profileKey = resolveUnitProfileKey(metricKind, unit);
+      return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
   };
-
-
-
-
-
-
-
-
-
-
-
-
-  // Describes each possible carousel view: when it's shown (condition), how
-  // to render its initial HTML, and how to patch it on a data-only update.
-  // Registry declaration order is the only thing that determines on-screen
-  // left-to-right order — _computeData() builds data.views by filtering
-  // this table in order, and the DOM/track/auto-slide navigation (see
-  // _holdSequence()) all consume that same ordered list as their single
-  // position source. There's no "anchor"/"slot" concept: adding a new view
-  // anywhere in this list only needs a new entry here plus its render/
-  // update functions, in the position where it should appear on screen —
-  // nothing else needs to change.
-
-
-  const VIEW_REGISTRY = [
-    {
-      key: "range",
-      condition: (data) => data.hasRange,
-      // AP-04 (audit 11.2): "auto" resolution (used when views: is omitted,
-      // or when a listed object explicitly says enabled:auto) mirrors
-      // condition() (available -> shown) for
-      // every view except range_scale, whose own default is off (see there).
-      defaultEnabled: (data) => data.hasRange,
-      // Review fix (P1, post-2.21.1, audit 14.4): whitelist of views:[i].options
-      // keys this view actually implements — see _normalizeViewOptions().
-      // AP-C3 (audit 23.2): show_time toggles whether the daily min/max
-      // cards show their timestamp (_renderRangeCards()'s `name` slot,
-      // reused from the extremes-card room-name field — see there); the
-      // value itself is unaffected either way.
-      optionsSchema: { show_time: boolOption(true) },
-      render: (card, data) => card._renderRangeView(data),
-      // AP-09 (audit 18): keyed patch-in-place instead of innerHTML
-      // replacement -- see _updateRangeCards().
-      update: (card, root, data) => card._updateRangeCards(root.querySelector(".rtc-range-view"), data),
-    },
-    {
-      // AP-04: YAML type "range_scale" (snake_case, renamed from the
-      // pre-AP-04 "rangeScale" key/range_scale_view flag — the ONLY thing
-      // renamed; internal method/CSS/data-field names below
-      // (_renderRangeScaleView/_updateRangeScaleView, hasRangeScale,
-      // .rtc-range-scale-view) are an implementation detail, not a public
-      // YAML surface, and stay as-is). condition() is now pure availability
-      // (rangeScaleAvailable, see _computeData()) — the old
-      // config.range_scale_view gate is gone; "auto" leaves it OFF by
-      // default (audit 11.2) — it appears when views: explicitly lists it
-      // (string or object form, both normalize to enabled:true).
-      key: "range_scale",
-      condition: (data) => data.rangeScaleAvailable,
-      defaultEnabled: () => false,
-      // Teil 2 (view-customizer Baukasten): purely visual band toggles —
-      // each suppresses both the colored band and its descriptive label
-      // (range_scale only has an optimal label; its top row is reserved
-      // for current/min/max). See the identical pair on "scale" below for
-      // the full rationale. Independent per view: range_scale and scale
-      // can show different bands.
-      // AP-C3 (audit 23.2): footer has three states — "detailed" (default,
-      // today's unchanged text incl. min/max timestamps), "compact" (same
-      // template minus the timestamps, see _rangeScaleFooterText()), or
-      // false (no footer at all for THIS view, independent of but ANDed
-      // with the global hide_footer).
-      optionsSchema: {
-        show_comfort_band: boolOption(true),
-        show_optimal_band: boolOption(true),
-        footer: enumOption("detailed", ["compact", "detailed", false]),
-      },
-      render: (card, data) => card._renderRangeScaleView(data),
-      update: (card, root, data) => card._updateRangeScaleView(root, data),
-    },
-    {
-      key: "scale",
-      condition: () => true,
-      // AP-04: "mandatory" is gone entirely — a views: config that omits
-      // "scale" now genuinely omits it (views: is fully authoritative when
-      // present, see resolveActiveViews()). Its own defaultEnabled is
-      // unconditionally true only because condition() itself always is;
-      // there's no longer any special protection against disabling it.
-      defaultEnabled: () => true,
-      // Teil 2 (view-customizer Baukasten, user request): show_comfort_band/
-      // show_optimal_band toggle whether the two background <div>s
-      // (.rtc-comfort-band/.rtc-optimal-band) and their matching
-      // descriptive labels render — see _renderScaleBar()/
-      // _renderScaleView(). Purely visual: comfortMin/Max, optimalMin/Max,
-      // classification/tone, footer text, and marker colors are computed
-      // completely independently of these and never read them.
-      // AP-C3 (audit 23.2): footer:false suppresses the comfort-count
-      // footer text (ANDed with the global hide_footer, same convention as
-      // range_scale's footer option). markers:"extremes" (default) is the
-      // established coldest+warmest+avg behavior; "average" leaves only the
-      // avg marker; "all" renders every valid configured room plus avg.
-      optionsSchema: {
-        show_comfort_band: boolOption(true),
-        show_optimal_band: boolOption(true),
-        footer: boolOption(true),
-        markers: enumOption("extremes", ["average", "extremes", "all"]),
-      },
-      render: (card, data) => card._renderScaleView(data),
-      update: (card, root, data) => card._updateScaleView(root, data),
-    },
-    {
-      key: "extremes",
-      condition: (data) => data.hasRoomsView,
-      defaultEnabled: (data) => data.hasRoomsView,
-      // AP-C3 (audit 23.2): show_value toggles the numeric value on the
-      // coldest/warmest cards (_renderMetricCard()'s shared showValue
-      // param, see there) — label/room name/color stay regardless.
-      optionsSchema: { show_value: boolOption(true) },
-      render: (card, data) => card._renderExtremesView(data),
-      // AP-09 (audit 18): keyed patch-in-place instead of innerHTML
-      // replacement -- see _updateExtremeCards().
-      update: (card, root, data) => card._updateExtremeCards(root.querySelector(".rtc-extremes-view"), data),
-    },
-  ];
-
-  function resolveActiveViews(registry, model, config) {
-    // Pure function (no `this`, directly unit-testable): resolves the
-    // final ordered list of active view keys from the caller's views:
-    // config (AP-04, audit sections 11, 12, 14.3-14.5) — a list of
-    // {type, enabled, options} requests (both string shorthand and an object
-    // without enabled normalize to enabled:true) — layered on VIEW_REGISTRY's
-    // condition()/defaultEnabled(). Without views: configured (config.views
-    // is null, the _normalizeConfig() sentinel for "not set"), requests
-    // defaults to one "auto" entry per registry key in registry order —
-    // today's exact 1:1 behavior, unchanged.
-    //
-    // views: IS the single public view-configuration surface, and is fully
-    // AUTHORITATIVE the moment it's present (even as an explicit empty
-    // list): only listed types can ever appear, in exactly the listed
-    // order — a type the list doesn't mention is simply never shown, no
-    // "always append what's missing" fallback (a real behavior change from
-    // the old view_order, deliberate per the audit). Each request is kept
-    // separate along all three axes the audit requires: `requested` (did
-    // the user's own enabled:true/false/"auto"-resolved-via-defaultEnabled()
-    // ask for it), `available` (does condition() say it COULD show), and
-    // `active` (both) — entries (not just the flat key list) are returned
-    // for any future consumer that needs the fuller picture; every current
-    // consumer (data.views itself, _holdSequence(), the carousel/solo
-    // dispatch) still only needs the flat, ordered `views` key array.
-    const requests = Array.isArray(config?.views)
-      ? config.views
-      : registry.map((v) => ({ type: v.key, enabled: "auto", options: {} }));
-    const diagnostics = [];
-    const seen = new Set();
-    const entries = [];
-    for (const request of requests) {
-      const descriptor = registry.find((v) => v.key === request.type);
-      if (!descriptor) {
-        diagnostics.push(`views: unknown view type "${request.type}"`);
-        continue;
-      }
-      if (seen.has(request.type)) {
-        diagnostics.push(`views: duplicate view type "${request.type}"`);
-        continue;
-      }
-      seen.add(request.type);
-      const available = descriptor.condition(model);
-      const requested = request.enabled === "auto" ? descriptor.defaultEnabled(model) : request.enabled === true;
-      entries.push({ type: request.type, requested, available, active: requested && available, options: request.options });
-    }
-
-    return { views: entries.filter((e) => e.active).map((e) => e.type), entries, diagnostics };
-  }
-
-  function resolveViewOptions(descriptor, providedOptions) {
-    // View-customizer "Baukasten" foundation (Teil 2): fully resolves ONE
-    // view's customization surface -- every optionsSchema key gets either
-    // its caller-provided (already whitelisted/validated by
-    // _normalizeViewOptions()) value or its schema default. Callers never
-    // need to know which keys exist or handle "what if it's missing" --
-    // any FUTURE optionsSchema key on ANY view (audit 23.2's own examples:
-    // a footer toggle on "range", markers on "scale", ...) flows through
-    // here automatically, with zero changes to this function. Pure (no
-    // `this`), like resolveActiveViews() above.
-    const schema = descriptor?.optionsSchema || {};
-    const resolved = {};
-    for (const key of Object.keys(schema)) {
-      const provided = providedOptions ? providedOptions[key] : undefined;
-      resolved[key] = provided === undefined ? schema[key].default : provided;
-    }
-    return resolved;
-  }
-
-  function resolveRoomDisplayOrder(list, sortMode, language) {
-    // AP-C2 (audit 23.1): room_sort's four modes for the RENDERED chip
-    // order only -- _computeData() keeps its own, always value-sorted
-    // `allRooms` for every calculation (extrema/comfort-count/spread), so
-    // this function is never on that path; it only reorders the possibly
-    // grid-capped subset that actually becomes chips. Pure (no `this`),
-    // like resolveActiveViews()/resolveViewOptions() above -- language is
-    // passed in explicitly rather than read from `this._language()` so it
-    // stays independently unit-testable.
-    const sorted = [...list];
-    if (sortMode === "name") return sorted.sort((a, b) => a.name.localeCompare(b.name, language));
-    if (sortMode === "value_desc") return sorted.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, language));
-    if (sortMode === "configured") return sorted.sort((a, b) => a.index - b.index);
-    return sorted.sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, language)); // value_asc (default)
-  }
-
 
   // ==== Card class: lifecycle, configuration, rendering ====
   // Main class for the custom Lovelace card; Home Assistant instantiates it
@@ -3039,16 +8643,17 @@ function classifyTrendRate(canonicalValue, policy) {
       this._config = null;
       this._hass = null;
       this._activeView = 0;
-      // Current view list (keys from VIEW_REGISTRY, e.g. "range"/"scale"/
-      // "extremes"); populated from data.views in _renderAll(), empty
-      // before the first render so _hasAutoSlide()/_slideTiming() default
-      // safely to "no rotator".
+      // Current view list (keys from VIEW_DEFINITIONS, e.g. "range"/"scale"/
+      // "extremes"); populated from the view model's views.keys in
+      // _renderAll(), empty before the first render so _hasAutoSlide()/
+      // _slideTiming() default safely to "no rotator".
       this._views = [];
-      // P1 fix (post-2.22.1): sibling to this._views, since data.views
+      // P1 fix (post-2.22.1): sibling to this._views, since the key list
       // alone can't distinguish a deliberately empty/collapsed view area
-      // from one that's requested-but-unavailable — both resolve to views:
-      // [] (see data.viewAreaCollapsed at _computeData()). Set alongside
-      // this._views in _renderAll(), compared alongside it in _render().
+      // from one that's requested-but-unavailable — both resolve to an
+      // empty list (see views.collapsed in presentation/view-model/
+      // view-state.js). Set alongside this._views in _renderAll(), and part
+      // of the structure signature _render() compares.
       this._viewAreaCollapsed = false;
       // AP-07: transient snapshot for the setConfig()-triggered old-timing
       // fix — see setConfig()/_renderAll(). undefined outside the narrow
@@ -3064,6 +8669,9 @@ function classifyTrendRate(canonicalValue, policy) {
       this._pointer = null;
       this._lastRenderSignature = "";
       this._structuralConfigSignature = null;
+      // The last RENDERED markup structure (see cardStructureSignature()). Committed
+      // alongside the other two, only after a render path actually succeeded.
+      this._structureSignature = null;
       this._eventsBound = false;
       this._suppressClickUntil = 0;
       this._rendered = false;
@@ -3087,10 +8695,9 @@ function classifyTrendRate(canonicalValue, policy) {
       this._lastViewConfigWarningKey = null;
       // _warnMixedMetricKindsOnce() dedup (AP-02) — see there.
       this._lastMetricContextWarningKey = null;
-      // Most recent view model, kept so the resize observer below can
-      // re-resolve the optimal-label position without needing a fresh hass
-      // update (see _resolveOptimalLabelPosition()).
-      this._lastRenderData = null;
+      // Most recent view model, kept so the resize observer below can re-resolve
+      // every mounted view's measured layout without needing a fresh hass update.
+      this._lastViewModel = null;
       this._resizeObserver = null;
       this._resizeRafId = null;
 
@@ -3203,11 +8810,11 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _warnAboutViewConfigOnce() {
-      // Validates views: against VIEW_REGISTRY once per setConfig() call
+      // Validates views: against the view definitions once per setConfig() call
       // (i.e. once per actual config change) rather than inside
-      // _computeData(), which runs on every hass update — logging there
+      // _computeViewModel(), which runs on every hass update — logging there
       // would flood the console for a persistently misconfigured YAML
-      // value. model is "everything available" here on purpose: only the
+      // value. Availability is "everything available" here on purpose: only the
       // static shape (unknown/duplicate type) is checked, not current
       // runtime availability, which resolveActiveViews() re-derives fresh
       // on every render anyway. Combines resolveActiveViews()'s own
@@ -3227,7 +8834,7 @@ function classifyTrendRate(canonicalValue, policy) {
       // that: only a genuinely repeated diagnostics list is deduplicated.
       const configDiagnostics = this._config?._viewsDiagnostics || [];
       const { diagnostics: resolveDiagnostics } = resolveActiveViews(
-        VIEW_REGISTRY,
+        VIEW_DEFINITIONS,
         { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
         this._config
       );
@@ -3286,7 +8893,7 @@ function classifyTrendRate(canonicalValue, policy) {
         if (this._resizeRafId !== null) return;
         this._resizeRafId = requestAnimationFrame(() => {
           this._resizeRafId = null;
-          this._resolveAllScaleLabelPositions(this._lastRenderData);
+          this._resolveViewLayouts(this._lastViewModel);
         });
       });
       this._resizeObserver.observe(this);
@@ -3308,7 +8915,7 @@ function classifyTrendRate(canonicalValue, policy) {
       // data, so it uses the configured room count as an upper-bound proxy
       // for "will show room chips" — a room without live data yet still
       // gets counted here, unlike the live-data-driven capacity cap in
-      // _computeData()). Extra chip rows (see _roomGridRows()) add to the
+      // roomGridRows()). Extra chip rows add to the
       // base size one-for-one.
       const roomCount = this._config?.rooms?.length ?? 0;
       // AP-C2: show_rooms:false never renders the chip grid, so its rows
@@ -3330,882 +8937,81 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     // ==== Configuration ====
-    // Validates and fills in the user configuration.
     _normalizeConfig(config) {
-      const userConfig = config ?? {};
-      if (!this._isPlainObject(userConfig)) {
-        throw new Error("Invalid configuration: card configuration must be an object.");
-      }
-
-      // entity (average value) is the only required config field.
-      const entity = this._requiredEntity(userConfig.entity, "entity");
-
-      // rooms is optional; below two valid room values the card stays in
-      // minimal mode (see _computeData()).
-      const roomsInput = userConfig.rooms === undefined ? [] : userConfig.rooms;
-      if (!Array.isArray(roomsInput)) {
-        throw new Error("Invalid configuration: rooms must be an array.");
-      }
-      const rooms = roomsInput.map((room, index) => this._normalizeRoom(room, index));
-
-      // Reviewer fix (P2, post-2.27.0): rooms[].entity is never checked for
-      // uniqueness elsewhere, but _updateRoomGrid()'s keyed patching (AP-09)
-      // maps chips by entity — a duplicate would silently overwrite one
-      // node in that Map, leaving one room unpatched or two models fighting
-      // over one chip. Rejected outright here, the same way a structurally
-      // invalid room already is in _normalizeRoom(), rather than inventing
-      // an occurrence-suffixed secondary key that _updateRoomGrid() would
-      // have to special-case.
-      const seenRoomEntities = new Set();
-      for (const room of rooms) {
-        if (seenRoomEntities.has(room.entity)) {
-          throw new Error(`Invalid configuration: duplicate rooms[].entity "${room.entity}" — each room must reference a unique entity.`);
-        }
-        seenRoomEntities.add(room.entity);
-      }
-
-      // Optional daily-range/trend entities, as produced by a template sensor.
-      const rangeEntity = this._optionalEntity(userConfig.range_entity, null, "range_entity");
-      const trendEntity = this._optionalEntity(userConfig.trend_entity, null, "trend_entity");
-
-      // Review fix (P1, post-2.21.1): _normalizeViewsConfig() now returns
-      // its diagnostics alongside the normalized views array — see there
-      // and _warnAboutViewConfigOnce().
-      const { views, diagnostics: viewsDiagnostics } = this._normalizeViewsConfig(userConfig.views);
-      const classification = this._normalizeClassificationConfig(userConfig.classification);
-
-      return {
-        entity,
-        // Cosmetic/optional overrides (avg_label/title/icon/decimals/
-        // hide_footer/rotation_seconds/slide_seconds/tap_action/hold_action):
-        // a malformed value falls back to the previous default rather than
-        // throwing, so a typo in an optional field can't break the whole
-        // card the way a bad entity id would.
-        avg_label: this._optionalString(userConfig.avg_label),
-        title: this._optionalString(userConfig.title),
-        icon: this._optionalString(userConfig.icon),
-        decimals: this._normalizeDecimalsOverride(userConfig.decimals),
-        // Optional manual override of the auto-detected HA language, e.g.
-        // for translation debugging or when hass.language isn't the
-        // desired one in a specific installation; "auto" (default) keeps
-        // the existing automatic detection untouched (see _language()).
-        language: this._normalizeLanguage(userConfig.language),
-        hide_footer: userConfig.hide_footer === true,
-        rotation_seconds: this._normalizePositiveSeconds(userConfig.rotation_seconds, DEFAULT_CONFIG.rotation_seconds, 1, 3600),
-        slide_seconds: this._normalizePositiveSeconds(userConfig.slide_seconds, DEFAULT_CONFIG.slide_seconds, 0.1, 10),
-        hold_seconds: DEFAULT_CONFIG.hold_seconds,
-        // AP-C1 (audit 23.1): independent of each other -- auto_slide only
-        // gates the automatic rotation timer (_hasAutoSlide()), swipe only
-        // gates the manual horizontal drag gesture (_handlePointerDown()).
-        // Both default true (today's behavior); either can be turned off
-        // without affecting the other.
-        auto_slide: userConfig.auto_slide !== false,
-        swipe: userConfig.swipe !== false,
-        tap_action: this._normalizeAction(userConfig.tap_action, DEFAULT_CONFIG.tap_action),
-        hold_action: this._normalizeAction(userConfig.hold_action, DEFAULT_CONFIG.hold_action),
-        // Optional room-chip grid override; null means "let _roomGridRows()
-        // decide automatically" (see there).
-        room_columns: this._normalizePositiveInteger(userConfig.room_columns),
-        room_rows: this._normalizePositiveInteger(userConfig.room_rows),
-        // AP-C2 (audit 23.1): room_sort is purely a presentation decision —
-        // it only reorders the rendered chips (_computeData()'s `rooms`),
-        // never the value-sorted `allRooms` that avg/extrema/comfort-count/
-        // scale actually use. room_label picks between the existing
-        // room.short/room.name pair per chip; "auto" is today's unchanged
-        // behavior (always room.short). show_rooms:false hides the chip
-        // grid only — rooms stay full data sources (data.hasRoomsView/
-        // allRooms untouched, see data.showRoomChips in _computeData()).
-        room_sort: this._normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
-        room_label: this._normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
-        show_rooms: userConfig.show_rooms !== false,
-        // AP-04: views: is the single public view-composition surface,
-        // resolved together with VIEW_REGISTRY's condition()/
-        // defaultEnabled() by resolveActiveViews() (see there). null is the
-        // "not configured at all" sentinel — resolveActiveViews() treats
-        // that as "one auto entry per registry key, in registry order"
-        // (today's default 1:1 behavior); a present-but-possibly-empty
-        // array (after invalid entries are filtered, see
-        // _normalizeViewsConfig()) is authoritative even when empty.
-        // Unknown/duplicate view types (detected later, by
-        // resolveActiveViews() itself) plus every diagnostic collected
-        // here are all warned about together, once per setConfig() call
-        // (see _warnAboutViewConfigOnce()), not thrown here, so a YAML
-        // typo degrades to "ignored" rather than breaking the card.
-        views,
-        // Internal-only field (underscore prefix signals "not a YAML key")
-        // carrying _normalizeViewsConfig()'s diagnostics forward to
-        // _warnAboutViewConfigOnce(), which is the single place they're
-        // actually surfaced (once per setConfig() call, not on every hass
-        // update).
-        _viewsDiagnostics: viewsDiagnostics,
-        start_view: this._optionalString(userConfig.start_view),
-        classification,
-        rooms,
-        range_entity: rangeEntity,
-        trend_entity: trendEntity,
-      };
+      // Thin delegation: the whole normalization lives in config/, as pure
+      // functions without `this`. What stays here is only the wiring — the
+      // registries the configuration layer is not allowed to import are passed
+      // in from this composition root.
+      return normalizeConfig(config, CONFIG_COLLABORATORS);
     }
 
-    _normalizeRoom(room, index) {
-      // Converts one config room entry into an internal room object.
-      if (!this._isPlainObject(room)) {
-        throw new Error(`Invalid configuration: rooms[${index}] must be an object.`);
-      }
-
-      const entity = this._requiredEntity(room.entity, `rooms[${index}].entity`);
-      const name = this._stringOrDefault(room.name, room.short || entity);
-      const short = this._stringOrDefault(room.short, name || entity);
-
-      return {
-        name,
-        short,
-        entity,
-        // Per-room action overrides; null means "inherit the card-level
-        // tap_action/hold_action" (see _buildActionConfig()).
-        tap_action: this._normalizeAction(room.tap_action, null),
-        hold_action: this._normalizeAction(room.hold_action, null),
-      };
-    }
-
-    _requiredEntity(value, name) {
-      // Required entity id (e.g. rooms[i].entity or the average entity).
-      if (typeof value !== "string" || !value.trim()) {
-        throw new Error(`Invalid configuration: ${name} must be a non-empty entity id.`);
-      }
-      return value.trim();
-    }
-
-    _optionalEntity(value, fallback, name) {
-      // Optional entity id with a fixed fallback (range_entity/trend_entity use null).
-      if (value === undefined || value === null || value === "") {
-        return fallback;
-      }
-      if (typeof value !== "string" || !value.trim()) {
-        throw new Error(`Invalid configuration: ${name} must be an entity id string.`);
-      }
-      return value.trim();
-    }
-
-    _optionalString(value) {
-      // Optional free-text override (avg_label/title/icon); a non-string or
-      // empty value means "use the built-in default" rather than throwing.
-      return typeof value === "string" && value.trim() ? value.trim() : null;
-    }
-
-    _classificationConfigError(path, message) {
-      throw new Error(`Invalid configuration: ${path} ${message}.`);
-    }
-
-    _assertClassificationKeys(value, allowed, path) {
-      for (const key of Object.keys(value)) {
-        if (!allowed.has(key)) this._classificationConfigError(`${path}.${key}`, "is not a supported option");
-      }
-    }
-
-    _classificationNumber(value, path) {
-      const parsed = this._parseConfigNumber(value);
-      if (parsed === null) this._classificationConfigError(path, "must be a finite number");
-      return parsed;
-    }
-
-    _normalizeClassificationBand(value, path, extraKeys = []) {
-      if (!this._isPlainObject(value)) this._classificationConfigError(path, "must be an object");
-      this._assertClassificationKeys(value, new Set(["min", "max", ...extraKeys]), path);
-      const min = this._classificationNumber(value.min, `${path}.min`);
-      const max = this._classificationNumber(value.max, `${path}.max`);
-      if (min >= max) this._classificationConfigError(path, "must have min < max");
-      return { min, max };
-    }
-
-    // Shared "descending min + exactly one final default: true" list
-    // contract, used by both classification.tiers (score/level/color/zone
-    // per item) and a non-temperature classification.icons list (icon per
-    // item) — the two lists differ only in their per-item extra fields,
-    // validated by validateItem(item, path), which returns the extra fields
-    // to merge onto the normalized {min, ...} entry.
-    _normalizeDescendingTierList(list, basePath, extraKeys, validateItem) {
-      if (!Array.isArray(list) || list.length === 0) {
-        this._classificationConfigError(basePath, "must be a non-empty array");
-      }
-      let defaultCount = 0;
-      let previousMin = Infinity;
-      const normalized = list.map((item, index) => {
-        const path = `${basePath}[${index}]`;
-        if (!this._isPlainObject(item)) this._classificationConfigError(path, "must be an object");
-        this._assertClassificationKeys(item, new Set(["min", "default", ...extraKeys]), path);
-        const isDefault = item.default === true;
-        if (item.default !== undefined && item.default !== true) {
-          this._classificationConfigError(`${path}.default`, "must be true when present");
-        }
-        if (isDefault) {
-          defaultCount += 1;
-          if (index !== list.length - 1) this._classificationConfigError(path, "default tier must be the final tier");
-          if (item.min !== undefined) this._classificationConfigError(`${path}.min`, "must be omitted on the default tier");
-        } else if (item.min === undefined) {
-          this._classificationConfigError(`${path}.min`, "is required for every non-default tier");
-        }
-
-        const min = isDefault ? -Infinity : this._classificationNumber(item.min, `${path}.min`);
-        if (!isDefault && min >= previousMin) {
-          this._classificationConfigError(basePath, "must use unique min values in strictly descending order");
-        }
-        previousMin = min;
-
-        return { min, ...validateItem(item, path) };
-      });
-      if (defaultCount !== 1) this._classificationConfigError(basePath, "must contain exactly one final default tier");
-      return normalized;
-    }
-
-    _normalizeCustomClassification(value) {
-      const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"]);
-      this._assertClassificationKeys(value, allowed, "classification");
-
-      if (typeof value.unit !== "string" || !value.unit.trim()) {
-        this._classificationConfigError("classification.unit", "must be a recognized unit string");
-      }
-      const unitToken = normalizeUnitToken(value.unit);
-      const metricKind = METRIC_TYPE_BY_UNIT[unitToken];
-      if (!metricKind) this._classificationConfigError("classification.unit", `"${value.unit}" is not recognized`);
-      const definition = METRIC_DEFINITIONS[metricKind];
-      const sourceProfileKey = Object.keys(definition.unitProfiles).find((key) =>
-        definition.unitProfiles[key].units.some((unit) => normalizeUnitToken(unit) === unitToken)
-      );
-      if (!sourceProfileKey) this._classificationConfigError("classification.unit", `"${value.unit}" has no registered UnitProfile`);
-      const sourceUnitProfile = definition.unitProfiles[sourceProfileKey];
-
-      const comparison = value.comparison ?? ">=";
-      if (comparison !== ">=" && comparison !== ">") {
-        this._classificationConfigError("classification.comparison", 'must be ">=" or ">"');
-      }
-
-      if (!this._isPlainObject(value.bands)) this._classificationConfigError("classification.bands", "must be an object");
-      this._assertClassificationKeys(value.bands, new Set(["comfort", "optimal"]), "classification.bands");
-      const sourceComfort = this._normalizeClassificationBand(value.bands.comfort, "classification.bands.comfort");
-      const sourceOptimal = this._normalizeClassificationBand(value.bands.optimal, "classification.bands.optimal");
-      if (sourceOptimal.min < sourceComfort.min || sourceOptimal.max > sourceComfort.max) {
-        this._classificationConfigError("classification.bands.optimal", "must be fully contained in classification.bands.comfort");
-      }
-
-      if (!this._isPlainObject(value.scale)) this._classificationConfigError("classification.scale", "must be an object");
-      this._assertClassificationKeys(value.scale, new Set(["min", "max", "step", "headroom", "one_sided"]), "classification.scale");
-      const sourceScale = this._normalizeClassificationBand(value.scale, "classification.scale", ["step", "headroom", "one_sided"]);
-      const sourceStep = this._classificationNumber(value.scale.step, "classification.scale.step");
-      if (sourceStep <= 0) this._classificationConfigError("classification.scale.step", "must be greater than zero");
-      if (sourceScale.min > sourceComfort.min || sourceScale.max < sourceComfort.max) {
-        this._classificationConfigError("classification.scale", "must fully contain the comfort and optimal bands");
-      }
-      const sourceHeadroom = value.scale.headroom === undefined
-        ? null
-        : this._classificationNumber(value.scale.headroom, "classification.scale.headroom");
-      if (sourceHeadroom !== null && sourceHeadroom < 0) {
-        this._classificationConfigError("classification.scale.headroom", "must be zero or greater");
-      }
-      if (value.scale.one_sided !== undefined && typeof value.scale.one_sided !== "boolean") {
-        this._classificationConfigError("classification.scale.one_sided", "must be a boolean");
-      }
-
-      const zones = new Set(CLASSIFICATION_ZONES);
-      const sourceTiers = this._normalizeDescendingTierList(
-        value.tiers,
-        "classification.tiers",
-        ["score", "level", "color", "zone"],
-        (tier, path) => {
-          const score = this._classificationNumber(tier.score, `${path}.score`);
-          if (typeof tier.level !== "string" || !tier.level.trim()) {
-            this._classificationConfigError(`${path}.level`, "must be a non-empty string");
-          }
-          if (typeof tier.color !== "string" || !isHexColor(tier.color.trim())) {
-            this._classificationConfigError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
-          }
-          if (!zones.has(tier.zone)) {
-            const quoted = CLASSIFICATION_ZONES.map((zone) => `"${zone}"`);
-            const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
-            this._classificationConfigError(`${path}.zone`, `must be one of ${list}`);
-          }
-          return { score, level: tier.level.trim(), color: tier.color.trim(), zone: tier.zone };
-        }
-      );
-
-      let sourceValidRange = null;
-      if (value.valid_range !== undefined) {
-        if (!this._isPlainObject(value.valid_range)) this._classificationConfigError("classification.valid_range", "must be an object");
-        this._assertClassificationKeys(value.valid_range, new Set(["min", "max", "min_inclusive", "max_inclusive"]), "classification.valid_range");
-        if (value.valid_range.min === undefined && value.valid_range.max === undefined) {
-          this._classificationConfigError("classification.valid_range", "must define min and/or max");
-        }
-        for (const key of ["min_inclusive", "max_inclusive"]) {
-          if (value.valid_range[key] !== undefined && typeof value.valid_range[key] !== "boolean") {
-            this._classificationConfigError(`classification.valid_range.${key}`, "must be a boolean");
-          }
-        }
-        sourceValidRange = {
-          min: value.valid_range.min === undefined ? null : this._classificationNumber(value.valid_range.min, "classification.valid_range.min"),
-          max: value.valid_range.max === undefined ? null : this._classificationNumber(value.valid_range.max, "classification.valid_range.max"),
-          minInclusive: value.valid_range.min_inclusive !== false,
-          maxInclusive: value.valid_range.max_inclusive !== false,
-        };
-        if (sourceValidRange.min !== null && sourceValidRange.max !== null && sourceValidRange.min >= sourceValidRange.max) {
-          this._classificationConfigError("classification.valid_range", "must have min < max");
-        }
-      }
-
-      // classification.icons has two distinct shapes, chosen by metricKind
-      // (mirroring the built-in profiles: temperature uses iconThresholds,
-      // the other three kinds use iconTiers) — a fixed fire/high/normal/low
-      // object for temperature, a descending {min, icon} list with a final
-      // {default: true, icon} entry for humidity/CO2/PM2.5.
-      let sourceIcons = null;
-      let sourceIconTiers = null;
-      if (value.icons !== undefined) {
-        if (metricKind === "temperature") {
-          if (!this._isPlainObject(value.icons)) {
-            this._classificationConfigError("classification.icons", "must be an object with fire/high/normal/low thresholds for a temperature profile");
-          }
-          this._assertClassificationKeys(value.icons, new Set(["fire", "high", "normal", "low"]), "classification.icons");
-          sourceIcons = {};
-          let previous = Infinity;
-          for (const key of ["fire", "high", "normal", "low"]) {
-            const threshold = this._classificationNumber(value.icons[key], `classification.icons.${key}`);
-            if (threshold >= previous) this._classificationConfigError("classification.icons", "must descend from fire to low");
-            previous = threshold;
-            sourceIcons[key] = threshold;
-          }
-        } else {
-          if (!Array.isArray(value.icons)) {
-            this._classificationConfigError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry for a non-temperature profile");
-          }
-          sourceIconTiers = this._normalizeDescendingTierList(value.icons, "classification.icons", ["icon"], (item, path) => {
-            if (typeof item.icon !== "string" || !item.icon.trim()) {
-              this._classificationConfigError(`${path}.icon`, "must be a non-empty string");
-            }
-            return { icon: item.icon.trim() };
-          });
-        }
-      } else if (metricKind === "temperature") {
-        sourceIcons = {
-          fire: sourceScale.max,
-          high: sourceComfort.max,
-          normal: sourceComfort.min,
-          low: sourceScale.min,
-        };
-      }
-
-      const toCanonical = sourceUnitProfile.toCanonical;
-      const deltaToCanonical = sourceUnitProfile.deltaToCanonical;
-      const convertBand = (band) => ({ min: toCanonical(band.min), max: toCanonical(band.max) });
-      const canonicalValidRange = sourceValidRange && {
-        min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min),
-        max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max),
-        minInclusive: sourceValidRange.minInclusive,
-        maxInclusive: sourceValidRange.maxInclusive,
-      };
-      const invalidWhen = canonicalValidRange
-        ? (reading) =>
-            (canonicalValidRange.min !== null && (canonicalValidRange.minInclusive ? reading < canonicalValidRange.min : reading <= canonicalValidRange.min)) ||
-            (canonicalValidRange.max !== null && (canonicalValidRange.maxInclusive ? reading > canonicalValidRange.max : reading >= canonicalValidRange.max))
-        : null;
-
-      return {
-        id: "custom",
-        metricKind,
-        comparison,
-        tiers: sourceTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
-        comfort: convertBand(sourceComfort),
-        optimal: convertBand(sourceOptimal),
-        scale: convertBand(sourceScale),
-        step: deltaToCanonical(sourceStep),
-        headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
-        oneSided: value.scale.one_sided === true,
-        invalidWhen,
-        validRange: canonicalValidRange,
-        invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-        iconThresholds: sourceIcons && Object.fromEntries(
-          Object.entries(sourceIcons).map(([key, threshold]) => [key, toCanonical(threshold)])
-        ),
-        iconTiers: sourceIconTiers?.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
-      };
-    }
-
-    _normalizeClassificationConfig(value) {
-      if (value === undefined || value === null || value === "") {
-        return { source: "auto", profile: null, custom: null };
-      }
-      if (typeof value === "string") {
-        const shorthand = value.trim().toLowerCase();
-        if (!shorthand) return { source: "auto", profile: null, custom: null };
-        if (shorthand === "auto" || shorthand === "entity") {
-          return { source: shorthand, profile: null, custom: null };
-        }
-        if (shorthand === "profile" || shorthand === "custom") {
-          this._classificationConfigError("classification", `"${shorthand}" requires the object form`);
-        }
-        return { source: "auto", profile: shorthand, custom: null };
-      }
-      if (!this._isPlainObject(value)) this._classificationConfigError("classification", "must be a string or object");
-
-      const inferredSource = value.source ?? (value.tiers !== undefined ? "custom" : "auto");
-      if (!["auto", "entity", "profile", "custom"].includes(inferredSource)) {
-        this._classificationConfigError("classification.source", 'must be "auto", "entity", "profile", or "custom"');
-      }
-      if (inferredSource === "custom") {
-        return { source: "custom", profile: null, custom: this._normalizeCustomClassification(value) };
-      }
-
-      this._assertClassificationKeys(value, new Set(["source", "profile"]), "classification");
-      if (inferredSource === "entity" && value.profile !== undefined) {
-        this._classificationConfigError("classification.profile", "cannot be combined with source entity");
-      }
-      const profile = value.profile === undefined ? null : this._optionalString(value.profile);
-      if (value.profile !== undefined && !profile) {
-        this._classificationConfigError("classification.profile", "must be a non-empty string");
-      }
-      return { source: inferredSource, profile: profile?.toLowerCase() ?? null, custom: null };
-    }
-
-    _normalizeViewsConfig(value) {
-      // Review fix (P1, post-2.21.1, audit 14.3-14.5): a non-array value,
-      // an unparseable list entry, or an invalid enabled: value used to
-      // fall back to a default silently, with no trace left behind for the
-      // user to discover the typo. Every such case is now collected into a
-      // `diagnostics` array alongside the normalized `views`, so
-      // _warnAboutViewConfigOnce() (see there) can surface it exactly once
-      // per setConfig() call — without changing the non-destructive
-      // fallback behavior itself (a malformed views: config still degrades
-      // to "ignored"/"auto", it just no longer does so invisibly).
-      //
-      // `undefined`/`null` (views: genuinely omitted from the YAML) is NOT
-      // diagnosed — that's the normal "not configured" case, resolved by
-      // resolveActiveViews() as "one auto entry per registry key". Any
-      // OTHER non-array value (a string, number, plain object, ...) is a
-      // real misconfiguration and IS diagnosed, then normalizes to the same
-      // null sentinel.
-      if (!Array.isArray(value)) {
-        if (value === undefined || value === null) return { views: null, diagnostics: [] };
-        return { views: null, diagnostics: [`views: expected an array, got ${JSON.stringify(value)}`] };
-      }
-      const views = [];
-      const diagnostics = [];
-      value.forEach((entry, index) => {
-        const { request, diagnostics: entryDiagnostics } = this._normalizeViewRequest(entry, index);
-        diagnostics.push(...entryDiagnostics);
-        if (request) views.push(request);
-      });
-      return { views, diagnostics };
-    }
-
-    _normalizeViewRequest(entry, index) {
-      // One views: list entry: a bare non-empty string is shorthand for
-      // {type, enabled:true} (audit 11.1's "String- und Objektform"); an
-      // object needs at least a non-empty `type`. An entry with no
-      // resolvable type at all (neither a non-empty string nor an object
-      // with one) is dropped — `request: null` — WITH a diagnostic, unlike
-      // the previous silent drop.
-      //
-      // `enabled`: listing a view is itself an explicit request, regardless
-      // of whether the user chose string or object syntax. Therefore an
-      // omitted field normalizes to true; only an explicitly written
-      // "auto" delegates to the view's own defaultEnabled(). Any OTHER value
-      // (a typo like "yes", a stray 1,
-      // explicit null, ...) is diagnosed but — deliberately, per the
-      // reviewer's explicit non-destructive requirement — still falls back
-      // to "auto" rather than dropping the whole entry: a typo in enabled:
-      // must not make a view disappear as completely as an unknown type
-      // would.
-      //
-      // `options`: normalized through _normalizeViewOptions()'s registry
-      // whitelist (audit 14.4) instead of only being structurally checked —
-      // see there.
-      if (typeof entry === "string") {
-        const type = entry.trim();
-        if (!type) return { request: null, diagnostics: [`views[${index}]: expected a non-empty string or an object`] };
-        return { request: { type, enabled: true, options: {} }, diagnostics: [] };
-      }
-      if (!this._isPlainObject(entry)) {
-        return { request: null, diagnostics: [`views[${index}]: expected a string or an object, got ${JSON.stringify(entry)}`] };
-      }
-      const type = this._optionalString(entry.type);
-      if (!type) {
-        return { request: null, diagnostics: [`views[${index}]: missing or invalid "type"`] };
-      }
-      const diagnostics = [];
-      let enabled;
-      if (entry.enabled === true || entry.enabled === false) {
-        enabled = entry.enabled;
-      } else if (entry.enabled === undefined) {
-        enabled = true;
-      } else if (entry.enabled === "auto") {
-        enabled = "auto";
-      } else {
-        enabled = "auto";
-        diagnostics.push(`views[${index}] ("${type}"): invalid "enabled" value ${JSON.stringify(entry.enabled)}, falling back to "auto"`);
-      }
-      const { options, diagnostics: optionsDiagnostics } = this._normalizeViewOptions(type, entry.options, index);
-      diagnostics.push(...optionsDiagnostics);
-      return { request: { type, enabled, options }, diagnostics };
-    }
-
-    _normalizeViewOptions(type, rawOptions, index) {
-      // Review fix (P1, post-2.21.1, audit 14.4): views:[i].options used to
-      // pass through with only a structural (plain-object) check — never
-      // filtered against anything, so a view's renderer/styles could end up
-      // trusting arbitrary user-supplied keys. Every VIEW_REGISTRY entry
-      // declares an optionsSchema (see there for each view's actual
-      // options) — only keys present in that whitelist survive; everything
-      // else is stripped, exactly like an unknown YAML key elsewhere in
-      // this card.
-      //
-      // P1 follow-up fix (post-2.22.1): stripping used to be silent — no
-      // trace left behind, unlike every other malformed views: field in
-      // this file (invalid "enabled", unparseable entries, ...). Unknown
-      // keys and a genuinely invalid (non-object, non-omitted) options:
-      // value are now diagnosed too, non-destructively (the filtered
-      // options themselves are unchanged). undefined/null (options: simply
-      // not provided) is deliberately NOT diagnosed — the same "not
-      // configured is normal" convention _normalizeViewsConfig() already
-      // applies to views: itself being omitted.
-      //
-      // Teil 2 (view-customizer Baukasten): a known key's VALUE is now also
-      // validated when its schema entry declares a validate() (boolOption()
-      // and friends) — a schema value used to be a bare presence-marker, so
-      // no view had value validation before this round; a key with no
-      // validate() (still possible for a future non-boolean option) simply
-      // isn't checked, same as before. An invalid value is diagnosed and
-      // dropped from the result — resolveViewOptions() then fills in the
-      // schema default for it, the same non-destructive fallback already
-      // established for an invalid "enabled".
-      const descriptor = VIEW_REGISTRY.find((v) => v.key === type);
-      const schema = descriptor?.optionsSchema || {};
-      if (rawOptions === undefined || rawOptions === null) return { options: {}, diagnostics: [] };
-      if (!this._isPlainObject(rawOptions)) {
-        return { options: {}, diagnostics: [`views[${index}] ("${type}"): invalid "options" value ${JSON.stringify(rawOptions)}, expected an object`] };
-      }
-      const result = {};
-      const unknownKeys = [];
-      const diagnostics = [];
-      for (const key of Object.keys(rawOptions)) {
-        if (!Object.prototype.hasOwnProperty.call(schema, key)) {
-          unknownKeys.push(key);
-          continue;
-        }
-        const value = rawOptions[key];
-        const validate = schema[key].validate;
-        if (typeof validate === "function" && !validate(value)) {
-          diagnostics.push(`views[${index}] ("${type}"): invalid "${key}" value ${JSON.stringify(value)}, falling back to default`);
-          continue;
-        }
-        result[key] = value;
-      }
-      if (unknownKeys.length) {
-        diagnostics.push(`views[${index}] ("${type}"): ignoring unknown "options" key(s) ${unknownKeys.map((k) => JSON.stringify(k)).join(", ")}`);
-      }
-      return { options: result, diagnostics };
-    }
-
-    _normalizeEnum(value, allowedValues, defaultValue) {
-      // Generic closed-set config value: an unrecognized value silently
-      // falls back to defaultValue, the same non-warning convention every
-      // other optional top-level field already uses (decimals,
-      // room_columns, ... — only views:[] diagnostics ever console.warn,
-      // see _warnAboutViewConfigOnce()) — a typo degrades to "use the
-      // default" rather than breaking the card.
-      return allowedValues.includes(value) ? value : defaultValue;
-    }
-
-    _normalizeLanguage(value) {
-      // Optional language override; "auto" (the default for anything
-      // invalid/missing) means "keep using hass's automatic detection" —
-      // see _language(). Only accepts a language that actually has a
-      // translation block, so an override can never silently select a
-      // language that would just fall back to English anyway.
-      if (typeof value !== "string") return "auto";
-      const normalized = value.trim().toLowerCase();
-      if (normalized === "" || normalized === "auto") return "auto";
-      return isSupportedLanguage(normalized) ? normalized : "auto";
-    }
-
+    // Delegations kept for the existing config-validation tests, which exercise
+    // these value-level rules through the element. They are migration
+    // scaffolding, not an API: config/primitives.js and config/actions.js are
+    // the real implementations and are now tested directly. Each one disappears
+    // once its element-level test moves to the module.
     _parseConfigNumber(value) {
-      // Strict shared numeric parser for optional cosmetic/layout config
-      // fields — see parseConfigNumber() in core/numbers.js for why plain
-      // Number() coercion is not acceptable here.
       return parseConfigNumber(value);
     }
 
     _normalizeDecimalsOverride(value) {
-      // Optional decimals override (0-2); anything else means "use the
-      // mode's default from METRIC_META" (see _fmt()).
-      if (value === undefined || value === null || value === "") return null;
-      const num = this._parseConfigNumber(value);
-      return num !== null && Number.isInteger(num) && num >= 0 && num <= 2 ? num : null;
+      return decimalsOverride(value);
     }
 
     _normalizePositiveInteger(value) {
-      // Optional room_columns/room_rows override; anything invalid — not a
-      // positive integer, or an unreasonably large value that couldn't
-      // possibly be a deliberate layout choice — means "let
-      // _roomGridRows() decide automatically" rather than throwing or
-      // building an absurdly large grid.
-      if (value === undefined || value === null || value === "") return null;
-      const num = this._parseConfigNumber(value);
-      return num !== null && Number.isInteger(num) && num >= 1 && num <= 20 ? num : null;
+      return positiveInteger(value);
     }
 
     _normalizePositiveSeconds(value, fallback, min, max) {
-      // rotation_seconds/slide_seconds: an invalid, missing, or out-of-
-      // range value falls back to the previous hardcoded default (14/1)
-      // instead of throwing — this only affects cosmetic timing, not
-      // correctness. min/max are practical per-field bounds (see call
-      // sites) — without an upper bound, an extreme value could overflow
-      // the animation-duration/setTimeout millisecond math it feeds into.
-      const num = this._parseConfigNumber(value);
-      return num !== null && num >= min && num <= max ? num : fallback;
+      return positiveSeconds(value, fallback, min, max);
     }
 
     _normalizeAction(value, fallback) {
-      // Validates a tap_action/hold_action object against the accepted action
-      // an invalid/missing value falls back to `fallback` (a card-level
-      // default, or null for a per-room override that should inherit the
-      // card-level action) instead of being passed through raw.
-      if (this._isPlainObject(value) && typeof value.action === "string" && isAllowedActionType(value.action)) {
-        return { ...value };
-      }
-      return fallback ? { ...fallback } : null;
+      return normalizeAction(value, fallback);
     }
 
-    _stringOrDefault(value, fallback) {
-      // String helper for optional display names.
-      if (value === undefined || value === null || value === "") {
-        return String(fallback ?? "");
-      }
-      return String(value);
+    // ==== Classification: delegations, not a second implementation ====
+    // Every method below forwards to application/model/classification.js, which owns
+    // the policy resolution, the projection into the display unit, the entity/auto/
+    // profile/custom priority and the lazy numeric branch. What is added here is only
+    // the two things the module cannot know: which policy this card was configured
+    // with, and which entity's attributes to read. Existing element-level tests call
+    // these directly; the mathematics behind them exists exactly once.
+    _classificationPolicy() {
+      return classificationPolicyOf(this._config);
     }
 
-    _isPlainObject(value) {
-      // Strict object check: arrays don't count as a config object.
-      return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-    }
-
-    // ==== Classification, colors, icons ====
     _resolveClassificationProfile(metricType, { lenient = false } = {}) {
-      // lenient (P1 review fix, post-2.30.0): _buildEntityModel() must probe
-      // every room's OWN metric kind before AP-02's kind-based filtering has
-      // run, so at that point a card-wide classification.profile/custom
-      // scoped to a DIFFERENT kind (e.g. classification: outdoor on a
-      // temperature card, probed here for an incidental humidity room) is
-      // not yet known to be irrelevant. Falling back to this kind's own
-      // default profile instead of throwing lets that later kind filter
-      // (excluded_foreign_metric_kind) do its job. The strict throw below
-      // stays intact for every other caller (always invoked with the
-      // card's actually-resolved metric kind), so a genuine mismatch
-      // between the primary entity's own kind and the configured profile
-      // still surfaces as the documented config error.
-      const registry = CLASSIFICATION_PROFILE_REGISTRY[metricType];
-      if (!registry) throw new Error(`No classification profiles registered for metric kind "${metricType}"`);
-      const policy = this._config?.classification || { source: "auto", profile: null, custom: null };
-      if (policy.source === "custom") {
-        if (policy.custom.metricKind !== metricType) {
-          if (lenient) return registry.profiles[registry.defaultProfile];
-          throw new Error(
-            `Invalid configuration: custom classification unit belongs to "${policy.custom.metricKind}", not detected metric kind "${metricType}".`
-          );
-        }
-        return policy.custom;
-      }
-      const profileId = policy.profile || registry.defaultProfile;
-      const profile = registry.profiles[profileId];
-      if (!profile) {
-        if (lenient) return registry.profiles[registry.defaultProfile];
-        throw new Error(`Invalid configuration: classification profile "${profileId}" is not available for metric kind "${metricType}".`);
-      }
-      return profile;
+      return resolveCanonicalProfile(this._classificationPolicy(), metricType, { lenient });
     }
 
     _classificationProfileForDisplay(metricType, unitProfile) {
-      const canonical = this._resolveClassificationProfile(metricType);
-      const definition = METRIC_DEFINITIONS[metricType];
-      const displayProfile = unitProfile || definition.unitProfiles[definition.canonicalProfileKey];
-      if (displayProfile.key === definition.canonicalProfileKey) return canonical;
-
-      const projectAbsolute = (value) => {
-        const converted = displayProfile.fromCanonical(value);
-        return (displayProfile.thresholdRounding || ((v) => v))(converted);
-      };
-      const projectBand = (band) => ({ min: projectAbsolute(band.min), max: projectAbsolute(band.max) });
-      const projectedValidRange = canonical.validRange && {
-        min: canonical.validRange.min === null ? null : projectAbsolute(canonical.validRange.min),
-        max: canonical.validRange.max === null ? null : projectAbsolute(canonical.validRange.max),
-        minInclusive: canonical.validRange.minInclusive,
-        maxInclusive: canonical.validRange.maxInclusive,
-      };
-      const invalidWhen = projectedValidRange
-        ? (reading) =>
-            (projectedValidRange.min !== null && (projectedValidRange.minInclusive ? reading < projectedValidRange.min : reading <= projectedValidRange.min)) ||
-            (projectedValidRange.max !== null && (projectedValidRange.maxInclusive ? reading > projectedValidRange.max : reading >= projectedValidRange.max))
-        : canonical.invalidWhen;
-
-      const projected = {
-        ...canonical,
-        tiers: canonical.tiers.map((tier) => ({
-          ...tier,
-          min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,
-        })),
-        comfort: projectBand(canonical.comfort),
-        optimal: projectBand(canonical.optimal),
-        scale: projectBand(canonical.scale),
-        step: displayProfile.deltaFromCanonical(canonical.step),
-        headroom: canonical.headroom === undefined ? undefined : displayProfile.deltaFromCanonical(canonical.headroom),
-        invalidWhen,
-        validRange: projectedValidRange,
-        iconThresholds: canonical.iconThresholds && Object.fromEntries(
-          Object.entries(canonical.iconThresholds).map(([key, threshold]) => [key, projectAbsolute(threshold)])
-        ),
-        iconTiers: canonical.iconTiers?.map((tier) => ({
-          ...tier,
-          min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,
-        })),
-      };
-      this._assertProjectedClassificationGeometry(canonical, projected, metricType, displayProfile);
-      return projected;
-    }
-
-    _assertProjectedClassificationGeometry(canonical, projected, metricType, displayProfile) {
-      // P2 review fix (post-2.30.0): projectAbsolute() above rounds each
-      // boundary independently (thresholdRounding, e.g. Math.round for
-      // Fahrenheit). Rounding is order-preserving but not injective — two
-      // canonical values that are still distinct in Celsius can round to
-      // the SAME display value, collapsing a band to zero width or making
-      // a tier permanently unreachable (_classifyNumericValue() compares
-      // against these exact projected/rounded numbers, so a collapse is a
-      // real classification bug, not just a cosmetic one). Every property
-      // checked here is GUARANTEED in the canonical profile already (see
-      // _normalizeCustomClassification() for custom profiles, the
-      // hand-authored CLASSIFICATION_PROFILE_REGISTRY entries for built-in
-      // ones) — this only catches a collapse that ROUNDING introduced, it
-      // never rejects something the canonical profile itself already
-      // allowed. Built-in profiles never trigger this in practice (their
-      // gaps are always >=1 °C, well above the ~0.56 °C needed to survive
-      // integer Fahrenheit rounding); it exists for custom profiles with
-      // narrow, freely-configured gaps.
-      const unitLabel = displayProfile.displayUnit || displayProfile.key;
-      const fail = (detail) => {
-        throw new Error(
-          `Invalid configuration: classification profile for "${metricType}" becomes degenerate when rounded to ${unitLabel} (${detail}) — configure wider gaps, or set classification.unit to "${unitLabel}" directly to avoid rounding.`
-        );
-      };
-      if (!(projected.comfort.min < projected.comfort.max)) fail("comfort band collapses");
-      if (!(projected.optimal.min < projected.optimal.max)) fail("optimal band collapses");
-      if (!(projected.scale.min < projected.scale.max)) fail("scale collapses");
-      for (let i = 1; i < canonical.tiers.length; i++) {
-        const wasDescending = Number.isFinite(canonical.tiers[i - 1].min) && Number.isFinite(canonical.tiers[i].min)
-          && canonical.tiers[i].min < canonical.tiers[i - 1].min;
-        if (!wasDescending) continue;
-        if (!(projected.tiers[i].min < projected.tiers[i - 1].min)) {
-          fail(`tier thresholds collapse near ${projected.tiers[i].min}${unitLabel}`);
-        }
-      }
-      if (projected.iconThresholds) {
-        const order = ["fire", "high", "normal", "low"];
-        for (let i = 1; i < order.length; i++) {
-          const prevKey = order[i - 1];
-          const curKey = order[i];
-          if (!(canonical.iconThresholds[curKey] < canonical.iconThresholds[prevKey])) continue;
-          if (!(projected.iconThresholds[curKey] < projected.iconThresholds[prevKey])) {
-            fail(`icon thresholds collapse near ${projected.iconThresholds[curKey]}${unitLabel}`);
-          }
-        }
-      }
-      if (projected.iconTiers) {
-        for (let i = 1; i < canonical.iconTiers.length; i++) {
-          const wasDescending = Number.isFinite(canonical.iconTiers[i - 1].min) && Number.isFinite(canonical.iconTiers[i].min)
-            && canonical.iconTiers[i].min < canonical.iconTiers[i - 1].min;
-          if (!wasDescending) continue;
-          if (!(projected.iconTiers[i].min < projected.iconTiers[i - 1].min)) {
-            fail(`icon tiers collapse near ${projected.iconTiers[i].min}${unitLabel}`);
-          }
-        }
-      }
+      return resolveDisplayProfile(this._classificationPolicy(), metricType, unitProfile);
     }
 
     _getEntityClassification(entityId, { allowPartial = false } = {}) {
-      // Reads value_color/value_level/value_score/value_zone attributes an
-      // integration or template sensor may provide. Automatic mode accepts
-      // the source only as a complete, valid color+level pair; the
-      // deliberately forced entity mode may request its partial metadata.
+      // Resolves the entity's attributes here, where hass lives; the validation
+      // itself is pure (see domain/classification/entity-attributes.js).
       if (!entityId || !this._hass?.states?.[entityId]) return null;
-      const attrs = this._hass.states[entityId].attributes;
-      // value_color must be a valid hex colour — it ends up in CSS/style
-      // attributes further down the render pipeline, so anything else is
-      // treated as absent rather than trusted verbatim.
-      const color = typeof attrs.value_color === "string" && isHexColor(attrs.value_color.trim())
-        ? attrs.value_color.trim()
-        : null;
-      const level = typeof attrs.value_level === "string" && attrs.value_level.trim()
-        ? attrs.value_level.trim()
-        : null;
-      const numericScore = Number(attrs.value_score);
-      const score = attrs.value_score !== undefined && attrs.value_score !== null && attrs.value_score !== "" && Number.isFinite(numericScore)
-        ? numericScore
-        : null;
-      const zone = typeof attrs.value_zone === "string" && attrs.value_zone.trim() ? attrs.value_zone.trim() : null;
-      if (allowPartial ? (!color && !level && score === null && !zone) : (!color || !level)) return null;
-      return {
-        color,
-        level,
-        score,
-        zone,
-        source: "entity",
-        profileId: null,
-      };
+      return readEntityClassification(this._hass.states[entityId].attributes, { allowPartial });
     }
 
     _resolveValueClassification(value, entityId, metricType, unitProfile) {
-      const policy = this._config?.classification || { source: "auto", profile: null, custom: null };
-      if (policy.source === "entity") {
-        const entity = this._getEntityClassification(entityId, { allowPartial: true });
-        return {
-          color: entity?.color || "#B4B2A9",
-          level: entity?.level || "—",
-          score: entity?.score ?? null,
-          zone: entity?.zone ?? null,
-          source: "entity",
-          profileId: null,
-        };
-      }
-      if (policy.source === "auto") {
-        const entity = this._getEntityClassification(entityId);
-        if (entity) return entity;
-      }
-      const numeric = this._classifyNumericValue(value, metricType, unitProfile);
-      const profile = this._resolveClassificationProfile(metricType);
-      return {
-        ...numeric,
-        source: profile.id === "custom" ? "custom" : "builtin",
-        profileId: profile.id,
-      };
+      return classifyValue(this._classificationPolicy(), metricType, unitProfile, value, this._attributesOf(entityId));
+    }
+
+    _attributesOf(entityId) {
+      return entityId ? this._hass?.states?.[entityId]?.attributes ?? null : null;
     }
 
     _temperatureIconForProfile(temp, unitProfile) {
-      const thresholds = this._classificationProfileForDisplay("temperature", unitProfile).iconThresholds;
-      if (temp >= thresholds.fire) return "mdi:fire-alert";
-      if (temp >= thresholds.high) return "mdi:thermometer-high";
-      if (temp >= thresholds.normal) return "mdi:thermometer";
-      if (temp >= thresholds.low) return "mdi:thermometer-low";
-      return "mdi:snowflake";
+      return temperatureIconForProfile(temp, this._classificationProfileForDisplay('temperature', unitProfile));
     }
 
     _profileIconForValue(value, metricType, unitProfile) {
-      // Header icons are part of the active classification profile, just
-      // like colors and labels. Temperature retains its public/custom
-      // fire/high/normal/low threshold contract; the other metric kinds use
-      // generic descending icon tiers. A metric without icon tiers keeps its
-      // stable METRIC_META icon, so adding another kind never requires a
-      // forced or semantically dubious icon family.
-      if (metricType === "temperature") return this._temperatureIconForProfile(value, unitProfile);
-      const profile = this._classificationProfileForDisplay(metricType, unitProfile);
-      const tier = profile.iconTiers?.find((candidate) =>
-        profile.comparison === ">" ? value > candidate.min : value >= candidate.min
-      );
-      return tier?.icon || this._metricMetaFor(metricType).icon;
+      // A metric kind without icon tiers keeps its stable presentation icon, so
+      // adding another kind never forces a semantically dubious icon family.
+      return resolveProfileIcon(this._classificationPolicy(), metricType, unitProfile, value) || metricMetaFor(metricType).icon;
     }
 
     // ==== Auto-slide: timing, keyframes, resume alignment ====
@@ -4264,7 +9070,7 @@ function classifyTrendRate(canonicalValue, policy) {
 
     _holdSequence() {
       // Hold-index sequence for one full auto-slide cycle: a linear
-      // ping-pong straight through data.views/this._views in their actual
+      // ping-pong straight through this._views in its actual
       // left-to-right DOM order — 0,1,...,N-1,N-2,...,1, then wrapping back
       // to 0 — so every transition (including the wrap) moves exactly one
       // position and no view is ever skipped over. Pure function of the
@@ -4572,10 +9378,8 @@ function classifyTrendRate(canonicalValue, policy) {
       return ((timestampMs % cycleMs) + cycleMs) % cycleMs;
     }
 
-    // ==== Formatting, numeric/attribute helpers, i18n ====
     _hasEntity(entityId) {
-      // Whether the entity exists in the current hass.states object.
-      return Boolean(entityId && this._hass?.states?.[entityId]);
+      return hasEntity(this._hass?.states, entityId);
     }
 
     _parseNum(raw) {
@@ -4585,15 +9389,11 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _getNum(entityId) {
-      // Reads a numeric sensor value from the entity's state.
-      if (!entityId) return null;
-      return this._parseNum(this._hass?.states?.[entityId]?.state);
+      return readNumericState(this._hass?.states, entityId);
     }
 
     _getAttrNum(entityId, attrName) {
-      // Reads a numeric value from an entity attribute (e.g. spread, minimum, maximum).
-      if (!entityId || !attrName) return null;
-      return this._parseNum(this._hass?.states?.[entityId]?.attributes?.[attrName]);
+      return readNumericAttribute(this._hass?.states, entityId, attrName);
     }
 
     _language() {
@@ -4626,70 +9426,19 @@ function classifyTrendRate(canonicalValue, policy) {
 
     _metricMetaFor(metricType) {
       // Shared fallback: unknown/missing metric types resolve to temperature.
-      return METRIC_META[metricType] || METRIC_META.temperature;
+      return metricMetaFor(metricType);
     }
 
     _resolveTrendPolicy(metricType) {
-      // Single policy-resolution seam. Today it resolves registry defaults;
-      // a later release can layer validated YAML or trend-entity attributes
-      // here without coupling configuration concerns into classification,
-      // data conversion, or rendering.
-      return TREND_POLICY_REGISTRY[metricType] || null;
+      return resolveTrendPolicy(metricType);
     }
 
     _buildTrendModel(metricType, canonicalValue, displayValue, displayUnit) {
-      const policy = this._resolveTrendPolicy(metricType);
-      const direction = classifyTrendRate(canonicalValue, policy);
-      const directionMeta = direction ? TREND_DIRECTION_META[direction] : null;
-      if (!directionMeta || !Number.isFinite(displayValue) || !displayUnit) return null;
-      return {
-        canonicalValue,
-        value: displayValue,
-        unit: displayUnit,
-        direction,
-        directionTranslationKey: directionMeta.translationKey,
-        policy,
-      };
-    }
-
-    _trendDisplayText(trend) {
-      if (!trend) return "";
-      const value = Object.is(trend.value, -0) ? 0 : trend.value;
-      const sign = value > 0 ? "+" : "";
-      return `${sign}${this._fmt(value)} ${trend.unit}`;
-    }
-
-    _trendAriaLabel(trend) {
-      if (!trend) return "";
-      return this._t("trend.aria", {
-        direction: this._t(trend.directionTranslationKey),
-        value: this._trendDisplayText(trend),
-      });
-    }
-
-    _averageTooltip(data) {
-      const tooltipKey = data.avgSource === "sensor" ? "avg.tooltip" : "avg.tooltipCalculated";
-      return this._t(tooltipKey, { value: this._fmtWithUnit(data.avg), label: data.avgLabel });
-    }
-
-    _averageAriaLabel(data, tooltip = this._averageTooltip(data)) {
-      const base = data.avgEntity ? this._t("avg.ariaOpen") : tooltip;
-      return data.trend ? `${base}. ${this._trendAriaLabel(data.trend)}` : base;
+      return buildTrendModel(metricType, canonicalValue, displayValue, displayUnit);
     }
 
     _autoRoomColumnsFor(metricType) {
-      // Max chips per row in fully automatic room-grid mode (no room_columns/
-      // room_rows override) — see _roomGridRows(). Kept conservative enough
-      // that a chip's number+unit never needs to shrink to fit.
-      return this._metricMetaFor(metricType).autoRoomColumns || 7;
-    }
-
-    _extremeRoomLabel(type, metricType) {
-      // Translated label for the coldest/warmest-equivalent room (extreme
-      // cards, scale marker tooltips): "type" is "cold" or "warm", but the
-      // wording itself is mode-dependent (e.g. "driest room" for humidity).
-      const meta = this._metricMetaFor(metricType);
-      return this._t(type === "cold" ? meta.lowRoomKey : meta.highRoomKey);
+      return autoRoomColumnsFor(metricType);
     }
 
     _metricMeta() {
@@ -4697,16 +9446,7 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _scaleConfigFor(metricType, unitProfile) {
-      const profile = this._classificationProfileForDisplay(metricType, unitProfile);
-      return {
-        comfort: profile.comfort,
-        optimal: profile.optimal,
-        scale: profile.scale,
-        step: profile.step,
-        oneSided: profile.oneSided === true,
-        headroom: profile.headroom,
-        anchorScale: profile.anchorScale !== false,
-      };
+      return scaleConfigFor(this._classificationProfileForDisplay(metricType, unitProfile));
     }
 
     _floorToStep(value, step) {
@@ -4729,12 +9469,7 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _rawUnitForEntity(entityId) {
-      // Reads one entity's own unit_of_measurement with no mode fallback —
-      // the generic, entity-agnostic counterpart to _metricTypeForEntity(),
-      // used by _resolveMetricContext() so metricType and unit are always
-      // read from the SAME entity (DATA-01).
-      const entityUnit = this._hass?.states?.[entityId]?.attributes?.unit_of_measurement;
-      return typeof entityUnit === "string" && entityUnit.trim() ? entityUnit.trim() : null;
+      return rawUnitForEntity(this._hass?.states, entityId);
     }
 
     _resolveUnitProfileKey(metricKind, rawUnit) {
@@ -4743,105 +9478,11 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _resolveAuxiliaryUnitProfile(entityId, metricKind, { rateSuffix = false } = {}) {
-      // Review fix (P0, post-2.21.1): range_entity/trend_entity are
-      // auxiliary sensors, not Primary/Room participants in
-      // _resolveMetricContext() — but their state/attributes still need a
-      // resolved unitProfile key before _convertMetricValue() can project
-      // them into canonical/display units (see _computeData()'s range/trend
-      // block). A COMPLETELY MISSING unit is unusable here too — the
-      // previous round's canonical-fallback-for-a-missing-unit asymmetry
-      // (documented at _buildEntityModel() above) has been explicitly and
-      // repeatedly rejected by the reviewer for Primary/Räume, and applies
-      // identically to Range/Trend: fehlend und unbekannt müssen beide
-      // unitProfile=null ergeben, nie eine stille Kanonisch-Annahme. A unit
-      // that IS present but doesn't resolve to any registered profile was
-      // already correctly rejected (unchanged, still `null`).
-      //
-      // rateSuffix: trend_entity's rate quantity is conventionally reported
-      // with a "/h" suffix on the ABSOLUTE unit (e.g. "ppm/h", "°C/h" — HA's
-      // own derivative/statistics helpers use exactly this convention), not
-      // the bare absolute unit itself. A trailing "/h" (whitespace-
-      // tolerant, case-insensitive) is stripped before matching against the
-      // registered unitProfiles.units list; a trend entity using the bare
-      // absolute unit with no suffix (also seen in the wild) still resolves
-      // unchanged, since stripping a non-matching suffix is a no-op.
-      if (!entityId) return null;
-      const definition = METRIC_DEFINITIONS[metricKind];
-      if (!definition) return null;
-      let rawUnit = this._rawUnitForEntity(entityId);
-      if (!rawUnit) return null;
-      if (rateSuffix) rawUnit = rawUnit.replace(/\s*\/\s*h$/i, "");
-      return this._resolveUnitProfileKey(metricKind, rawUnit);
+      return resolveAuxiliaryUnitProfileKey(this._hass?.states, entityId, metricKind, { rateSuffix });
     }
 
     _buildEntityModel(entityId, sourceRole) {
-      // One EntityModel per Primary/Room entity (AP-02, audit section 4.1):
-      // every field needed to decide whether this entity may participate in
-      // metric-kind resolution or averaging, resolved once so
-      // _resolveMetricContext() never has to re-derive it independently for
-      // different purposes (that independent re-derivation — metricType via
-      // one path, avg/avgSource via another, unit via a third — was DATA-01
-      // through DATA-04's shared root cause). All four metric kinds now have
-      // a MetricDefinition (review fix, post-AP-03: humidity/co2/pm25 got
-      // trivial identity UnitProfiles), so canonicalValue is a genuine
-      // (no-op for those three, real for temperature) conversion in every
-      // case, never a bypass.
-      const stateObject = entityId ? this._hass?.states?.[entityId] || null : null;
-      const rawValue = this._getNum(entityId);
-      const rawUnit = this._rawUnitForEntity(entityId);
-      const rawDeviceClass = stateObject?.attributes?.device_class;
-      const deviceClass = typeof rawDeviceClass === "string" && rawDeviceClass.trim() ? rawDeviceClass.trim() : null;
-      const metricKind = this._metricTypeForEntity(entityId);
-      const validNumeric = rawValue !== null;
-
-      // Review fix (P0, post-2.21.1): a unit is only ever trusted when it is
-      // BOTH present AND resolves to a registered UnitProfile — a missing
-      // unit_of_measurement is no longer assumed canonical. The previous
-      // round's asymmetry ("fehlend ist nicht dasselbe wie explizit
-      // falsch" — a missing unit fell back to canonical while an explicit-
-      // but-unresolvable one, e.g. device_class:temperature + "hPa", did
-      // not) was an intentional, documented judgment call, but the reviewer
-      // has since explicitly and repeatedly rejected it: fehlend und
-      // unbekannt muss beide unitProfile=null/validUnit=false ergeben, die
-      // Messung ausschließen und diagnostiziert werden — no exceptions.
-      // validUnit:false means "this entity's own metric kind is known, but
-      // its reading cannot be trusted" — metricKind itself is deliberately
-      // left resolved (not nulled out), so title/icon fallbacks (see
-      // _resolveMetricContext()'s "no candidates" branch) still make sense
-      // even when nothing anywhere is numerically usable.
-      let unitProfile = null;
-      let canonicalValue = rawValue;
-      let validUnit = true;
-      if (validNumeric && metricKind) {
-        const definition = METRIC_DEFINITIONS[metricKind]; // always exists now (all 4 kinds registered)
-        if (rawUnit) {
-          unitProfile = this._resolveUnitProfileKey(metricKind, rawUnit);
-          if (!unitProfile) validUnit = false;
-        } else {
-          validUnit = false;
-        }
-        if (unitProfile) {
-          canonicalValue = this._convertMetricValue(rawValue, {
-            metricKind,
-            quantityKind: "absolute",
-            fromProfileKey: unitProfile,
-            toProfileKey: definition.canonicalProfileKey,
-          });
-        }
-      }
-
-      // Physical/custom valid_range checks are defined in the profile's
-      // canonical unit. Run them only after the entity value has passed unit
-      // resolution and been converted; comparing a raw Fahrenheit value
-      // against canonical Celsius limits would otherwise reject valid data.
-      // lenient:true (P1 review fix, post-2.30.0): this entity's OWN kind
-      // may not be the kind the card-wide classification policy is scoped
-      // to (e.g. a humidity room on an otherwise-temperature card with
-      // classification: outdoor) — see _resolveClassificationProfile()'s
-      // lenient parameter for why that must not throw here.
-      const validPhysical = validNumeric && (!validUnit || this._isPhysicallyValid(canonicalValue, metricKind, null, { lenient: true }));
-
-      return { entityId, sourceRole, stateObject, rawValue, rawUnit, deviceClass, metricKind, unitProfile, quantityKind: "absolute", canonicalValue, validNumeric, validPhysical, validUnit, errors: [] };
+      return buildEntityModel(this._hass?.states, this._config, entityId, sourceRole);
     }
 
     _warnMixedMetricKindsOnce(diagnostic) {
@@ -4861,193 +9502,20 @@ function classifyTrendRate(canonicalValue, policy) {
       );
     }
 
+    // Memoized by hass/config identity. Home Assistant reassigns a fresh hass
+    // object on every real update, so identity is exactly the right invalidation
+    // signal, and a single render asks for the context many times.
+    //
+    // The mixed-kind warning is deduplicated and therefore stateful, which is why
+    // it stays out here rather than inside the pure resolution. It fires on a cache
+    // MISS only — the same moments it fired before.
     _resolveMetricContext() {
-      // Atomic MeasurementContext (AP-02, v2.17.0 consolidated audit,
-      // sections 4.1-4.3): resolves metric kind, display unit, and average
-      // source together from EntityModels (_buildEntityModel()), replacing
-      // the three independently-resolving paths (metricType here, avg/
-      // avgSource via _computeData()'s own checks, unit here again) that
-      // were the shared root cause of DATA-01 through DATA-04. A primary or
-      // room may only determine the resolved kind or contribute to the
-      // average once it is BOTH numerically and physically valid — no
-      // majority vote is ever used to pick a "winner" between genuinely
-      // disagreeing metric kinds (see the "mixed_metric_kinds" branch
-      // below), unlike the pre-AP-02 implementation.
-      //
-      // 1. Primary usable (numeric + physically valid + a resolvable metric
-      //    kind, e.g. NOT a stuck "0 ppm" CO2 reading — DATA-01) -> it alone
-      //    determines metricKind/averageSource. Rooms of the SAME kind
-      //    (also numeric + physically valid) participate; rooms of a
-      //    DIFFERENT kind are excluded and diagnosed
-      //    ("excluded_foreign_metric_kind"), never silently dropped and
-      //    never averaged in regardless of their own validity.
-      // 2. Primary not usable -> only rooms that are themselves numeric +
-      //    physically valid + of a resolvable kind are candidates at all —
-      //    an unavailable room can never outnumber/outvote a genuinely
-      //    available one (DATA-02).
-      //    - No candidates -> no usable source; metricKind still defaults
-      //      sensibly (the primary's own resolvable kind if it has one,
-      //      else "temperature") purely for the empty state's title/icon,
-      //      but averageSource stays null.
-      //    - Candidates all share one metric kind -> roomConsensus:
-      //      metricKind is that kind, averageSource.canonicalValue is the
-      //      mean of their CANONICAL values — compatible units of the same
-      //      kind (e.g. a °F room among °C rooms) are converted before
-      //      averaging, never averaged raw.
-      //    - Candidates span more than one metric kind -> NO majority
-      //      selection. metricKind/averageSource are null, diagnostics
-      //      carries "mixed_metric_kinds" (DATA-03) — a defined
-      //      configuration state, not an arbitrary winner picked by count.
-      //
-      // Every canonicalValue used here is expressed in the metric kind's
-      // CANONICAL unit (Celsius for temperature) — even when the winning
-      // source itself reports Fahrenheit/Kelvin; _computeData() (AP-03)
-      // converts into the resolved displayUnitProfile exactly once, early,
-      // before any comfort/classification/scale decision is made, so those
-      // decisions are always made against the SAME unit as the number
-      // actually displayed. displayUnitProfile itself follows audit 9.4:
-      // (1) a usable primary's own unit profile; (2) otherwise, the
-      // participating rooms' shared unit profile, IF they all agree — a
-      // room-consensus average spanning disagreeing units (e.g. one °F room
-      // among °C rooms) has no single "the" display unit, so it falls back
-      // to canonical; (3) canonical when nothing else resolves. humidity/
-      // co2/pm25 each have one identity UnitProfile, so their display
-      // projection remains a no-op.
-      //
-      // Memoized like _language(): invalidated on hass or config identity
-      // change, so _metricType()/_unit() (thin wrappers below) stay cheap
-      // and consistent across a single render.
       if (this._metricContextCacheHass === this._hass && this._metricContextCacheConfig === this._config) {
         return this._metricContextCacheValue;
       }
-
-      const primary = this._buildEntityModel(this._config?.entity, "primary");
-      const rooms = (this._config?.rooms || []).map((room) => this._buildEntityModel(room.entity, "room"));
-      const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
-
-      let metricKind;
-      let averageSource;
-      let participatingRooms;
-      let excludedRoomIds;
-      let consistent;
-      let diagnostics;
-      let sourceEntity;
-      let sourceKind;
-      let displayUnitProfileKey;
-
-      if (primaryUsable) {
-        metricKind = primary.metricKind;
-        participatingRooms = [];
-        excludedRoomIds = [];
-        diagnostics = [];
-        for (const room of rooms) {
-          if (!room.validNumeric || room.metricKind === null) continue;
-          if (room.metricKind !== metricKind) {
-            excludedRoomIds.push(room.entityId);
-            diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
-            continue;
-          }
-          if (!room.validUnit) {
-            // Review fix (post-AP-01..03): same metric kind as the usable
-            // primary, but this room's OWN unit doesn't match any
-            // registered UnitProfile for that kind — diagnosed and
-            // excluded, never silently averaged in with an assumed unit.
-            excludedRoomIds.push(room.entityId);
-            diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
-            continue;
-          }
-          if (room.validPhysical) participatingRooms.push(room);
-        }
-        averageSource = { kind: "primary", entityId: primary.entityId, canonicalValue: primary.canonicalValue, unitProfile: primary.unitProfile };
-        consistent = true;
-        sourceEntity = primary.entityId;
-        sourceKind = "primary";
-        displayUnitProfileKey = primary.unitProfile;
-      } else {
-        const candidates = rooms.filter((room) => room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null);
-        // Review fix (post-AP-01..03): rooms that are numerically/physically
-        // valid and have a resolvable metric kind, but whose OWN unit
-        // doesn't match any registered UnitProfile for that kind, are
-        // diagnosed here too — not just in the primaryUsable branch above —
-        // so they're never silently dropped from the candidate pool without
-        // a trace, regardless of which room-consensus sub-branch is reached.
-        const unusableUnitRooms = rooms.filter((room) => room.validNumeric && room.validPhysical && !room.validUnit && room.metricKind !== null);
-        const unusableUnitIds = unusableUnitRooms.map((room) => room.entityId);
-        const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind }));
-        participatingRooms = [];
-        excludedRoomIds = unusableUnitIds;
-        if (candidates.length === 0) {
-          metricKind = primary.metricKind || "temperature";
-          averageSource = null;
-          diagnostics = unusableUnitDiagnostics;
-          consistent = true;
-          sourceEntity = primary.metricKind ? primary.entityId : null;
-          sourceKind = primary.metricKind ? "primary" : "default";
-          displayUnitProfileKey = null;
-        } else {
-          const kinds = new Set(candidates.map((room) => room.metricKind));
-          if (kinds.size > 1) {
-            metricKind = null;
-            averageSource = null;
-            diagnostics = [{ code: "mixed_metric_kinds", metricKinds: [...kinds] }, ...unusableUnitDiagnostics];
-            consistent = false;
-            sourceEntity = null;
-            sourceKind = "mixed";
-            displayUnitProfileKey = null;
-            this._warnMixedMetricKindsOnce(diagnostics[0]);
-          } else {
-            metricKind = candidates[0].metricKind;
-            participatingRooms = candidates;
-            diagnostics = unusableUnitDiagnostics;
-            consistent = true;
-            sourceEntity = candidates[0].entityId;
-            sourceKind = "roomConsensus";
-            // A room-consensus average has no single "the" display unit
-            // unless every participating room actually agrees on one — a
-            // °F room mixed among °C rooms (audit 9.4/9.7 "Mixed Units")
-            // still averages correctly (canonicalValue is already
-            // canonicalized per room), but display falls back to canonical
-            // rather than arbitrarily preferring one disagreeing room's unit.
-            displayUnitProfileKey = candidates.every((room) => room.unitProfile === candidates[0].unitProfile)
-              ? candidates[0].unitProfile
-              : null;
-            averageSource = {
-              kind: "roomConsensus",
-              entityIds: candidates.map((room) => room.entityId),
-              canonicalValue: candidates.reduce((sum, room) => sum + room.canonicalValue, 0) / candidates.length,
-              unitProfile: null,
-            };
-          }
-        }
-      }
-
-      const definition = METRIC_DEFINITIONS[metricKind];
-      const canonicalUnit = definition ? definition.canonicalUnit : this._metricMetaFor(metricKind).unitFallback;
-      // AP-03 (audit 9.4): the resolved display profile —
-      // celsius/fahrenheit/kelvin for temperature and the identity profile
-      // for humidity/co2/pm25. Falls back to the canonical profile key
-      // whenever displayUnitProfileKey couldn't be resolved to one source.
-      const displayUnitProfile = definition
-        ? this._getUnitProfile(metricKind, displayUnitProfileKey || definition.canonicalProfileKey)
-        : null;
-      const value = {
-        metricKind,
-        canonicalUnit,
-        unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit,
-        displayUnitProfile,
-        averageSource,
-        participatingRooms,
-        excludedRoomIds,
-        consistent,
-        diagnostics,
-        // Legacy aliases: kept so existing callers (_unit()/_metricType()
-        // below, and pre-AP-02 tests that are still valid) keep working
-        // unchanged.
-        metricType: metricKind,
-        sourceEntity,
-        sourceKind,
-      };
-
+      const value = resolveMeasurementContext(this._hass?.states, this._config);
+      const mixed = value.diagnostics.find((diagnostic) => diagnostic.code === 'mixed_metric_kinds');
+      if (mixed) this._warnMixedMetricKindsOnce(mixed);
       this._metricContextCacheHass = this._hass;
       this._metricContextCacheConfig = this._config;
       this._metricContextCacheValue = value;
@@ -5086,15 +9554,11 @@ function classifyTrendRate(canonicalValue, policy) {
     // identity conversion.
 
     _getMetricDefinition(metricKind) {
-      const definition = METRIC_DEFINITIONS[metricKind];
-      if (!definition) throw new Error(`No MetricDefinition registered for metricKind "${metricKind}"`);
-      return definition;
+      return getMetricDefinition(metricKind);
     }
 
     _getUnitProfile(metricKind, profileKey) {
-      const profile = this._getMetricDefinition(metricKind).unitProfiles[profileKey];
-      if (!profile) throw new Error(`Unknown unitProfile "${profileKey}" for metricKind "${metricKind}"`);
-      return profile;
+      return getUnitProfile(metricKind, profileKey);
     }
 
     // Raw primitives: operate directly on profile/tier/band objects, with
@@ -5106,48 +9570,27 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _deriveThresholdsForProfileFromTiers(canonicalTiers, profile) {
-      return deriveThresholdsForProfile(canonicalTiers, profile);
+      return deriveThresholdsForProfile$1(canonicalTiers, profile);
     }
 
     _deriveBandForProfileFromBand(band, profile) {
-      return deriveBandForProfile(band, profile);
+      return deriveBandForProfile$1(band, profile);
     }
 
-    // Registry-based convenience wrappers, for the common case of an
-    // already-registered metricKind.
-    _convertMetricValue(value, { metricKind, quantityKind, fromProfileKey, toProfileKey }) {
-      const fromProfile = this._getUnitProfile(metricKind, fromProfileKey);
-      const toProfile = this._getUnitProfile(metricKind, toProfileKey);
-      return this._convertUnitValue(value, quantityKind, fromProfile, toProfile);
+    _convertMetricValue(value, options) {
+      return convertMetricValue(value, options);
     }
 
     _deriveThresholdsForProfile(metricKind, profileKey) {
-      const definition = this._getMetricDefinition(metricKind);
-      return this._deriveThresholdsForProfileFromTiers(definition.canonicalClassificationTiers, this._getUnitProfile(metricKind, profileKey));
+      return deriveThresholdsForProfile(metricKind, profileKey);
     }
 
     _deriveBandForProfile(metricKind, profileKey, bandName) {
-      const definition = this._getMetricDefinition(metricKind);
-      const bandKey = `canonical${bandName[0].toUpperCase()}${bandName.slice(1)}Band`; // "comfort" -> canonicalComfortBand
-      const band = definition[bandKey];
-      if (!band) throw new Error(`Unknown band "${bandName}" for metricKind "${metricKind}"`);
-      return this._deriveBandForProfileFromBand(band, this._getUnitProfile(metricKind, profileKey));
+      return deriveBandForProfile(metricKind, profileKey, bandName);
     }
 
     _metricTypeForEntity(entityId) {
-      // Resolves a metric type from one entity's own device_class/unit, or
-      // null if neither is present/known. Reads the state directly rather
-      // than via _unit()/_resolveMetricContext() (which resolve a single
-      // card-wide context) so it can be reused for arbitrary room entities.
-      const state = this._hass?.states?.[entityId];
-      if (!state) return null;
-      const deviceClass = state.attributes?.device_class;
-      if (typeof deviceClass === "string" && deviceClass.trim()) {
-        const metric = METRIC_TYPE_BY_DEVICE_CLASS[deviceClass.trim().toLowerCase()];
-        if (metric) return metric;
-      }
-      const unit = normalizeUnitToken(state.attributes?.unit_of_measurement);
-      return METRIC_TYPE_BY_UNIT[unit] || null;
+      return metricKindForEntity(this._hass?.states, entityId);
     }
 
     _fmtWithUnit(value, digits, withSpace = true) {
@@ -5171,248 +9614,50 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _rangePosition(minValue, maxValue, scaleMin, scaleMax) {
-      // Computes left position and width for the comfort/optimal bands.
-      const left = this._pos(minValue, scaleMin, scaleMax);
-      const right = this._pos(maxValue, scaleMin, scaleMax);
-      return {
-        left: Math.min(left, right),
-        width: Math.abs(right - left),
-      };
+      return rangePosition(minValue, maxValue, scaleMin, scaleMax);
     }
 
     _scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
-      // Bundles everything _renderScaleBar()/_updateScaleBarCommon() need to
-      // draw one scale bar (comfort/optimal band position+size, scale edge
-      // values). comfortMin/comfortMax/optimalMin/optimalMax are the same
-      // mode-dependent thresholds for every scale bar on the card; only
-      // scaleMin/scaleMax (the bar's own dynamic bounds) differ between the
-      // main "scale" view (room-based) and the "rangeScale" view
-      // (daily-range-based, see _computeData()) — computed here once so
-      // both views share identical position math via the same function.
-      const comfortBand = this._rangePosition(comfortMin, comfortMax, scaleMin, scaleMax);
-      const optimalBand = this._rangePosition(optimalMin, optimalMax, scaleMin, scaleMax);
-      return {
-        scaleMin,
-        scaleMax,
-        optimalMin,
-        optimalMax,
-        comfortLeft: comfortBand.left,
-        comfortWidth: comfortBand.width,
-        comfortCenter: comfortBand.left + comfortBand.width / 2,
-        optimalLeft: optimalBand.left,
-        optimalWidth: optimalBand.width,
-        optimalCenter: optimalBand.left + optimalBand.width / 2,
-        // A data-anchored axis can legitimately sit wholly outside the
-        // semantic bands (e.g. a winter outdoor scale at -3..9 °C). Keep
-        // their configured bounds in the model, but do not render a
-        // zero-width band or a misleading label pinned to an axis edge.
-        comfortVisible: comfortMax > scaleMin && comfortMin < scaleMax,
-        optimalVisible: optimalMax > scaleMin && optimalMin < scaleMax,
-      };
+      return scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax);
     }
 
     _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
-      // Splits `count` room chips into an array of row descriptors
-      // {itemCount, columnCount} (e.g. [{itemCount:5,columnCount:5},
-      // {itemCount:4,columnCount:4}] for 9 rooms with no override).
-      // columnCount is the CSS grid-template-columns count for that row —
-      // equal to itemCount unless `columns` is explicitly fixed, in which
-      // case every row (including a shorter last row) keeps the same
-      // columnCount so chip widths stay visually consistent across rows
-      // instead of a short last row's chips stretching wider. Pure
-      // function of count/columns/rows/autoMaxColumns — no DOM/entity
-      // access — so it's independently testable. Also returns `capacity`
-      // (rooms actually shown; only less than `count` when both columns
-      // and rows are explicitly configured and their product is smaller
-      // than count — an explicit override always wins over showing every
-      // configured room, see "Oeffentliche Konfiguration"). `autoMaxColumns`
-      // (default 7, see _autoRoomColumnsFor()) only affects the fully
-      // automatic branch below — any explicit columns/rows override takes
-      // priority and never sees this value.
-      if (count <= 0) return { rowSizes: [], capacity: 0 };
-
-      // Both fixed: a literal columns x rows grid, filled row-major; excess
-      // rooms beyond capacity are dropped rather than growing the grid.
-      // rowCount is capped to what `count` can actually fill, so an
-      // over-large room_rows (e.g. 5 rows for 2 rooms) never produces
-      // empty trailing rows.
-      if (columns && rows) {
-        const capacity = columns * rows;
-        const shown = Math.min(count, capacity);
-        const rowCount = Math.min(rows, Math.ceil(shown / columns));
-        const rowSizes = [];
-        let remaining = shown;
-        for (let i = 0; i < rowCount; i++) {
-          const itemCount = Math.min(columns, remaining);
-          rowSizes.push({ itemCount, columnCount: columns });
-          remaining -= itemCount;
-        }
-        return { rowSizes, capacity: shown };
-      }
-
-      // Only columns fixed: rows grow automatically, no capping.
-      if (columns) {
-        const rowCount = Math.ceil(count / columns);
-        const rowSizes = [];
-        let remaining = count;
-        for (let i = 0; i < rowCount; i++) {
-          const itemCount = Math.min(columns, remaining);
-          rowSizes.push({ itemCount, columnCount: columns });
-          remaining -= itemCount;
-        }
-        return { rowSizes, capacity: count };
-      }
-
-      // Only rows fixed, or fully automatic (rows derived from the
-      // metric-specific autoMaxColumns per row): distribute as evenly as
-      // possible across the row count, extra items going to the earliest
-      // rows first — e.g. 9 rooms over 2 rows -> [5, 4], 13 over 2 -> [7, 6].
-      // Row count is capped to `count` so an over-large room_rows never
-      // produces empty rows (the automatic default never needs this cap on
-      // its own, since Math.ceil(count/autoMaxColumns) <= count for every
-      // count >= 1, but an explicit room_rows override can request more
-      // rows than there are rooms).
-      const rowCount = Math.min(rows || Math.max(1, Math.ceil(count / autoMaxColumns)), count);
-      const base = Math.floor(count / rowCount);
-      const remainder = count % rowCount;
-      const rowSizes = [];
-      for (let i = 0; i < rowCount; i++) {
-        const itemCount = base + (i < remainder ? 1 : 0);
-        rowSizes.push({ itemCount, columnCount: itemCount });
-      }
-      return { rowSizes, capacity: count };
+      return roomGridRows(count, columns, rows, autoMaxColumns);
     }
 
     _resolveDynamicStep(metricType, unitProfile, staticStep, low, high, baseMin, baseMax, anchorScale = true) {
-      // AP-03 (audit 9.6): Fahrenheit's rounding step depends on how wide
-      // the actually-displayed span is (2°F/5°F/10°F for spans <=20/<=40/
-      // >40 °F) instead of a single fixed step — a narrow Fahrenheit range
-      // stays fine-grained, a wide one doesn't produce an absurd number of
-      // gridlines. Celsius/Kelvin (no dynamicDisplaySteps on their profile)
-      // and humidity/co2/pm25 (identity UnitProfiles without dynamic steps)
-      // keep the fixed staticStep unchanged. Teil C (review
-      // fix 3): unitProfile is the caller's explicit resolution, never
-      // self-resolved here.
-      const definition = METRIC_DEFINITIONS[metricType];
-      if (!definition) return staticStep;
-      if (!unitProfile?.dynamicDisplaySteps) return staticStep;
-      const dataMin = Number.isFinite(low) ? low : baseMin;
-      const dataMax = Number.isFinite(high) ? high : baseMax;
-      const spanMin = anchorScale ? Math.min(dataMin, baseMin) : dataMin;
-      const spanMax = anchorScale ? Math.max(dataMax, baseMax) : dataMax;
-      const span = spanMax - spanMin;
-      const tier = unitProfile.dynamicDisplaySteps.find((t) => span <= t.maxSpan);
-      return (tier || unitProfile.dynamicDisplaySteps[unitProfile.dynamicDisplaySteps.length - 1]).step;
+      // The registry guard stays here: an unregistered metric kind has no unit
+      // profile to read span-dependent steps from.
+      if (!METRIC_DEFINITIONS[metricType]) return staticStep;
+      return resolveDynamicStep(staticStep, unitProfile?.dynamicDisplaySteps, low, high, baseMin, baseMax, anchorScale);
     }
 
     _dynamicScale(coolestValue, warmestValue, metricType, unitProfile) {
-      // Expands either the mode's anchored base scale OR the live data range
-      // to leave headroom around real values so markers don't hug the edge;
-      // rounds to the mode's step (1 for
-      // temperature/Kelvin, dynamic 2/5/10 for Fahrenheit — see
-      // _resolveDynamicStep() — 5 for humidity/pm25, 200 for co2) after
-      // adding a buffer (the active profile's headroom, defaulting to a full
-      // step).
-      // oneSided modes (co2/pm25) never expand the lower bound — there is
-      // no "too low" concept for them, so min always stays at scale.min.
-      // Teil C (review fix 3): unitProfile is threaded through explicitly
-      // to _scaleConfigFor()/_resolveDynamicStep() — see _buildScaleModel().
-      // The resolved step is now also returned (not just min/max), so
-      // _buildScaleModel() can expose it as the renderer-ready
-      // displayStep without a third independent call.
-      const { scale, step: staticStep, oneSided, headroom, anchorScale } = this._scaleConfigFor(metricType, unitProfile);
-      const baseMin = scale.min;
-      const baseMax = scale.max;
-      const numericLow = Number(coolestValue);
-      const numericHigh = Number(warmestValue);
-      const low = Number.isFinite(numericLow) ? numericLow : baseMin;
-      const high = Number.isFinite(numericHigh) ? numericHigh : baseMax;
-      const step = this._resolveDynamicStep(
-        metricType,
-        unitProfile,
-        staticStep,
-        oneSided ? baseMin : low,
-        high,
-        baseMin,
-        baseMax,
-        anchorScale
-      );
-      const buffer = headroom ?? step;
-
-      const warmLimit = this._ceilToStep(high + buffer, step);
-      let max = anchorScale ? Math.max(baseMax, warmLimit) : warmLimit;
-      max = this._ceilToStep(max, step);
-      if (!Number.isFinite(max)) max = baseMax;
-
-      let min = baseMin;
-      if (!oneSided) {
-        const coldLimit = this._floorToStep(low - buffer, step);
-        min = anchorScale ? Math.min(baseMin, coldLimit) : coldLimit;
-        min = this._floorToStep(min, step);
-        if (!Number.isFinite(min)) min = baseMin;
-      }
-
-      if (min >= max) max = min + step;
-      return { min, max, step };
+      // Keeps the registry guard of _resolveDynamicStep() in the loop by passing
+      // the dynamic steps only for a registered metric kind.
+      const dynamicDisplaySteps = METRIC_DEFINITIONS[metricType] ? unitProfile?.dynamicDisplaySteps : undefined;
+      return dynamicScale(coolestValue, warmestValue, this._scaleConfigFor(metricType, unitProfile), dynamicDisplaySteps);
     }
 
     _buildScaleModel({ metricType, unitProfile, comfortMin, comfortMax, optimalMin, optimalMax, low, high, markers }) {
-      // AP-03 (audit 9.6, "SCALE-01 - gemeinsames ScaleModel für beide
-      // Scale-Views"): fuses _dynamicScale()+_scaleGeometry() — previously
-      // two near-identical call pairs in _computeData(), one for the main
-      // "scale" view (room-based low/high) and one for "rangeScale"
-      // (daily-range-based low/high) — into the single shared function the
-      // audit requires, called identically by both. Guarantees "identical
-      // geometry for identical input in both views" structurally (it is
-      // literally the same function call), not just by convention.
-      //
-      // Teil C (review fix 3, P1): takes an explicit options object
-      // (metricType/unitProfile resolved ONCE by the caller — _computeData()
-      // — instead of every downstream helper re-resolving
-      // this._resolveMetricContext() independently) and returns the FULL
-      // renderer-ready model, not just geometry: displayStep (the actual
-      // rounding step _dynamicScale() chose — previously recomputed
-      // separately, nowhere exposed) and markerPositions (one _pos() call
-      // per entry in `markers`, e.g. {avg, coolest, warmest} for the main
-      // scale or {current, min, max} for rangeScale — replacing the
-      // several independent this._pos(...) call sites _computeData() used
-      // to make against this same scale) and boundaryLabels (the min/max
-      // edge labels, pre-formatted in the SAME unit as everything else this
-      // model produced — replacing _renderScaleBar()'s/
-      // _updateScaleBarCommon()'s own ad-hoc this._fmtWithUnit(scaleMin,...)
-      // calls). geometry fields (scaleMin/scaleMax/optimalMin/optimalMax/
-      // comfortLeft/.../optimalCenter) are unchanged from _scaleGeometry()'s
-      // own contract.
-      const dynamicScale = this._dynamicScale(low, high, metricType, unitProfile);
-      const geometry = this._scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, dynamicScale.min, dynamicScale.max);
-      const markerPositions = {};
-      for (const key of Object.keys(markers || {})) {
-        markerPositions[key] = this._pos(markers[key], dynamicScale.min, dynamicScale.max);
-      }
-      return {
-        ...geometry,
-        displayStep: dynamicScale.step,
-        markerPositions,
-        boundaryLabels: {
-          min: this._fmtWithUnit(dynamicScale.min, 0, false),
-          max: this._fmtWithUnit(dynamicScale.max, 0, false),
-        },
-      };
+      return buildScaleAxis({
+        scaleConfig: this._scaleConfigFor(metricType, unitProfile),
+        displayUnitProfile: METRIC_DEFINITIONS[metricType] ? unitProfile : undefined,
+        comfort: { min: comfortMin, max: comfortMax },
+        optimal: { min: optimalMin, max: optimalMax },
+        low,
+        high,
+        markers,
+        formatBoundary: (value) => this._fmtWithUnit(value, 0, false),
+      });
     }
 
     _avgTone(value, entityId, metricType, unitProfile) {
-      const classification = this._resolveValueClassification(value, entityId, metricType, unitProfile);
-      const icon = this._config.icon || this._profileIconForValue(value, metricType, unitProfile);
-      return {
-        label: classification.level,
-        color: classification.color,
-        score: classification.score,
-        zone: classification.zone,
-        source: classification.source,
-        profileId: classification.profileId,
-        icon,
-        soft: this._rgba(classification.color, 0.20),
-      };
+      return buildTone({
+        classification: this._resolveValueClassification(value, entityId, metricType, unitProfile),
+        icon: this._config.icon || this._profileIconForValue(value, metricType, unitProfile),
+        texts: this._texts(),
+      });
     }
 
     _classificationTableFor(metricType, unitProfile) {
@@ -5420,30 +9665,7 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _classifyNumericValue(value, metricType, unitProfile) {
-      const table = this._classificationTableFor(metricType, unitProfile);
-      if (table.invalidWhen?.(value)) {
-        const invalid = table.invalidClassification || {
-          score: null,
-          levelKey: "level.invalidReading",
-          color: "#B4B2A9",
-          zone: "invalid",
-        };
-        return {
-          level: invalid.level || this._t(invalid.levelKey),
-          color: invalid.color,
-          score: invalid.score ?? null,
-          zone: invalid.zone ?? "invalid",
-        };
-      }
-      const tier = table.tiers.find((candidate) =>
-        table.comparison === ">" ? value > candidate.min : value >= candidate.min
-      );
-      return {
-        level: tier.level || this._t(tier.levelKey),
-        color: tier.color,
-        score: tier.score ?? null,
-        zone: tier.zone ?? null,
-      };
+      return numericTone(classifyNumericTier(this._classificationPolicy(), metricType, unitProfile, value), this._texts());
     }
 
     _fallbackTone(value, metricType, unitProfile) {
@@ -5452,11 +9674,7 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     _isPhysicallyValid(value, metricType, unitProfile = null, { lenient = false } = {}) {
-      if (!CLASSIFICATION_PROFILE_REGISTRY[metricType]) return true;
-      const profile = unitProfile
-        ? this._classificationProfileForDisplay(metricType, unitProfile)
-        : this._resolveClassificationProfile(metricType, { lenient });
-      return !profile.invalidWhen?.(value);
+      return isValuePhysicallyValid(this._classificationPolicy(), metricType, unitProfile, value, { lenient });
     }
 
     _fallbackTemperatureIcon(temp, unitProfile) {
@@ -5474,545 +9692,54 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     // ==== Data computation ====
-    // Computes everything the display needs from the current sensor values:
-    // average, coldest/warmest room, colors, comfort status.
-    //
-    // rooms is optional (minimal mode); below two valid room values,
-    // hasRoomsView is false and chips/the extreme-value view are omitted
-    // (see the hasRoomsView branches below and _renderContent()).
-    _computeData() {
-      const config = this._config;
-      // Resolved first via the atomic MeasurementContext (AP-02, see
-      // _resolveMetricContext()): metric kind, average source, and which
-      // rooms actually participate are all decided together, from the same
-      // EntityModels — never three independently-resolving checks like
-      // before AP-02 (that mismatch was DATA-01 through DATA-04's shared
-      // root cause). device_class/unit_of_measurement usually survive on an
-      // unavailable entity, so even the empty state can show the correct
-      // title/mode; comfort/optimal ranges below also depend on the mode.
+    // The production entry point. Everything fachlich lives in application/model
+    // (numbers and semantic tokens) and presentation/view-model (titles, formatting,
+    // geometry, colours); this method only supplies the inputs.
+    _computeViewModel() {
       const context = this._resolveMetricContext();
-      const metricType = context.metricType || "temperature";
-      const title = config.title || this._t(this._metricMetaFor(metricType).titleKey);
-      const scaleConfig = this._scaleConfigFor(metricType, context.displayUnitProfile);
-      const comfortMin = scaleConfig.comfort.min;
-      const comfortMax = scaleConfig.comfort.max;
-      const optimalMin = scaleConfig.optimal.min;
-      const optimalMax = scaleConfig.optimal.max;
-
-      // No usable average source at all — either nothing resolvable/valid
-      // anywhere (context.diagnostics empty), or rooms report genuinely
-      // incompatible metric kinds with no usable primary to arbitrate
-      // (context.diagnostics[0].code === "mixed_metric_kinds", DATA-03) —
-      // exposed as configurationState so a future block can surface it more
-      // specifically; for now this renders as the existing empty state,
-      // never a cross-metric-kind average.
-      if (context.averageSource === null) {
-        return {
-          empty: true,
-          metricType,
-          title,
-          missingRooms: config.rooms.filter((room) => !this._hasEntity(room.entity)).length,
-          configurationState: context.diagnostics[0]?.code ?? null,
-        };
-      }
-
-      // AP-03 (audit 9.1-9.6): from here on, every number is projected into
-      // the resolved DISPLAY unit (context.displayUnitProfile) exactly
-      // once — comfort/classification/scale decisions must be made against
-      // the SAME unit as what's actually rendered (see
-      // _resolveMetricContext()/_classificationTableFor() for why a
-      // canonical-only comparison would be wrong against a rounded
-      // Fahrenheit boundary). Identity for humidity/co2/pm25 and whenever
-      // the resolved display is already canonical (e.g. Celsius) — a
-      // complete no-op for the real household's Celsius-only sensors.
-      const displayProfile = context.displayUnitProfile;
-      const toDisplay = displayProfile ? displayProfile.fromCanonical : (v) => v;
-      const toDisplayDelta = displayProfile ? displayProfile.deltaFromCanonical : (v) => v;
-
-      // Room values: only the rooms the atomic context actually accepted as
-      // participants (same metric kind as the resolved context, numerically
-      // + physically valid, entity currently available — see
-      // _resolveMetricContext()). value is the DISPLAY value (e.g. a
-      // Fahrenheit room reads back in °F here when the card resolves to a
-      // Fahrenheit display, °C when it doesn't — see _buildEntityModel()
-      // for the canonical value this is derived from), so every comparison
-      // below against comfortMin/comfortMax (from _scaleConfigFor(),
-      // likewise resolved into the display unit) is correct regardless of
-      // which unit each entity actually reports in.
-      const participatingByEntity = new Map(context.participatingRooms.map((model) => [model.entityId, model]));
-      // AP-C2: room_label picks which of room.short/room.name is actually
-      // rendered on the chip -- "auto" (default) resolves to room.short,
-      // identical to today's unconditional behavior; "short" is the same
-      // value, just explicitly chosen rather than implicit; "name" shows
-      // the full name instead (CSS ellipsis remains the overflow guard,
-      // same as any other label). Resolved once here so
-      // _renderRoomChip()/_patchRoomChip() have a single field to read,
-      // without needing to know about room_label themselves.
-      const roomDisplayLabel = (room) => (config.room_label === "name" ? room.name : room.short);
-      // A room's short code is guaranteed never to shrink/ellipsize only
-      // when the actually-rendered label is exactly two Unicode uppercase
-      // letters (e.g. "WZ", "KÜ") — a purely text-based check against the
-      // resolved displayLabel, independent of whether `short` was
-      // explicitly configured or derived (see .rtc-room-short[data-short-
-      // guaranteed] in the styles below). Longer labels (e.g. "WOHNZ") or
-      // full room names keep the normal ellipsis fallback.
-      const validRooms = config.rooms
-        .map((room, index) => {
-          const model = participatingByEntity.get(room.entity);
-          if (!model) return null;
-          const displayLabel = roomDisplayLabel(room);
-          return { ...room, index, value: toDisplay(model.canonicalValue), displayLabel, shortGuaranteed: isTwoUpperLetterLabel(displayLabel) };
-        })
-        .filter((room) => room !== null);
-
-      // Room-chip grid layout (see _roomGridRows()); when room_columns AND
-      // room_rows are both explicitly configured and their product is
-      // smaller than the number of valid rooms, the grid capacity caps how
-      // many rooms are shown as chips. This is a display-only cap: it must
-      // never change avg/extrema/comfort/spread/subtitle, which always use
-      // every valid room (see allRooms below) — a room hidden purely by a
-      // grid override still counts everywhere else, exactly as if its chip
-      // were simply not rendered. The cap itself is applied here, in
-      // config-declaration order (validRooms is still unsorted at this
-      // point), rather than after the value-sort below — capping by value
-      // would make the visible chip set drift as values change through the
-      // day (e.g. a room silently vanishing from the grid once it's no
-      // longer among the N coldest), which would be confusing; capping by
-      // declaration order keeps the visible chip set stable and predictable.
-      // autoMaxColumns is metric-specific (see _autoRoomColumnsFor()) and
-      // only affects the fully-automatic branch of _roomGridRows() — an
-      // explicit room_columns/room_rows override is unaffected.
-      const roomGrid = this._roomGridRows(validRooms.length, config.room_columns, config.room_rows, this._autoRoomColumnsFor(metricType));
-      const cappedRooms = roomGrid.capacity < validRooms.length ? validRooms.slice(0, roomGrid.capacity) : validRooms;
-
-      // Sort by value then name for the FACHLICHE order. allRooms (every
-      // valid room) feeds every calculation below (extrema, comfort count,
-      // spread) and is always value-sorted, regardless of room_sort —
-      // room_sort (AP-C2, audit 23.1) is purely a presentation decision,
-      // so it only ever reorders `rooms` (the possibly grid-capped subset
-      // that actually becomes rendered chips), never `allRooms`.
-      const sortRooms = (list) => [...list].sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, this._language()));
-      const allRooms = sortRooms(validRooms);
-      const rooms = resolveRoomDisplayOrder(cappedRooms, config.room_sort, this._language());
-
-      // The average IS context.averageSource's canonical value, projected
-      // into the display unit — one atomic decision (see
-      // _resolveMetricContext()), not the old independent avgSensor/
-      // avgFallback pair that let a primary entity's own numeric-but-wrong-
-      // kind reading (DATA-04: "1013 hPa") slip through untouched by the
-      // room-based metricType resolution.
-      const avg = toDisplay(context.averageSource.canonicalValue);
-
-      // avgSource is the single source of truth for whether the displayed
-      // average actually came from config.entity's own state; avgEntity
-      // (used for the average's clickability and for _avgTone()'s/spread's
-      // attribute lookups below) must follow it exactly — using a looser
-      // "entity exists" check here would leave the average clickable, and
-      // its color/spread sourced from a stale/unavailable primary entity,
-      // even while the displayed number is the room-based fallback.
-      const avgSource = context.averageSource.kind === "primary" ? "sensor" : "calculated";
-      const avgEntity = avgSource === "sensor" ? config.entity : "";
-
-      // Daily-range view: only when range_entity is configured, its state
-      // is currently a valid number, AND its own unit resolves to a real
-      // UnitProfile for this metric kind (review fix 2, P0: previously read
-      // both raw, with no unit check at all — an entity reporting its
-      // spread/min/max in a different or unresolvable unit produced wrong
-      // classified/scaled numbers, e.g. a Celsius-configured card showing a
-      // raw Fahrenheit "18" as if it were 18°C). rangeState is a
-      // spread/delta (today's range width, quantityKind "delta" — same
-      // conversion factor as the spread attribute above, never the
-      // absolute +32 Fahrenheit offset); minimum/maximum are absolute
-      // readings (quantityKind "absolute"). Both go through the SAME
-      // resolved rangeProfile (one entity, one unit for state+attributes),
-      // then through the same canonical->display projection
-      // (toDisplay/toDisplayDelta) as every other number in this method.
-      const metricDefinition = METRIC_DEFINITIONS[metricType];
-      const rangeProfile = this._resolveAuxiliaryUnitProfile(config.range_entity, metricType);
-      let rangeState = rangeProfile ? this._getNum(config.range_entity) : null;
-      if (rangeState !== null) {
-        rangeState = toDisplayDelta(
-          this._convertMetricValue(rangeState, {
-            metricKind: metricType,
-            quantityKind: "delta",
-            fromProfileKey: rangeProfile,
-            toProfileKey: metricDefinition.canonicalProfileKey,
-          })
-        );
-      }
-      // A negative spread/delta is physically impossible (today's range
-      // can't be a negative width) — checked on the DISPLAY-unit value,
-      // consistent with every other physical-validity check in this method
-      // running after the canonical->display projection.
-      const hasRange = rangeState !== null && rangeState >= 0;
-      let rangeMin = hasRange ? this._getAttrNum(config.range_entity, "minimum") : null;
-      let rangeMax = hasRange ? this._getAttrNum(config.range_entity, "maximum") : null;
-      if (rangeMin !== null) {
-        rangeMin = toDisplay(
-          this._convertMetricValue(rangeMin, {
-            metricKind: metricType,
-            quantityKind: "absolute",
-            fromProfileKey: rangeProfile,
-            toProfileKey: metricDefinition.canonicalProfileKey,
-          })
-        );
-      }
-      if (rangeMax !== null) {
-        rangeMax = toDisplay(
-          this._convertMetricValue(rangeMax, {
-            metricKind: metricType,
-            quantityKind: "absolute",
-            fromProfileKey: rangeProfile,
-            toProfileKey: metricDefinition.canonicalProfileKey,
-          })
-        );
-      }
-      if (rangeMin !== null && !this._isPhysicallyValid(rangeMin, metricType, context.displayUnitProfile)) rangeMin = null;
-      if (rangeMax !== null && !this._isPhysicallyValid(rangeMax, metricType, context.displayUnitProfile)) rangeMax = null;
-      const rangeMinTime = hasRange
-        ? this._formatTime(this._hass?.states?.[config.range_entity]?.attributes?.minimum_zeitpunkt)
-        : null;
-      const rangeMaxTime = hasRange
-        ? this._formatTime(this._hass?.states?.[config.range_entity]?.attributes?.maximum_zeitpunkt)
-        : null;
-      // "" (not config.range_entity) as the entity id: rangeMin/rangeMax
-      // are historical readings (today's extremes, from attributes), not
-      // range_entity's current state — if range_entity itself carries a
-      // live value_color/value_level (a generic sensor isn't guaranteed
-      // not to), both would wrongly inherit that one current classification
-      // instead of their own numeric fallback tier. _roomTone()'s existing
-      // "" guard (via _getEntityClassification()) already skips straight to
-      // the numeric fallback, no new logic needed.
-      const rangeMinColor = rangeMin !== null ? this._roomTone(rangeMin, "", metricType, context.displayUnitProfile) : null;
-      const rangeMaxColor = rangeMax !== null ? this._roomTone(rangeMax, "", metricType, context.displayUnitProfile) : null;
-
-      // Trend: only when trend_entity is configured, valid, AND its own
-      // unit resolves to a real UnitProfile — typed as a RATE (review fix
-      // 2, P0: same conversion factor as a delta, audit 9.5), converted
-      // through the SAME two-step canonical->display projection as
-      // rangeState above. trendUnit is now always "<card display unit>/h"
-      // rather than the trend entity's own raw unit attribute — once the
-      // NUMBER is converted into the display unit, labeling it with the
-      // entity's original (pre-conversion) unit would be a label/number
-      // mismatch.
-      const trendProfile = this._resolveAuxiliaryUnitProfile(config.trend_entity, metricType, { rateSuffix: true });
-      const rawTrendValue = trendProfile ? this._getNum(config.trend_entity) : null;
-      let trendCanonicalValue = null;
-      let trendValue = null;
-      if (rawTrendValue !== null) {
-        trendCanonicalValue = this._convertMetricValue(rawTrendValue, {
-          metricKind: metricType,
-          quantityKind: "rate",
-          fromProfileKey: trendProfile,
-          toProfileKey: metricDefinition.canonicalProfileKey,
-        });
-        trendValue = toDisplayDelta(trendCanonicalValue);
-      }
-      const trendUnit = config.trend_entity ? `${this._unit()}/h` : null;
-      const trend = this._buildTrendModel(metricType, trendCanonicalValue, trendValue, trendUnit);
-
-      // Extended mode (room chips, extreme-value view, auto-slide) needs
-      // at least two valid room values. Driven by allRooms, not the
-      // possibly grid-capped rooms — a room_columns/room_rows override
-      // that hides chips must never turn off the room-comparison features
-      // it doesn't otherwise affect.
-      const hasRoomsView = allRooms.length >= 2;
-
-      const coolest = hasRoomsView ? allRooms[0] : null;
-      const warmest = hasRoomsView ? allRooms[allRooms.length - 1] : null;
-      // Spread prefers the average entity's spread attribute (computed
-      // server-side by a template sensor); only recomputed locally when that
-      // attribute is missing/invalid, or when the average itself is the
-      // room-based fallback (avgSource !== "sensor") — the spread attribute
-      // belongs to config.entity's own state and would otherwise be a stale
-      // reading from a broken/unavailable primary entity. Distinct from the
-      // daily-range entity's own min/max further above.
-      // The spread attribute is read from config.entity's own state, in
-      // that entity's own unit — canonicalized (AP-02) then projected into
-      // the display unit (AP-03, toDisplayDelta — never the absolute
-      // toDisplay(), a delta must never pick up the Fahrenheit +32 offset)
-      // before use, so it's never compared/combined with computedSpread
-      // (already display-unit, derived from display-unit room values) in
-      // mismatched units. Only meaningful for "temperature" (the only kind
-      // with a MetricDefinition so far, see AP-01); humidity/co2/pm25 have
-      // no unit-conversion concept, so rawSpread passes through unchanged
-      // there, exactly as before AP-02/AP-03.
-      let rawSpread = avgSource === "sensor" ? this._getAttrNum(config.entity, "spread") : null;
-      if (rawSpread !== null && context.averageSource.unitProfile && METRIC_DEFINITIONS[metricType]) {
-        const definition = METRIC_DEFINITIONS[metricType];
-        rawSpread = toDisplayDelta(
-          this._convertMetricValue(rawSpread, {
-            metricKind: metricType,
-            quantityKind: "delta",
-            fromProfileKey: context.averageSource.unitProfile,
-            toProfileKey: definition.canonicalProfileKey,
-          })
-        );
-      }
-      // A negative spread (room-to-room range) is physically impossible;
-      // treat it the same as a missing/invalid attribute.
-      const attrSpread = rawSpread !== null && rawSpread >= 0 ? rawSpread : null;
-      const computedSpread = hasRoomsView ? warmest.value - coolest.value : 0;
-      const spread = attrSpread !== null ? attrSpread : computedSpread;
-
-      // Dynamic scale expands beyond the profile anchor as needed or, for an
-      // unanchored profile such as outdoor temperature, follows only the live
-      // data range. Without room data it expands around the average instead.
-      // It must cover avg too
-      // (DATA-03): a weighted/independent average source can fall outside
-      // [coolest, warmest], which would otherwise clamp the avg marker to
-      // the scale edge — same reasoning as the rangeScale axis below.
-      // _buildScaleModel() (AP-03/SCALE-01, options-object rewritten by
-      // Teil C) is the single shared engine for both this main scale and
-      // the rangeScale below — see there. metricType/context.displayUnitProfile
-      // are resolved once, right here, and threaded through explicitly —
-      // never re-resolved by any downstream helper (Teil C, review fix 3).
-      const scaleMarkerValues = { avg };
-      if (hasRoomsView) {
-        scaleMarkerValues.coolest = coolest.value;
-        scaleMarkerValues.warmest = warmest.value;
-        for (const room of allRooms) scaleMarkerValues[`room_${room.index}`] = room.value;
-      }
-      const scaleModel = this._buildScaleModel({
-        metricType,
-        unitProfile: context.displayUnitProfile,
-        comfortMin,
-        comfortMax,
-        optimalMin,
-        optimalMax,
-        low: hasRoomsView ? Math.min(coolest.value, avg) : avg,
-        high: hasRoomsView ? Math.max(warmest.value, avg) : avg,
-        markers: scaleMarkerValues,
+      const domainModel = buildCardDomainModel({
+        // hass.states is read, never written or copied.
+        states: this._hass?.states,
+        config: this._config,
+        context,
+        // A plain locale string, needed for the name tie-break that keeps the
+        // extrema and the "stands out most" room agreeing on ties.
+        language: this._language(),
       });
-      const scaleMin = scaleModel.scaleMin;
-      const scaleMax = scaleModel.scaleMax;
+      return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
+    }
 
-      const inComfort = hasRoomsView
-        ? allRooms.filter((room) => room.value >= comfortMin && room.value <= comfortMax).length
-        : 0;
-      const tooWarm = hasRoomsView ? allRooms.filter((room) => room.value > comfortMax).length : 0;
-      const tooCool = hasRoomsView ? allRooms.filter((room) => room.value < comfortMin).length : 0;
+    // TEMPORARY compatibility adapter, and by now only that. Nothing on the production
+    // render path reads the flat shape any more: the card shell, all four views and
+    // every DOM patcher consume the CardViewModel directly, and no module under
+    // render/ or views/ may even import legacy-data.js (an architecture test enforces
+    // it). This exists so the 32 committed DTO baselines and the element-level
+    // assertions written against the flat object keep their meaning while the rendering
+    // layer moves out from under them. It goes away together with them in the
+    // element/test cleanup round.
+    _computeData() {
+      return toLegacyData(this._computeViewModel());
+    }
 
-      // Positions for the comfort/optimal bands and markers on the main scale.
-      const scaleGeometry = scaleModel;
-      const avgPos = scaleModel.markerPositions.avg;
-
-      // "range_scale" view (see VIEW_REGISTRY): an alternate scale bar with
-      // its own dynamic bounds derived from the daily min/max instead of
-      // room min/max — only computed when it can actually be shown, same
-      // gating as hasRangeScale below. Reuses the exact same
-      // _buildScaleModel(), just called with rangeMin/rangeMax instead of
-      // coolest/warmest — the audit's required "identical geometry for
-      // identical input in both views" invariant, structurally guaranteed.
-      // hasRange alone isn't enough: it only reflects range_entity's own
-      // state being valid, not that minimum/maximum are present too (see
-      // "Daily-range view" above) — this view specifically needs both, plus
-      // a sane (non-inverted) min<=max pair. AP-04: rangeScaleAvailable is
-      // pure AVAILABILITY (no config gate baked in, unlike the old
-      // range_scale_view-gated hasRangeScale) — resolveActiveViews() below
-      // decides, from views:, whether an available range_scale view is
-      // actually requested; "auto" leaves it off by default (audit 11.2).
-      const rangeScaleAvailable = hasRange && rangeMin !== null && rangeMax !== null && rangeMin <= rangeMax;
-
-      // View list: VIEW_REGISTRY order (range, range_scale, scale, extremes)
-      // filtered by condition()/defaultEnabled(), then the optional YAML
-      // views: config layered on top (see resolveActiveViews()) — drives
-      // both the rendered .rtc-view elements and the auto-slide order (see
-      // _holdSequence()). Diagnostics are surfaced once per setConfig()
-      // (_warnAboutViewConfigOnce()), not re-logged here on every hass
-      // update. Must run BEFORE the range_scale geometry block below —
-      // hasRangeScale is now a CONSEQUENCE of whether views actually
-      // resolved to include "range_scale", not an independent condition.
-      const { views, entries: viewEntries } = resolveActiveViews(VIEW_REGISTRY, { hasRange, hasRoomsView, rangeScaleAvailable }, config);
-      const hasRangeScale = views.includes("range_scale");
-
-      // View-customizer "Baukasten" (Teil 2): fully resolves EVERY
-      // registry view's own optionsSchema (defaults filled in) into
-      // data.viewOptions.<key> — generic and additive, not specific to any
-      // one option (current examples include band visibility, footer and
-      // marker modes). Computed for all registry entries, not just active
-      // ones (cheap, and a future consumer checking an inactive view's
-      // would-be options doesn't need special-casing here).
-      const viewOptions = {};
-      for (const descriptor of VIEW_REGISTRY) {
-        const entry = viewEntries.find((e) => e.type === descriptor.key);
-        viewOptions[descriptor.key] = resolveViewOptions(descriptor, entry?.options);
-      }
-
-      // AP-05 (audit sections 13, 14.1): the null-view state has two
-      // distinct causes that must render differently (explicit user
-      // instruction, not the audit's own "optional" framing) — a
-      // deliberately empty/fully-disabled views: config collapses the view
-      // area entirely (no markup at all), while a view that was actually
-      // REQUESTED but is systemically unavailable (e.g. range_scale
-      // requested with no valid range_entity) shows a localized hint
-      // instead, so the user can tell "nothing to show by design" apart
-      // from "something's misconfigured". `entries` (from
-      // resolveActiveViews(), not just the flat `views` list) is what makes
-      // the distinction possible: requested/available are tracked
-      // separately per entry, not collapsed into a single active flag.
-      const anyRequestedButUnavailable = viewEntries.some((e) => e.requested && !e.available);
-      const viewAreaCollapsed = views.length === 0 && !anyRequestedButUnavailable;
-
-      let rangeScaleGeometry = null;
-      let rangeCurrentPos = 0;
-      let rangeMinPos = 0;
-      let rangeMaxPos = 0;
-      if (hasRangeScale) {
-        // The axis must cover every value actually rendered on it,
-        // including avg — which can fall outside [rangeMin, rangeMax] when
-        // range_entity updates less often than entity (see readme climate
-        // card.md, "Auto-Slide und Bedienung"). Building the axis from only
-        // rangeMin/rangeMax would then clamp the avg marker to 0 or 100%
-        // even though the edge labels show a different min/max.
-        const rangeScaleModel = this._buildScaleModel({
-          metricType,
-          unitProfile: context.displayUnitProfile,
-          comfortMin,
-          comfortMax,
-          optimalMin,
-          optimalMax,
-          low: Math.min(rangeMin, avg),
-          high: Math.max(rangeMax, avg),
-          markers: { current: avg, min: rangeMin, max: rangeMax },
-        });
-        rangeScaleGeometry = rangeScaleModel;
-        rangeCurrentPos = rangeScaleModel.markerPositions.current;
-        rangeMinPos = rangeScaleModel.markerPositions.min;
-        rangeMaxPos = rangeScaleModel.markerPositions.max;
-      }
-
-      let coolestPos = 0;
-      let warmestPos = 0;
-      let coolestShift = 0;
-      let warmestShift = 0;
-      let coolestColor = null;
-      let warmestColor = null;
-      let scaleRoomMarkers = [];
-      if (hasRoomsView) {
-        coolestPos = scaleModel.markerPositions.coolest;
-        warmestPos = scaleModel.markerPositions.warmest;
-        const markerOverlap = Math.abs(warmestPos - coolestPos) < 1.6;
-        coolestShift = markerOverlap ? -4 : 0;
-        warmestShift = markerOverlap ? 4 : 0;
-        coolestColor = this._roomTone(coolest.value, coolest.entity, metricType, context.displayUnitProfile);
-        warmestColor = this._roomTone(warmest.value, warmest.entity, metricType, context.displayUnitProfile);
-        scaleRoomMarkers = allRooms.map((room) => ({
-          index: room.index,
-          entity: room.entity,
-          name: room.name,
-          value: room.value,
-          position: scaleModel.markerPositions[`room_${room.index}`],
-          color: this._roomTone(room.value, room.entity, metricType, context.displayUnitProfile),
-        }));
-      }
-
-      const tone = this._avgTone(avg, avgEntity, metricType, context.displayUnitProfile);
-      const avgColor = tone.color;
-
-      // Short status line under the title; without room data it stays
-      // limited to the plain average assessment.
-      let subtitle = "";
-      if (avg > comfortMax) {
-        subtitle = hasRoomsView
-          ? this._t("subtitle.aboveComfort", { diff: this._fmtWithUnit(avg - comfortMax), count: tooWarm, total: allRooms.length, adjective: this._t(this._metricMetaFor(metricType).aboveAdjectiveKey) })
-          : this._t("subtitle.aboveComfortNoRooms", { diff: this._fmtWithUnit(avg - comfortMax) });
-      } else if (avg < comfortMin) {
-        subtitle = hasRoomsView
-          ? this._t("subtitle.belowComfort", { diff: this._fmtWithUnit(comfortMin - avg), count: tooCool, total: allRooms.length, adjective: this._t(this._metricMetaFor(metricType).belowAdjectiveKey) })
-          : this._t("subtitle.belowComfortNoRooms", { diff: this._fmtWithUnit(comfortMin - avg) });
-      } else if (hasRoomsView && tooWarm + tooCool > 0) {
-        // The out-of-comfort room furthest from avg is always coolest or
-        // warmest (avg sits between the global min/max, and |x-avg| is
-        // maximized at one of those two endpoints) — so this reuses those
-        // already-computed objects instead of re-deriving via a second,
-        // independent sort. That second sort used to tie-break differently
-        // from coolest/warmest's own sort on an exact value tie, so the
-        // named room and the "warmest/coolest room" card could disagree.
-        const warmestOut = warmest.value > comfortMax;
-        const coolestOut = coolest.value < comfortMin;
-        const issue = warmestOut && coolestOut
-          ? (Math.abs(warmest.value - avg) >= Math.abs(coolest.value - avg) ? warmest : coolest)
-          : warmestOut ? warmest : coolest;
-        subtitle = this._t("subtitle.inComfortIssue", { name: issue.name });
-      } else if (hasRoomsView) {
-        subtitle = this._t("subtitle.inComfortAllGood");
-      } else {
-        subtitle = this._t("subtitle.inComfort");
-      }
-
-      const missingRooms = config.rooms.length - allRooms.length;
-      if (missingRooms > 0) {
-        subtitle += this._t("subtitle.missingRooms", { count: missingRooms });
-      }
-
-      // AP-C2: show_rooms:false hides only the rendered chip grid --
-      // hasRoomsView itself (and everything derived from allRooms: coolest/
-      // warmest, comfort count, spread, the scale's cold/warm markers)
-      // stays exactly as it would with rooms visible, since rooms remain
-      // full data sources either way.
-      const showRoomChips = hasRoomsView && config.show_rooms !== false;
-
-      // Central view model for rendering and updates.
+    // The narrow presentation collaborator: a translator and three formatters,
+    // nothing that could reach the card, the DOM or the configuration.
+    _texts() {
       return {
-        empty: false,
-        hasRoomsView,
-        showRoomChips,
-        hasRange,
-        rangeState,
-        hasRangeScale,
-        views,
-        viewOptions,
-        viewAreaCollapsed,
-        metricType,
-        // Teil C (review fix 3): exposed so render functions that call
-        // _roomTone() directly (_renderExtremeCard()/_renderRoomChip(),
-        // outside this method's own scope) can pass the SAME explicitly-
-        // resolved profile _computeData() itself used, instead of each
-        // re-resolving it independently.
-        displayUnitProfile: context.displayUnitProfile,
-        title,
-        avg,
-        avgLabel: config.avg_label || this._t("avg.label"),
-        avgEntity,
-        avgSource,
-        rooms,
-        roomCount: allRooms.length,
-        roomRows: roomGrid.rowSizes,
-        coolest,
-        warmest,
-        spread,
-        rangeMin,
-        rangeMax,
-        rangeMinTime,
-        rangeMaxTime,
-        rangeMinColor,
-        rangeMaxColor,
-        trendValue,
-        trendUnit,
-        trend,
-        inComfort,
-        comfortMin,
-        comfortMax,
-        // optimalMin/optimalMax/scaleMin/scaleMax/comfortLeft/comfortWidth/
-        // comfortCenter/optimalLeft/optimalWidth/optimalCenter come from scaleGeometry.
-        ...scaleGeometry,
-        avgPos,
-        coolestPos,
-        warmestPos,
-        coolestShift,
-        warmestShift,
-        coolestColor,
-        warmestColor,
-        scaleRoomMarkers,
-        avgColor,
-        tone,
-        subtitle,
-        rangeScaleGeometry,
-        rangeCurrentPos,
-        rangeMinPos,
-        rangeMaxPos,
+        language: this._language(),
+        t: (key, vars) => this._t(key, vars),
+        fmt: (value, digits) => this._fmt(value, digits),
+        fmtWithUnit: (value, digits, withSpace) => this._fmtWithUnit(value, digits, withSpace),
+        formatTime: (isoString) => this._formatTime(isoString),
       };
+    }
+
+    // The only DOM capability the rendering layer is given: this card's own document,
+    // that document's window, and the two element operations derived from them. Built
+    // per call because it is a handful of property reads, and because caching it would
+    // add the one failure mode it does not otherwise have — going stale if the card is
+    // ever adopted into another document.
+    _renderContext() {
+      return createRenderContext(this.ownerDocument);
     }
 
     // ==== Rendering ====
@@ -6049,36 +9776,28 @@ function classifyTrendRate(canonicalValue, policy) {
         `slide:${this._config.slide_seconds}`,
         `view:${this._activeView}`,
       ].join("|");
+      // The fast path, deliberately BEFORE any model or view-model work: an
+      // unchanged signature means an unchanged card, and computing a view model
+      // only to throw it away would make every no-op hass push cost a full
+      // pipeline run.
       if (allowSkip && signature === this._lastRenderSignature) return;
 
-      const data = this._computeData();
+      const viewModel = this._computeViewModel();
       const currentlyEmpty = Boolean(this.shadowRoot.querySelector(".rtc-empty"));
-      // showRoomChips (AP-C2: hasRoomsView AND show_rooms !== false) drives
-      // the room-chip grid, a DOM section independent of the view
-      // carousel; a change forces a full rebuild instead of a partial
-      // update. Can change from a plain data update, not just a config
-      // change (e.g. a second room becoming available), so this check
-      // can't be skipped even when setConfig() wasn't just called.
-      const currentlyHasRooms = Boolean(this.shadowRoot.querySelector(".rtc-room-grid"));
-      // The view carousel's own structure is checked generically: does the
-      // exact ordered list of view keys differ from what's currently
-      // mounted (this._views, set by the last _renderAll())? This catches
-      // any availability, count, or pure ordering change for any current
-      // or future view — not just a hardcoded set of flags that would need
-      // a new one added by hand for every new view type.
-      const currentViews = this._views || [];
-      const currentViewAreaCollapsed = this._viewAreaCollapsed || false;
-      // P1 fix (post-2.22.1): data.views alone is [] for BOTH null-view
-      // states (deliberately collapsed vs. requested-but-unavailable, see
-      // data.viewAreaCollapsed at _computeData()), so a transition between
-      // them must also be caught here — otherwise it's invisible to this
-      // check and _renderAll() never fires, leaving the DOM (no markup vs.
-      // .rtc-no-views) stuck on whichever state rendered first.
-      const viewsChanged = data.empty
-        ? false
-        : currentViews.length !== data.views.length ||
-          data.views.some((key, i) => key !== currentViews[i]) ||
-          data.viewAreaCollapsed !== currentViewAreaCollapsed;
+      // What the MARKUP would look like, as one comparable value: the chip grid, the
+      // ordered view keys, the collapsed-vs-hint null-view state, and whatever each
+      // view declares about its own optional nodes (see cardStructureSignature()).
+      // A change here cannot be expressed by patching, so it forces a full rebuild.
+      //
+      // This replaced a hand-maintained list of booleans. That list was correct for
+      // everything on it and silently wrong for everything else: with show_rooms:false
+      // the chip grid is absent either way, so a second room becoming valid changed
+      // nothing on the list — while the scale view's footer and its two extrema
+      // markers genuinely had to appear. Composing the signature from the renderers
+      // themselves means a new view, or a new optional element in an existing view,
+      // extends its own signature and this method never learns about it.
+      const structureSignature = cardStructureSignature(viewModel, VIEW_RENDERERS);
+      const structureChanged = structureSignature !== this._structureSignature;
 
       // hide_footer/rotation_seconds/slide_seconds don't show up in the
       // views list, but a partial update can't add/remove the footer
@@ -6100,46 +9819,49 @@ function classifyTrendRate(canonicalValue, policy) {
       // this._config.views (Teil 2, view-customizer Baukasten): the active
       // VIEW KEYS list is already covered by viewsChanged above, but a
       // views:[i].options change alone (e.g. show_comfort_band toggling)
-      // doesn't touch that list at all — _updateContent()'s partial patch
-      // path can't add/remove the comfort/optimal band <div>s
-      // (_updateScaleBarCommon() only patches elements that already exist),
-      // so any options change must force a full rebuild too. Generic and
-      // future-proof: covers every current and future structural view
-      // option, not just the band toggles.
+      // doesn't touch that list at all — the partial patch path can't
+      // add/remove the comfort/optimal band <div>s (patchScaleBar() only
+      // patches elements that already exist), so any options change must
+      // force a full rebuild too. Generic and future-proof: covers every
+      // current and future structural view option, not just the band
+      // toggles.
       const structuralConfigSignature = `${this._config.hide_footer}|${this._config.rotation_seconds}|${this._config.slide_seconds}|${this._config.auto_slide}|${JSON.stringify(this._config.views)}`;
       const structuralConfigChanged = structuralConfigSignature !== this._structuralConfigSignature;
 
-      // Both signatures are committed only after a render path actually
-      // succeeds (set hass()'s try/catch means a thrown _computeData()/
+      // All three signatures are committed only after a render path actually
+      // succeeds (set hass()'s try/catch means a thrown _computeViewModel()/
       // _renderAll()/_updateContent()/_updateEmpty() skips the assignment
       // below entirely) — committing upfront would suppress a correct
       // retry of the exact same, currently-failing update, since the next
       // identical hass push would compute the same signature and be
       // silently skipped as "unchanged".
+      const commit = () => {
+        this._lastRenderSignature = signature;
+        this._structuralConfigSignature = structuralConfigSignature;
+        this._structureSignature = structureSignature;
+      };
+
       if (
         !this._rendered ||
-        data.empty !== currentlyEmpty ||
-        (!data.empty && (data.showRoomChips !== currentlyHasRooms || viewsChanged || structuralConfigChanged))
+        viewModel.empty !== currentlyEmpty ||
+        (!viewModel.empty && (structureChanged || structuralConfigChanged))
       ) {
-        this._renderAll(data);
-        this._lastRenderSignature = signature;
-        this._structuralConfigSignature = structuralConfigSignature;
+        this._renderAll(viewModel);
+        commit();
         return;
       }
 
-      if (data.empty) {
-        this._updateEmpty(data);
-        this._lastRenderSignature = signature;
-        this._structuralConfigSignature = structuralConfigSignature;
+      if (viewModel.empty) {
+        this._updateEmpty(viewModel);
+        commit();
         return;
       }
 
-      this._updateContent(data);
-      this._lastRenderSignature = signature;
-      this._structuralConfigSignature = structuralConfigSignature;
+      this._updateContent(viewModel);
+      commit();
     }
 
-    _renderAll(data) {
+    _renderAll(viewModel) {
       // Full (re)build on first render, empty/normal-state changes, or a
       // view-composition change. _views/_activeView must be set before
       // _styles(), which derives track/view widths and keyframes from the
@@ -6158,7 +9880,7 @@ function classifyTrendRate(canonicalValue, policy) {
       // P1 fix (reviewer finding, post-AP-07): must be read before
       // this._rendered is set true a few lines down (see there).
       const isFirstRender = !this._rendered;
-      this._lastRenderData = data;
+      this._lastViewModel = viewModel;
 
       // AP-07 (audit 14.2): an in-flight-but-not-yet-classified pointer
       // gesture (this._pointer set, this._isDragging still false — the
@@ -6182,16 +9904,16 @@ function classifyTrendRate(canonicalValue, policy) {
 
       // AP-07 (audit 14.2, Bug C): dropping to <2 active views renders a
       // track-less solo/empty layout (no ".rtc-track" at all — see
-      // _renderContent()'s `data.views.length >= 2 ? ... : ...`).
-      // _applyAutoSlideStyles() bails out on its very first line when
-      // there's no track, so it never reaches _scheduleAccessibilitySync()
-      // — the only place that otherwise clears this._a11ySyncTimer. Without
-      // this, a timer armed while >=2 views were active would linger
-      // (harmless once it eventually fires and self-corrects, but violates
-      // "Timer nur ab zwei aktiven Views" until then). _stopRotation()
-      // clears both timers unconditionally; the branches below re-arm
-      // exactly what's actually warranted for the NEW view count — for
-      // every other transition this is a harmless no-op, since
+      // renderCardBody()'s view-area branch). _applyAutoSlideStyles()
+      // bails out on its very first line when there's no track, so it
+      // never reaches _scheduleAccessibilitySync() — the only place that
+      // otherwise clears this._a11ySyncTimer. Without this, a timer armed
+      // while >=2 views were active would linger (harmless once it
+      // eventually fires and self-corrects, but violates "Timer nur ab
+      // zwei aktiven Views" until then). _stopRotation() clears both
+      // timers unconditionally; the branches below re-arm exactly what's
+      // actually warranted for the NEW view count — for every other
+      // transition this is a harmless no-op, since
       // _scheduleAccessibilitySync()/_resumeSynchronizedSlideWhenAligned()
       // already clear-before-set themselves.
       this._stopRotation();
@@ -6210,8 +9932,8 @@ function classifyTrendRate(canonicalValue, policy) {
       const previousActiveKey = this._preConfigChangeVisualKey !== undefined
         ? this._preConfigChangeVisualKey
         : (this._views[this._currentVisualViewIndex()] ?? null);
-      this._views = data.empty ? [] : (data.views || []);
-      this._viewAreaCollapsed = data.empty ? false : Boolean(data.viewAreaCollapsed);
+      this._views = viewModel.empty ? [] : viewModel.views.keys;
+      this._viewAreaCollapsed = viewModel.empty ? false : Boolean(viewModel.views.collapsed);
       let nextIndex = this._views.indexOf(previousActiveKey);
       if (nextIndex === -1) nextIndex = this._views.indexOf(this._config?.start_view);
       // AP-04: the "mandatory scale" fallback is gone along with mandatory
@@ -6221,15 +9943,16 @@ function classifyTrendRate(canonicalValue, policy) {
       // be absent.
       this._activeView = nextIndex === -1 ? 0 : nextIndex;
 
+      const context = this._renderContext();
       this.shadowRoot.innerHTML = `
         <style>${this._styles()}</style>
         <ha-card class="rtc-card">
-          ${data.empty ? this._renderEmpty(data) : this._renderContent(data)}
+          ${renderCardBody(context, viewModel, VIEW_RENDERERS)}
         </ha-card>
       `;
       this._bindEvents();
       this._rendered = true;
-      if (!isFirstRender && !data.empty) {
+      if (!isFirstRender && !viewModel.empty) {
         // P1 fix (reviewer finding, post-AP-07): previousActiveKey above is
         // correctly preserved, but that alone is only a JS bookkeeping
         // value — _applyAutoSlideStyles() (the old unconditional else
@@ -6259,7 +9982,7 @@ function classifyTrendRate(canonicalValue, policy) {
       } else {
         this._applyAutoSlideStyles();
       }
-      this._resolveAllScaleLabelPositions(data);
+      this._resolveViewLayouts(viewModel);
       // On a cold dashboard reload, this first synchronous measurement can
       // run before the page's web font has actually loaded (the card
       // inherits its font from the page, no @font-face of its own) — the
@@ -6269,649 +9992,43 @@ function classifyTrendRate(canonicalValue, policy) {
       // _fontsReadyBound guards against registering a fresh .then() on
       // every hasRoomsView/hasRange/hasRangeScale-triggered rebuild before
       // fonts finish loading, which would each close over that call's own
-      // data and could re-apply a stale one after a newer rebuild already
-      // ran); a no-op in the common case where fonts were already ready.
-      // Uses this._lastRenderData at fire time, not the data closed over
-      // here, so it's never stale even if it fires after a later update.
-      if (!data.empty && document.fonts?.ready && !this._fontsReadyBound) {
+      // view model and could re-apply a stale one after a newer rebuild
+      // already ran); a no-op in the common case where fonts were already
+      // ready. Uses this._lastViewModel at fire time, not the model closed
+      // over here, so it's never stale even if it fires after a later
+      // update.
+      const fonts = this.ownerDocument.fonts;
+      if (!viewModel.empty && fonts?.ready && !this._fontsReadyBound) {
         this._fontsReadyBound = true;
-        document.fonts.ready
+        fonts.ready
           .then(() => {
-            if (this.isConnected) this._resolveAllScaleLabelPositions(this._lastRenderData);
+            if (this.isConnected) this._resolveViewLayouts(this._lastViewModel);
           })
           .catch(() => {});
       }
     }
 
-    _resolveLabelForm(el, longText, shortText, fitsWithWidth) {
-      // Long-/short-form label architecture (post-2.27.0 review): a
-      // collision-prone label (e.g. scale.optimalLabel, rangeScale.
-      // currentLabel) is never permanently shortened in the translations —
-      // instead both a canonical long form and a short fallback are
-      // available, and the card picks between them here at measure time,
-      // based on the ACTUAL rendered width, the same way
-      // _resolveOptimalLabelPosition()/_resolveRangeScaleLabels() already
-      // measure real geometry rather than guessing from character counts.
-      // Always tries the long form FIRST and reverts to it whenever there's
-      // room again (this runs on every resolve pass — resize, font-ready,
-      // every data update — so growing the card back out restores the long
-      // form on the very next pass, not just once at load). The short form
-      // is a deliberate intermediate step BEFORE the existing CSS-ellipsis
-      // max-width fallback (still applied by the caller below when even
-      // the short form doesn't fit) — a real word beats a truncated one
-      // whenever there's a real word that fits.
-      el.textContent = longText;
-      if (longText === shortText) return el.getBoundingClientRect().width;
-      const longWidth = el.getBoundingClientRect().width;
-      if (fitsWithWidth(longWidth)) return longWidth;
-      el.textContent = shortText;
-      return el.getBoundingClientRect().width;
+    // Every mounted view re-measures its own labels. The card holds no knowledge of
+    // which views have a layout pass — the registry does, and a view that declares no
+    // resolveLayout hook is simply skipped.
+    _resolveViewLayouts(viewModel) {
+      resolveViewLayouts(this._renderContext(), this.shadowRoot, viewModel, VIEW_RENDERERS);
     }
 
-    _resolveOptimalLabelPosition(containerEl, geometry) {
-      // The optimal label under the bar is centered on
-      // geometry.optimalCenter (a percentage), but text width is fixed in
-      // pixels while the bar's rendered width varies with card/viewport
-      // size — a percentage alone can't guarantee it won't visually
-      // overlap the min/max value labels in the same row (most relevant
-      // for co2/pm25, whose optimal band always starts at the scale's left
-      // edge). This measures the actual rendered widths (only possible
-      // after the DOM exists) and positions the label in pixels at the
-      // nearest point that doesn't overlap. Always derives the desired
-      // position fresh from geometry.optimalCenter — the one authoritative
-      // source — rather than reading back its own previous (already-in-
-      // pixels) output, so repeated calls never drift.
-      // Scoped to containerEl (that view's own .rtc-scale-view/
-      // .rtc-range-scale-view wrapper), not the whole shadow root, because
-      // both scale-bar views can exist in the DOM at once (the carousel
-      // keeps every view mounted, sliding between them) and share the same
-      // inner class names — a root-wide query would only ever find the first.
-      if (!containerEl) return;
-      const bar = containerEl.querySelector(".rtc-scale-bar");
-      const minEl = containerEl.querySelector(".rtc-scale-label-min");
-      const centerEl = containerEl.querySelector(".rtc-scale-label-center");
-      const maxEl = containerEl.querySelector(".rtc-scale-label-max");
-      if (!bar || !minEl || !centerEl || !maxEl) return;
-
-      // A previous call may have constrained centerEl's own width (see
-      // max-width below); clearing it first guarantees this call measures
-      // centerEl's natural, unconstrained width. Without this, a second
-      // call shortly after the first would measure the already-shrunk box,
-      // wrongly conclude it now "fits", clear max-width again, and let the
-      // text spring back to full width — an infinite reflow/re-narrow loop
-      // between repeated calls (observed via the resize observer, which can
-      // legitimately fire more than once for a single resize).
-      centerEl.style.maxWidth = "";
-
-      const barWidth = bar.getBoundingClientRect().width;
-      if (!barWidth) return;
-      const minWidth = minEl.getBoundingClientRect().width;
-      const maxWidth = maxEl.getBoundingClientRect().width;
-
-      const gap = 4; // minimum visual gap in px between adjacent labels
-      // Long-/short-form resolution (see _resolveLabelForm()): "fits" here
-      // is the exact same lowLimit<=highLimit criterion computed below,
-      // just evaluated once for whichever centerWidth the candidate form
-      // actually measures at.
-      const range = `${this._fmt(geometry.optimalMin, 0)}–${this._fmtWithUnit(geometry.optimalMax, 0, false)}`;
-      const longText = this._t("scale.optimalLabel", { range });
-      const shortText = this._t("scale.optimalLabelShort", { range });
-      const centerWidth = this._resolveLabelForm(
-        centerEl,
-        longText,
-        shortText,
-        (width) => minWidth + gap + width / 2 <= barWidth - maxWidth - gap - width / 2
-      );
-
-      const desiredPx = (barWidth * geometry.optimalCenter) / 100;
-      const lowLimit = minWidth + gap + centerWidth / 2;
-      const highLimit = barWidth - maxWidth - gap - centerWidth / 2;
-      // If there isn't enough room anywhere even for the short form (very
-      // narrow bar/very long label), centering it is the fairest fallback —
-      // better than pinning fully against one side. In that case the
-      // label's own width is also capped to the space actually available
-      // between min/max (see the matching text-overflow:ellipsis in
-      // _styles()), so it visibly truncates instead of overlapping its
-      // neighbors — the fallback above only prevents anchoring the label
-      // off-center, not overlap by itself when centerWidth alone already
-      // exceeds the free space. The label is centered at barWidth/2
-      // (symmetric), so the space actually available to it is bounded by
-      // whichever side (min/max) is tighter, used on *both* sides — not
-      // minWidth+maxWidth combined, which would only be safe for an
-      // (impossible, for a centered box) asymmetric split matching each
-      // side's individual slack exactly.
-      const fits = lowLimit <= highLimit;
-      const targetPx = fits ? this._clamp(desiredPx, lowLimit, highLimit) : barWidth / 2;
-      centerEl.style.left = `${targetPx}px`;
-      centerEl.style.maxWidth = fits ? "" : `${Math.max(0, barWidth - 2 * Math.max(minWidth, maxWidth) - gap * 2)}px`;
-    }
-
-    _resolveAllScaleLabelPositions(data) {
-      // Re-resolves every currently-rendered scale-bar's floating label(s)
-      // — the main "scale" view always, "rangeScale" only when it exists.
-      // Single entry point for triggers that don't know (or care) which
-      // scale-bar-shaped views currently exist: initial render, resize,
-      // font-ready (see _bindResizeObserver(), _renderAll()).
-      if (!this.shadowRoot || !data || data.empty) return;
-      const scaleContainer = this.shadowRoot.querySelector(".rtc-scale-view");
-      if (scaleContainer) this._resolveOptimalLabelPosition(scaleContainer, data);
-      if (data.hasRangeScale) {
-        const rangeScaleContainer = this.shadowRoot.querySelector(".rtc-range-scale-view");
-        if (rangeScaleContainer) {
-          // rangeScale has its own shared-template optimal label (from
-          // _renderScaleBar(), same as the main scale view) in addition to
-          // its three top labels — both need resolving here, or the
-          // optimal label stays at its unresolved initial percentage
-          // through the first render, a resize, and font-ready, only
-          // catching up on the next actual data update (which routes
-          // through _updateScaleBarCommon() instead).
-          this._resolveOptimalLabelPosition(rangeScaleContainer, data.rangeScaleGeometry);
-          this._resolveRangeScaleLabels(rangeScaleContainer, data);
-        }
-      }
-    }
-
-    _resolveRangeScaleLabels(containerEl, data) {
-      // Hotfix (post-2.22.0, "jetzt"-Marker-Zuordnung): current is a FIXED
-      // pivot, never repositioned by collision avoidance — only min/max are
-      // ever allowed to drift from their own anchor to avoid overlapping a
-      // neighbor. The previous version modeled all three labels as equally
-      // free-floating items in one shared forward-/backward-pass declutter
-      // group; that shared group also included an edge-clamp step ("shift
-      // the WHOLE group" if any member ran past the bar's own edge), which
-      // could silently drag current away from its own marker even without a
-      // direct current/neighbor collision (e.g. min or max naturally
-      // anchored right at 0%/100% of a wide value range) — current has no
-      // stable visual identity distinct from a marker directly above it, so
-      // a drifted current label reads as belonging to whichever marker it
-      // ends up nearest, typically max. current is the primary live value;
-      // min/max are historical context values that can absorb a shift
-      // without creating a misleading reading. See readme climate card.md,
-      // "Tagesbereich-Balken-Ansicht" for the full policy writeup.
-      if (!containerEl) return;
-      const bar = containerEl.querySelector(".rtc-scale-bar");
-      const currentEl = containerEl.querySelector(".rtc-range-scale-label-current");
-      const minEl = containerEl.querySelector(".rtc-range-scale-label-min");
-      const maxEl = containerEl.querySelector(".rtc-range-scale-label-max");
-      const topRow = containerEl.querySelector(".rtc-range-scale-top-row");
-      if (!bar || !currentEl || !minEl || !maxEl || !topRow) return;
-      const barWidth = bar.getBoundingClientRect().width;
-      if (!barWidth) return;
-
-      const gap = 4;
-      // Reset any previous shrink before measuring natural widths — else a
-      // still-applied max-width from an earlier narrow-bar resolve would
-      // be measured as if it were the label's natural size (the same
-      // measure-before-shrink idempotency _resolveOptimalLabelPosition()
-      // already depends on).
-      for (const el of [currentEl, minEl, maxEl]) el.style.maxWidth = "";
-
-      // Step 1: fix current's own center. Long-/short-form resolution (see
-      // _resolveLabelForm()) happens first: current reserves
-      // [currentLeft-gap, currentRight+gap] exclusively for itself (Step 3
-      // below never lets min/max encroach on it), so a long current label
-      // eating too much of the bar can starve min/max of room — the short
-      // form is tried before that happens. "Fits" here is deliberately the
-      // WORST case (min and max both landing on the same side, e.g. when
-      // avg sits outside [min,max] — see Step 2 below): current's reserved
-      // width plus the standard gaps must still leave enough room for BOTH
-      // side labels' natural widths stacked together, even though they
-      // usually split across both sides and so usually have much more room
-      // than this. Never a consequence of an actual min/max-vs-min/max
-      // collision (that's still Step 3/_layoutSideLabelGroup()'s own job,
-      // via its existing ellipsis fallback) — only of current's own width.
-      // minEl/maxEl are measured lazily, inside the fits closure, so most
-      // languages (whose *Short form is identical to the long form —
-      // _resolveLabelForm() short-circuits before ever calling fits) never
-      // pay for these two extra reflows at all.
-      const currentLongText = this._t("rangeScale.currentLabel");
-      const currentShortText = this._t("rangeScale.currentLabelShort");
-      let currentWidth = this._resolveLabelForm(
-        currentEl,
-        currentLongText,
-        currentShortText,
-        (width) => barWidth - width - 2 * gap >= minEl.getBoundingClientRect().width + gap + maxEl.getBoundingClientRect().width
-      );
-      if (currentWidth > barWidth) {
-        currentEl.style.maxWidth = `${barWidth}px`;
-        currentWidth = currentEl.getBoundingClientRect().width;
-      }
-      const currentAnchor = (barWidth * data.rangeCurrentPos) / 100;
-      const currentCenter = this._clamp(currentAnchor, currentWidth / 2, barWidth - currentWidth / 2);
-      const currentLeft = currentCenter - currentWidth / 2;
-      const currentRight = currentCenter + currentWidth / 2;
-      currentEl.style.left = `${currentCenter}px`;
-
-      // Step 2: assign min/max to a side of the fixed current pivot, by the
-      // same displayed-value + semanticRank tie-break UI-01 already
-      // established (min=0, current=1, max=2 — see _fmt()). AP-06 fix
-      // (audit section 15, UI-01 follow-up): the tie-detection string
-      // (displayKey) is only ever compared for EQUALITY, never re-parsed
-      // back into a number — a grouped/thousands-separated display value
-      // (e.g. "1,200") is not valid Number() input and used to compare as
-      // NaN, which made the old rounded-then-Number() tie-break always fall
-      // through to "right" for any value >=1000. Actual ordering when not
-      // tied uses the raw numeric value/data.avg, never the formatted
-      // string. This is what makes "current outside [rangeMin, rangeMax]"
-      // (range_entity updates less often than entity — see "Auto-Slide und
-      // Bedienung") fall out naturally: if both min and max are numerically
-      // below (or both above) current, both are assigned the same side and
-      // packed together there, preserving their own min-before-max order —
-      // no separate branch needed for that case.
-      const digits = this._config.decimals ?? this._metricMeta().decimals;
-      const displayKey = (value) => this._fmt(value, digits);
-      const currentKey = displayKey(data.avg);
-      const sideItems = [
-        { el: minEl, anchor: (barWidth * data.rangeMinPos) / 100, value: data.rangeMin, semanticRank: 0 },
-        { el: maxEl, anchor: (barWidth * data.rangeMaxPos) / 100, value: data.rangeMax, semanticRank: 2 },
-      ].map((item) => {
-        const key = displayKey(item.value);
-        const side = key !== currentKey ? (item.value < data.avg ? "left" : "right") : (item.semanticRank < 1 ? "left" : "right");
-        return { ...item, side, width: item.el.getBoundingClientRect().width };
-      });
-      const leftItems = sideItems.filter((item) => item.side === "left").sort((a, b) => a.value - b.value);
-      const rightItems = sideItems.filter((item) => item.side === "right").sort((a, b) => a.value - b.value);
-
-      // Step 3: keep as many historical labels as possible on current's
-      // lower line. If a side group does not fit naturally between the
-      // fixed pivot and its outer edge, lift ONLY the item nearest current
-      // (last on the left, first on the right), then re-check. This targets
-      // the actual collision instead of moving the unrelated label on the
-      // opposite side too. Lifted items reuse _layoutSideLabelGroup() over
-      // the full bar width; lower items keep the established independent
-      // side packing. No label geometry feeds back into the value-derived
-      // scale, and current never moves horizontally.
-      const fitsNaturally = (items, edgeMin, edgeMax) =>
-        items.length === 0 ||
-        items.reduce((sum, item) => sum + item.width, 0) + gap * (items.length - 1) <= edgeMax - edgeMin;
-      const liftUntilFit = (items, edgeMin, edgeMax, side) => {
-        const lower = [...items];
-        const upper = [];
-        while (lower.length && !fitsNaturally(lower, edgeMin, edgeMax)) {
-          upper.push(side === "left" ? lower.pop() : lower.shift());
-        }
-        return { lower, upper };
-      };
-      const leftLayout = liftUntilFit(leftItems, 0, currentLeft - gap, "left");
-      const rightLayout = liftUntilFit(rightItems, currentRight + gap, barWidth, "right");
-      const upperItems = [...leftLayout.upper, ...rightLayout.upper]
-        .sort((a, b) => a.value - b.value || a.semanticRank - b.semanticRank);
-
-      topRow.classList.toggle("rtc-range-scale-has-upper", upperItems.length > 0);
-      for (const item of sideItems) {
-        item.el.classList.toggle("rtc-range-scale-label-upper", upperItems.includes(item));
-      }
-      this._layoutSideLabelGroup(leftLayout.lower, 0, currentLeft - gap, gap);
-      this._layoutSideLabelGroup(rightLayout.lower, currentRight + gap, barWidth, gap);
-      this._layoutSideLabelGroup(upperItems, 0, barWidth, gap);
-
-      for (const item of sideItems) {
-        item.el.style.left = `${item.left + item.width / 2}px`;
-      }
-    }
-
-    _layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
-      // Positions 0-2 labels (already sorted ascending by value, i.e. the
-      // desired left-to-right reading order within this group) inside
-      // [edgeMin, edgeMax] — the same deterministic forward-pass/clamp-
-      // right/backward-pass/clamp-left declutter _resolveRangeScaleLabels()
-      // used to run once for all three labels together, now run
-      // independently per side of the fixed current pivot (see there).
-      // Mutates each item's .left/.width in place; does not touch the DOM
-      // (the caller applies el.style.left once, after both sides are laid
-      // out) or the fixed current pivot itself.
-      if (items.length === 0) return;
-      const available = edgeMax - edgeMin;
-      const requiredWidth = items.reduce((sum, item) => sum + item.width, 0) + gap * (items.length - 1);
-      if (requiredWidth > available) {
-        const maxWidthEach = Math.max(0, (available - gap * (items.length - 1)) / items.length);
-        for (const item of items) {
-          item.el.style.maxWidth = `${maxWidthEach}px`;
-          item.width = Math.min(item.width, item.el.getBoundingClientRect().width);
-        }
-      }
-
-      for (const item of items) item.left = item.anchor - item.width / 2;
-
-      for (let i = 1; i < items.length; i++) {
-        items[i].left = Math.max(items[i].left, items[i - 1].left + items[i - 1].width + gap);
-      }
-      const overflow = items[items.length - 1].left + items[items.length - 1].width - edgeMax;
-      if (overflow > 0) {
-        for (const item of items) item.left -= overflow;
-      }
-      for (let i = items.length - 2; i >= 0; i--) {
-        items[i].left = Math.min(items[i].left, items[i + 1].left - gap - items[i].width);
-      }
-      const underflow = Math.min(0, items[0].left - edgeMin);
-      if (underflow < 0) {
-        for (const item of items) item.left -= underflow;
-      }
-    }
-
-    _emptyHint(data) {
-      // Shared empty-state hint text for _renderEmpty()/_updateEmpty();
-      // avoids a misleading "room entity" wording when no rooms are configured.
-      if (this._config?.rooms?.length === 0) {
-        return this._t("empty.hintNoRooms");
-      }
-      return data?.missingRooms
-        ? this._t("empty.hintMissingRooms", { count: data.missingRooms })
-        : this._t("empty.hintNoRoomData");
-    }
-
-    _updateEmpty(data) {
+    _updateEmpty(viewModel) {
       // Updates the empty state without a full DOM rebuild.
-      const root = this.shadowRoot;
-      if (!root) return;
-      this._lastRenderData = data;
-      const titleEl = root.querySelector(".rtc-empty-title");
-      if (titleEl) titleEl.textContent = data.title;
-      const subtitleEl = root.querySelector(".rtc-empty-subtitle");
-      if (subtitleEl) {
-        subtitleEl.textContent = `${this._t("empty.title")} ${this._emptyHint(data)}`;
-      }
-      // An empty→empty update (e.g. the configured entity is swapped for a
-      // different mode while both stay unavailable) still needs its icon
-      // to follow the new mode — title/subtitle alone would leave a stale
-      // icon from the previous mode.
-      const iconEl = root.querySelector(".rtc-empty-icon ha-icon");
-      if (iconEl) iconEl.setAttribute("icon", this._metricMetaFor(data.metricType).emptyIcon);
+      if (!this.shadowRoot) return;
+      this._lastViewModel = viewModel;
+      patchEmptyCardBody(this.shadowRoot, viewModel);
     }
 
-    _toneStyle(data) {
-      // CSS variables for the current tone color, consumed by several child elements.
-      return `--tone-color:${data.tone.color};--tone-soft:${data.tone.soft};--tone-border:${this._rgba(data.tone.color, 0.38)};--tone-band:${this._rgba(data.tone.color, 0.20)};`;
-    }
-
-    // ==== AP-09 (audit 18, A11Y-02): keyed DOM-patching helpers ====
-    // Average/Rooms/Range/Extrema used to be fully replaced via `innerHTML =`
-    // on every single hass update, destroying and recreating every
-    // focusable <button> even when only a number changed -- a focused
-    // element vanished and activeElement fell back to the shadow root/host/
-    // body. The methods below patch existing nodes' attributes/text in
-    // place instead, only ever falling back to a full (re-)render for the
-    // rare cases that are genuinely structural (a room's entity appearing/
-    // disappearing, the average's interactive-vs-disabled shape flipping).
-    // Scale/RangeScale (_updateScaleBarCommon()) were already correct
-    // (attribute patching, no innerHTML) and are untouched here.
-
-    _htmlToElement(html) {
-      // Parses an already-_esc()-safe HTML string (the output of an
-      // existing _renderXxx() string-builder) into one detached element.
-      // The ONLY place the update path still parses HTML, and only for
-      // genuinely NEW nodes (a new room appearing, a shape change) -- never
-      // for an existing node that merely needs new content, which is
-      // patched in place instead. Reuses the same, already-correct,
-      // already-escaped _renderXxx() builders rather than maintaining a
-      // second, independent description of each element's markup.
-      const wrapper = this.ownerDocument.createElement("div");
-      wrapper.innerHTML = html.trim();
-      return wrapper.firstElementChild;
-    }
-
-    _focusFallbackTarget() {
-      // Deterministic fallback target (audit 18.1: "etwa auf den
-      // Average-Button oder den Card-Host mit erklärtem ARIA-Status") for
-      // when a focused element genuinely disappears. The average button is
-      // preferred when it exists AND is the interactive (button) shape --
-      // the disabled div variant is never a valid target, it isn't
-      // focusable. `.rtc-root` (tabindex="-1" in the template, see
-      // _renderAll()) is the last-resort fallback, e.g. when no entity:
-      // is configured or the average itself is currently non-interactive.
-      const root = this.shadowRoot;
-      if (!root) return null;
-      const avgButton = root.querySelector("button.rtc-avg-button");
-      if (avgButton) return avgButton;
-      return root.querySelector(".rtc-root");
-    }
-
-    _applyFocusFallback() {
-      const target = this._focusFallbackTarget();
-      if (target) target.focus();
-    }
-
-    _updateAverage(avgEl, data) {
-      // Patches the average button/disabled-div in place when its shape
-      // (interactive vs. disabled) hasn't changed -- the common case, one
-      // per hass update. Only falls back to a full replace when the shape
-      // itself must change (avgEntity presence flipped, a genuinely
-      // structural, comparatively rare transition) or on the very first
-      // call (avgEl still empty).
-      if (!avgEl) return;
-      const hasEntity = Boolean(data.avgEntity);
-      const child = avgEl.firstElementChild;
-      const existing = child && (hasEntity ? child.tagName === "BUTTON" && child.classList.contains("rtc-avg-button") : child.classList.contains("rtc-avg-button-disabled")) ? child : null;
-      if (existing) {
-        this._patchAverage(existing, data);
-        return;
-      }
-
-      const focusedWithin = this.shadowRoot?.activeElement && avgEl.contains(this.shadowRoot.activeElement);
-      avgEl.replaceChildren(this._htmlToElement(this._renderAverage(data)));
-      if (focusedWithin) this._applyFocusFallback();
-    }
-
-    _patchAverage(el, data) {
-      // Shared attribute/text patch for both the interactive button and
-      // the disabled div shape -- mirrors _renderAverage()'s two branches
-      // field-for-field. Uses setAttribute()/textContent exclusively
-      // (never innerHTML), which is itself a modest security hardening
-      // (audit 21.3) on top of the focus fix: no interpolated string is
-      // ever re-parsed as HTML for an update that only changes a value.
-      const tooltip = this._averageTooltip(data);
-      el.setAttribute("title", tooltip);
-      if (data.avgEntity) {
-        el.setAttribute("data-entity", data.avgEntity);
-      }
-      el.setAttribute("aria-label", this._averageAriaLabel(data, tooltip));
-      el.querySelector(".rtc-avg-label").textContent = data.avgLabel;
-      el.querySelector(".rtc-avg-value-num").textContent = this._fmt(data.avg);
-      el.querySelector(".rtc-avg-value-unit").textContent = this._unit();
-      const hasTrend = Boolean(data.trend);
-      el.classList.toggle("rtc-has-trend", hasTrend);
-      if (hasTrend) {
-        el.setAttribute("data-trend-direction", data.trend.direction);
-      } else {
-        el.removeAttribute("data-trend-direction");
-      }
-      const arrowEl = el.querySelector(".rtc-avg-trend-arrow");
-      arrowEl.hidden = !hasTrend;
-    }
-
-    _updateContent(data) {
+    _updateContent(viewModel) {
       // Fast partial update on new HA values: only text, markers, colors,
       // and dynamic subsections change, so the slider animation never restarts.
       const root = this.shadowRoot;
       if (!root) return;
-      this._lastRenderData = data;
-
-      const contentRoot = root.querySelector(".rtc-root");
-      if (contentRoot) {
-        contentRoot.setAttribute("style", this._toneStyle(data));
-        contentRoot.setAttribute("data-metric", data.metricType);
-      }
-
-      const iconEl = root.querySelector(".rtc-icon-badge ha-icon");
-      if (iconEl) iconEl.setAttribute("icon", data.tone.icon);
-
-      const titleEl = root.querySelector(".rtc-title");
-      if (titleEl) titleEl.textContent = data.title;
-
-      const subtitleEl = root.querySelector(".rtc-subtitle");
-      if (subtitleEl) subtitleEl.textContent = data.subtitle;
-
-      const statusEl = root.querySelector(".rtc-status-pill");
-      if (statusEl) statusEl.textContent = data.tone.label;
-
-      const avgEl = root.querySelector(".rtc-average");
-      this._updateAverage(avgEl, data);
-
-      const roomGrid = root.querySelector(".rtc-room-grid");
-      this._updateRoomGrid(roomGrid, data);
-
-      // Each view (range/scale/extremes) patches its own subsection; a
-      // view not currently in the DOM (its VIEW_REGISTRY condition was
-      // false) is a no-op via its own querySelector guard.
-      VIEW_REGISTRY.forEach((v) => v.update(this, root, data));
-    }
-
-    _updateScaleBarCommon(containerEl, data, geometry, footerText) {
-      // Shared partial-update for one scale bar's comfort/optimal band
-      // position, scale-edge min/max labels, optimal-band label, and footer
-      // — everything both "scale" and "rangeScale" views have identically
-      // (see _renderScaleBar()). Scoped to containerEl, not the whole
-      // shadow root, for the same reason as _resolveOptimalLabelPosition()
-      // (both views' bars can coexist in the DOM at once). AP-06: footerText
-      // is computed by the caller (same expression as its render path),
-      // not decided in here — mirrors _renderScaleBar()'s own change.
-      if (!containerEl) return;
-
-      const comfortBandEl = containerEl.querySelector(".rtc-comfort-band");
-      if (comfortBandEl) {
-        comfortBandEl.style.left = `${geometry.comfortLeft}%`;
-        comfortBandEl.style.width = `${geometry.comfortWidth}%`;
-        comfortBandEl.hidden = !geometry.comfortVisible;
-      }
-
-      const optimalBandEl = containerEl.querySelector(".rtc-optimal-band");
-      if (optimalBandEl) {
-        optimalBandEl.style.left = `${geometry.optimalLeft}%`;
-        optimalBandEl.style.width = `${geometry.optimalWidth}%`;
-        optimalBandEl.hidden = !geometry.optimalVisible;
-      }
-
-      // Footer only exists in the DOM when its render path decided to show
-      // one (hasRoomsView/hide_footer for "scale", hide_footer only for
-      // "rangeScale") — the querySelector guard already handles "no footer
-      // in this view", footerText itself is never null when the element
-      // exists.
-      const footerEl = containerEl.querySelector(".rtc-scale-footer");
-      if (footerEl) {
-        footerEl.textContent = footerText;
-      }
-
-      const optimalLabelEl = containerEl.querySelector(".rtc-scale-label-center");
-      if (optimalLabelEl) optimalLabelEl.hidden = !geometry.optimalVisible;
-
-      // .rtc-scale-label-center's own text/position are otherwise owned by
-      // _resolveOptimalLabelPosition() below (long-/short-form choice plus
-      // collision-aware placement, see there) -- no separate assignment
-      // here, so the "how is this label's text built" logic exists in
-      // exactly one place.
-      const labelMinEl = containerEl.querySelector(".rtc-scale-label-min");
-      if (labelMinEl) labelMinEl.textContent = geometry.boundaryLabels.min;
-
-      const labelMaxEl = containerEl.querySelector(".rtc-scale-label-max");
-      if (labelMaxEl) labelMaxEl.textContent = geometry.boundaryLabels.max;
-
-      this._resolveOptimalLabelPosition(containerEl, geometry);
-    }
-
-    _updateScaleView(root, data) {
-      // Fast partial update for the main scale view (comfort/optimal bands,
-      // labels, footer, markers); called from VIEW_REGISTRY's "scale"
-      // entry. data doubles as its own geometry object (see _renderScaleView()).
-      const containerEl = root.querySelector(".rtc-scale-view");
-      const footerText = data.hasRoomsView && !this._config.hide_footer && data.viewOptions.scale.footer !== false ? this._scaleFooterText(data) : null;
-      this._updateScaleBarCommon(containerEl, data, data, footerText);
-      if (!containerEl) return;
-
-      const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
-      if (comfortLabelEl) {
-        comfortLabelEl.style.left = `${data.comfortCenter}%`;
-        comfortLabelEl.textContent = this._t("scale.comfortLabel", { range: `${this._fmt(data.comfortMin, 0)}–${this._fmtWithUnit(data.comfortMax, 0, false)}` });
-        comfortLabelEl.hidden = !data.comfortVisible;
-      }
-
-      // Coldest/warmest markers only exist in room mode; the guards below
-      // simply no-op in minimal mode.
-      const coldMarker = containerEl.querySelector(".rtc-marker-cold");
-      const warmMarker = containerEl.querySelector(".rtc-marker-warm");
-      const avgMarker = containerEl.querySelector(".rtc-marker-avg");
-      if (coldMarker) {
-        coldMarker.setAttribute("style", `left:calc(${data.coolestPos}% + ${data.coolestShift}px);--marker-color:${data.coolestColor};--marker-shadow:${this._rgba(data.coolestColor, 0.28)};`);
-        coldMarker.setAttribute("title", `${this._extremeRoomLabel("cold", data.metricType)}: ${data.coolest.name} ${this._fmtWithUnit(data.coolest.value)}`);
-      }
-      if (warmMarker) {
-        warmMarker.setAttribute("style", `left:calc(${data.warmestPos}% + ${data.warmestShift}px);--marker-color:${data.warmestColor};--marker-shadow:${this._rgba(data.warmestColor, 0.28)};`);
-        warmMarker.setAttribute("title", `${this._extremeRoomLabel("warm", data.metricType)}: ${data.warmest.name} ${this._fmtWithUnit(data.warmest.value)}`);
-      }
-      this._updateScaleRoomMarkers(containerEl, data);
-      if (avgMarker) {
-        avgMarker.setAttribute("style", `left:${data.avgPos}%;--marker-color:${data.avgColor};--marker-shadow:${this._rgba(data.avgColor, 0.28)};`);
-        avgMarker.setAttribute("title", this._t("avg.tooltip", { value: this._fmtWithUnit(data.avg), label: data.avgLabel }));
-        avgMarker.classList.toggle("rtc-marker-emphasized", data.viewOptions.scale.markers === "all" && data.hasRoomsView);
-      }
-    }
-
-    _updateScaleRoomMarkers(containerEl, data) {
-      // `markers:all` is a keyed, data-driven marker set. Room availability
-      // may change while the scale view itself remains mounted, so patch by
-      // the original YAML room index instead of assuming the initial count
-      // remains stable. These markers are non-interactive; adding/removing
-      // them cannot disturb focus.
-      const bar = containerEl?.querySelector(".rtc-scale-bar");
-      if (!bar) return;
-      const desired = data.viewOptions.scale.markers === "all" && data.hasRoomsView
-        ? data.scaleRoomMarkers
-        : [];
-      const existing = new Map(
-        [...bar.querySelectorAll(".rtc-marker-room")].map((el) => [Number(el.dataset.roomMarkerIndex), el])
-      );
-      const avgMarker = bar.querySelector(".rtc-marker-avg");
-      for (const marker of desired) {
-        let markerEl = existing.get(marker.index);
-        if (!markerEl) {
-          markerEl = bar.ownerDocument.createElement("div");
-          markerEl.className = "rtc-marker rtc-marker-room";
-          markerEl.dataset.roomMarkerIndex = String(marker.index);
-          bar.insertBefore(markerEl, avgMarker);
-        }
-        markerEl.setAttribute("style", `left:${marker.position}%;--marker-color:${marker.color};--marker-shadow:${this._rgba(marker.color, 0.22)};`);
-        markerEl.setAttribute("title", `${marker.name}: ${this._fmtWithUnit(marker.value)}`);
-        existing.delete(marker.index);
-      }
-      for (const stale of existing.values()) stale.remove();
-    }
-
-    _updateRangeScaleView(root, data) {
-      // Fast partial update for the rangeScale view; called from
-      // VIEW_REGISTRY's "rangeScale" entry. Mirrors _updateScaleView() but
-      // for daily min/max markers and the current/min/max top labels — see
-      // _renderRangeScaleView().
-      const containerEl = root.querySelector(".rtc-range-scale-view");
-      if (!containerEl) return;
-      const footerMode = data.viewOptions.range_scale.footer;
-      const footerText = this._config.hide_footer || footerMode === false ? null : this._rangeScaleFooterText(data, footerMode);
-      this._updateScaleBarCommon(containerEl, data, data.rangeScaleGeometry, footerText);
-
-      const currentLabelEl = containerEl.querySelector(".rtc-range-scale-label-current");
-      if (currentLabelEl) currentLabelEl.style.left = `${data.rangeCurrentPos}%`;
-      const minLabelEl = containerEl.querySelector(".rtc-range-scale-label-min");
-      if (minLabelEl) minLabelEl.style.left = `${data.rangeMinPos}%`;
-      const maxLabelEl = containerEl.querySelector(".rtc-range-scale-label-max");
-      if (maxLabelEl) maxLabelEl.style.left = `${data.rangeMaxPos}%`;
-
-      // Reuses the "cold"/"warm" marker classes for min/max (same visual
-      // shape/CSS, just a different meaning here — see _renderRangeScaleView()).
-      const minMarker = containerEl.querySelector(".rtc-marker-cold");
-      const maxMarker = containerEl.querySelector(".rtc-marker-warm");
-      const avgMarker = containerEl.querySelector(".rtc-marker-avg");
-      if (minMarker) {
-        minMarker.setAttribute("style", `left:${data.rangeMinPos}%;--marker-color:${data.rangeMinColor};--marker-shadow:${this._rgba(data.rangeMinColor, 0.28)};`);
-        minMarker.setAttribute("title", `${this._t("card.dailyMinimum")}: ${data.rangeMinTime || "–"} ${this._fmtWithUnit(data.rangeMin)}`);
-      }
-      if (maxMarker) {
-        maxMarker.setAttribute("style", `left:${data.rangeMaxPos}%;--marker-color:${data.rangeMaxColor};--marker-shadow:${this._rgba(data.rangeMaxColor, 0.28)};`);
-        maxMarker.setAttribute("title", `${this._t("card.dailyMaximum")}: ${data.rangeMaxTime || "–"} ${this._fmtWithUnit(data.rangeMax)}`);
-      }
-      if (avgMarker) {
-        avgMarker.setAttribute("style", `left:${data.rangeCurrentPos}%;--marker-color:${data.avgColor};--marker-shadow:${this._rgba(data.avgColor, 0.28)};`);
-        avgMarker.setAttribute("title", this._t("avg.tooltip", { value: this._fmtWithUnit(data.avg), label: this._t("rangeScale.currentLabel") }));
-      }
-
-      this._resolveRangeScaleLabels(containerEl, data);
+      this._lastViewModel = viewModel;
+      patchCardBody(this._renderContext(), root, viewModel, VIEW_RENDERERS);
     }
 
     _maxTrackOffsetPct() {
@@ -6958,7 +10075,7 @@ function classifyTrendRate(canonicalValue, policy) {
       if (!track) return fallback;
 
       try {
-        const transform = window.getComputedStyle(track).transform;
+        const transform = computedStyleOf(track).transform;
         if (!transform || transform === "none") return fallback;
         const matrix = new DOMMatrixReadOnly(transform);
         const width = track.getBoundingClientRect().width || 1;
@@ -6996,654 +10113,60 @@ function classifyTrendRate(canonicalValue, policy) {
       track.style.transition = enable ? `transform 420ms ${SLIDE_EASING_CSS}` : "none";
     }
 
-    _renderEmpty(data) {
-      // HTML for the case where neither the average entity nor any room reports a number.
-      const missingHint = this._emptyHint(data);
-      const emptyIcon = this._metricMetaFor(data.metricType).emptyIcon;
-      return `
-        <div class="rtc-empty">
-          <div class="rtc-empty-icon"><ha-icon icon="${this._esc(emptyIcon)}"></ha-icon></div>
-          <div class="rtc-empty-copy">
-            <div class="rtc-empty-title">${this._esc(data.title)}</div>
-            <div class="rtc-empty-subtitle">${this._esc(this._t("empty.title"))} ${this._esc(missingHint)}</div>
-          </div>
-        </div>
-      `;
-    }
+    // ==== Compatibility delegations for element-level tests ====
+    // Production never calls anything below. A large number of tests were written
+    // against the pre-extraction method names on the element, and rewriting all of them
+    // in the same round as extracting the renderers would have made a refactoring
+    // mistake indistinguishable from an intended change. Each of these forwards to the
+    // rendering layer and holds no logic of its own; they are removed together with the
+    // flat DTO in the element/test cleanup round.
 
-    _renderNoActiveViews(data) {
-      // AP-05 (audit sections 13, 14.1, "Null aktive Views"): only called
-      // for the "requested but systemically unavailable" half of the
-      // null-view policy (see data.viewAreaCollapsed at _computeData()) —
-      // the header/average/room chips (rendered unconditionally outside
-      // mainPanelRight, unaffected by this branch) stay visible, but the
-      // view area itself becomes a plain localized hint instead of
-      // guessing which view to fall back to. A deliberately empty/fully-
-      // disabled views: config takes the OTHER branch in _renderContent()
-      // and collapses to nothing here — this function is never reached for
-      // that case. No auto-slide/swipe either way: both already gate on
-      // this._views.length >= 2 (see _hasAutoSlide()), automatically
-      // satisfied here since this._views is empty.
-      return `<div class="rtc-rotator-solo rtc-no-views">${this._esc(this._t("views.none"))}</div>`;
-    }
-
-    _renderContent(data) {
-      // HTML for the whole card: header, main panel, room chips. data.views
-      // has 1-4 entries (see VIEW_REGISTRY); with only one view the rotator/swipe mechanics
-      // are omitted entirely (static scale view, no auto-slide) — the
-      // wrapper deliberately skips the .rtc-rotator class so vertical
-      // scrolling stays untouched by the pointer handlers, which only treat
-      // .rtc-rotator elements as swipeable.
-      const toneStyle = this._toneStyle(data);
-      const viewRenderers = Object.fromEntries(VIEW_REGISTRY.map((v) => [v.key, () => v.render(this, data)]));
-      const rotatorHint = this._esc(this._t("rotator.hint"));
-      // AP-04 (necessary, minimal consequence of removing "mandatory" from
-      // VIEW_REGISTRY): the solo-view path used to hardcode
-      // this._renderScaleView(data) — harmless only because "scale" could
-      // never be missing or sit anywhere but wherever the carousel path put
-      // it. Once views: can genuinely omit "scale" (e.g.
-      // views:[{type:extremes,enabled:true}]), that hardcoding would render
-      // the wrong view. Reuses the SAME generic viewRenderers lookup the
-      // carousel path already uses, keyed by data.views[0] — one view, one
-      // renderer call, no special-casing of which view it is. A views:
-      // config that resolves to ZERO active views renders one of two
-      // null-view states, per data.viewAreaCollapsed (see _computeData()):
-      // a deliberately empty/fully-disabled config collapses the view area
-      // to nothing at all (empty string — no markup, no .rtc-no-views), so
-      // a card intentionally configured with no views doesn't show a
-      // "nothing to see" hint that looks like a misconfiguration; a
-      // REQUESTED-but-unavailable view (e.g. range_scale with no valid
-      // range_entity) instead shows _renderNoActiveViews()'s localized
-      // hint, since that case genuinely IS something the user should
-      // notice and can fix.
-      const mainPanelRight = data.views.length >= 2
-        ? `
-          <div class="rtc-rotator" aria-live="off" title="${rotatorHint}">
-            <div class="rtc-track">
-              ${data.views.map((kind) => `<div class="rtc-view">${viewRenderers[kind]()}</div>`).join("")}
-            </div>
-          </div>
-        `
-        : data.views.length === 1
-          ? `
-          <div class="rtc-rotator-solo">${viewRenderers[data.views[0]]()}</div>
-        `
-          : data.viewAreaCollapsed
-            ? ""
-            : this._renderNoActiveViews(data);
-      const roomGrid = data.showRoomChips
-        ? `
-          <div class="rtc-room-grid">
-            ${this._renderRoomGridRows(data)}
-          </div>
-        `
-        : "";
-
-      // tabindex="-1": out of the normal tab order, but focusable via
-      // .focus() -- the last-resort AP-09 focus-fallback target (see
-      // _focusFallbackTarget()) when a focused element disappears and no
-      // average button exists to fall back to instead.
-      return `
-        <div class="rtc-root" data-metric="${this._esc(data.metricType)}" style="${toneStyle}" tabindex="-1">
-          <div class="rtc-top-line"></div>
-
-          <div class="rtc-header">
-            <div class="rtc-icon-badge" aria-hidden="true">
-              <ha-icon icon="${this._esc(data.tone.icon)}"></ha-icon>
-            </div>
-
-            <div class="rtc-title-block">
-              <div class="rtc-title">${this._esc(data.title)}</div>
-              <div class="rtc-subtitle">${this._esc(data.subtitle)}</div>
-            </div>
-
-            <div class="rtc-status-pill">${this._esc(data.tone.label)}</div>
-          </div>
-
-          <div class="rtc-main-panel">
-            <div class="rtc-average">${this._renderAverage(data)}</div>
-
-            ${mainPanelRight}
-          </div>
-
-          ${roomGrid}
-        </div>
-      `;
-    }
-
-    _renderAverage(data) {
-      // Home average, left side of the main panel; stays visible but not
-      // clickable when there's no average entity.
-      const tooltip = this._averageTooltip(data);
-      const ariaLabel = this._averageAriaLabel(data, tooltip);
-      const avgLabel = this._esc(data.avgLabel);
-      const hasTrend = Boolean(data.trend);
-      const trendClass = hasTrend ? " rtc-has-trend" : "";
-      const trendDirection = hasTrend ? ` data-trend-direction="${this._esc(data.trend.direction)}"` : "";
-      const hidden = hasTrend ? "" : " hidden";
-      const content = `
-        <span class="rtc-avg-label">${avgLabel}</span>
-        <span class="rtc-avg-value">
-          <span class="rtc-avg-value-num">${this._fmt(data.avg)}</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true"${hidden}><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit">${this._esc(this._unit())}</span></span></span>
-        </span>
-      `;
-
-      if (!data.avgEntity) {
-        return `
-          <div
-            class="rtc-avg-button rtc-avg-button-disabled${trendClass}"
-            ${trendDirection}
-            title="${this._esc(tooltip)}"
-            aria-label="${this._esc(ariaLabel)}"
-          >
-            ${content}
-          </div>
-        `;
+    _renderViewMarkup(key) {
+      const viewModel = this._computeViewModel();
+      if (!viewModel.views.byKey[key]) {
+        throw new Error(`${CARD_NAME}: view "${key}" is not active for this configuration`);
       }
-
-      return `
-        <button
-          type="button"
-          class="rtc-avg-button${trendClass}"
-          ${trendDirection}
-          data-entity="${this._esc(data.avgEntity)}"
-          aria-label="${this._esc(ariaLabel)}"
-          title="${this._esc(tooltip)}"
-        >
-          ${content}
-        </button>
-      `;
+      return VIEW_RENDERERS.find((view) => view.key === key).render(this._renderContext(), viewModel);
     }
 
-    _scaleFooterText(data) {
-      // The signed rate is a third, independently optional segment of the
-      // room-bound main Scale footer. RangeScale owns a different footer.
-      const segments = [
-        this._t("footer.comfort", { count: data.inComfort, total: data.roomCount }),
-        this._t("footer.spread", { value: this._fmtWithUnit(data.spread) }),
-      ];
-      if (data.trend) {
-        segments.push(this._t("footer.trend", { value: this._trendDisplayText(data.trend) }));
-      }
-      return segments.join(" · ");
+    _renderScaleView() {
+      return this._renderViewMarkup("scale");
     }
 
-    _rangeScaleFooterText(data, mode) {
-      // AP-06 (audit section 16): RangeScale's own footer — today's span
-      // (rangeState, the range_entity's own STATE, never rangeMax -
-      // rangeMin) plus the daily min/max and their timestamps. Deliberately
-      // NOT tied to hasRoomsView (unlike _scaleFooterText()) — RangeScale
-      // must show this footer with zero rooms configured. rangeState/
-      // rangeMin/rangeMax are formatted without a null-guard: this is only
-      // ever called while the rangeScale view itself is showing, and
-      // hasRangeScale already requires rangeScaleAvailable (hasRange &&
-      // rangeMin !== null && rangeMax !== null, see _computeData()) — all
-      // three are structurally guaranteed non-null here. Only the
-      // timestamps are independently nullable (minimum_zeitpunkt/
-      // maximum_zeitpunkt can be absent even when the numeric attributes
-      // aren't), hence the "–" fallback already established for them in
-      // this view's marker tooltips (see _renderRangeScaleView()).
-      // AP-C3 (audit 23.2): "compact" reuses rangeScale.footerCompact — the
-      // exact same template with the two timestamp parentheticals dropped,
-      // already translated for every language (see i18n/languages/) — rather
-      // than composing a truncated string here, which would need to
-      // guess at each language's own punctuation/connector conventions.
-      const key = mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer";
-      return this._t(key, {
-        span: this._fmtWithUnit(data.rangeState),
-        min: this._fmtWithUnit(data.rangeMin),
-        minTime: data.rangeMinTime || "–",
-        max: this._fmtWithUnit(data.rangeMax),
-        maxTime: data.rangeMaxTime || "–",
-      });
+    _renderRangeScaleView() {
+      return this._renderViewMarkup("range_scale");
     }
 
-    _renderScaleBar(data, geometry, viewClass, topRowHtml, markersHtml, footerText, showComfortBand, showOptimalBand) {
-      // Shared markup for any scale-bar-shaped view (comfort/optimal band,
-      // scale edge labels, footer) — used by both "scale" (room-based
-      // geometry) and "rangeScale" (daily-range-based geometry, see
-      // _computeData()'s rangeScaleGeometry). Only the top row (comfort
-      // pill vs. avg/min/max labels), the markers, and the footer text
-      // differ between views; callers build/compute those and pass them
-      // in — AP-06: footer content is each caller's own decision (room
-      // comfort vs. RangeScale's daily span), not decided in here.
-      //
-      // Teil 2 (view-customizer Baukasten): showComfortBand/showOptimalBand
-      // are likewise each caller's own resolved data.viewOptions.<key>
-      // decision, not read from data here — identical pattern to
-      // footerText. Purely a markup omission: when false, the band <div>
-      // and its matching descriptive label are not emitted
-      // (_updateScaleBarCommon()'s existing querySelector guards already
-      // no-op correctly on their absence, no update-path change needed).
-      const footer = footerText ? `<div class="rtc-scale-footer">${this._esc(footerText)}</div>` : "";
-      const comfortBandHtml = showComfortBand ? `<div class="rtc-comfort-band" style="left:${geometry.comfortLeft}%;width:${geometry.comfortWidth}%;"${geometry.comfortVisible ? "" : " hidden"}></div>` : "";
-      const optimalBandHtml = showOptimalBand ? `<div class="rtc-optimal-band" style="left:${geometry.optimalLeft}%;width:${geometry.optimalWidth}%;"${geometry.optimalVisible ? "" : " hidden"}></div>` : "";
-      const optimalLabelHtml = showOptimalBand
-        ? `<span class="rtc-scale-label-center" style="left:${geometry.optimalCenter}%"${geometry.optimalVisible ? "" : " hidden"}>${this._esc(this._t("scale.optimalLabel", { range: `${this._fmt(geometry.optimalMin, 0)}–${this._fmtWithUnit(geometry.optimalMax, 0, false)}` }))}</span>`
-        : "";
-
-      return `
-        <div class="${viewClass}">
-          ${topRowHtml}
-
-          <div class="rtc-scale-bar">
-            ${comfortBandHtml}
-            ${optimalBandHtml}
-            ${markersHtml}
-          </div>
-
-          <div class="rtc-scale-labels">
-            <span class="rtc-scale-label-min">${this._esc(geometry.boundaryLabels.min)}</span>
-            ${optimalLabelHtml}
-            <span class="rtc-scale-label-max rtc-scale-max">${this._esc(geometry.boundaryLabels.max)}</span>
-          </div>
-
-          ${footer}
-        </div>
-      `;
+    _renderRangeCards() {
+      return renderMetricCards(this._computeViewModel().views.byKey.range.cards);
     }
 
-    _renderScaleView(data) {
-      // Dynamic scale with comfort band, optimal band, and marker(s); rendered
-      // as the "scale" view, or alone (no rotator) in minimal mode. Thin
-      // wrapper around the shared _renderScaleBar() — data doubles as its
-      // own geometry object here (_computeData() spreads scaleGeometry's
-      // fields directly onto data for the main scale).
-      const avgMarkerColor = data.avgColor;
-      const { show_comfort_band: showComfortBand, show_optimal_band: showOptimalBand, footer: showFooter, markers: markersMode } = data.viewOptions.scale;
-      const extremaMarkers = data.hasRoomsView && markersMode === "extremes"
-        ? `
-            <div class="rtc-marker rtc-marker-cold" style="left:calc(${data.coolestPos}% + ${data.coolestShift}px);--marker-color:${data.coolestColor};--marker-shadow:${this._rgba(data.coolestColor, 0.28)};" title="${this._esc(`${this._extremeRoomLabel("cold", data.metricType)}: ${data.coolest.name} ${this._fmtWithUnit(data.coolest.value)}`)}"></div>
-            <div class="rtc-marker rtc-marker-warm" style="left:calc(${data.warmestPos}% + ${data.warmestShift}px);--marker-color:${data.warmestColor};--marker-shadow:${this._rgba(data.warmestColor, 0.28)};" title="${this._esc(`${this._extremeRoomLabel("warm", data.metricType)}: ${data.warmest.name} ${this._fmtWithUnit(data.warmest.value)}`)}"></div>
-          `
-        : "";
-      const roomMarkers = data.hasRoomsView && markersMode === "all"
-        ? data.scaleRoomMarkers.map((marker) => `
-            <div class="rtc-marker rtc-marker-room" data-room-marker-index="${marker.index}" style="left:${marker.position}%;--marker-color:${marker.color};--marker-shadow:${this._rgba(marker.color, 0.22)};" title="${this._esc(`${marker.name}: ${this._fmtWithUnit(marker.value)}`)}"></div>
-          `).join("")
-        : "";
-      const avgMarkerClass = markersMode === "all" && data.hasRoomsView ? " rtc-marker-emphasized" : "";
-      const markersHtml = `
-            ${extremaMarkers}
-            ${roomMarkers}
-            <div class="rtc-marker rtc-marker-avg${avgMarkerClass}" style="left:${data.avgPos}%;--marker-color:${avgMarkerColor};--marker-shadow:${this._rgba(avgMarkerColor, 0.28)};" title="${this._esc(this._t("avg.tooltip", { value: this._fmtWithUnit(data.avg), label: data.avgLabel }))}"></div>
-      `;
-      const topRowHtml = `
-          <div class="rtc-scale-comfort-row">
-            ${showComfortBand ? `<span class="rtc-scale-comfort-label" style="left:${data.comfortCenter}%"${data.comfortVisible ? "" : " hidden"}>${this._esc(this._t("scale.comfortLabel", { range: `${this._fmt(data.comfortMin, 0)}–${this._fmtWithUnit(data.comfortMax, 0, false)}` }))}</span>` : ""}
-          </div>
-      `;
-      const footerText = data.hasRoomsView && !this._config.hide_footer && showFooter !== false ? this._scaleFooterText(data) : null;
-      return this._renderScaleBar(data, data, "rtc-scale-view", topRowHtml, markersHtml, footerText, showComfortBand, showOptimalBand);
+    _renderExtremeCards() {
+      return renderMetricCards(this._computeViewModel().views.byKey.extremes.cards);
     }
 
-    _renderRangeScaleView(data) {
-      // Alternate scale bar (optional, requested via views:
-      // [{type:"range_scale"}], see "Oeffentliche
-      // Konfiguration"): same comfort/optimal band and scale-edge labels as
-      // the main "scale" view (via the shared _renderScaleBar()), but the
-      // markers show today's minimum/maximum instead of coldest/warmest
-      // room, and the top row shows current/min/max labels above their own
-      // markers instead of a single "Komfort" pill — see
-      // _resolveRangeScaleLabels() for how those three labels avoid
-      // overlapping each other. Reuses the "cold"/"warm" marker classes
-      // for min/max (identical shape/CSS, just a different meaning here).
-      const geometry = data.rangeScaleGeometry;
-      const markersHtml = `
-            <div class="rtc-marker rtc-marker-cold" style="left:${data.rangeMinPos}%;--marker-color:${data.rangeMinColor};--marker-shadow:${this._rgba(data.rangeMinColor, 0.28)};" title="${this._esc(`${this._t("card.dailyMinimum")}: ${data.rangeMinTime || "–"} ${this._fmtWithUnit(data.rangeMin)}`)}"></div>
-            <div class="rtc-marker rtc-marker-warm" style="left:${data.rangeMaxPos}%;--marker-color:${data.rangeMaxColor};--marker-shadow:${this._rgba(data.rangeMaxColor, 0.28)};" title="${this._esc(`${this._t("card.dailyMaximum")}: ${data.rangeMaxTime || "–"} ${this._fmtWithUnit(data.rangeMax)}`)}"></div>
-            <div class="rtc-marker rtc-marker-avg" style="left:${data.rangeCurrentPos}%;--marker-color:${data.avgColor};--marker-shadow:${this._rgba(data.avgColor, 0.28)};" title="${this._esc(this._t("avg.tooltip", { value: this._fmtWithUnit(data.avg), label: this._t("rangeScale.currentLabel") }))}"></div>
-      `;
-      const topRowHtml = `
-          <div class="rtc-range-scale-top-row">
-            <span class="rtc-range-scale-label-current" style="left:${data.rangeCurrentPos}%">${this._esc(this._t("rangeScale.currentLabel"))}</span>
-            <span class="rtc-range-scale-label-min" style="left:${data.rangeMinPos}%">${this._esc(this._t("rangeScale.minLabel"))}</span>
-            <span class="rtc-range-scale-label-max" style="left:${data.rangeMaxPos}%">${this._esc(this._t("rangeScale.maxLabel"))}</span>
-          </div>
-      `;
-      const { show_comfort_band: showComfortBand, show_optimal_band: showOptimalBand, footer: footerMode } = data.viewOptions.range_scale;
-      const footerText = this._config.hide_footer || footerMode === false ? null : this._rangeScaleFooterText(data, footerMode);
-      return this._renderScaleBar(data, geometry, "rtc-range-scale-view", topRowHtml, markersHtml, footerText, showComfortBand, showOptimalBand);
+    _scaleFooterText() {
+      return this._computeViewModel().views.byKey.scale.footerText;
     }
 
-    _renderExtremesView(data) {
-      // Extreme-value view: two large cards for the coldest/warmest room.
-      return `
-        <div class="rtc-extremes-view">
-          ${this._renderExtremeCards(data)}
-        </div>
-      `;
+    _rangeScaleFooterText() {
+      return this._computeViewModel().views.byKey.range_scale.footerText;
     }
 
-    _renderExtremeCards(data) {
-      // Renders both extreme-value cards together, so updates stay short.
-      const showValue = data.viewOptions.extremes.show_value;
-      return `
-        ${this._renderExtremeCard(data.coolest, "cold", data.metricType, data.displayUnitProfile, showValue)}
-        ${this._renderExtremeCard(data.warmest, "warm", data.metricType, data.displayUnitProfile, showValue)}
-      `;
+    _trendDisplayText(trend) {
+      return buildTrendText(trend, this._texts());
     }
 
-    _renderMetricCard({ label, name, value, entity, color, roomIndex, showName = true, showValue = true }) {
-      // Shared card markup for the extreme-value view and the daily-range
-      // view, so both are laid out identically. roomIndex is only set for
-      // real rooms, so _buildActionConfig() correctly falls back to the
-      // card's default actions for daily-range cards instead of a
-      // nonexistent room index. Missing value/name render as "–" (the card
-      // stays clickable) instead of crashing.
-      // AP-C3 (audit 23.2): showName/showValue are the two independent
-      // per-caller visibility flags -- range.show_time (this slot holds
-      // the min/max timestamp for range cards, see _renderRangeCards())
-      // drives showName; extremes.show_value drives showValue. Both
-      // default true (today's unchanged behavior). A hidden field is
-      // omitted from the tooltip/aria-label too, not just the visible
-      // text, so it isn't silently exposed on hover.
-      const cardColor = color || "var(--rtc-muted)";
-      const roomIndexAttr = roomIndex !== undefined && roomIndex !== null ? ` data-room-index="${roomIndex}"` : "";
-      const hasValue = typeof value === "number" && Number.isFinite(value);
-      const nameText = showName ? name || "–" : "";
-      const numText = showValue ? (hasValue ? this._fmt(value) : "–") : "";
-      const unitText = showValue && hasValue ? ` ${this._unit()}` : "";
-      const titleValueText = showValue ? (hasValue ? this._fmtWithUnit(value) : "–") : "";
-      const titleText = [label, [nameText, titleValueText].filter(Boolean).join(" ")].filter(Boolean).join(": ");
-
-      return `
-        <button
-          type="button"
-          class="rtc-extreme-card"
-          data-entity="${this._esc(entity)}"${roomIndexAttr}
-          style="--extreme-color:${cardColor};--extreme-bg:${this._rgba(cardColor, 0.09)};--extreme-border:${this._rgba(cardColor, 0.36)};--extreme-line-shadow:${this._rgba(cardColor, 0.24)};"
-          title="${this._esc(titleText)}"
-          aria-label="${this._esc(this._t("card.ariaOpen", { label, name: nameText }))}"
-        >
-          <span class="rtc-extreme-line"></span>
-          <span class="rtc-extreme-label">${this._esc(label)}</span>
-          <span class="rtc-extreme-name">${this._esc(nameText)}</span>
-          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">${this._esc(numText)}</span><span class="rtc-extreme-value-unit">${this._esc(unitText)}</span></span>
-        </button>
-      `;
+    _resolveLabelForm(element, longText, shortText, fitsWithWidth) {
+      return resolveLabelForm(element, longText, shortText, fitsWithWidth);
     }
 
-    // AP-09 (audit 18): patches an existing metric-card node in place --
-    // field-for-field mirror of _renderMetricCard() above, shared by both
-    // Range and Extrema's update paths. Uses style.setProperty() for the
-    // four CSS custom properties (audit 21.3's hardening recommendation for
-    // newly-written dynamic-style code) rather than reassembling one
-    // `style` string.
-    _patchMetricCard(cardEl, { label, name, value, entity, color, roomIndex, showName = true, showValue = true }) {
-      const cardColor = color || "var(--rtc-muted)";
-      const hasValue = typeof value === "number" && Number.isFinite(value);
-      const nameText = showName ? name || "–" : "";
-      const numText = showValue ? (hasValue ? this._fmt(value) : "–") : "";
-      const unitText = showValue && hasValue ? ` ${this._unit()}` : "";
-      const titleValueText = showValue ? (hasValue ? this._fmtWithUnit(value) : "–") : "";
-      const titleText = [label, [nameText, titleValueText].filter(Boolean).join(" ")].filter(Boolean).join(": ");
-
-      cardEl.setAttribute("data-entity", entity == null ? "" : String(entity));
-      if (roomIndex !== undefined && roomIndex !== null) cardEl.setAttribute("data-room-index", String(roomIndex));
-      else cardEl.removeAttribute("data-room-index");
-      cardEl.style.setProperty("--extreme-color", cardColor);
-      cardEl.style.setProperty("--extreme-bg", this._rgba(cardColor, 0.09));
-      cardEl.style.setProperty("--extreme-border", this._rgba(cardColor, 0.36));
-      cardEl.style.setProperty("--extreme-line-shadow", this._rgba(cardColor, 0.24));
-      cardEl.setAttribute("title", titleText);
-      cardEl.setAttribute("aria-label", this._t("card.ariaOpen", { label, name: nameText }));
-      cardEl.querySelector(".rtc-extreme-label").textContent = label;
-      cardEl.querySelector(".rtc-extreme-name").textContent = nameText;
-      cardEl.querySelector(".rtc-extreme-value-num").textContent = numText;
-      cardEl.querySelector(".rtc-extreme-value-unit").textContent = unitText;
+    _focusFallbackTarget() {
+      return focusFallbackTarget(this.shadowRoot);
     }
 
-    _extremeCardModel(room, type, metricType, unitProfile, showValue) {
-      // Pure model computation shared by _renderExtremeCard() (initial
-      // render) and _updateExtremeCards() (patch path) -- one place that
-      // decides label/color/etc. for an extrema card, so the two paths can
-      // never quietly drift apart. showValue (AP-C3: extremes.show_value)
-      // defaults true so every OTHER existing caller/test keeps working
-      // unchanged.
-      const color = this._roomTone(room.value, room.entity, metricType, unitProfile);
-      return {
-        label: this._extremeRoomLabel(type, metricType),
-        name: room.name,
-        value: room.value,
-        entity: room.entity,
-        color,
-        roomIndex: room.index,
-        showValue: showValue !== false,
-      };
-    }
-
-    _renderExtremeCard(room, type, metricType, unitProfile, showValue) {
-      // Single extreme-value card; thin wrapper around _renderMetricCard().
-      return this._renderMetricCard(this._extremeCardModel(room, type, metricType, unitProfile, showValue));
-    }
-
-    _updateRangeCards(el, data) {
-      // AP-09: patches the two fixed range cards (min, max) in place --
-      // called from VIEW_REGISTRY's "range" entry. Reads the two existing
-      // .rtc-extreme-card nodes by position (render order is structurally
-      // fixed by _renderRangeCards() below: minimum first, maximum second).
-      // Falls back to a full re-render only as a defensive guard if the DOM
-      // doesn't actually hold two cards (shouldn't happen in practice --
-      // this view only appears/disappears via _renderAll(), never mid-patch).
-      if (!el) return;
-      const cards = el.querySelectorAll(".rtc-extreme-card");
-      if (cards.length !== 2) {
-        el.innerHTML = this._renderRangeCards(data);
-        return;
-      }
-      const showName = data.viewOptions.range.show_time;
-      this._patchMetricCard(cards[0], {
-        label: this._t("card.dailyMinimum"),
-        name: data.rangeMinTime,
-        value: data.rangeMin,
-        entity: this._config.range_entity,
-        color: data.rangeMinColor,
-        showName,
-      });
-      this._patchMetricCard(cards[1], {
-        label: this._t("card.dailyMaximum"),
-        name: data.rangeMaxTime,
-        value: data.rangeMax,
-        entity: this._config.range_entity,
-        color: data.rangeMaxColor,
-        showName,
-      });
-    }
-
-    _updateExtremeCards(el, data) {
-      // AP-09: mirrors _updateRangeCards() for the two fixed extrema cards
-      // (coldest, warmest) -- called from VIEW_REGISTRY's "extremes" entry.
-      // Deliberately role-keyed, not entity-keyed: when a different room
-      // becomes coldest/warmest, the SAME card node is patched with the new
-      // room's data rather than being replaced -- the slot is continuously
-      // "the coldest room", the same way a value display continuously shows
-      // "the current temperature" regardless of which sensor briefly backs
-      // it. A focused card therefore never loses focus just because the
-      // underlying room changed.
-      if (!el) return;
-      const cards = el.querySelectorAll(".rtc-extreme-card");
-      if (cards.length !== 2) {
-        el.innerHTML = this._renderExtremeCards(data);
-        return;
-      }
-      const showValue = data.viewOptions.extremes.show_value;
-      this._patchMetricCard(cards[0], this._extremeCardModel(data.coolest, "cold", data.metricType, data.displayUnitProfile, showValue));
-      this._patchMetricCard(cards[1], this._extremeCardModel(data.warmest, "warm", data.metricType, data.displayUnitProfile, showValue));
-    }
-
-    _renderRangeView(data) {
-      // Daily-range view (left of scale, only when hasRange): daily min/max of range_entity.
-      return `
-        <div class="rtc-range-view">
-          ${this._renderRangeCards(data)}
-        </div>
-      `;
-    }
-
-    _renderRangeCards(data) {
-      // Both cards share range_entity — minimum/maximum are attributes of that one entity.
-      const showName = data.viewOptions.range.show_time;
-      return `
-        ${this._renderMetricCard({
-          label: this._t("card.dailyMinimum"),
-          name: data.rangeMinTime,
-          value: data.rangeMin,
-          entity: this._config.range_entity,
-          color: data.rangeMinColor,
-          showName,
-        })}
-        ${this._renderMetricCard({
-          label: this._t("card.dailyMaximum"),
-          name: data.rangeMaxTime,
-          value: data.rangeMax,
-          entity: this._config.range_entity,
-          color: data.rangeMaxColor,
-          showName,
-        })}
-      `;
-    }
-
-    _renderRoomGridRows(data) {
-      // Splits data.rooms into data.roomRows-sized rows (see
-      // _roomGridRows()); each row is its own CSS grid with its own column
-      // count, since a single native CSS grid can't vary column count per
-      // row. A single row (the unconfigured, <= 7 rooms default) renders
-      // identically to the old flat-grid markup, just wrapped one level
-      // deeper. columnCount (not itemCount) drives grid-template-columns,
-      // so a short last row under a fixed room_columns keeps the same chip
-      // width as the rows above it instead of stretching to fill.
-      let cursor = 0;
-      return data.roomRows
-        .map(({ itemCount, columnCount }) => {
-          const roomsInRow = data.rooms.slice(cursor, cursor + itemCount);
-          cursor += itemCount;
-          return `<div class="rtc-room-row" style="grid-template-columns:repeat(${columnCount}, minmax(0, 1fr));">${roomsInRow.map((room) => this._renderRoomChip(room, data)).join("")}</div>`;
-        })
-        .join("");
-    }
-
-    _renderRoomChip(room, data) {
-      // Small room chip at the bottom; rooms outside the comfort range get a bolder color.
-      const out = room.value < data.comfortMin || room.value > data.comfortMax;
-      const color = this._roomTone(room.value, room.entity, data.metricType, data.displayUnitProfile);
-      const mark = room.value > data.comfortMax ? "↑" : room.value < data.comfortMin ? "↓" : "•";
-      const style = `--room-color:${color};--room-mark-bg:${this._rgba(color, 0.18)};--room-bg:${out ? this._rgba(color, 0.10) : "var(--rtc-chip-bg)"};--room-border:${out ? this._rgba(color, 0.36) : "var(--rtc-hairline)"};`;
-      const shortGuaranteedAttr = room.shortGuaranteed ? ' data-short-guaranteed="true"' : "";
-
-      return `
-        <button
-          type="button"
-          class="rtc-room-chip"
-          data-entity="${this._esc(room.entity)}"
-          data-room-index="${room.index}"
-          style="${style}"
-          title="${this._esc(`${room.name}: ${this._fmtWithUnit(room.value)}`)}"
-          aria-label="${this._esc(this._t("room.ariaOpen", { name: room.name }))}"
-        >
-          <span class="rtc-room-top">
-            <span class="rtc-room-short"${shortGuaranteedAttr}>${this._esc(room.displayLabel)}</span>
-            <span class="rtc-room-mark">${mark}</span>
-          </span>
-          <span class="rtc-room-value"><span class="rtc-room-value-num">${this._fmt(room.value)}</span><span class="rtc-room-value-unit">${this._esc(this._unit())}</span></span>
-        </button>
-      `;
-    }
-
-    // AP-09 (audit 18): patches an existing room-chip node in place --
-    // field-for-field mirror of _renderRoomChip() above. Used for BOTH
-    // reused chips (an already-existing entity) and freshly created ones
-    // (see _updateRoomGrid()) -- a freshly created chip is first parsed via
-    // _htmlToElement(_renderRoomChip(...)) purely for its skeleton shape,
-    // then immediately patched here too, so there is exactly one place
-    // that knows which fields a room chip has, not two independently
-    // maintained descriptions.
-    _patchRoomChip(chip, room, data) {
-      const out = room.value < data.comfortMin || room.value > data.comfortMax;
-      const color = this._roomTone(room.value, room.entity, data.metricType, data.displayUnitProfile);
-      const mark = room.value > data.comfortMax ? "↑" : room.value < data.comfortMin ? "↓" : "•";
-
-      chip.setAttribute("data-entity", room.entity);
-      chip.setAttribute("data-room-index", String(room.index));
-      chip.style.setProperty("--room-color", color);
-      chip.style.setProperty("--room-mark-bg", this._rgba(color, 0.18));
-      chip.style.setProperty("--room-bg", out ? this._rgba(color, 0.1) : "var(--rtc-chip-bg)");
-      chip.style.setProperty("--room-border", out ? this._rgba(color, 0.36) : "var(--rtc-hairline)");
-      chip.setAttribute("title", `${room.name}: ${this._fmtWithUnit(room.value)}`);
-      chip.setAttribute("aria-label", this._t("room.ariaOpen", { name: room.name }));
-      const shortEl = chip.querySelector(".rtc-room-short");
-      shortEl.textContent = room.displayLabel;
-      // toggleAttribute (not a conditional setAttribute): chip DOM nodes are
-      // reused across re-renders (see AP-09 keyed patching above), so a
-      // stale "true" from a prior config must be actively removed once the
-      // label no longer qualifies, not merely left unset.
-      shortEl.toggleAttribute("data-short-guaranteed", room.shortGuaranteed);
-      chip.querySelector(".rtc-room-mark").textContent = mark;
-      chip.querySelector(".rtc-room-value-num").textContent = this._fmt(room.value);
-      chip.querySelector(".rtc-room-value-unit").textContent = this._unit();
-    }
-
-    _updateRoomGrid(roomGridEl, data) {
-      // AP-09 (audit 18): entity-keyed reconciliation instead of rebuilding
-      // the whole grid via innerHTML on every update. Row wrapper <div>s
-      // themselves are cheap, unkeyed, non-focusable layout containers --
-      // only the room-chip <button>s inside them carry identity/focus and
-      // are reused by data-entity, wherever in the new row structure they
-      // end up.
-      //
-      // A real browser (confirmed only there -- jsdom's simplified focus
-      // model doesn't reproduce this, see focus-stability.spec.js) blurs a
-      // focused node the instant appendChild()/insertBefore() is called on
-      // it, EVEN when the node is already exactly where it's being "moved"
-      // to (a net no-op position-wise) -- the DOM spec's insert algorithm
-      // unconditionally removes-then-reinserts an already-connected node,
-      // and the HTML living standard's focus fixup rule fires on that
-      // removal step alone, unconditionally. The fix is to never issue the
-      // move call at all for a chip that's already correctly positioned --
-      // by far the common case (a plain value update touches zero chip
-      // positions) -- so the dominant, per-second update path never risks
-      // a blur. Row wrapper COUNT is only ever GROWN before repositioning
-      // (new wrappers attach to roomGridEl immediately, never sitting
-      // detached, which would ALSO blur via the same fixup rule) and
-      // trimmed only afterward, once guaranteed empty.
-      if (!roomGridEl) return;
-
-      const activeBefore = this.shadowRoot?.activeElement;
-      const focusedChip = activeBefore?.classList?.contains("rtc-room-chip") ? activeBefore : null;
-      const rooms = data.rooms || [];
-      const presentEntities = new Set(rooms.map((room) => room.entity));
-
-      const existingChips = new Map();
-      roomGridEl.querySelectorAll(".rtc-room-chip").forEach((chip) => {
-        const entity = chip.getAttribute("data-entity");
-        if (presentEntities.has(entity)) existingChips.set(entity, chip);
-        else chip.remove();
-      });
-
-      while (roomGridEl.children.length < data.roomRows.length) roomGridEl.appendChild(this.ownerDocument.createElement("div"));
-
-      let cursor = 0;
-      data.roomRows.forEach(({ itemCount, columnCount }, rowIndex) => {
-        const rowEl = roomGridEl.children[rowIndex];
-        rowEl.className = "rtc-room-row";
-        rowEl.style.gridTemplateColumns = `repeat(${columnCount}, minmax(0, 1fr))`;
-        const roomsInRow = rooms.slice(cursor, cursor + itemCount);
-        cursor += itemCount;
-        roomsInRow.forEach((room, indexInRow) => {
-          const chip = existingChips.get(room.entity) || this._htmlToElement(this._renderRoomChip(room, data));
-          this._patchRoomChip(chip, room, data);
-          if (rowEl.children[indexInRow] !== chip) rowEl.insertBefore(chip, rowEl.children[indexInRow] || null);
-        });
-      });
-
-      while (roomGridEl.children.length > data.roomRows.length) roomGridEl.removeChild(roomGridEl.lastElementChild);
-
-      // Covers both ways a focused chip can lose focus: its room
-      // disappeared (removed above) or it genuinely had to move to a new
-      // row/position (unavoidably blurred by the browser, see above) --
-      // comparing before/after rather than pre-guessing "will be lost"
-      // catches both uniformly.
-      if (focusedChip && this.shadowRoot?.activeElement !== focusedChip) this._applyFocusFallback();
+    _applyFocusFallback() {
+      applyFocusFallback(this.shadowRoot);
     }
 
     // ==== Event handling ====
@@ -7954,875 +10477,16 @@ function classifyTrendRate(canonicalValue, policy) {
     }
 
     // ==== Styles ====
+    // All CSS for the card, scoped to the shadow DOM. The stylesheet itself lives in
+    // styles/; the four values below are the only per-render inputs it has, and all
+    // four come from the carousel.
     _styles() {
-      // All CSS for the card, scoped to the shadow DOM.
-      return `
-        ${this._slideKeyframes()}
-
-        :host {
-          display: block;
-          --rtc-radius: 20px;
-          --rtc-muted: var(--secondary-text-color);
-          --rtc-faint: color-mix(in srgb, var(--secondary-text-color) 72%, transparent);
-          --rtc-hairline: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 42%, transparent);
-          --rtc-panel: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
-          --rtc-chip-bg: color-mix(in srgb, var(--primary-text-color) 3%, transparent);
-          --rtc-card-border: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 70%, transparent);
-          --rtc-top-overlay: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        .rtc-card {
-          container: rtc-card / inline-size;
-          border-radius: var(--rtc-radius);
-          padding: 0;
-          overflow: hidden;
-          background: linear-gradient(135deg, var(--rtc-top-overlay), transparent), var(--ha-card-background, var(--card-background-color));
-          border: 1px solid var(--rtc-card-border);
-          box-shadow: var(--ha-card-box-shadow, 0 8px 26px rgba(0,0,0,0.18));
-        }
-
-        .rtc-root {
-          position: relative;
-          padding: 15px 16px 16px;
-          display: grid;
-          gap: 11px;
-        }
-
-        .rtc-top-line {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 3px;
-          background: linear-gradient(90deg, var(--tone-color), transparent);
-        }
-
-        .rtc-header {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          gap: 11px;
-          align-items: center;
-          min-width: 0;
-        }
-
-        .rtc-icon-badge {
-          width: 39px;
-          height: 39px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--tone-soft);
-          border: 1px solid var(--tone-border);
-        }
-
-        .rtc-icon-badge ha-icon {
-          width: 22px;
-          height: 22px;
-          color: var(--tone-color);
-        }
-
-        .rtc-title-block {
-          min-width: 0;
-        }
-
-        .rtc-title {
-          font-size: 21px;
-          font-weight: 920;
-          line-height: 1.05;
-          color: var(--primary-text-color);
-        }
-
-        .rtc-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
-          font-weight: 650;
-          line-height: 1.25;
-          color: var(--rtc-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .rtc-status-pill {
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 900;
-          white-space: nowrap;
-          color: var(--tone-color);
-          background: var(--tone-soft);
-          border: 1px solid var(--tone-border);
-        }
-
-        .rtc-main-panel {
-          display: grid;
-          grid-template-columns: minmax(94px, 106px) minmax(0, 1fr);
-          gap: 8px;
-          align-items: center;
-          border-radius: 17px;
-          padding: 9px 10px;
-          background: var(--rtc-panel);
-          border: 1px solid var(--rtc-hairline);
-        }
-
-        button {
-          appearance: none;
-          -webkit-appearance: none;
-          font: inherit;
-          color: inherit;
-          border: 0;
-          margin: 0;
-          text-align: left;
-        }
-
-        .rtc-avg-button {
-          position: relative;
-          display: block;
-          width: 100%;
-          min-width: 0;
-          border-radius: 13px;
-          cursor: pointer;
-          background: transparent;
-          touch-action: manipulation;
-          user-select: none;
-          outline: none;
-        }
-
-        .rtc-avg-button-disabled {
-          cursor: default;
-        }
-
-        .rtc-avg-button:focus-visible,
-        .rtc-room-chip:focus-visible,
-        .rtc-extreme-card:focus-visible {
-          outline: 2px solid var(--tone-color);
-          outline-offset: 2px;
-        }
-
-        .rtc-avg-label {
-          display: block;
-          font-size: 10px;
-          font-weight: 850;
-          letter-spacing: .075em;
-          text-transform: uppercase;
-          color: var(--rtc-faint);
-          white-space: nowrap;
-        }
-
-        .rtc-avg-value {
-          display: block;
-          margin-top: 4px;
-          font-size: 33px;
-          font-weight: 950;
-          line-height: .95;
-          color: var(--primary-text-color);
-          font-variant-numeric: tabular-nums;
-          white-space: nowrap;
-        }
-
-        .rtc-avg-unit-wrap {
-          display: inline-block;
-        }
-
-        .rtc-avg-unit-gap {
-          font-size: 14px;
-        }
-
-        .rtc-avg-unit-core {
-          display: inline;
-        }
-
-        .rtc-avg-button.rtc-has-trend .rtc-avg-unit-core {
-          display: inline-grid;
-          grid-template-rows: minmax(0, 1fr) auto;
-          justify-items: center;
-          align-items: center;
-          height: .95em;
-          vertical-align: bottom;
-        }
-
-        .rtc-avg-value-unit {
-          display: inline;
-          font-size: 14px;
-          font-weight: 750;
-          line-height: 1;
-          color: var(--rtc-faint);
-        }
-
-        .rtc-avg-trend-arrow {
-          display: block;
-          align-self: end;
-          width: 10px;
-          height: 10px;
-          color: var(--rtc-muted);
-          transform: translateY(-1px);
-        }
-
-        .rtc-avg-trend-arrow-svg {
-          display: block;
-          width: 10px;
-          height: 10px;
-          overflow: visible;
-          stroke-width: 1.2;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          transform: rotate(0deg);
-          transform-origin: center;
-        }
-
-        .rtc-avg-button[data-trend-direction="stable"] .rtc-avg-trend-arrow-svg {
-          transform: rotate(45deg);
-        }
-
-        .rtc-avg-button[data-trend-direction="falling"] .rtc-avg-trend-arrow-svg {
-          transform: rotate(90deg);
-        }
-
-        .rtc-avg-trend-arrow[hidden] {
-          display: none;
-        }
-
-        .rtc-rotator,
-        .rtc-rotator-solo {
-          min-width: 0;
-          height: 70px;
-          /* Keep the carousel clipped horizontally, but extend its paint
-             viewport upward for RangeScale's collision-only upper label.
-             overflow:hidden and paint containment both clipped at the
-             border box, which cut the label under Home Assistant's real
-             font metrics. The directional clip changes paint only: layout,
-             row heights, and the scale-bar position remain untouched. */
-          overflow: visible;
-          clip-path: inset(-10px 0 0 0);
-          border-radius: 14px;
-          contain: layout style;
-        }
-
-        .rtc-rotator {
-          /* Only the swipeable rotator needs pan-y so vertical scroll still reaches the browser. */
-          touch-action: pan-y;
-        }
-
-        .rtc-no-views {
-          /* _renderNoActiveViews(): a requested-but-unavailable view (e.g.
-             range_scale with no valid range_entity) falls back to this
-             localized one-line hint instead of the usual view content.
-             Previously unstyled — it inherited plain block/left/top text
-             instead of matching the rest of the card's centered, muted
-             typography. Same box as .rtc-rotator-solo above (this class is
-             always combined with it, never alone), so centering here only
-             needs flex on that existing 70px-tall box. */
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 0 14px;
-          font-size: 13px;
-          font-weight: 700;
-          line-height: 1.3;
-          color: var(--secondary-text-color);
-        }
-
-        .rtc-track {
-          /* Width is views.length*100% so all views sit correctly side by side. */
-          display: flex;
-          width: ${Math.max(1, (this._views || []).length) * 100}%;
-          height: 70px;
-          align-items: stretch;
-          ${this._trackAnimationCss()}
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-          will-change: transform;
-        }
-
-        .rtc-track.rtc-manual {
-          animation: none !important;
-        }
-
-        .rtc-view {
-          /* Width is 100/views.length % of the track's own width. */
-          flex: 0 0 ${this._viewWidthPct()}%;
-          width: ${this._viewWidthPct()}%;
-          min-width: 0;
-          box-sizing: border-box;
-        }
-
-        .rtc-scale-view {
-          height: 70px;
-          box-sizing: border-box;
-          display: grid;
-          align-content: center;
-          gap: 4px;
-          padding: 0 1px;
-        }
-
-        .rtc-scale-comfort-row {
-          position: relative;
-          height: 12px;
-          font-size: 10px;
-          font-weight: 800;
-          color: var(--rtc-faint);
-          white-space: nowrap;
-        }
-
-        .rtc-scale-comfort-label {
-          position: absolute;
-          top: 0;
-          transform: translateX(-50%);
-        }
-
-        /* "rangeScale" view (optional, requested via views:
-           [{type:"range_scale"}]): same overall
-           layout as .rtc-scale-view, but its top row holds three labels
-           (current/min/max) above their markers instead of one centered
-           "Komfort" pill — positions set/corrected in JS, see
-           _renderRangeScaleView()/_resolveRangeScaleLabels(). */
-        .rtc-range-scale-view {
-          height: 70px;
-          box-sizing: border-box;
-          display: grid;
-          align-content: center;
-          gap: 4px;
-          padding: 0 1px;
-        }
-
-        .rtc-range-scale-top-row {
-          position: relative;
-          height: 12px;
-          font-size: 10px;
-          font-weight: 800;
-          color: var(--rtc-faint);
-          white-space: nowrap;
-        }
-
-        .rtc-range-scale-label-current,
-        .rtc-range-scale-label-min,
-        .rtc-range-scale-label-max {
-          position: absolute;
-          top: 0;
-          /* JS sets style.left to a resolved center px value (see
-             _resolveRangeScaleLabels()), which this transform then centers
-             on. current is a FIXED pivot — always exactly centered on the
-             .rtc-marker-avg current-value marker, never repositioned by
-             collision avoidance. Only min/max drift off-center from their
-             own marker, and only when they'd otherwise overlap current or
-             each other. Ellipsis only actually engages when
-             _resolveRangeScaleLabels()/_layoutSideLabelGroup() sets an
-             explicit max-width (a side group doesn't fit even at natural
-             width, or — rarely — current alone is wider than the whole bar)
-             — harmless no-op otherwise. */
-          transform: translateX(-50%);
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        /* When one historical label cannot fit between the fixed current
-           pivot and its outer edge, only that colliding label moves to the
-           upper line. Current and any non-colliding historical label share
-           the lower line. The row height itself stays 12px, so the scale
-           bar's grid position never changes. */
-        .rtc-range-scale-top-row.rtc-range-scale-has-upper
-          .rtc-range-scale-label-current,
-        .rtc-range-scale-top-row.rtc-range-scale-has-upper
-          .rtc-range-scale-label-min,
-        .rtc-range-scale-top-row.rtc-range-scale-has-upper
-          .rtc-range-scale-label-max {
-          top: 4px;
-          line-height: 12px;
-        }
-
-        .rtc-range-scale-top-row.rtc-range-scale-has-upper
-          .rtc-range-scale-label-upper {
-          top: -8px;
-          line-height: 12px;
-          /* The generic label rule clips horizontally for the genuine
-             narrow-bar ellipsis fallback. A lifted min/max label instead
-             sits partly outside its normal line box; Home Assistant's real
-             font rasterization can paint glyph ink beyond that tight box
-             (most visibly the i-dot in "min"). Let the short historical
-             label paint freely in both axes so neither min nor max can
-             self-clip. Position, row height, and therefore the bar stay
-             byte-for-byte unchanged. */
-          overflow: visible;
-          text-overflow: clip;
-        }
-
-        .rtc-scale-bar {
-          position: relative;
-          height: 9px;
-          border-radius: 999px;
-          background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
-          overflow: visible;
-          border: 1px solid var(--rtc-hairline);
-        }
-
-        .rtc-comfort-band,
-        .rtc-optimal-band,
-        .rtc-marker {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-        }
-
-        .rtc-comfort-band {
-          background: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
-          z-index: 1;
-        }
-
-        .rtc-optimal-band {
-          background: var(--tone-band);
-          z-index: 2;
-        }
-
-        .rtc-marker {
-          top: 50%;
-          transform: translate(-50%, -50%);
-          width: 4px;
-          height: 17px;
-          border-radius: 999px;
-          background: var(--marker-color);
-          box-shadow: 0 0 0 3px var(--marker-shadow);
-        }
-
-        .rtc-marker-cold { z-index: 4; }
-        .rtc-marker-warm { z-index: 5; }
-        .rtc-marker-room {
-          height: 13px;
-          z-index: 4;
-        }
-        .rtc-marker-avg {
-          height: 15px;
-          z-index: 6;
-        }
-        .rtc-marker-avg.rtc-marker-emphasized {
-          height: 19px;
-        }
-
-        .rtc-scale-labels {
-          position: relative;
-          height: 12px;
-          font-size: 10px;
-          font-weight: 750;
-          color: var(--rtc-faint);
-          white-space: nowrap;
-        }
-
-        .rtc-scale-labels span {
-          position: absolute;
-          top: 0;
-          /* Ellipsis only actually engages on .rtc-scale-label-center, and
-             only when _resolveOptimalLabelPosition() sets an explicit
-             max-width (no non-overlapping position fits) — harmless no-op
-             on min/max, which never get a max-width. */
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .rtc-scale-label-min { left: 0; }
-        .rtc-scale-label-center { transform: translateX(-50%); }
-        .rtc-scale-label-max { right: 0; }
-
-        .rtc-scale-footer {
-          font-size: 10.5px;
-          font-weight: 750;
-          color: var(--rtc-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .rtc-extremes-view,
-        .rtc-range-view {
-          height: 70px;
-          box-sizing: border-box;
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
-          padding: 0 1px;
-        }
-
-        .rtc-extreme-card {
-          position: relative;
-          min-width: 0;
-          height: 70px;
-          box-sizing: border-box;
-          border-radius: 14px;
-          padding: 8px 9px 7px;
-          overflow: hidden;
-          display: grid;
-          grid-template-columns: 1fr;
-          grid-template-rows: auto auto 1fr;
-          column-gap: 0;
-          row-gap: 1px;
-          background: linear-gradient(135deg, var(--extreme-bg), transparent 72%);
-          border: 1px solid var(--extreme-border);
-          box-shadow: inset 0 1px 0 color-mix(in srgb, var(--extreme-color) 16%, transparent);
-          cursor: pointer;
-          touch-action: manipulation;
-          user-select: none;
-          outline: none;
-        }
-
-        .rtc-extreme-line {
-          position: absolute;
-          left: 0;
-          top: 0;
-          right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, var(--extreme-color), transparent);
-          box-shadow: 0 0 10px var(--extreme-line-shadow);
-          opacity: .98;
-        }
-
-        .rtc-extreme-label {
-          grid-column: 1;
-          grid-row: 1;
-          min-width: 0;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 0;
-          color: var(--extreme-color);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 1.05;
-          opacity: .94;
-        }
-
-        .rtc-extreme-name {
-          grid-column: 1;
-          grid-row: 2;
-          align-self: start;
-          min-width: 0;
-          max-width: 100%;
-          font-size: 13px;
-          font-weight: 900;
-          line-height: 1.05;
-          color: var(--primary-text-color);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .rtc-extreme-value {
-          grid-column: 1;
-          grid-row: 3;
-          align-self: end;
-          justify-self: end;
-          display: flex;
-          align-items: flex-end;
-          justify-content: flex-end;
-          font-size: 25px;
-          font-weight: 950;
-          line-height: .88;
-          color: var(--extreme-color);
-          font-variant-numeric: tabular-nums;
-          white-space: nowrap;
-          letter-spacing: -.02em;
-          min-width: 0;
-        }
-
-        .rtc-extreme-value-unit {
-          font-size: 10px;
-          font-weight: 850;
-          letter-spacing: 0;
-        }
-
-        .rtc-room-grid {
-          /* One .rtc-room-row per row (see _roomGridRows()) — a plain flex
-             column, since native CSS grid can't vary column count per row
-             within a single grid. gap here is the vertical row gap. */
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .rtc-room-row {
-          display: grid;
-          /* grid-template-columns is set inline (repeat(rowSize, ...)) to match that row's chip count. */
-          gap: 6px;
-        }
-
-        .rtc-room-chip {
-          min-width: 0;
-          border-radius: 13px;
-          padding: 7px 7px 8px;
-          background: var(--room-bg);
-          border: 1px solid var(--room-border);
-          cursor: pointer;
-          touch-action: manipulation;
-          user-select: none;
-          outline: none;
-        }
-
-        .rtc-room-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 4px;
-          min-width: 0;
-        }
-
-        .rtc-room-short {
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: .04em;
-          color: var(--rtc-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          min-width: 0;
-        }
-
-        /* Guarantees full visibility for an exactly-two-uppercase-letter
-           label (see TWO_UPPER_LETTER_RE / validRooms.shortGuaranteed) --
-           overflow:visible alone would not be enough, since .rtc-room-chip
-           itself clips at narrow widths (see the 460px/600px breakpoints
-           below) and .rtc-room-short competes for space in .rtc-room-top
-           with the fixed 15px .rtc-room-mark and its 4px gap. Presence-only
-           attribute selector: _patchRoomChip() sets/clears this via
-           toggleAttribute(), which does not guarantee the "true" value. */
-        .rtc-room-short[data-short-guaranteed] {
-          flex: 0 0 auto;
-          min-width: max-content;
-          overflow: visible;
-          text-overflow: clip;
-        }
-
-        .rtc-room-mark {
-          flex: 0 0 15px;
-          width: 15px;
-          height: 15px;
-          border-radius: 999px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 9px;
-          font-weight: 900;
-          line-height: 1;
-          color: var(--room-color);
-          background: var(--room-mark-bg);
-        }
-
-        .rtc-room-value {
-          display: flex;
-          align-items: baseline;
-          gap: 1px;
-          margin-top: 5px;
-          font-size: 17px;
-          font-weight: 920;
-          line-height: 1;
-          color: var(--primary-text-color);
-          white-space: nowrap;
-          font-variant-numeric: tabular-nums;
-        }
-
-        .rtc-room-value-unit {
-          flex: 0 0 auto;
-          font-size: 10px;
-          font-weight: 750;
-          color: var(--rtc-faint);
-        }
-
-        .rtc-empty {
-          padding: 16px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .rtc-empty-icon {
-          width: 38px;
-          height: 38px;
-          flex: 0 0 auto;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--rtc-panel);
-          border: 1px solid var(--rtc-hairline);
-        }
-
-        .rtc-empty-icon ha-icon {
-          width: 22px;
-          height: 22px;
-          color: var(--secondary-text-color);
-        }
-
-        .rtc-empty-copy {
-          min-width: 0;
-        }
-
-        .rtc-empty-title {
-          font-size: 21px;
-          font-weight: 900;
-          color: var(--primary-text-color);
-          line-height: 1.05;
-        }
-
-        .rtc-empty-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
-          color: var(--secondary-text-color);
-          line-height: 1.3;
-        }
-
-        @container rtc-card (max-width: 460px) {
-          .rtc-root { padding: 14px; }
-          .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
-          .rtc-avg-value { font-size: 29px; }
-          .rtc-room-grid { gap: 5px; }
-          .rtc-room-row { gap: 5px; }
-          .rtc-room-chip {
-            padding-left: 5px;
-            padding-right: 5px;
-            overflow: hidden;
-          }
-          .rtc-room-value {
-            font-size: 14px;
-            gap: 0;
-            letter-spacing: 0;
-            min-width: 0;
-          }
-          .rtc-room-value-unit {
-            font-size: 7.5px;
-            line-height: 1;
-            transform: translateY(-1px);
-          }
-          .rtc-room-short { font-size: 10px; }
-          .rtc-extremes-view,
-          .rtc-range-view { gap: 6px; }
-          .rtc-extreme-card {
-            height: 70px;
-            padding: 8px 7px 7px;
-          }
-          .rtc-extreme-label {
-            grid-column: 1;
-            grid-row: 1;
-            font-size: 9.5px;
-            white-space: nowrap;
-          }
-          .rtc-extreme-name {
-            font-size: 12.5px;
-          }
-          .rtc-extreme-value {
-            font-size: 22px;
-          }
-          .rtc-extreme-value-unit { font-size: 9px; }
-        }
-
-        @container rtc-card (max-width: 360px) {
-          .rtc-main-panel {
-            grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
-          }
-          .rtc-rotator,
-          .rtc-rotator-solo,
-          .rtc-track,
-          .rtc-scale-view,
-          .rtc-range-scale-view,
-          .rtc-extremes-view,
-          .rtc-range-view {
-            height: 74px;
-          }
-          .rtc-extreme-card {
-            height: 74px;
-            padding-left: 6px;
-            padding-right: 6px;
-          }
-          .rtc-extreme-label {
-            font-size: 9px;
-          }
-          .rtc-extreme-name {
-            font-size: 12px;
-          }
-          .rtc-extreme-value {
-            font-size: 21px;
-          }
-        }
-
-        @supports not (container-type: inline-size) {
-          @media (max-width: 600px) {
-            .rtc-root { padding: 14px; }
-            .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
-            .rtc-avg-value { font-size: 29px; }
-            .rtc-room-grid { gap: 5px; }
-            .rtc-room-row { gap: 5px; }
-            .rtc-room-chip {
-              padding-left: 5px;
-              padding-right: 5px;
-              overflow: hidden;
-            }
-            .rtc-room-value {
-              font-size: 14px;
-              gap: 0;
-              letter-spacing: 0;
-              min-width: 0;
-            }
-            .rtc-room-value-unit {
-              font-size: 7.5px;
-              line-height: 1;
-              transform: translateY(-1px);
-            }
-            .rtc-room-short { font-size: 10px; }
-            .rtc-extremes-view,
-            .rtc-range-view { gap: 6px; }
-            .rtc-extreme-card {
-              height: 70px;
-              padding: 8px 7px 7px;
-            }
-            .rtc-extreme-label {
-              font-size: 9.5px;
-              white-space: nowrap;
-            }
-            .rtc-extreme-name {
-              font-size: 12.5px;
-            }
-            .rtc-extreme-value {
-              font-size: 22px;
-            }
-            .rtc-extreme-value-unit { font-size: 9px; }
-          }
-
-          @media (max-width: 380px) {
-            .rtc-main-panel {
-              grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
-            }
-            .rtc-rotator,
-            .rtc-rotator-solo,
-            .rtc-track,
-            .rtc-scale-view,
-            .rtc-range-scale-view,
-            .rtc-extremes-view,
-            .rtc-range-view {
-              height: 74px;
-            }
-            .rtc-extreme-card {
-              height: 74px;
-              padding-left: 6px;
-              padding-right: 6px;
-            }
-            .rtc-extreme-label {
-              font-size: 9px;
-            }
-            .rtc-extreme-name {
-              font-size: 12px;
-            }
-            .rtc-extreme-value {
-              font-size: 21px;
-            }
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          /* Disables the auto animation; transform isn't !important, so manual swiping still works. */
-          .rtc-track {
-            animation: none !important;
-            transition: none !important;
-          }
-        }
-      `;
+      return buildStyles({
+        keyframes: this._slideKeyframes(),
+        trackAnimationCss: this._trackAnimationCss(),
+        viewCount: (this._views || []).length,
+        viewWidthPct: this._viewWidthPct(),
+      });
     }
   }
 

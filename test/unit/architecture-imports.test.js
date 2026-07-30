@@ -12,20 +12,35 @@
 //
 // The binding directory layout (paths are normative, not illustrative):
 //
-//   0  src/core/                     no project-internal dependencies at all
-//   1  src/config/                   } may import core, but not each other
-//      src/i18n/                     }
-//      src/domain/                   }
-//   2  src/application/model/        no DOM, window, document, custom elements
-//   3  src/presentation/view-model/  may join model and i18n
-//   4  src/views/  src/render/       no back-imports from runtime or element
-//   5  src/controllers/runtime/
-//   6  src/element/                  no domain computation
-//   7  src/index.js                  composition root
+//   0  src/core/                      no project-internal dependencies at all
+//   1  src/config/                    } may import core, but not each other
+//      src/i18n/                      }
+//      src/domain/                    }
+//   2  src/application/model/         no DOM, window, document, custom elements
+//   3  src/presentation/view-model/   may join model and i18n
+//   4  src/render/primitives/         } markup and DOM patching, no view knowledge
+//      src/render/layout/             } measure-and-position, no view knowledge
+//      src/styles/                    } the stylesheet, no view knowledge
+//   5  src/views/                     } one module per view; may use layer 4
+//      src/render/composition/        } the card shell; gets the registry injected
+//   6  src/controllers/runtime/
+//   7  src/element/                   no domain computation
+//   8  src/index.js                   composition root
 //
 // Anything under src/ that is not covered by one of those prefixes fails the
 // test, so adding a directory forces an explicit decision here rather than a
 // silent new layer.
+//
+// Layer 4 and layer 5 are deliberately split, and the split does real work:
+//
+//   - a render primitive can never import a view, so "the average button" cannot
+//     acquire an opinion about the carousel;
+//   - a view CAN import primitives, which is the whole point — the four views
+//     share one scale bar, one metric card and one marker shape;
+//   - the card shell cannot import the view registry, because the shell and the
+//     registry are separate groups of the same layer. The composition root hands
+//     the registry to the shell, so a shell that hardcoded a view key would have
+//     nowhere to get it from.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,12 +59,22 @@ const LAYERS = [
   { layer: 1, name: "domain", group: "domain", prefix: "domain/" },
   { layer: 2, name: "application/model", group: "application/model", prefix: "application/model/" },
   { layer: 3, name: "presentation/view-model", group: "presentation/view-model", prefix: "presentation/view-model/" },
-  { layer: 4, name: "views", group: "views", prefix: "views/" },
-  { layer: 4, name: "render", group: "render", prefix: "render/" },
-  { layer: 5, name: "controllers/runtime", group: "controllers/runtime", prefix: "controllers/runtime/" },
-  { layer: 6, name: "element", group: "element", prefix: "element/" },
+  // primitives and layout are one group: the layout pass measures rendered nodes and
+  // legitimately uses the same DOM-reading primitives the renderers do. styles is
+  // separate — a stylesheet has nothing to say about a node.
+  { layer: 4, name: "render/primitives", group: "render", prefix: "render/primitives/" },
+  { layer: 4, name: "render/layout", group: "render", prefix: "render/layout/" },
+  { layer: 4, name: "styles", group: "styles", prefix: "styles/" },
+  { layer: 5, name: "views", group: "views", prefix: "views/" },
+  { layer: 5, name: "render/composition", group: "render/composition", prefix: "render/composition/" },
+  { layer: 6, name: "controllers/runtime", group: "controllers/runtime", prefix: "controllers/runtime/" },
+  { layer: 7, name: "element", group: "element", prefix: "element/" },
 ];
-const COMPOSITION_ROOT = { layer: 7, name: "composition root", group: "(root)" };
+const COMPOSITION_ROOT = { layer: 8, name: "composition root", group: "(root)" };
+
+// Every layer at or above the rendering layers. Used by the checks that keep the
+// element out of the render path.
+const RENDER_LAYER_NAMES = ["render/primitives", "render/layout", "styles", "views", "render/composition"];
 
 // Ambient environment surface that must not appear in the application layer.
 // Matched as whole identifiers, against code only (comments and string/template
@@ -106,6 +131,71 @@ const FORBIDDEN_APPLICATION_GLOBALS = [
 // processing an already-supplied Date value stays fine, so only the reading
 // entry points are forbidden.
 const FORBIDDEN_CLOCK_READS = [/\bDate\s*\.\s*now\b/, /\bnew\s+Date\s*\(\s*\)/, /\bperformance\s*\.\s*now\b/];
+
+// The rendering layers DO touch the DOM — that is their job — but never through an
+// ambient global. Every document, window and element they use arrives as an
+// argument, either on the RenderContext or as the node being patched. That is what
+// makes a render module testable against a foreign jsdom realm, and what stops the
+// render path from depending on which document happens to be global.
+//
+// The timer and observer entries are not about the DOM at all: scheduling belongs to
+// the controller layer, and a renderer that armed its own timer would be able to
+// change the card after the render it was asked for.
+const FORBIDDEN_RENDER_GLOBALS = [
+  "globalThis",
+  "window",
+  "document",
+  "navigator",
+  "location",
+  "customElements",
+  "localStorage",
+  "sessionStorage",
+  "fetch",
+  "XMLHttpRequest",
+  "WebSocket",
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+  "performance",
+  "ResizeObserver",
+  "MutationObserver",
+  "IntersectionObserver",
+  "matchMedia",
+  // getComputedStyle must be reached through the element's OWN realm
+  // (element.ownerDocument.defaultView), never as a global.
+  "getComputedStyle",
+];
+
+// These names are forbidden as GLOBALS, not as property names. `defaultView
+// .getComputedStyle(el)` is exactly the realm-correct form the contract asks for,
+// while a bare `getComputedStyle(el)` silently resolves against whichever document
+// happens to be ambient. The lookbehind is what distinguishes the two.
+function referencesGlobal(code, identifier) {
+  return new RegExp(`(?<![.\\w$])${identifier}\\b`).test(code);
+}
+
+// The custom element must never reach a renderer. Historically every render and
+// update function took the card itself as a generic context and helped itself to
+// whatever it needed — the formatter, the config, the translator, the classifier —
+// which is precisely why the render path could not be tested or reasoned about
+// separately. These identifiers are the fingerprints of that shape.
+//
+// `card` is included as a whole identifier. Longer names are unaffected
+// (`cardColor`, `metricCardModel`, `cardEl` all pass), so the cost is a small
+// naming convention in the render layers and the benefit is a rule a machine can
+// actually check.
+const FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS = [
+  "card",
+  "hass",
+  "shadowRoot",
+  "attachShadow",
+  "_config",
+  "_hass",
+  "this",
+];
 
 function listSourceFiles(dir, prefix = "") {
   const out = [];
@@ -374,6 +464,101 @@ test("the application layer reads no wall clock of its own", () => {
   );
 });
 
+test("the rendering layers touch the DOM only through what they are given", () => {
+  const violations = [];
+  for (const file of files) {
+    if (!RENDER_LAYER_NAMES.includes(classify(file).name)) continue;
+    const code = stripCommentsAndStringText(readSource(file));
+    for (const identifier of FORBIDDEN_RENDER_GLOBALS) {
+      if (referencesGlobal(code, identifier)) violations.push(`${file} references the global ${identifier}`);
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `a render module must receive its document, window and nodes as arguments:\n  ${violations.join("\n  ")}`
+  );
+});
+
+test("no renderer is handed the custom element as a generic context", () => {
+  const violations = [];
+  for (const file of files) {
+    if (!RENDER_LAYER_NAMES.includes(classify(file).name)) continue;
+    const code = stripCommentsAndStringText(readSource(file));
+    for (const identifier of FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS) {
+      if (new RegExp(`\\b${identifier}\\b`).test(code)) violations.push(`${file} references ${identifier}`);
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `render and view modules take a RenderContext and a view model, never the card:\n  ${violations.join("\n  ")}`
+  );
+});
+
+test("the card shell cannot reach the view registry, and no view reaches a controller", () => {
+  // Both follow from the layer table, but they are the two rules the split exists
+  // for, so they are asserted by name rather than left implicit in a generic
+  // direction check that would still pass if someone merged the groups.
+  const shell = files.filter((file) => classify(file).name === "render/composition");
+  assert.ok(shell.length > 0, "the card shell must exist");
+  for (const file of shell) {
+    for (const specifier of graph.get(file).specifiers) {
+      const target = resolveSpecifier(file, specifier);
+      assert.ok(
+        !target.startsWith("views/"),
+        `${file} imports ${target} — the shell receives the view registry from the composition root instead`
+      );
+    }
+  }
+
+  const viewFiles = files.filter((file) => classify(file).name === "views");
+  assert.ok(viewFiles.length > 0, "the view modules must exist");
+  for (const file of viewFiles) {
+    for (const specifier of graph.get(file).specifiers) {
+      const target = resolveSpecifier(file, specifier);
+      assert.ok(
+        !target.startsWith("controllers/") && !target.startsWith("element/"),
+        `${file} imports ${target} — a view renders, it does not drive the card`
+      );
+    }
+  }
+});
+
+test("no module in the rendering layers reads the legacy DTO adapter", () => {
+  // The adapter is scaffolding with a planned end. As long as nothing on the render
+  // path can reach it, removing it is a change to the element and the tests only —
+  // which is exactly what makes that removal a safe, separate step.
+  const LEGACY = "presentation/view-model/legacy-data.js";
+  for (const file of files) {
+    if (!RENDER_LAYER_NAMES.includes(classify(file).name)) continue;
+    for (const specifier of graph.get(file).specifiers) {
+      assert.notEqual(
+        resolveSpecifier(file, specifier),
+        LEGACY,
+        `${file} imports the legacy DTO adapter — the render path consumes the CardViewModel directly`
+      );
+    }
+  }
+  // And it is still reachable from somewhere, or it would be dead code the
+  // reachability check would already have caught: the composition root keeps it alive
+  // for _computeData().
+  assert.ok(files.includes(LEGACY), "the adapter still exists during the migration");
+});
+
+test("no render primitive knows about a view", () => {
+  for (const file of files) {
+    if (!["render/primitives", "render/layout", "styles"].includes(classify(file).name)) continue;
+    for (const specifier of graph.get(file).specifiers) {
+      const target = resolveSpecifier(file, specifier);
+      assert.ok(
+        !target.startsWith("views/") && !target.startsWith("render/composition/"),
+        `${file} imports ${target} — a shared primitive must stay unaware of who uses it`
+      );
+    }
+  }
+});
+
 test("the source scanner sees through template substitutions", () => {
   // Guards the guard: a scanner that removed whole template literals would
   // miss the most likely way a global reaches a model module.
@@ -395,11 +580,43 @@ test("the source scanner sees through template substitutions", () => {
   }
 });
 
+test("the global check distinguishes a global from a realm-correct property access", () => {
+  // Guards the guard again: without the lookbehind, the one CORRECT way to reach
+  // getComputedStyle would be the only thing the check could see.
+  assert.equal(referencesGlobal("const s = getComputedStyle(el);", "getComputedStyle"), true);
+  assert.equal(referencesGlobal("const s = el.ownerDocument.defaultView.getComputedStyle(el);", "getComputedStyle"), false);
+  assert.equal(referencesGlobal("const d = document;", "document"), true);
+  assert.equal(referencesGlobal("const d = el.ownerDocument;", "document"), false, "ownerDocument is not the global");
+  assert.equal(referencesGlobal("const t = setTimeout;", "setTimeout"), true);
+  assert.equal(referencesGlobal("const t = view.setTimeout;", "setTimeout"), false);
+});
+
 test("the source scanner preserves line numbers", () => {
   // Comments and template text are blanked, not deleted, so a reported
   // violation can still be located.
   const source = "const a = 1;\n// window\nconst b = `x\ny`;\nconst c = 3;\n";
   assert.equal(stripCommentsAndStringText(source).split("\n").length, source.split("\n").length);
+});
+
+test("the composition root declares no method name twice", () => {
+  // A duplicate class member is legal JavaScript: the later definition silently wins
+  // and the earlier one becomes unreachable. During an extraction that is exactly how
+  // a stale implementation survives — it looks present, reads plausibly, and is never
+  // executed. A shadowed _trendDisplayText() lived here for a whole phase.
+  const seen = new Map();
+  readSource(ENTRY)
+    .split("\n")
+    .forEach((line, index) => {
+      const match = line.match(/^ {4}(?:static )?([_a-zA-Z][a-zA-Z0-9]*)\(/);
+      if (!match) return;
+      if (!seen.has(match[1])) seen.set(match[1], []);
+      seen.get(match[1]).push(index + 1);
+    });
+  const duplicates = [...seen.entries()]
+    .filter(([, lines]) => lines.length > 1)
+    .map(([name, lines]) => `${name} at lines ${lines.join(", ")}`);
+  assert.deepEqual(duplicates, [], `shadowed class members:\n  ${duplicates.join("\n  ")}`);
+  assert.ok(seen.size > 50, "the scan must actually have found methods");
 });
 
 test("the import graph is acyclic", () => {

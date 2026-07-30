@@ -48,7 +48,7 @@ export const sv = {
   // adjectives DO inflect for number (unlike German/English/Dutch) —
   // these are the plural forms, the only ones this key is ever used with
   // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-  // requires >= 2 rooms, see _computeData()). Note "rum" itself is
+  // requires >= 2 rooms, see buildCardDomainModel()). Note "rum" itself is
   // plural-invariant ("ett rum" / "flera rum"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
   // same-value-both-branches for the noun, not a bug.

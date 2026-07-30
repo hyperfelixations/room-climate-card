@@ -48,7 +48,7 @@ export const nb = {
   // adjectives DO inflect for number (unlike German/English/Dutch) — these
   // are the plural forms, the only ones this key is ever used with
   // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
-  // requires >= 2 rooms, see _computeData()). Note "rom" itself is
+  // requires >= 2 rooms, see buildCardDomainModel()). Note "rom" itself is
   // plural-invariant ("et rom" / "flere rom"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
   // same-value-both-branches for the noun, not a bug.

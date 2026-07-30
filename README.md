@@ -626,9 +626,11 @@ built from ES-module sources rather than edited directly:
 
 ```text
 src/
-  index.js                 composition root (still holds the renderers and the element)
+  index.js                 composition root (still holds the carousel runtime,
+                           the pointer gestures and the custom element)
   core/                    numbers, text, colour, easing, card metadata
-  config/                  defaults, allowed action types, option schemas
+  config/                  YAML normalization: defaults, primitives, rooms,
+                           views, classification profiles
   i18n/
     languages/<code>.js    one file per supported language
     registry.js            assembles the translation table
@@ -638,24 +640,49 @@ src/
     trend.js               trend deadbands and direction tokens
     units/                 unit tokens and value conversion
     metrics/               metric definitions, unit profiles, kind resolution
+    scale/                 axis bounds, rounding steps, band and marker geometry
     classification/
       profiles/<kind>/     one file per classification profile
       registry.js          which profiles exist per metric kind
+      resolve.js           which profile applies, and the per-value priority
+      projection.js        re-expressing a profile in the displayed unit
+  application/model/       what the card knows, independent of any language,
+                           format or colour: one model per entity, the
+                           card-wide measurement context, the room, range
+                           and trend models, and the assembled domain model
+  presentation/view-model/ what the card shows: titles and icons, tones, room
+                           layout, which views are active, one content model
+                           per view, and the assembled view model
+  render/
+    primitives/            the render context, plus the average, room grid,
+                           metric card, marker, scale bar and empty state
+    layout/                long/short label choice and collision-free label
+                           placement, measured against real widths
+    composition/           the card shell: header, average, view area, chips
+  views/                   one module per view, plus the registry composed
+                           from the view definitions' own order
+  styles/                  the stylesheet, in sections
 dist/room-climate-card.js  the built card — generated, committed, never edited by hand
 ```
 
 Import direction is enforced by a test. The layers, lowest first, are
 `core` → `config`/`i18n`/`domain` → `application/model` →
-`presentation/view-model` → `views`/`render` → `controllers/runtime` →
-`element` → `index.js`. `core` has no project-internal dependencies, no module
-may import from a layer above it, and there are no cycles or external runtime
-imports.
+`presentation/view-model` → `render/primitives`+`render/layout`+`styles` →
+`views`+`render/composition` → `controllers/runtime` → `element` → `index.js`.
+`core` has no project-internal dependencies, no module may import from a layer
+above it, and there are no cycles or external runtime imports. A view may use a
+render primitive; a primitive can never reach a view, and the card shell is
+handed the view registry rather than importing it.
 
 Adding a language means adding one file under `src/i18n/languages/`, a locale
 entry in `src/i18n/locales.js`, and one line in `src/i18n/registry.js`. Adding
 a classification profile means adding one file under
 `src/domain/classification/profiles/<kind>/` and one entry in
-`src/domain/classification/registry.js`.
+`src/domain/classification/registry.js`. Adding a view means one entry in
+`src/presentation/view-model/view-state.js`, one content builder beside it, and
+one module under `src/views/` — the registry composes itself from the
+definitions, and a missing piece fails at load rather than rendering an empty
+carousel slot.
 
 The bundle is not a concatenation of these files: Rollup bundles the ES
 modules, drops import/export statements, and may move or rename top-level

@@ -22,16 +22,19 @@ test.after(() => {
   env.cleanupAll();
 });
 
-test("ROB-01: a thrown _computeData() does not commit the render signature, so an identical retry actually re-renders", () => {
+test("ROB-01: a thrown _computeViewModel() does not commit the render signature, so an identical retry actually re-renders", () => {
   const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hassA);
   const sigAfterFirstRender = el._lastRenderSignature;
   assert.ok(sigAfterFirstRender, "first render must commit a non-empty signature");
 
   const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature" }) });
-  const original = el._computeData;
+  // The real production compute entry point, not the legacy-DTO adapter: _render()
+  // calls _computeViewModel(), and a test that failed the adapter instead would stop
+  // proving anything the moment the adapter is removed.
+  const original = el._computeViewModel;
   let threw = false;
-  el._computeData = function () {
+  el._computeViewModel = function () {
     threw = true;
     throw new Error("induced failure for ROB-01 test");
   };
@@ -45,7 +48,7 @@ test("ROB-01: a thrown _computeData() does not commit the render signature, so a
   assert.equal(loggedErrors.length, 1, "set hass()'s try/catch must log exactly once, not crash");
   assert.equal(el._lastRenderSignature, sigAfterFirstRender, "signature must NOT advance after a failed render");
 
-  el._computeData = original;
+  el._computeViewModel = original;
   el.hass = hassB; // retry with the identical (already-failed) data
   assert.notEqual(el._lastRenderSignature, sigAfterFirstRender, "the retry must actually re-render, not be skipped as 'unchanged'");
   env.cleanup(el);
@@ -169,5 +172,74 @@ test("a font-ready promise rejection does not produce an unhandled rejection (th
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   await Promise.resolve(); // let the document.fonts.ready.then()/.catch() chain settle
   assert.ok(el.shadowRoot.querySelector(".rtc-root"));
+  env.cleanup(el);
+});
+
+// ==== The production render path consumes the CardViewModel ====
+
+test("a full render and a partial update both go through _computeViewModel(), never through the legacy DTO", () => {
+  const hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+  });
+  const el = env.createCard(
+    { entity: "sensor.avg", rooms: [{ name: "A", short: "AA", entity: "sensor.r1" }, { name: "B", short: "BB", entity: "sensor.r2" }] },
+    hass
+  );
+
+  let viewModelCalls = 0;
+  let legacyCalls = 0;
+  const realViewModel = el._computeViewModel.bind(el);
+  el._computeViewModel = function () {
+    viewModelCalls += 1;
+    return realViewModel();
+  };
+  const realLegacy = el._computeData.bind(el);
+  el._computeData = function () {
+    legacyCalls += 1;
+    return realLegacy();
+  };
+
+  // A partial update (the common per-second path).
+  el._render(false);
+  assert.equal(viewModelCalls, 1, "exactly one view model per render, not one per view");
+  assert.equal(legacyCalls, 0, "the flat DTO is not on the render path at all");
+
+  // A structural rebuild.
+  el._rendered = false;
+  el._render(false);
+  assert.equal(viewModelCalls, 2);
+  assert.equal(legacyCalls, 0);
+  assert.ok(el.shadowRoot.querySelector(".rtc-scale-view"), "and the card still rendered");
+  env.cleanup(el);
+});
+
+test("the legacy compatibility method still reproduces the flat shape on demand", () => {
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const el = env.createCard({ entity: "sensor.avg" }, hass);
+  const data = el._computeData();
+  assert.equal(data.empty, false);
+  assert.equal(data.metricType, "temperature");
+  assert.equal(typeof data.avg, "number");
+  assert.equal(typeof data.scaleMin, "number");
+  assert.ok(Array.isArray(data.views));
+  env.cleanup(el);
+});
+
+test("the signature fast path returns before any view model is computed", () => {
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const el = env.createCard({ entity: "sensor.avg" }, hass);
+  let calls = 0;
+  const real = el._computeViewModel.bind(el);
+  el._computeViewModel = function () {
+    calls += 1;
+    return real();
+  };
+  // An identical hass push: the signature is unchanged, so nothing may be computed.
+  el.hass = hass;
+  assert.equal(calls, 0, "a no-op update must cost nothing");
+  el._render(false);
+  assert.equal(calls, 1, "while an explicitly forced render does compute");
   env.cleanup(el);
 });
