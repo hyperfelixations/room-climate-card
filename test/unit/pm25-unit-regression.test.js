@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -32,7 +33,7 @@ test("PM2.5 accepts equivalent Home Assistant unit spellings at the UnitProfile 
     assert.equal(model.metricKind, "pm25", `metric kind for ${JSON.stringify(unit)}`);
     assert.equal(model.unitProfile, "microgram_per_m3", `unit profile for ${JSON.stringify(unit)}`);
     assert.equal(model.validUnit, true, `unit validity for ${JSON.stringify(unit)}`);
-    assert.equal(el._computeData().empty, false, `card data for ${JSON.stringify(unit)}`);
+    assert.equal(computeLegacyData(el).empty, false, `card data for ${JSON.stringify(unit)}`);
     env.cleanup(el);
   }
 });
@@ -68,7 +69,7 @@ test("reported PM2.5 dashboard configuration stays usable with normalized primar
     ],
   }, mkHass(states, "de"));
 
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, false);
   assert.equal(data.metricType, "pm25");
   assert.equal(data.roomCount, 4);
@@ -91,7 +92,7 @@ test("PM2.5 normalization does not accept a physically different or unknown expl
     const model = el._buildEntityModel(entityId, "primary");
     assert.equal(model.unitProfile, null);
     assert.equal(model.validUnit, false);
-    assert.equal(el._computeData().empty, true);
+    assert.equal(computeLegacyData(el).empty, true);
     env.cleanup(el);
   }
 });

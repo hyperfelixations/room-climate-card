@@ -14,6 +14,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -70,7 +71,7 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
       warnings.some((w) => w.includes("show_comfort_band") && w.includes("falling back")),
       `invalid value ${JSON.stringify(invalid)} must be diagnosed`
     );
-    assert.equal(el._computeData().viewOptions.scale.show_comfort_band, true, `invalid value ${JSON.stringify(invalid)} must fall back to the default (true)`);
+    assert.equal(computeLegacyData(el).viewOptions.scale.show_comfort_band, true, `invalid value ${JSON.stringify(invalid)} must fall back to the default (true)`);
   }
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
@@ -88,7 +89,7 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
 
 test("data.viewOptions: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(normalize(data.viewOptions.scale), { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" });
   assert.deepEqual(normalize(data.viewOptions.range_scale), { show_comfort_band: true, show_optimal_band: true, footer: "detailed" });
   env.cleanup(el);
@@ -104,7 +105,7 @@ const COMBINATIONS = [
 for (const combo of COMBINATIONS) {
   test(`data.viewOptions: scale resolves explicit options ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    assert.deepEqual(normalize(el._computeData().viewOptions.scale), { ...combo, footer: true, markers: "extremes" });
+    assert.deepEqual(normalize(computeLegacyData(el).viewOptions.scale), { ...combo, footer: true, markers: "extremes" });
     env.cleanup(el);
   });
 }
@@ -123,7 +124,7 @@ test("data.viewOptions: scale and range_scale resolve independently in the same 
       "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
     })
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(normalize(data.viewOptions.scale), { show_comfort_band: false, show_optimal_band: true, footer: true, markers: "extremes" });
   assert.deepEqual(normalize(data.viewOptions.range_scale), { show_comfort_band: true, show_optimal_band: false, footer: "detailed" });
   env.cleanup(el);
@@ -135,8 +136,8 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
   const elBothVisible = env.createCard(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: true, show_optimal_band: true } }] }), twoRoomStates());
   const elBothHidden = env.createCard(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false, show_optimal_band: false } }] }), twoRoomStates());
 
-  const a = elBothVisible._computeData();
-  const b = elBothHidden._computeData();
+  const a = computeLegacyData(elBothVisible);
+  const b = computeLegacyData(elBothHidden);
 
   assert.equal(a.comfortMin, b.comfortMin);
   assert.equal(a.comfortMax, b.comfortMax);
@@ -157,7 +158,7 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
 for (const combo of COMBINATIONS) {
   test(`_renderScaleView(): bands and their labels match ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    const html = el._renderScaleView(el._computeData());
+    const html = el._renderScaleView(computeLegacyData(el));
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-scale-comfort-label"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
@@ -180,7 +181,7 @@ for (const combo of COMBINATIONS) {
         "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
       })
     );
-    const html = el._renderRangeScaleView(el._computeData());
+    const html = el._renderRangeScaleView(computeLegacyData(el));
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
     assert.equal(html.includes('class="rtc-scale-label-center"'), combo.show_optimal_band);

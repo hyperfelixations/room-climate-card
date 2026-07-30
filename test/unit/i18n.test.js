@@ -22,6 +22,7 @@ const vm = require("vm");
 const { JSDOM } = require("jsdom");
 const { createTestEnvironment, CARD_SOURCE_PATH } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
@@ -367,7 +368,7 @@ test("pluralization: missingRooms uses singular/plural correctly for 1 vs N miss
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.missing1" }] },
     hass
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.match(data.subtitle, /1 room without data/);
   env.cleanup(el);
 });

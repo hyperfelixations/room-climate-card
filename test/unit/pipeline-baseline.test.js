@@ -49,7 +49,9 @@ test.before(async () => {
   ({ resolveMeasurementContext } = await import("../../src/application/model/measurement-context.js"));
   ({ buildCardDomainModel } = await import("../../src/application/model/card-domain-model.js"));
   ({ buildCardViewModel } = await import("../../src/presentation/view-model/card-view-model.js"));
-  ({ toLegacyData } = await import("../../src/presentation/view-model/legacy-data.js"));
+  // The frozen oracle, not a production module: the flat shape no longer exists in
+  // src/, and the 32 committed baselines are what it still serves.
+  ({ toLegacyData } = require("../helpers/legacy-dto.js"));
   ({ normalizeConfig } = await import("../../src/config/normalize-config.js"));
   ({ optionSchemaForView } = await import("../../src/presentation/view-model/view-state.js"));
   ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));

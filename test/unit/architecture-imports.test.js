@@ -49,6 +49,7 @@ const path = require("node:path");
 
 const SRC_DIR = path.join(__dirname, "..", "..", "src");
 const ENTRY = "index.js";
+const ELEMENT = "element/room-climate-card.js";
 
 // Ordered: the first matching prefix wins, so "application/model/" is checked
 // before any shorter prefix could shadow it.
@@ -562,25 +563,23 @@ test("the card shell cannot reach the view registry, and no view reaches a contr
   }
 });
 
-test("no module in the rendering layers reads the legacy DTO adapter", () => {
-  // The adapter is scaffolding with a planned end. As long as nothing on the render
-  // path can reach it, removing it is a change to the element and the tests only —
-  // which is exactly what makes that removal a safe, separate step.
-  const LEGACY = "presentation/view-model/legacy-data.js";
+test("the legacy DTO adapter is gone from the shipped source entirely", () => {
+  // It was scaffolding with a planned end, and this is that end. The flat object the
+  // pre-refactoring card produced is no longer computed anywhere in src/: production
+  // renders from the CardViewModel, and the 32 committed DTO baselines are served by a
+  // frozen test-only helper (test/helpers/legacy-dto.js) that nothing here can reach.
   for (const file of files) {
-    if (!RENDER_LAYER_NAMES.includes(classify(file).name)) continue;
-    for (const specifier of graph.get(file).specifiers) {
-      assert.notEqual(
-        resolveSpecifier(file, specifier),
-        LEGACY,
-        `${file} imports the legacy DTO adapter — the render path consumes the CardViewModel directly`
-      );
-    }
+    assert.ok(!/legacy-data/.test(file), `${file} still ships the legacy adapter`);
+    const code = stripCommentsAndStringText(readSource(file));
+    assert.ok(
+      !/\btoLegacyData\b/.test(code),
+      `${file} still references toLegacyData — the flat shape must not exist in the bundle`
+    );
   }
-  // And it is still reachable from somewhere, or it would be dead code the
-  // reachability check would already have caught: the composition root keeps it alive
-  // for _computeData().
-  assert.ok(files.includes(LEGACY), "the adapter still exists during the migration");
+
+  // And the helper genuinely lives outside src/, so the bundle cannot pick it up.
+  const helper = path.join(SRC_DIR, "..", "test", "helpers", "legacy-dto.js");
+  assert.ok(fs.existsSync(helper), "the frozen oracle must still exist for the baselines");
 });
 
 test("the controller layer exists and imports nothing above itself", () => {
@@ -726,13 +725,13 @@ test("the ownership guard actually recognizes an assignment", () => {
   assert.equal(assigns("_readOnly", "return this._readOnly;"), false);
 });
 
-test("the composition root declares no method name twice", () => {
+test("the custom element declares no method name twice", () => {
   // A duplicate class member is legal JavaScript: the later definition silently wins
   // and the earlier one becomes unreachable. During an extraction that is exactly how
   // a stale implementation survives — it looks present, reads plausibly, and is never
   // executed. A shadowed _trendDisplayText() lived here for a whole phase.
   const seen = new Map();
-  readSource(ENTRY)
+  readSource(ELEMENT)
     .split("\n")
     .forEach((line, index) => {
       const match = line.match(/^ {4}(?:static )?([_a-zA-Z][a-zA-Z0-9]*)\(/);
@@ -745,6 +744,57 @@ test("the composition root declares no method name twice", () => {
     .map(([name, lines]) => `${name} at lines ${lines.join(", ")}`);
   assert.deepEqual(duplicates, [], `shadowed class members:\n  ${duplicates.join("\n  ")}`);
   assert.ok(seen.size > 50, "the scan must actually have found methods");
+});
+
+test("the custom element lives in its own layer and is reachable", () => {
+  const elementFiles = files.filter((file) => classify(file).name === "element");
+  assert.ok(elementFiles.includes(ELEMENT), "the element must live in element/");
+  // Reachability is already checked globally, but naming it here means a future
+  // refactor cannot quietly orphan the element and still pass.
+  const rootImports = graph.get(ENTRY).specifiers.map((specifier) => resolveSpecifier(ENTRY, specifier));
+  assert.ok(rootImports.includes(ELEMENT), "the composition root must import the element");
+});
+
+test("the composition root contains no class, no render logic and no domain logic", () => {
+  // What it is allowed to do: import the element, register it, announce it to the
+  // dashboard's card picker, expose the version. Nothing else.
+  const code = stripCommentsAndStringText(readSource(ENTRY));
+  assert.ok(!/\bclass\s/.test(code), "the custom element class does not belong in the composition root");
+  for (const forbidden of [
+    "shadowRoot",
+    "innerHTML",
+    "querySelector",
+    "addEventListener",
+    "setTimeout",
+    "requestAnimationFrame",
+    "buildCardViewModel",
+    "buildCardDomainModel",
+    "renderCardBody",
+    "buildStyles",
+  ]) {
+    assert.ok(
+      !new RegExp(`\\b${forbidden}\\b`).test(code),
+      `${ENTRY} references ${forbidden} — the root registers the card, it does not run it`
+    );
+  }
+  // The three global reads that ARE allowed here, and only here: the custom element
+  // registry and the dashboard's card list cannot be reached any other way.
+  assert.match(code, /customElements\s*\.\s*define/);
+  assert.match(code, /window\s*\.\s*customCards/);
+  assert.ok(readSource(ENTRY).split("\n").length < 80, "a registration root that grows past a screen is no longer a registration root");
+});
+
+test("no controller reaches back into the element or the composition root", () => {
+  for (const file of files) {
+    if (classify(file).name !== "controllers/runtime") continue;
+    for (const specifier of graph.get(file).specifiers) {
+      const target = resolveSpecifier(file, specifier);
+      assert.ok(
+        !target.startsWith("element/") && target !== ENTRY,
+        `${file} imports ${target} — a controller is driven BY the element, never the other way round`
+      );
+    }
+  }
 });
 
 test("the import graph is acyclic", () => {

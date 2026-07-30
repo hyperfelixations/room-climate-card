@@ -33,6 +33,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -49,7 +50,7 @@ test("missing primary entity + valid humidity rooms -> metricType/comfort bounds
     "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
   });
   const el = env.createCard({ entity: "sensor.does_not_exist", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "humidity");
   assert.equal(data.comfortMin, 40);
   assert.equal(data.comfortMax, 60);
@@ -63,7 +64,7 @@ test("primary entity exists but carries neither device_class nor unit -> falls b
     "sensor.co2b": mkState("sensor.co2b", 720, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.co2b" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "co2");
   env.cleanup(el);
 });
@@ -75,7 +76,7 @@ test("primary entity's own device_class always wins over any room fallback", () 
     "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "temperature", "primary entity's device_class must not be overridden by rooms");
   env.cleanup(el);
 });
@@ -85,7 +86,7 @@ test("no metric type resolvable anywhere -> falls back to temperature as the fin
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "temperature");
   env.cleanup(el);
 });
@@ -95,7 +96,7 @@ test("primary entity falls back via unit_of_measurement when device_class is abs
     "sensor.avg": mkState("sensor.avg", 55, { unit_of_measurement: "%" }), // no device_class
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "humidity");
   env.cleanup(el);
 });
@@ -113,14 +114,14 @@ test("Fahrenheit unit without device_class resolves to temperature (unit fallbac
     "72°F must canonicalize to (72-32)*5/9 ≈ 22.22°C internally, not pass through raw"
   );
   // AP-03 (native Fahrenheit display, see test/unit/native-fahrenheit.test.js
-  // for the full suite): _computeData() projects the canonical value back
+  // for the full suite): computeLegacyData() projects the canonical value back
   // into the resolved display unit — °F here, since the usable primary
   // itself reports °F — so data.avg reads 72 again, not the canonical
   // 22.22, and comfort bounds are the generated integer Fahrenheit ones
   // (68-75), not Celsius (20-24). This is the correctness fix for audit
   // 9.1: a raw 72 misclassified against a 20-24 "Celsius" comfort band no
   // longer happens, because the comparison now happens entirely in °F.
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "temperature");
   assert.equal(el._unit(), "°F");
   assert.ok(Math.abs(data.avg - 72) < 1e-9, "data.avg must display natively as 72°F, not the internal canonical 22.22");
@@ -144,7 +145,7 @@ test("mixed room device_classes (1 vs 1 tie): no primary, no majority winner -> 
   assert.equal(context.diagnostics.length, 1);
   assert.equal(context.diagnostics[0].code, "mixed_metric_kinds");
   assert.deepEqual(new Set(context.diagnostics[0].metricKinds), new Set(["co2", "humidity"]));
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, true, "no coherent single average can be computed across incompatible metric kinds");
   assert.equal(data.configurationState, "mixed_metric_kinds");
   env.cleanup(el);
@@ -172,7 +173,7 @@ test("mixed room device_classes (one kind outnumbers the other): still no majori
   assert.equal(context.averageSource, null);
   assert.equal(context.diagnostics[0].code, "mixed_metric_kinds");
   assert.deepEqual(new Set(context.diagnostics[0].metricKinds), new Set(["humidity", "temperature"]));
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, true);
   assert.equal(data.configurationState, "mixed_metric_kinds");
   env.cleanup(el);
@@ -204,7 +205,7 @@ test("v2.16.0 DATA-01: metricType and unit are read from the SAME entity, never 
   assert.equal(context.metricType, "humidity");
   assert.equal(context.unit, "%", "unit must follow the room source, never the stray primary-entity unit once metricType itself fell back to a room");
   assert.equal(context.sourceKind, "roomConsensus");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.comfortMin, 40, "comfort bounds must be humidity's, not derived from the stray hPa unit");
   env.cleanup(el);
 });
@@ -212,7 +213,7 @@ test("v2.16.0 DATA-01: metricType and unit are read from the SAME entity, never 
 // ==== AP-02: DATA-01..04 (v2.17.0 consolidated audit) reproduction cases ====
 // Each of these is the audit's own counterexample, verbatim. All four share
 // one root cause (three independently-resolving code paths in the old
-// _computeData()/_resolveMetricContext(); see room-climate-card.js) and are
+// computeLegacyData()/_resolveMetricContext(); see room-climate-card.js) and are
 // fixed together by the atomic MeasurementContext pipeline, not as four
 // isolated hotfixes — per the acceptance criterion, none of them may ever
 // again produce a value like "55 ppm" or "1013 °C".
@@ -227,7 +228,7 @@ test("DATA-01: a physically invalid primary (0 ppm CO2) must not be usable — f
   const context = el._resolveMetricContext();
   assert.equal(context.metricType, "humidity", "a physically invalid primary reading must not be usable, regardless of its own device_class");
   assert.equal(context.sourceKind, "roomConsensus");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "humidity");
   assert.equal(data.avg, 55);
   env.cleanup(el);
@@ -246,7 +247,7 @@ test("DATA-02: unavailable rooms must not participate in metric-kind consensus �
   );
   const context = el._resolveMetricContext();
   assert.equal(context.metricType, "humidity", "unavailable temperature rooms must not count toward consensus at all");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "humidity");
   assert.equal(data.avg, 50, "average must come from the single genuinely available humidity room, never 50°C");
   env.cleanup(el);
@@ -263,7 +264,7 @@ test("DATA-03: a temperature room and a humidity room must never be averaged tog
   assert.equal(context.metricType, null);
   assert.equal(context.averageSource, null, "22°C and 50% must never be blended into a single number");
   assert.equal(context.diagnostics[0].code, "mixed_metric_kinds");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, true);
   assert.notEqual(data.avg, 36, "the old raw cross-metric average must never appear");
   env.cleanup(el);
@@ -279,7 +280,7 @@ test("DATA-04: an unrecognized-unit primary (1013 hPa) must not be usable — fa
   const context = el._resolveMetricContext();
   assert.equal(context.metricType, "temperature");
   assert.equal(context.sourceKind, "roomConsensus", "the unrecognized-unit primary must not be treated as a usable source at all");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "temperature");
   assert.equal(data.avg, 22, "average must come from the room fallback, never the unrecognized 1013 hPa reading");
   assert.notEqual(data.avg, 1013);
@@ -308,7 +309,7 @@ test("review fix: device_class:temperature + an unresolvable unit (hPa) must NOT
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
   assert.equal(context.sourceKind, "roomConsensus", "device_class alone must not make an unresolvable-unit primary usable");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.metricType, "temperature");
   assert.equal(data.avg, 22, "average must come from the room fallback, never the unresolvable 1013 hPa reading");
   assert.notEqual(data.avg, 1013);
@@ -329,7 +330,7 @@ test("review fix: a room with device_class:temperature but an unresolvable unit 
     context.diagnostics.some((d) => d.code === "unusable_unit" && d.entityId === "sensor.bad"),
     "the excluded room must be diagnosed as unusable_unit, not silently dropped"
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.roomCount, 1, "only sensor.t1 participates");
   assert.ok(!data.rooms.some((r) => r.entity === "sensor.bad"));
   env.cleanup(el);
@@ -364,7 +365,7 @@ test("review fix (P0, post-2.21.1): a primary with device_class:temperature but 
   assert.equal(primaryModel.validUnit, false);
   assert.equal(primaryModel.unitProfile, null, "no silent canonical assumption for a missing unit");
   assert.equal(primaryModel.metricKind, "temperature", "metricKind stays resolved via device_class even though the reading itself is unusable, so empty-state title/icon fallbacks remain sensible");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.avg, 22, "the room-consensus average (20/24 -> 22), never a value derived from the unusable primary reading");
   env.cleanup(el);
 });
@@ -381,7 +382,7 @@ test("review fix (P0, post-2.21.1): a room with device_class:temperature but a C
     context.diagnostics.some((d) => d.code === "unusable_unit" && d.entityId === "sensor.bad"),
     "must be diagnosed, not silently dropped, even though it's the only candidate"
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, true, "no usable measurement anywhere -> empty state, never a value derived from the unit-less room");
   assert.equal(data.metricType, "temperature", "title/icon must still be temperature-appropriate via the room's own resolved (but untrusted) metricKind, not the generic default");
   env.cleanup(el);
@@ -392,7 +393,7 @@ test("review fix (P0, post-2.21.1): when every configured entity lacks a unit, t
     "sensor.avg": mkState("sensor.avg", 55, { device_class: "humidity" }), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, true);
   assert.equal(data.metricType, "humidity", "device_class alone still drives the empty-state title/icon, even though the reading itself is unusable");
   env.cleanup(el);
@@ -421,7 +422,7 @@ test("AP-02: a usable primary excludes type-foreign rooms from averaging/extrema
     context.diagnostics.some((d) => d.code === "excluded_foreign_metric_kind" && d.entityId === "sensor.hum1"),
     "the excluded humidity room must be diagnosed, not just silently dropped"
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.roomCount, 2, "only the two temperature rooms participate — the humidity room is neither averaged nor rendered as a chip");
   assert.ok(!data.rooms.some((r) => r.entity === "sensor.hum1"));
   env.cleanup(el);
@@ -442,7 +443,7 @@ test("AP-02: room-consensus averaging canonicalizes mixed units of the SAME metr
   const context = el._resolveMetricContext();
   assert.equal(context.metricType, "temperature");
   assert.equal(context.consistent, true, "a shared metric kind across differing but compatible units is not a misconfiguration");
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(
     Math.abs(data.avg - 22) < 1e-9,
     "the °F room must be canonicalized to 22°C before averaging with the two °C rooms — a raw (20+24+71.6)/3 would be physically meaningless"

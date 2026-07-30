@@ -24,6 +24,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -140,13 +141,13 @@ test("the round trip is idempotent: one to two to one leaves the original struct
 
 test("the values and the visible view stay consistent across the structural flip", () => {
   const el = env.createCard(config(), oneValidRoom());
-  const before = el._computeData();
+  const before = computeLegacyData(el);
   assert.equal(before.hasRoomsView, false);
   assert.deepEqual([...el._views], ["scale"]);
   assert.equal(el._activeView, 0);
 
   el.hass = twoValidRooms(1000);
-  const after = el._computeData();
+  const after = computeLegacyData(el);
   assert.equal(after.hasRoomsView, true);
   assert.equal(after.roomCount, 2);
   assert.deepEqual([...el._views], ["scale"], "the view list itself did not change");

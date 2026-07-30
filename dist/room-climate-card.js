@@ -6054,105 +6054,6 @@ function buildCardViewModel({ domainModel, config, texts }) {
   };
 }
 
-// The compatibility adapter: CardViewModel -> the flat `data` object the
-// characterization suite and a large part of the element-level tests still read.
-//
-// TEMPORARY, and by now only that. The production render path no longer touches this
-// shape at all: the card shell, every view module and every DOM patcher consume the
-// structured CardViewModel directly (see src/render/ and src/views/), and no module
-// in either layer imports this file — an architecture test enforces that. What still
-// depends on the flat shape is the test suite: 32 committed DTO baselines and a large
-// number of element-level assertions were written against it, and rewriting those in
-// the same round as the extraction would have made a refactoring mistake
-// indistinguishable from an intended change.
-//
-// It is scaffolding with a planned end: the element/test cleanup round removes this
-// file and the flat shape together. Until then, nothing may be added to it — an extra
-// field here would be an untested new contract, and the baselines would have to be
-// re-recorded to accept it.
-
-// The three marker positions of the daily-range axis default to 0 when that view is
-// not active, because the flat shape exposes them unconditionally.
-const NO_RANGE_SCALE_POSITION = 0;
-
-// The room-marker shape the flat object has always exposed. The structured model
-// carries a shadow colour and a tooltip too, which are rendering values; projecting
-// explicitly here keeps the frozen shape frozen instead of widening it whenever the
-// marker model grows.
-function toLegacyRoomMarker({ index, entity, name, value, position, color }) {
-  return { index, entity, name, value, position, color };
-}
-
-function toLegacyData(viewModel) {
-  if (viewModel.empty) {
-    return {
-      empty: true,
-      metricType: viewModel.metric.kind,
-      title: viewModel.title,
-      missingRooms: viewModel.missingRooms,
-      configurationState: viewModel.configurationState,
-    };
-  }
-
-  const { scale, rangeScale, extremes, range, trend, rooms, views } = viewModel;
-
-  return {
-    empty: false,
-    hasRoomsView: rooms.hasRoomsView,
-    showRoomChips: rooms.showChips,
-    hasRange: range.hasRange,
-    rangeState: range.state,
-    hasRangeScale: views.hasRangeScale,
-    views: views.keys,
-    viewOptions: views.options,
-    viewAreaCollapsed: views.collapsed,
-    metricType: viewModel.metric.kind,
-    displayUnitProfile: viewModel.metric.displayUnitProfile,
-    title: viewModel.title,
-    avg: viewModel.average.value,
-    avgLabel: viewModel.average.label,
-    avgEntity: viewModel.average.entity,
-    avgSource: viewModel.average.source,
-    rooms: rooms.visible,
-    roomCount: rooms.count,
-    roomRows: rooms.rowSizes,
-    coolest: extremes ? extremes.coolest : null,
-    warmest: extremes ? extremes.warmest : null,
-    spread: viewModel.spread,
-    rangeMin: range.min,
-    rangeMax: range.max,
-    rangeMinTime: range.minTime,
-    rangeMaxTime: range.maxTime,
-    rangeMinColor: range.minColor,
-    rangeMaxColor: range.maxColor,
-    trendValue: trend.value,
-    trendUnit: trend.unit,
-    trend: trend.model,
-    inComfort: viewModel.comfort.inComfort,
-    comfortMin: viewModel.comfort.min,
-    comfortMax: viewModel.comfort.max,
-    // The scale model is spread flat: scaleMin/scaleMax, optimalMin/optimalMax, the
-    // comfort and optimal band geometry, displayStep, markerPositions and
-    // boundaryLabels all become top-level fields.
-    ...scale,
-    avgPos: viewModel.average.position,
-    coolestPos: extremes ? extremes.coolestPosition : 0,
-    warmestPos: extremes ? extremes.warmestPosition : 0,
-    coolestShift: extremes ? extremes.coolestShift : 0,
-    warmestShift: extremes ? extremes.warmestShift : 0,
-    coolestColor: extremes ? extremes.coolestColor : null,
-    warmestColor: extremes ? extremes.warmestColor : null,
-    scaleRoomMarkers: viewModel.roomMarkers.map(toLegacyRoomMarker),
-    avgColor: viewModel.average.color,
-    tone: viewModel.tone,
-    subtitle: viewModel.subtitle,
-    rangeScaleGeometry: rangeScale,
-    rangeCurrentPos: rangeScale ? rangeScale.markerPositions.current : NO_RANGE_SCALE_POSITION,
-    rangeMinPos: rangeScale ? rangeScale.markerPositions.min : NO_RANGE_SCALE_POSITION,
-    rangeMaxPos: rangeScale ? rangeScale.markerPositions.max : NO_RANGE_SCALE_POSITION,
-  };
-}
-
 // The RenderContext: the only way a render module reaches the DOM.
 //
 // Deliberately tiny. It carries the two things that genuinely vary by realm — the
@@ -8981,6 +8882,15 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     return currentTranslate;
   }
 
+  // The same freeze, but the controller finds its own track — so the interaction runtime
+  // never has to query the DOM. With no track mounted there is nothing to freeze and the
+  // index-derived position is the honest answer.
+  function freezeTrackAtCurrentPosition() {
+    const track = getTrack();
+    if (!track) return -(activeIndex || 0) * viewWidthPct(viewCount());
+    return pauseTrackAtCurrentPosition(track);
+  }
+
   function setTrackTranslate(translatePct) {
     const track = getTrack();
     if (!track) return;
@@ -9143,6 +9053,11 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     trackAnimationCss: () => trackAnimationCss(timing(), activeIndex),
     slideKeyframes: () => slideKeyframes(timing()),
     maxTrackOffsetPct,
+    // Whether the track is currently detached from the synchronized animation. The
+    // interaction runtime needs to know this — a tap must not schedule a resume for a
+    // state that never applied — and asking the controller keeps the "rtc-manual" class
+    // an implementation detail of exactly one module.
+    isTrackManual: () => Boolean(getTrack()?.classList.contains("rtc-manual")),
     currentVisualIndex,
     phaseHoldsView,
     delayUntilPhaseHolds,
@@ -9173,6 +9088,7 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     updateTrackTransform,
     trackTranslatePct,
     pauseTrackAtCurrentPosition,
+    freezeTrackAtCurrentPosition,
     setTrackTranslate,
     setTrackTransition,
 
@@ -9274,56 +9190,417 @@ function createResizeRuntime({ platform, onMeasure }) {
   };
 }
 
-// Build entry module. Rollup bundles this into the single, dependency-free
-// IIFE that Home Assistant loads (dist/room-climate-card.js) — the IIFE
-// wrapper and "use strict" prologue that used to be written by hand here are
-// now emitted by the build (see rollup.config.mjs), which is why this file
-// starts directly with the module body.
+// The arithmetic of a gesture, as pure functions.
 //
-// dist/room-climate-card.js is generated and committed; never edit it.
-// `npm run build` regenerates it, `npm run verify:dist` proves the committed
-// copy still matches this source.
+// Every threshold the card recognizes lives here as a named constant, and every
+// decision derived from one is a function of numbers only — no event, no DOM, no
+// element. That is what lets "does a 9-pixel drag start a swipe" be answered by a test
+// that writes down two numbers instead of dispatching pointer events into a browser.
 //
-// This module is the composition root, and it is shrinking. The whole data path is
-// now extracted:
+// The values themselves are not new and must not drift: they are what the card has
+// always felt like.
+
+
+// A drag has to be BOTH long enough and clearly more horizontal than vertical before it
+// counts as a swipe. The ratio is what keeps a diagonal flick during vertical dashboard
+// scrolling from hijacking the page.
+const SWIPE_DIRECTION_MIN_PX = 10;
+const SWIPE_DIRECTION_RATIO = 1.25;
+
+// How far across the rotator a drag must travel to commit to the next view. Below it,
+// the track snaps back to whichever view is nearest.
+const SWIPE_COMMIT_FRACTION = 0.18;
+
+// Beyond this much movement, a press is no longer a tap — it was a drag that happened
+// to end on an entity, and firing its action would be a misread.
+const TAP_CANCEL_PX = 12;
+
+// How long a click is ignored after a pointerup already handled the same gesture.
+// Browsers synthesize a click after every pointerup, and without this the action would
+// fire twice.
+const CLICK_SUPPRESSION_MS = 450;
+
+function isHorizontalSwipe(dx, dy) {
+  const absX = Math.abs(dx);
+  return absX >= SWIPE_DIRECTION_MIN_PX && absX > Math.abs(dy) * SWIPE_DIRECTION_RATIO;
+}
+
+// How far the track follows the finger, in percent of the track's own width, capped at
+// one view in either direction so a fast flick cannot fling past the neighbour.
+function dragOffsetPct(dx, pointerWidthPx, viewWidthPct) {
+  return clamp((dx / pointerWidthPx) * viewWidthPct, -viewWidthPct, viewWidthPct);
+}
+
+// Which view a translate percentage corresponds to.
 //
-//   core/                     card identity, numbers, text, colour, easing
-//   config/                   the complete YAML normalization
-//   i18n/                     languages, registry, formatting, translation
-//   domain/                   units and conversion, metric definitions and kind
-//                             resolution, classification profiles and services,
-//                             scale geometry, trend rules
-//   application/model/        EntityModel, MeasurementContext, aggregates,
-//                             auxiliary models, the CardDomainModel
-//   presentation/view-model/  METRIC_META, tone, room layout, view state, the
-//                             per-view content models, the CardViewModel and the
-//                             temporary legacy DTO adapter
-//   render/primitives/        the RenderContext plus the average, room grid, metric
-//                             card, marker, scale bar, empty state and focus fallback
-//   render/layout/            long/short label resolution and collision-free label
-//                             placement, measured against the real rendered widths
-//   render/composition/       the card shell: header, average, view area, chips
-//   views/                    one module per view, plus the registry composed from
-//                             the view definitions' own order
-//   styles/                   the stylesheet
+// Always derived from where the track was actually FROZEN when the gesture began, never
+// from the active index: that index only tracks completed swipes and structural resets,
+// and during synchronized auto-slide it is stale relative to the visible position.
+// Using it here could skip a view.
+function viewIndexFromTranslate(translatePct, viewWidthPct, maxIndex) {
+  return clamp(Math.round(-translatePct / viewWidthPct), 0, maxIndex);
+}
+
+// Where a completed drag should land. A committed swipe always moves EXACTLY one view;
+// below the commit threshold the nearest view wins instead.
+function resolveSwipeTarget({ dx, pointerWidthPx, startTranslate, viewWidthPct, maxIndex, maxTrackOffsetPct }) {
+  const threshold = pointerWidthPx * SWIPE_COMMIT_FRACTION;
+  const startView = viewIndexFromTranslate(startTranslate, viewWidthPct, maxIndex);
+  if (dx <= -threshold) return clamp(startView + 1, 0, maxIndex);
+  if (dx >= threshold) return clamp(startView - 1, 0, maxIndex);
+  const projected = clamp(startTranslate + (dx / pointerWidthPx) * viewWidthPct, maxTrackOffsetPct, 0);
+  return clamp(Math.round(-projected / viewWidthPct), 0, maxIndex);
+}
+
+function isTapCancelledByMovement(dx, dy) {
+  return Math.abs(dx) > TAP_CANCEL_PX || Math.abs(dy) > TAP_CANCEL_PX;
+}
+
+function resolveTapOrHold(elapsedSeconds, holdSeconds) {
+  return elapsedSeconds >= holdSeconds ? "hold" : "tap";
+}
+
+// The gesture controller: what the user's finger is doing, and what that means.
 //
-// What is still HERE, for the platform/controller/element step that follows:
-//   - the carousel timing, the auto-slide keyframes and the accessibility sync
-//   - the pointer gestures, the timers, the resize observer and the event wiring
-//   - the custom element itself: lifecycle, render scheduling, memoization and
-//     the stateful, deduplicated console diagnostics
-//   - thin delegations that existing element-level tests still call directly;
-//     each forwards to a module and holds no logic of its own
+// It owns exactly three things and nothing else owns them: the in-flight pointer, the
+// confirmed-drag flag, and the moment until which a synthesized click is ignored. Those
+// three used to live on the custom element next to the configuration, the hass object
+// and the render pipeline, which is why "is a swipe in progress" had answers in four
+// places.
+//
+// What it does NOT get: hass, the configuration object, the domain model, the view
+// model, a renderer, or the element. It receives a platform, the carousel controller,
+// three narrow DOM ports and a handful of scalar pull-callbacks. Every threshold it
+// applies comes from interaction-logic.js, where it is a named constant.
+//
+// The division of labour with the carousel is deliberate: this module decides WHAT the
+// gesture means, the carousel decides how the track moves. Nothing here touches a class
+// name or a transform.
+
+
+// How long after a completed swipe the card waits before rejoining the synchronized
+// animation, and the shorter wait used when a gesture was aborted rather than completed.
+const RESUME_AFTER_SWIPE_MS = 10000;
+const RESUME_AFTER_CANCEL_MS = 1200;
+
+function createInteractionRuntime({
+  platform,
+  carousel,
+  findInPath,
+  getRotator,
+  isSwipeEnabled,
+  getHoldSeconds,
+  fireAction,
+  requestRender,
+}) {
+  let pointer = null;
+  let dragging = false;
+  let suppressClickUntil = 0;
+
+  const maxIndex = () => Math.max(0, carousel.viewKeys.length - 1);
+
+  function suppressNextClick() {
+    suppressClickUntil = platform.now() + CLICK_SUPPRESSION_MS;
+  }
+
+  // A gesture that ends without a completed swipe must not schedule a resume unless the
+  // track is genuinely detached — a plain tap never detaches it, and arming a resume for
+  // a state that never applied would hand the track back mid-cycle.
+  function resumeIfTrackIsManual(delayMs) {
+    if (carousel.isTrackManual()) carousel.resumeAfterInteraction(delayMs);
+  }
+
+  // Where a confirmed-but-aborted drag should land.
+  //
+  // The active index was never updated during the drag itself, so snapping to it would
+  // jump back to wherever the card was before the gesture started. The position the
+  // track was actually FROZEN at is the only honest answer. Shared by the cancel path
+  // and by the configuration-change abort, which have the same problem: a confirmed drag
+  // with no reliable final delta to work from.
+  function resolveAbortedIndex(startTranslate) {
+    return viewIndexFromTranslate(startTranslate, carousel.viewWidthPct(), maxIndex());
+  }
+
+  return {
+    // ---- owned state, exposed as accessors ----------------------------------
+    get pointer() {
+      return pointer;
+    },
+    set pointer(value) {
+      pointer = value;
+    },
+    get isDragging() {
+      return dragging;
+    },
+    set isDragging(value) {
+      dragging = Boolean(value);
+    },
+    get suppressClickUntil() {
+      return suppressClickUntil;
+    },
+    isInteracting: () => dragging || Boolean(pointer),
+    suppressNextClick,
+
+    // ---- pointer ------------------------------------------------------------
+    handlePointerDown(event) {
+      // Deliberately does NOT pause the animation yet: a pointerdown in the rotator may
+      // just be the start of vertical dashboard scrolling, and pausing here would cause
+      // a visible jump on pointercancel.
+      if (event.button !== undefined && event.button !== 0) return;
+      if (event.isPrimary === false) return;
+      const rotator = getRotator(event);
+      // swipe:false makes a pointerdown behave exactly like one that started outside the
+      // rotator — no tracking, no preventDefault — without touching any of the
+      // downstream logic. Tap and hold are unaffected: they never depend on the rotator.
+      pointer = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        time: platform.now(),
+        rotator: Boolean(rotator) && isSwipeEnabled(),
+        entityTarget: findInPath(event, "[data-entity]"),
+        startTranslate: -(carousel.activeIndex || 0) * carousel.viewWidthPct(),
+        dragging: false,
+        width: rotator?.getBoundingClientRect().width || 1,
+      };
+    },
+
+    handlePointerMove(event) {
+      if (!pointer || pointer.id !== event.pointerId || !pointer.rotator) return;
+      const dx = event.clientX - pointer.x;
+      const dy = event.clientY - pointer.y;
+      if (!pointer.dragging) {
+        if (!isHorizontalSwipe(dx, dy)) return;
+        // A real swipe just started: freeze the synchronized animation where it is, so
+        // the handoff to manual dragging does not jump.
+        pointer.dragging = true;
+        dragging = true;
+        pointer.startTranslate = carousel.freezeTrackAtCurrentPosition();
+        // A resume from a PREVIOUS swipe may still be pending; it would hand the track
+        // back mid-gesture. Cleared through its owner, which is the only thing that can.
+        carousel.stop();
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const offsetPct = dragOffsetPct(dx, pointer.width, carousel.viewWidthPct());
+      carousel.setTrackTranslate(pointer.startTranslate + offsetPct);
+    },
+
+    handlePointerUp(event) {
+      if (!pointer || pointer.id !== event.pointerId) return;
+
+      const dx = event.clientX - pointer.x;
+      const dy = event.clientY - pointer.y;
+      const elapsedSeconds = (platform.now() - pointer.time) / 1000;
+      const entityTarget = findInPath(event, "[data-entity]") || pointer.entityTarget;
+
+      if (pointer.rotator && pointer.dragging) {
+        event.preventDefault();
+        event.stopPropagation();
+        const targetView = resolveSwipeTarget({
+          dx,
+          pointerWidthPx: pointer.width,
+          startTranslate: pointer.startTranslate,
+          viewWidthPct: carousel.viewWidthPct(),
+          maxIndex: maxIndex(),
+          maxTrackOffsetPct: carousel.maxTrackOffsetPct(),
+        });
+        const changed = targetView !== carousel.activeIndex;
+        carousel.activeIndex = targetView;
+        dragging = false;
+        carousel.setTrackTransition(true);
+        carousel.updateTrackTransform(true);
+        carousel.scheduleAccessibilitySync();
+        carousel.resumeWhenAligned(carousel.activeIndex, RESUME_AFTER_SWIPE_MS);
+        requestRender({ viewChanged: changed });
+        suppressNextClick();
+        pointer = null;
+        return;
+      }
+
+      if (isTapCancelledByMovement(dx, dy) && entityTarget) {
+        // It moved too far to be a tap, but it also never became a swipe. Doing nothing
+        // is the honest reading — and the click that follows must still be swallowed.
+        suppressNextClick();
+        pointer = null;
+        return;
+      }
+
+      if (entityTarget) {
+        event.preventDefault();
+        event.stopPropagation();
+        fireAction(entityTarget, resolveTapOrHold(elapsedSeconds, getHoldSeconds()));
+        suppressNextClick();
+      }
+
+      if (pointer.rotator) resumeIfTrackIsManual(0);
+      pointer = null;
+    },
+
+    handlePointerCancel(event) {
+      // The browser or the dashboard aborted the gesture — a vertical scroll took over,
+      // a stylus lifted, a system gesture won. Also used for pointerleave; both carry a
+      // pointerId, so this only reacts to the pointer it is actually tracking.
+      if (!pointer || pointer.id !== event.pointerId) return;
+      const aborted = pointer;
+      const wasRotator = Boolean(aborted.rotator);
+      pointer = null;
+      if (dragging) {
+        carousel.activeIndex = resolveAbortedIndex(aborted.startTranslate);
+        dragging = false;
+        carousel.updateTrackTransform(true);
+        carousel.scheduleAccessibilitySync();
+        carousel.resumeAfterInteraction(RESUME_AFTER_CANCEL_MS);
+        requestRender({ viewChanged: false });
+        return;
+      }
+      if (!wasRotator) return;
+      resumeIfTrackIsManual(0);
+    },
+
+    // A configuration change can arrive mid-swipe — live editing in the dashboard
+    // editor. A stale pointer (its width and frozen position computed against the
+    // about-to-change view count) must not carry over. A CONFIRMED drag is settled first,
+    // exactly like a cancel: without that the track stays frozen at whatever
+    // intermediate position it had reached, with no resume ever scheduled.
+    cancelForConfigChange() {
+      if (dragging && pointer?.rotator) {
+        carousel.activeIndex = resolveAbortedIndex(pointer.startTranslate);
+        carousel.setTrackTransition(true);
+        carousel.updateTrackTransform(true);
+        carousel.scheduleAccessibilitySync();
+        carousel.resumeWhenAligned(carousel.activeIndex, RESUME_AFTER_SWIPE_MS);
+      }
+      pointer = null;
+      dragging = false;
+    },
+
+    // ---- click, keyboard, context menu --------------------------------------
+    handleClick(event) {
+      // Browsers synthesize a click after a pointerup. Without this lock the same action
+      // would fire twice for one gesture.
+      if (platform.now() < suppressClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const entityTarget = findInPath(event, "[data-entity]");
+      if (!entityTarget) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fireAction(entityTarget, "tap");
+    },
+
+    handleKeydown(event) {
+      // Enter and Space activate a focused control, the same as a tap. `repeat` is
+      // excluded so holding the key down does not fire the action once per repetition.
+      if ((event.key !== "Enter" && event.key !== " ") || event.repeat) return;
+      const entityTarget = findInPath(event, "[data-entity]");
+      if (!entityTarget) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fireAction(entityTarget, "tap");
+    },
+
+    handleContextMenu(event) {
+      // A long press is already a card action, so the browser's own menu would compete
+      // with it.
+      if (!findInPath(event, "[data-entity]")) return;
+      event.preventDefault();
+    },
+  };
+}
+
+// Handing a user action to Home Assistant.
+//
+// The card does not open a dialog, navigate or call a service itself. It dispatches one
+// `hass-action` event with a config attached, and the dashboard does the rest — which is
+// why the whole of this module is about assembling that config correctly and dispatching
+// it into the right realm.
+//
+// It receives neither hass nor the element. `dispatch` is a single narrow callback, and
+// the two configuration lookups return exactly what they say: the rooms array and the
+// card-level action pair.
+
+const MORE_INFO = "more-info";
+
+// A clicked element carries its own entity, and a room chip additionally carries the
+// index of the room it came from. A room's own action wins over the card-level one — a
+// per-room override would otherwise be silently ignored on exactly the element it was
+// configured for.
+function cloneAction(action, entityId) {
+  const cloned = { ...(action || { action: MORE_INFO }) };
+  // more-info without an entity would open nothing. Filling it in from the clicked
+  // element is what makes `tap_action: more-info` work as a card-wide default.
+  if (cloned.action === MORE_INFO && !cloned.entity) cloned.entity = entityId;
+  return cloned;
+}
+
+function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
+  function buildActionConfig(target, entityId) {
+    const roomIndex = target?.dataset?.roomIndex;
+    const room = roomIndex !== undefined ? (getRooms() || [])[Number(roomIndex)] : null;
+    const cardActions = getCardActions() || {};
+    return {
+      entity: entityId,
+      tap_action: cloneAction(room?.tap_action || cardActions.tap_action, entityId),
+      hold_action: cloneAction(room?.hold_action || cardActions.hold_action, entityId),
+    };
+  }
+
+  return {
+    buildActionConfig,
+
+    fire(target, action) {
+      if (!target?.dataset?.entity) return;
+      const entityId = target.dataset.entity;
+      // Only these two exist; anything else is treated as a tap rather than dropped,
+      // because a gesture the user made should never silently do nothing.
+      const eventAction = action === "hold" ? "hold" : "tap";
+      const actionConfig = buildActionConfig(target, entityId);
+      const selectedAction = actionConfig[`${eventAction}_action`];
+      // `none` is a deliberate configuration, not a missing one: it means "this gesture
+      // does nothing here".
+      if (!selectedAction || selectedAction.action === "none") return;
+
+      // Constructed in the card's CURRENT realm (see browser-platform.js): an event from
+      // a foreign realm fails the listener's own instanceof check, and the dashboard
+      // would silently ignore it.
+      const event = platform.createEvent("hass-action", { bubbles: true, composed: true });
+      event.detail = { config: actionConfig, action: eventAction };
+      dispatch(event);
+    },
+  };
+}
+
+// The custom element: Home Assistant's lifecycle, the render pipeline, and the
+// state transitions between them.
+//
+// What it does is deliberately narrow, and everything it does NOT do lives one layer
+// down:
+//
+//   config and hass          it owns these, because Home Assistant hands them to it
+//   render signatures        when a render is needed at all, and how much of one
+//   _renderPending           a render deferred because a gesture is in flight
+//   warning deduplication    stateful, so it cannot live in a pure normalizer
+//   lifecycle orchestration  connect, disconnect, and what each one starts or stops
+//
+// The carousel owns the active index and both timers. The interaction runtime owns the
+// pointer, the drag flag and the click-suppression deadline. The resize runtime owns
+// the observer, the animation frame and the fonts subscription. The element holds
+// windows onto those — accessors, never copies — because a second copy of a fact is how
+// the two drift apart.
 //
 // Import direction is enforced by test/unit/architecture-imports.test.js:
 //
 //   core -> config / i18n / domain -> application/model
 //        -> presentation/view-model -> render/primitives + render/layout + styles
-//        -> views + render/composition -> controllers/runtime -> element -> this file
+//        -> views + render/composition -> controllers/runtime -> this file
+//        -> index.js
 //
-// Nothing below may be imported by a module above it, and Rollup's onwarn
-// (see rollup.config.mjs) turns any cycle or unresolved specifier into a
-// build failure.
+// Nothing below may be imported by a module above it, and Rollup's onwarn (see
+// rollup.config.mjs) turns any cycle or unresolved specifier into a build failure.
+
 
 
   // Custom card for Home Assistant room climate data (temperature, humidity,
@@ -9357,6 +9634,10 @@ function createResizeRuntime({ platform, onMeasure }) {
   // ==== Card class: lifecycle, configuration, rendering ====
   // Main class for the custom Lovelace card; Home Assistant instantiates it
   // when the card is displayed.
+  // NOTE ON INDENTATION: the class is deliberately indented by two spaces even though
+  // it sits at module scope. Its render methods build markup from template literals
+  // whose leading whitespace reaches the browser verbatim and is pinned by the DOM
+  // characterization baselines. Re-indenting the class would change the shipped HTML.
   class RoomClimateCard extends HTMLElement {
     constructor() {
       super();
@@ -9388,9 +9669,9 @@ function createResizeRuntime({ platform, onMeasure }) {
           slideSeconds: this._config?.slide_seconds ?? DEFAULT_CONFIG.slide_seconds,
           autoSlide: this._config?.auto_slide,
         }),
-        // The pointer gestures still live on the element this round, so whether a
-        // gesture is in flight is a question the controller has to ask.
-        isInteracting: () => this._isDragging || Boolean(this._pointer),
+        // Whether a gesture is in flight is the interaction runtime's answer to give.
+        // Resolved late, because that runtime is constructed below this one.
+        isInteracting: () => Boolean(this._interaction?.isInteracting()),
       });
 
       // Container resizes and the web font finishing loading — the two triggers that
@@ -9398,6 +9679,38 @@ function createResizeRuntime({ platform, onMeasure }) {
       this._resize = createResizeRuntime({
         platform: this._platform,
         onMeasure: () => this._resolveViewLayouts(this._lastViewModel),
+      });
+
+      // Hands a user action to Home Assistant. Gets neither hass nor this element:
+      // two narrow configuration lookups and one dispatch callback.
+      this._actions = createActionRuntime({
+        platform: this._platform,
+        getRooms: () => this._config?.rooms,
+        getCardActions: () => ({ tap_action: this._config?.tap_action, hold_action: this._config?.hold_action }),
+        dispatch: (event) => this.dispatchEvent(event),
+      });
+
+      // Owns the in-flight pointer, the confirmed-drag flag and the click-suppression
+      // deadline. It decides what a gesture MEANS; the carousel decides how the track
+      // moves.
+      this._interaction = createInteractionRuntime({
+        platform: this._platform,
+        carousel: this._carousel,
+        findInPath: (event, selector) => this._findInPath(event, selector),
+        getRotator: (event) => this._findInPath(event, ".rtc-rotator"),
+        isSwipeEnabled: () => this._config?.swipe !== false,
+        getHoldSeconds: () => this._config.hold_seconds,
+        // Routed through the element's own one-line entry point rather than straight
+        // into the action runtime: that method is the seam existing tests substitute to
+        // observe which action a gesture resolved to, and it holds no logic of its own.
+        fireAction: (target, action) => this._fireHassAction(target, action),
+        // The render pipeline stays with the element: _renderPending is a render
+        // concern, not a gesture one.
+        requestRender: ({ viewChanged }) => {
+          if (!viewChanged && !this._renderPending) return;
+          this._renderPending = false;
+          this._render(false);
+        },
       });
       // P1 fix (post-2.22.1): sibling to this._views, since the key list
       // alone can't distinguish a deliberately empty/collapsed view area
@@ -9412,7 +9725,6 @@ function createResizeRuntime({ platform, onMeasure }) {
       // call; _renderAll() falls back to computing live whenever it's
       // undefined (which is the normal, hass-driven-update case).
       this._preConfigChangeVisualKey = undefined;
-      this._pointer = null;
       this._lastRenderSignature = "";
       this._structuralConfigSignature = null;
       // The last RENDERED markup structure (see cardStructureSignature()). Committed
@@ -9422,9 +9734,7 @@ function createResizeRuntime({ platform, onMeasure }) {
       // Returned by the platform when the visibility listener is attached; the only
       // thing that knows how to detach it again.
       this._unlistenVisibility = null;
-      this._suppressClickUntil = 0;
       this._rendered = false;
-      this._isDragging = false;
       // Set when a hass update arrives while a swipe is in progress (see
       // _render()); a pending update is applied once the drag ends (see
       // _handlePointerUp()/_handlePointerCancel()) so it's never silently lost.
@@ -9481,6 +9791,29 @@ function createResizeRuntime({ platform, onMeasure }) {
       return this._carousel.resumeTimerHandle;
     }
 
+    // The interaction runtime's state, same rule: windows, never copies. _pointer and
+    // _isDragging are writable because existing tests drive a gesture by constructing
+    // the exact pointer shape a real pointerdown would produce.
+    get _pointer() {
+      return this._interaction.pointer;
+    }
+
+    set _pointer(value) {
+      this._interaction.pointer = value;
+    }
+
+    get _isDragging() {
+      return this._interaction.isDragging;
+    }
+
+    set _isDragging(value) {
+      this._interaction.isDragging = value;
+    }
+
+    get _suppressClickUntil() {
+      return this._interaction.suppressClickUntil;
+    }
+
     get _a11ySyncTimer() {
       return this._carousel.accessibilityTimerHandle;
     }
@@ -9501,43 +9834,13 @@ function createResizeRuntime({ platform, onMeasure }) {
     }
 
     _cancelInteractionForConfigChange() {
-      // A config change (e.g. live-editing in the dashboard editor) can
-      // arrive mid-swipe; without this, a stale _pointer (width/
-      // startTranslate computed against the about-to-change view count/
-      // structure) and a possibly-pending render would carry over into the
-      // new config. Clearing them here, before anything else in
-      // setConfig() runs, prevents that.
-      //
-      // Reviewer fix (P1, post-2.27.0): a BESTÄTIGTER swipe (_isDragging)
-      // used to be aborted by simply nulling _pointer/_isDragging below,
-      // with nothing settling the track afterwards — this comment used to
-      // point at a trailing _restartRotation() call in setConfig() for
-      // that, but that call was removed in an earlier round (see
-      // setConfig()'s own P1 comment) without this cleanup being updated.
-      // The track was left permanently frozen in "rtc-manual" at whatever
-      // intermediate position the drag had reached, with no resume timer.
-      // Settle it first, the same way _handlePointerCancel() already
-      // handles an aborted confirmed drag with no reliable final pointer
-      // delta to work from: resolve _pointer.startTranslate (the position
-      // the track was frozen at when the drag was confirmed, see
-      // _pauseTrackAtCurrentPosition()) to its nearest view index, snap the
-      // track there, and schedule the same phase-aligned resume a
-      // completed swipe gets.
-      if (this._isDragging && this._pointer?.rotator) {
-        const viewWidthPct = this._viewWidthPct();
-        const maxIndex = (this._views?.length || 1) - 1;
-        this._activeView = this._clamp(Math.round(-this._pointer.startTranslate / viewWidthPct), 0, maxIndex);
-        this._setTrackTransition(true);
-        this._updateTrackTransform(true);
-        this._scheduleAccessibilitySync();
-        this._resumeSynchronizedSlideWhenAligned(this._activeView, 10000);
-      }
-      this._pointer = null;
-      this._isDragging = false;
+      // A configuration change can arrive mid-swipe — live editing in the dashboard
+      // editor. The gesture itself is the interaction runtime's to abort; the pending
+      // render is the element's.
+      this._interaction.cancelForConfigChange();
       this._renderPending = false;
     }
 
-    // Called by Home Assistant when the card is created or reconfigured.
     setConfig(config) {
       this._cancelInteractionForConfigChange();
       // AP-07 (audit 14.1): the view visible "before" this call must be
@@ -9784,10 +10087,6 @@ function createResizeRuntime({ platform, onMeasure }) {
       return this._carousel.hasAutoSlide();
     }
 
-    _prefersReducedMotion() {
-      return this._platform.prefersReducedMotion();
-    }
-
     _viewWidthPct() {
       return this._carousel.viewWidthPct();
     }
@@ -9798,10 +10097,6 @@ function createResizeRuntime({ platform, onMeasure }) {
 
     _slideTiming() {
       return this._carousel.timing();
-    }
-
-    _pct(value) {
-      return formatPercent(value);
     }
 
     _trackAnimationCss() {
@@ -9846,20 +10141,8 @@ function createResizeRuntime({ platform, onMeasure }) {
       this._carousel.scheduleAccessibilitySync();
     }
 
-    _resumeSynchronizedSlide(delayMs = 1800) {
-      this._carousel.resumeAfterInteraction(delayMs);
-    }
-
     _resumeSynchronizedSlideWhenAligned(targetView, minDelayMs = 10000) {
       this._carousel.resumeWhenAligned(targetView, minDelayMs);
-    }
-
-    _delayUntilAutoPhaseMatchesView(targetView, minDelayMs = 10000) {
-      return this._carousel.delayUntilPhaseHolds(targetView, minDelayMs);
-    }
-
-    _autoPhaseMatchesView(targetView) {
-      return this._carousel.phaseHoldsView(targetView);
     }
 
     _waitFromTimestampUntilViewHold(targetView, timestampMs, timing = this._slideTiming()) {
@@ -9892,22 +10175,6 @@ function createResizeRuntime({ platform, onMeasure }) {
 
     _getTrackTranslatePct(track) {
       return this._carousel.trackTranslatePct(track);
-    }
-
-    _pauseTrackAtCurrentPosition(track) {
-      return this._carousel.pauseTrackAtCurrentPosition(track);
-    }
-
-    _setTrackTranslate(translate) {
-      this._carousel.setTrackTranslate(translate);
-    }
-
-    _setTrackTransition(enable) {
-      this._carousel.setTrackTransition(enable);
-    }
-
-    _hasEntity(entityId) {
-      return hasEntity(this._hass?.states, entityId);
     }
 
     _parseNum(raw) {
@@ -9957,14 +10224,6 @@ function createResizeRuntime({ platform, onMeasure }) {
       return metricMetaFor(metricType);
     }
 
-    _resolveTrendPolicy(metricType) {
-      return resolveTrendPolicy(metricType);
-    }
-
-    _buildTrendModel(metricType, canonicalValue, displayValue, displayUnit) {
-      return buildTrendModel(metricType, canonicalValue, displayValue, displayUnit);
-    }
-
     _autoRoomColumnsFor(metricType) {
       return autoRoomColumnsFor(metricType);
     }
@@ -9994,10 +10253,6 @@ function createResizeRuntime({ platform, onMeasure }) {
 
     _formatTime(isoString) {
       return formatTimeOfDay(this._language(), isoString);
-    }
-
-    _rawUnitForEntity(entityId) {
-      return rawUnitForEntity(this._hass?.states, entityId);
     }
 
     _resolveUnitProfileKey(metricKind, rawUnit) {
@@ -10117,10 +10372,6 @@ function createResizeRuntime({ platform, onMeasure }) {
       return deriveBandForProfile(metricKind, profileKey, bandName);
     }
 
-    _metricTypeForEntity(entityId) {
-      return metricKindForEntity(this._hass?.states, entityId);
-    }
-
     _fmtWithUnit(value, digits, withSpace = true) {
       // Combines the formatted number and its unit.
       const separator = withSpace ? " " : "";
@@ -10132,32 +10383,13 @@ function createResizeRuntime({ platform, onMeasure }) {
       return escapeHtml(value);
     }
 
-    _clamp(value, min, max) {
-      return clamp(value, min, max);
-    }
-
     _pos(value, min, max) {
       // Converts a value into a percentage position on the scale.
       return percentInRange(value, min, max);
     }
 
-    _rangePosition(minValue, maxValue, scaleMin, scaleMax) {
-      return rangePosition(minValue, maxValue, scaleMin, scaleMax);
-    }
-
-    _scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
-      return scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax);
-    }
-
     _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
       return roomGridRows(count, columns, rows, autoMaxColumns);
-    }
-
-    _resolveDynamicStep(metricType, unitProfile, staticStep, low, high, baseMin, baseMax, anchorScale = true) {
-      // The registry guard stays here: an unregistered metric kind has no unit
-      // profile to read span-dependent steps from.
-      if (!METRIC_DEFINITIONS[metricType]) return staticStep;
-      return resolveDynamicStep(staticStep, unitProfile?.dynamicDisplaySteps, low, high, baseMin, baseMax, anchorScale);
     }
 
     _dynamicScale(coolestValue, warmestValue, metricType, unitProfile) {
@@ -10235,18 +10467,6 @@ function createResizeRuntime({ platform, onMeasure }) {
         language: this._language(),
       });
       return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
-    }
-
-    // TEMPORARY compatibility adapter, and by now only that. Nothing on the production
-    // render path reads the flat shape any more: the card shell, all four views and
-    // every DOM patcher consume the CardViewModel directly, and no module under
-    // render/ or views/ may even import legacy-data.js (an architecture test enforces
-    // it). This exists so the 32 committed DTO baselines and the element-level
-    // assertions written against the flat object keep their meaning while the rendering
-    // layer moves out from under them. It goes away together with them in the
-    // element/test cleanup round.
-    _computeData() {
-      return toLegacyData(this._computeViewModel());
     }
 
     // The narrow presentation collaborator: a translator and three formatters,
@@ -10592,14 +10812,6 @@ function createResizeRuntime({ platform, onMeasure }) {
       return resolveLabelForm(element, longText, shortText, fitsWithWidth);
     }
 
-    _focusFallbackTarget() {
-      return focusFallbackTarget(this.shadowRoot);
-    }
-
-    _applyFocusFallback() {
-      applyFocusFallback(this.shadowRoot);
-    }
-
     // ==== Event handling ====
     // Event listeners for click, keyboard, and touch/pointer interaction.
     _bindEvents() {
@@ -10646,269 +10858,39 @@ function createResizeRuntime({ platform, onMeasure }) {
       return path.find((node) => node?.matches?.(selector)) || null;
     }
 
+    // ==== Interaction and actions: delegations to their controllers ====
+    // The listeners are bound to these methods, and a number of tests call them
+    // directly with a synthetic event. Neither holds any logic or state of its own.
     _handleClick(event) {
-      // Plain click; a short lock prevents this from double-firing right after pointerup already handled it.
-      if (this._platform.now() < this._suppressClickUntil) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      const entityTarget = this._findInPath(event, "[data-entity]");
-      if (!entityTarget) return;
-      event.preventDefault();
-      event.stopPropagation();
-      this._fireHassAction(entityTarget, "tap");
+      this._interaction.handleClick(event);
     }
 
     _handleKeydown(event) {
-      // Enter/Space activate a focused button, same as more-info tap.
-      if ((event.key !== "Enter" && event.key !== " ") || event.repeat) return;
-      const entityTarget = this._findInPath(event, "[data-entity]");
-      if (!entityTarget) return;
-      event.preventDefault();
-      event.stopPropagation();
-      this._fireHassAction(entityTarget, "tap");
+      this._interaction.handleKeydown(event);
     }
 
     _handlePointerDown(event) {
-      // Starts a pointer interaction; deliberately doesn't pause the
-      // auto-slide animation yet — a pointerdown in the rotator may just be
-      // the start of vertical dashboard scrolling, and pausing here would
-      // cause a visible jump on pointercancel. See _handlePointerMove().
-      if (event.button !== undefined && event.button !== 0) return;
-      if (event.isPrimary === false) return;
-      const rotator = this._findInPath(event, ".rtc-rotator");
-      const entityTarget = this._findInPath(event, "[data-entity]");
-      // AP-C1: swipe:false disables horizontal drag gestures, independent
-      // of auto_slide. Every downstream pointer handler already gates on
-      // this._pointer.rotator (_handlePointerMove()'s early return,
-      // _handlePointerUp()'s confirmed-swipe branch) — folding swipe:false
-      // into it here makes a disabled swipe behave exactly like a
-      // pointerdown that started outside the rotator (an existing, already-
-      // correct code path: no threshold-swipe tracking, no
-      // preventDefault()), without touching any of that logic. Tap/hold
-      // actions (entityTarget-based) are unaffected, since they don't
-      // depend on .rotator at all.
-      this._pointer = {
-        id: event.pointerId,
-        x: event.clientX,
-        y: event.clientY,
-        time: this._platform.now(),
-        rotator: Boolean(rotator) && this._config?.swipe !== false,
-        entityTarget,
-        startTranslate: -(this._activeView || 0) * this._viewWidthPct(),
-        dragging: false,
-        width: rotator?.getBoundingClientRect().width || 1,
-      };
+      this._interaction.handlePointerDown(event);
     }
 
     _handlePointerMove(event) {
-      // Horizontal movement in the rotator is treated as a swipe; vertical
-      // scrolling stays possible because the animation only pauses once a
-      // horizontal swipe is confirmed.
-      if (!this._pointer || this._pointer.id !== event.pointerId || !this._pointer.rotator) return;
-      const dx = event.clientX - this._pointer.x;
-      const dy = event.clientY - this._pointer.y;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-      if (!this._pointer.dragging) {
-        if (absX < 10 || absX <= absY * 1.25) return;
-        // A real swipe just started: freeze the synced animation at its
-        // current position so the handoff to manual dragging doesn't jump.
-        this._pointer.dragging = true;
-        this._isDragging = true;
-        const track = this.shadowRoot?.querySelector(".rtc-track");
-        this._pointer.startTranslate = track
-          ? this._pauseTrackAtCurrentPosition(track)
-          : -(this._activeView || 0) * this._viewWidthPct();
-        // A resume from a PREVIOUS swipe may still be pending; it would hand the track
-        // back to the synchronized animation in the middle of this one. Cleared through
-        // its owner, which is the only thing that can clear it — the element's
-        // _resumeAutoTimer is a read-only window onto the controller's handle, not a
-        // second copy to null out.
-        this._carousel.stop();
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const viewWidthPct = this._viewWidthPct();
-      const offsetPct = this._clamp((dx / this._pointer.width) * viewWidthPct, -viewWidthPct, viewWidthPct);
-      this._setTrackTranslate(this._pointer.startTranslate + offsetPct);
+      this._interaction.handlePointerMove(event);
     }
 
     _handlePointerUp(event) {
-      // Ends a pointer interaction: either completes a swipe or fires tap/hold.
-      if (!this._pointer || this._pointer.id !== event.pointerId) return;
-
-      const dx = event.clientX - this._pointer.x;
-      const dy = event.clientY - this._pointer.y;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-      const elapsedSeconds = (this._platform.now() - this._pointer.time) / 1000;
-      const entityTarget = this._findInPath(event, "[data-entity]") || this._pointer.entityTarget;
-
-      if (this._pointer.rotator && this._pointer.dragging) {
-        event.preventDefault();
-        event.stopPropagation();
-        const threshold = this._pointer.width * 0.18;
-        const viewWidthPct = this._viewWidthPct();
-        const maxIndex = (this._views?.length || 1) - 1;
-        const projectedTranslate = this._clamp(
-          this._pointer.startTranslate + (dx / this._pointer.width) * viewWidthPct,
-          this._maxTrackOffsetPct(),
-          0
-        );
-        // A swipe always moves exactly one view; below the threshold, the
-        // nearest rounded position wins instead. Both branches derive their
-        // starting point from _pointer.startTranslate — the position the
-        // track was actually frozen at when the swipe began (see
-        // _pauseTrackAtCurrentPosition()) — rather than this._activeView,
-        // which only tracks completed swipes/structural resets and can be
-        // stale relative to the synced auto-slide animation's current
-        // visual position; using it here could skip a view.
-        const startView = this._clamp(Math.round(-this._pointer.startTranslate / viewWidthPct), 0, maxIndex);
-        let targetView;
-        if (dx <= -threshold) targetView = startView + 1;
-        else if (dx >= threshold) targetView = startView - 1;
-        else targetView = Math.round(-projectedTranslate / viewWidthPct);
-        targetView = this._clamp(targetView, 0, maxIndex);
-        const changed = targetView !== this._activeView;
-        this._activeView = targetView;
-        this._isDragging = false;
-        this._setTrackTransition(true);
-        this._updateTrackTransform(true);
-        this._scheduleAccessibilitySync();
-        this._resumeSynchronizedSlideWhenAligned(this._activeView, 10000);
-        if (changed || this._renderPending) {
-          this._renderPending = false;
-          this._render(false);
-        }
-        this._suppressNextClick();
-        this._pointer = null;
-        return;
-      }
-
-      if ((absX > 12 || absY > 12) && entityTarget) {
-        this._suppressNextClick();
-        this._pointer = null;
-        return;
-      }
-
-      if (entityTarget) {
-        event.preventDefault();
-        event.stopPropagation();
-        const action = elapsedSeconds >= this._config.hold_seconds ? "hold" : "tap";
-        this._fireHassAction(entityTarget, action);
-        this._suppressNextClick();
-      }
-
-      // Only a real completed swipe (handled above, returns early) or an
-      // earlier one still waiting out its resume window ever detaches the
-      // track from the synced animation (see _pauseTrackAtCurrentPosition()/
-      // .rtc-manual); a plain tap never does, so it must not unconditionally
-      // schedule a resume — that would arm a "was paused" state that never
-      // actually applied.
-      if (this._pointer.rotator) {
-        const track = this.shadowRoot?.querySelector(".rtc-track");
-        if (track?.classList.contains("rtc-manual")) {
-          this._resumeSynchronizedSlide(0);
-        }
-      }
-
-      this._pointer = null;
+      this._interaction.handlePointerUp(event);
     }
 
     _handlePointerCancel(event) {
-      // Browser/dashboard aborted the gesture (e.g. vertical scroll took
-      // over); returns the card to a consistent slider state. Also used
-      // for pointerleave (see _bindEvents()) — both carry a pointerId, so
-      // this only reacts to the pointer it's actually tracking (matches
-      // the existing guard in _handlePointerUp()).
-      if (!this._pointer || this._pointer.id !== event.pointerId) return;
-      const pointer = this._pointer;
-      const wasRotator = Boolean(pointer.rotator);
-      this._pointer = null;
-      if (this._isDragging) {
-        // _updateTrackTransform() below snaps to this._activeView, which —
-        // unlike after a completed swipe in _handlePointerUp() — was never
-        // updated during the drag itself. Derive it here from the position
-        // the track was actually frozen at (_pointer.startTranslate, see
-        // _pauseTrackAtCurrentPosition()), or the snap-back jumps to
-        // wherever _activeView happened to be before this gesture started
-        // instead of the visually correct nearby view.
-        const viewWidthPct = this._viewWidthPct();
-        const maxIndex = Math.max(0, (this._views?.length || 1) - 1);
-        this._activeView = this._clamp(Math.round(-pointer.startTranslate / viewWidthPct), 0, maxIndex);
-        this._isDragging = false;
-        this._updateTrackTransform(true);
-        this._scheduleAccessibilitySync();
-        this._resumeSynchronizedSlide(1200);
-        if (this._renderPending) {
-          this._renderPending = false;
-          this._render(false);
-        }
-        return;
-      }
-      if (!wasRotator) return;
-      // No completed swipe, but the track may still be manually frozen from
-      // an earlier swipe waiting on its resume window — rejoin phase-aware
-      // instead of forcing the animation and causing a visible jump.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      if (track?.classList.contains("rtc-manual")) {
-        this._resumeSynchronizedSlide(0);
-      }
+      this._interaction.handlePointerCancel(event);
     }
 
     _handleContextMenu(event) {
-      // Suppresses the browser context menu on long-press, since hold is already a card action.
-      const entityTarget = this._findInPath(event, "[data-entity]");
-      if (!entityTarget) return;
-      event.preventDefault();
-    }
-
-    _suppressNextClick() {
-      // Prevents a click right after pointerup from firing the same action again.
-      this._suppressClickUntil = this._platform.now() + 450;
+      this._interaction.handleContextMenu(event);
     }
 
     _fireHassAction(target, action) {
-      // Hands the user action off to Home Assistant (more-info, navigate, assist, ...).
-      if (!target?.dataset?.entity) return;
-      const entityId = target.dataset.entity;
-      const eventAction = action === "hold" ? "hold" : "tap";
-      const actionConfig = this._buildActionConfig(target, entityId);
-      const selectedAction = actionConfig[`${eventAction}_action`];
-
-      if (!selectedAction || selectedAction.action === "none") return;
-
-      const event = this._platform.createEvent("hass-action", { bubbles: true, composed: true });
-      event.detail = {
-        config: actionConfig,
-        action: eventAction,
-      };
-      this.dispatchEvent(event);
-    }
-
-    _buildActionConfig(target, entityId) {
-      // Builds the action config for exactly the clicked element.
-      const roomIndex = target?.dataset?.roomIndex;
-      const room = roomIndex !== undefined ? this._config.rooms[Number(roomIndex)] : null;
-      const tapAction = this._cloneAction(room?.tap_action || this._config.tap_action, entityId);
-      const holdAction = this._cloneAction(room?.hold_action || this._config.hold_action, entityId);
-
-      return {
-        entity: entityId,
-        tap_action: tapAction,
-        hold_action: holdAction,
-      };
-    }
-
-    _cloneAction(action, entityId) {
-      // Clones an action object, filling in the entity for more-info.
-      const cloned = { ...(action || { action: "more-info" }) };
-      if (cloned.action === "more-info" && !cloned.entity) {
-        cloned.entity = entityId;
-      }
-      return cloned;
+      this._actions.fire(target, action);
     }
 
     // ==== Styles ====
@@ -10925,28 +10907,46 @@ function createResizeRuntime({ platform, onMeasure }) {
     }
   }
 
-  // ==== Registration ====
-  // Registers the card as a custom element and with Home Assistant's card picker.
-  if (!customElements.get(CARD_TYPE)) {
-    customElements.define(CARD_TYPE, RoomClimateCard);
-  }
+// The composition root: it wires nothing together and computes nothing. It imports
+// the finished custom element, registers it, and tells Home Assistant that it exists.
+//
+// Rollup bundles this into the single, dependency-free IIFE that Home Assistant loads
+// (dist/room-climate-card.js). The IIFE wrapper and the "use strict" prologue are
+// emitted by the build (see rollup.config.mjs), which is why this file starts directly
+// with the module body.
+//
+// dist/room-climate-card.js is generated and committed; never edit it. `npm run build`
+// regenerates it, and `npm run verify:dist` proves the committed copy still matches
+// this source. It is the only artifact HACS and Home Assistant ever load.
+//
+// The three global reads below are the one unavoidable exception to the platform
+// contract: registering a custom element and announcing it to the dashboard's card
+// picker are things a card can only do against the real global registry. Everything
+// else in the tree reaches the browser through controllers/runtime/browser-platform.js.
 
-  window.customCards = window.customCards || [];
-  const existingCard = window.customCards.find((card) => card.type === CARD_TYPE);
-  const cardMetadata = {
-    type: CARD_TYPE,
-    name: CARD_NAME,
-    preview: false,
-    description: "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
-    documentationURL: "https://github.com/hyperfelixations/room-climate-card",
-  };
 
-  if (existingCard) {
-    Object.assign(existingCard, cardMetadata);
-  } else {
-    window.customCards.push(cardMetadata);
-  }
+// ==== Registration ====
+// Registers the card as a custom element and with Home Assistant's card picker.
+if (!customElements.get(CARD_TYPE)) {
+  customElements.define(CARD_TYPE, RoomClimateCard);
+}
 
-  window.roomClimateCardVersion = CARD_VERSION;
+window.customCards = window.customCards || [];
+const existingCard = window.customCards.find((card) => card.type === CARD_TYPE);
+const cardMetadata = {
+  type: CARD_TYPE,
+  name: CARD_NAME,
+  preview: false,
+  description: "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
+  documentationURL: "https://github.com/hyperfelixations/room-climate-card",
+};
+
+if (existingCard) {
+  Object.assign(existingCard, cardMetadata);
+} else {
+  window.customCards.push(cardMetadata);
+}
+
+window.roomClimateCardVersion = CARD_VERSION;
 
 })();

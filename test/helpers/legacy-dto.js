@@ -1,19 +1,24 @@
-// The compatibility adapter: CardViewModel -> the flat `data` object the
-// characterization suite and a large part of the element-level tests still read.
+"use strict";
+
+// FROZEN. The flat `data` object the card produced before the rendering layer consumed
+// the CardViewModel directly.
 //
-// TEMPORARY, and by now only that. The production render path no longer touches this
-// shape at all: the card shell, every view module and every DOM patcher consume the
-// structured CardViewModel directly (see src/render/ and src/views/), and no module
-// in either layer imports this file — an architecture test enforces that. What still
-// depends on the flat shape is the test suite: 32 committed DTO baselines and a large
-// number of element-level assertions were written against it, and rewriting those in
-// the same round as the extraction would have made a refactoring mistake
-// indistinguishable from an intended change.
+// This file used to live in src/presentation/view-model/ and was shipped in the bundle.
+// It is not any more: no production module reads the flat shape, and an architecture
+// test proves nothing under src/ can reach it. It survives here for exactly one reason —
+// the 32 committed DTO baselines in test/baseline/model/ are a Phase 0 oracle recorded
+// against the ORIGINAL monolithic card, and re-recording them would throw away the only
+// independent evidence that the whole pipeline still computes what it always computed.
 //
-// It is scaffolding with a planned end: the element/test cleanup round removes this
-// file and the flat shape together. Until then, nothing may be added to it — an extra
-// field here would be an untested new contract, and the baselines would have to be
-// re-recorded to accept it.
+// It is therefore frozen in both senses:
+//
+//   - nothing may be added to it. An extra field would be an untested contract, and the
+//     baselines would have to be re-recorded to accept it — which is precisely the thing
+//     this file exists to avoid;
+//   - it is test-only. It is not importable from src/, not reachable from the
+//     composition root, and not present in dist/room-climate-card.js.
+//
+// When the baselines are eventually retired, this file goes with them.
 
 // The three marker positions of the daily-range axis default to 0 when that view is
 // not active, because the flat shape exposes them unconditionally.
@@ -27,7 +32,7 @@ function toLegacyRoomMarker({ index, entity, name, value, position, color }) {
   return { index, entity, name, value, position, color };
 }
 
-export function toLegacyData(viewModel) {
+function toLegacyData(viewModel) {
   if (viewModel.empty) {
     return {
       empty: true,
@@ -96,3 +101,12 @@ export function toLegacyData(viewModel) {
     rangeMaxPos: rangeScale ? rangeScale.markerPositions.max : NO_RANGE_SCALE_POSITION,
   };
 }
+
+// Builds the flat object from a rendered card, through the same view model production
+// renders from. The card no longer has a _computeData() of its own; this is what the
+// element-level tests written against the flat shape call instead.
+function computeLegacyData(element) {
+  return toLegacyData(element._computeViewModel());
+}
+
+module.exports = { toLegacyData, computeLegacyData };

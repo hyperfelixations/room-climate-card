@@ -22,6 +22,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { SeededRandom } = require("../helpers/seeded-random.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 test.before(() => {
@@ -189,7 +190,7 @@ function runOne(seed, roomCount) {
   let el;
   try {
     el = env.createCard(config, hass);
-    const data = el._computeData();
+    const data = computeLegacyData(el);
     problems = checkInvariants(el, data, metricType, roomValues);
   } catch (err) {
     threw = err;

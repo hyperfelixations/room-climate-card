@@ -12,6 +12,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -85,7 +86,7 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
       ],
     })
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.viewOptions.range.show_time, true, "invalid show_time falls back to default (true)");
   assert.equal(data.viewOptions.range_scale.footer, "detailed", "invalid footer falls back to default (detailed)");
   assert.equal(data.viewOptions.scale.footer, true, "invalid scale footer falls back to default (true)");
@@ -112,7 +113,7 @@ test("optionsSchema: valid values for all 5 keys are honored, including footer:f
     }),
     rangeStates()
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.viewOptions.range.show_time, false);
   assert.equal(data.viewOptions.range_scale.footer, false);
   assert.equal(data.viewOptions.scale.footer, false);
@@ -125,8 +126,8 @@ test("optionsSchema: valid values for all 5 keys are honored, including footer:f
 
 test("scale.markers: 'extremes' (default) renders coldest/warmest markers alongside avg (regression)", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  assert.equal(el._computeData().viewOptions.scale.markers, "extremes");
-  const html = el._renderScaleView(el._computeData());
+  assert.equal(computeLegacyData(el).viewOptions.scale.markers, "extremes");
+  const html = el._renderScaleView(computeLegacyData(el));
   assert.ok(html.includes("rtc-marker-cold"));
   assert.ok(html.includes("rtc-marker-warm"));
   assert.ok(html.includes("rtc-marker-avg"));
@@ -135,7 +136,7 @@ test("scale.markers: 'extremes' (default) renders coldest/warmest markers alongs
 
 test("scale.markers: 'average' omits coldest/warmest markers, avg marker stays", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { markers: "average" } }] }), twoRoomStates());
-  const html = el._renderScaleView(el._computeData());
+  const html = el._renderScaleView(computeLegacyData(el));
   assert.ok(!html.includes("rtc-marker-cold"));
   assert.ok(!html.includes("rtc-marker-warm"));
   assert.ok(html.includes("rtc-marker-avg"));
@@ -147,7 +148,7 @@ test("scale.markers: 'all' renders one small marker per valid configured room pl
     threeRoomConfig({ views: [{ type: "scale", options: { markers: "all" } }] }),
     threeRoomStates()
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const html = el._renderScaleView(data);
   assert.equal(data.scaleRoomMarkers.length, 3);
   assert.equal((html.match(/rtc-marker-room/g) || []).length, 3);
@@ -167,7 +168,7 @@ test("scale.markers: 'all' excludes unavailable rooms and keeps marker positions
       "sensor.r2": mkState("sensor.r2", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }),
     })
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.scaleRoomMarkers.length, 2);
   for (const marker of data.scaleRoomMarkers) {
     assert.equal(marker.position, el._pos(marker.value, data.scaleMin, data.scaleMax));
@@ -196,8 +197,8 @@ test("scale.markers: 'all' patches the keyed marker set when room availability c
 test("scale.markers does not affect coolest/warmest room selection, comfort count, or marker colors in data", () => {
   const elAll = env.createCard(baseConfig(), twoRoomStates());
   const elAvg = env.createCard(baseConfig({ views: [{ type: "scale", options: { markers: "average" } }] }), twoRoomStates());
-  const a = elAll._computeData();
-  const b = elAvg._computeData();
+  const a = computeLegacyData(elAll);
+  const b = computeLegacyData(elAvg);
   assert.equal(a.coolest.name, b.coolest.name);
   assert.equal(a.warmest.name, b.warmest.name);
   assert.equal(a.coolestColor, b.coolestColor);
@@ -211,14 +212,14 @@ test("scale.markers does not affect coolest/warmest room selection, comfort coun
 
 test("scale.footer:false suppresses the comfort-count footer text, ANDed with the global hide_footer", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { footer: false } }] }), twoRoomStates());
-  const html = el._renderScaleView(el._computeData());
+  const html = el._renderScaleView(computeLegacyData(el));
   assert.ok(!html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
 
 test("scale.footer:true (default) keeps the footer, unrelated to markers", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  const html = el._renderScaleView(el._computeData());
+  const html = el._renderScaleView(computeLegacyData(el));
   assert.ok(html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
@@ -228,16 +229,16 @@ test("range_scale.footer: detailed (default) includes min/max timestamps, compac
   const elCompact = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: "compact" } }] }), rangeStates());
   const elFalse = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates());
 
-  const detailedHtml = elDetailed._renderRangeScaleView(elDetailed._computeData());
-  const compactHtml = elCompact._renderRangeScaleView(elCompact._computeData());
-  const falseHtml = elFalse._renderRangeScaleView(elFalse._computeData());
+  const detailedHtml = elDetailed._renderRangeScaleView(computeLegacyData(elDetailed));
+  const compactHtml = elCompact._renderRangeScaleView(computeLegacyData(elCompact));
+  const falseHtml = elFalse._renderRangeScaleView(computeLegacyData(elFalse));
 
   assert.ok(detailedHtml.includes("rtc-scale-footer"));
   assert.ok(compactHtml.includes("rtc-scale-footer"));
   assert.ok(!falseHtml.includes("rtc-scale-footer"));
 
-  const detailedText = elDetailed._rangeScaleFooterText(elDetailed._computeData(), "detailed");
-  const compactText = elCompact._rangeScaleFooterText(elCompact._computeData(), "compact");
+  const detailedText = elDetailed._rangeScaleFooterText(computeLegacyData(elDetailed), "detailed");
+  const compactText = elCompact._rangeScaleFooterText(computeLegacyData(elCompact), "compact");
   assert.notEqual(detailedText, compactText, "compact must be a genuinely different (shorter) string than detailed");
   assert.ok(!compactText.includes("(") , "compact must drop the timestamp parentheticals entirely");
 
@@ -247,8 +248,8 @@ test("range_scale.footer: detailed (default) includes min/max timestamps, compac
 });
 
 test("range_scale.footer does not affect the comfort/optimal band geometry or label positions", () => {
-  const a = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true } ] }), rangeStates())._computeData();
-  const b = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates())._computeData();
+  const a = computeLegacyData(env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true } ] }), rangeStates()));
+  const b = computeLegacyData(env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates()));
   assert.equal(a.rangeScaleGeometry.comfortMin, b.rangeScaleGeometry.comfortMin);
   assert.equal(a.rangeScaleGeometry.optimalMin, b.rangeScaleGeometry.optimalMin);
   assert.equal(a.rangeCurrentPos, b.rangeCurrentPos);
@@ -258,7 +259,7 @@ test("range_scale.footer does not affect the comfort/optimal band geometry or la
 
 test("range.show_time:true (default) shows the min/max timestamp on the range cards (regression)", () => {
   const el = env.createCard(baseConfig({ range_entity: "sensor.range" }), rangeStates());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const html = el._renderRangeCards(data);
   assert.ok(typeof data.rangeMinTime === "string" && data.rangeMinTime.length > 0, "sanity: fixture must actually produce a timestamp");
   assert.ok(html.includes(data.rangeMinTime), "min timestamp text must appear in the rendered card");
@@ -267,7 +268,7 @@ test("range.show_time:true (default) shows the min/max timestamp on the range ca
 
 test("range.show_time:false omits the timestamp text from both range cards without touching the numeric value", () => {
   const el = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range", options: { show_time: false } }] }), rangeStates());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const html = el._renderRangeCards(data);
   assert.ok(!html.includes('class="rtc-extreme-name">' + data.rangeMinTime), "min timestamp text must not appear");
   assert.ok(html.includes(String(Math.trunc(data.rangeMin))) || html.includes(el._fmt(data.rangeMin)), "the numeric value must still render");
@@ -278,7 +279,7 @@ test("range.show_time:false omits the timestamp text from both range cards witho
 
 test("extremes.show_value:true (default) shows the numeric value on both extrema cards (regression)", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const html = el._renderExtremeCards(data);
   assert.ok(html.includes(el._fmt(data.coolest.value)));
   env.cleanup(el);
@@ -286,7 +287,7 @@ test("extremes.show_value:true (default) shows the numeric value on both extrema
 
 test("extremes.show_value:false hides the numeric value but keeps the room name and label", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "extremes", options: { show_value: false } }] }), twoRoomStates());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const html = el._renderExtremeCards(data);
   assert.ok(!html.includes(`>${el._fmt(data.coolest.value)}<`), "the numeric value text must not appear");
   assert.ok(html.includes(data.coolest.name), "the room name must still appear");
@@ -294,8 +295,8 @@ test("extremes.show_value:false hides the numeric value but keeps the room name 
 });
 
 test("extremes.show_value does not affect which room is coldest/warmest or their colors", () => {
-  const a = env.createCard(baseConfig(), twoRoomStates())._computeData();
-  const b = env.createCard(baseConfig({ views: [{ type: "extremes", options: { show_value: false } }] }), twoRoomStates())._computeData();
+  const a = computeLegacyData(env.createCard(baseConfig(), twoRoomStates()));
+  const b = computeLegacyData(env.createCard(baseConfig({ views: [{ type: "extremes", options: { show_value: false } }] }), twoRoomStates()));
   assert.equal(a.coolest.name, b.coolest.name);
   assert.equal(a.warmest.name, b.warmest.name);
 });

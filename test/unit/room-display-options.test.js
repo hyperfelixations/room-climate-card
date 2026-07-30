@@ -12,6 +12,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -79,37 +80,37 @@ test("integration: room_sort/room_label/show_rooms default correctly, invalid va
 
 test("room_sort: value_asc (default) orders chips by value ascending, name as tie-break", () => {
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(roomNames(data), ["Attic", "Bath", "Kitchen", "Den"]); // 18, 20, 24, 26
   env.cleanup(el);
 });
 
 test("room_sort: value_desc orders chips by value descending", () => {
   const el = env.createCard(fourRoomConfig({ room_sort: "value_desc" }), fourRoomHass());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(roomNames(data), ["Den", "Kitchen", "Bath", "Attic"]); // 26, 24, 20, 18
   env.cleanup(el);
 });
 
 test("room_sort: name orders chips alphabetically", () => {
   const el = env.createCard(fourRoomConfig({ room_sort: "name" }), fourRoomHass());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(roomNames(data), ["Attic", "Bath", "Den", "Kitchen"]);
   env.cleanup(el);
 });
 
 test("room_sort: configured preserves the declaration order from rooms:", () => {
   const el = env.createCard(fourRoomConfig({ room_sort: "configured" }), fourRoomHass());
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.deepEqual(roomNames(data), ["Kitchen", "Attic", "Den", "Bath"]);
   env.cleanup(el);
 });
 
 test("room_sort: NEVER affects data.allRooms / extrema / comfort count / spread, across all four modes", () => {
-  const baseline = env.createCard(fourRoomConfig({ room_sort: "value_asc" }), fourRoomHass())._computeData();
+  const baseline = computeLegacyData(env.createCard(fourRoomConfig({ room_sort: "value_asc" }), fourRoomHass()));
   for (const mode of ["value_desc", "name", "configured"]) {
     const el = env.createCard(fourRoomConfig({ room_sort: mode }), fourRoomHass());
-    const data = el._computeData();
+    const data = computeLegacyData(el);
     assert.equal(data.coolest.name, baseline.coolest.name, `${mode}: coolest must stay Attic regardless of chip order`);
     assert.equal(data.warmest.name, baseline.warmest.name, `${mode}: warmest must stay Den regardless of chip order`);
     assert.equal(data.avg, baseline.avg);
@@ -160,8 +161,8 @@ test("room_label: name shows the full room name instead of the abbreviation", ()
 test("room_label: does not affect any data computation (value, color classification, tooltip room name)", () => {
   const elShort = env.createCard(fourRoomConfig({ room_label: "short" }), fourRoomHass());
   const elName = env.createCard(fourRoomConfig({ room_label: "name" }), fourRoomHass());
-  const dataShort = elShort._computeData();
-  const dataName = elName._computeData();
+  const dataShort = computeLegacyData(elShort);
+  const dataName = computeLegacyData(elName);
   assert.equal(dataShort.avg, dataName.avg);
   assert.equal(dataShort.inComfort, dataName.inComfort);
   const chipTitleShort = elShort.shadowRoot.querySelector('[data-entity="sensor.rc"]').getAttribute("title");
@@ -197,7 +198,7 @@ function oneRoomHass() {
 }
 
 function firstRoom(el) {
-  return [...el._computeData().rooms].find((r) => r.entity === "sensor.r0");
+  return [...computeLegacyData(el).rooms].find((r) => r.entity === "sensor.r0");
 }
 
 test("shortGuaranteed: explicit two-uppercase-letter short (e.g. WZ) is guaranteed", () => {
@@ -273,7 +274,7 @@ test("shortGuaranteed: a stale data-short-guaranteed attribute is removed on set
 test("show_rooms:false removes .rtc-room-grid from the DOM but leaves data.hasRoomsView/extrema/footer text fully populated", () => {
   const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-room-grid"), null);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRoomsView, true, "rooms remain a data source even with chips hidden");
   assert.equal(data.showRoomChips, false);
   assert.ok(data.coolest && data.warmest, "extrema must still be computed");
@@ -297,7 +298,7 @@ test("show_rooms:false via setConfig() removes an already-rendered grid (forces 
 
 test("show_rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by hasRoomsView, not showRoomChips)", () => {
   const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
-  const html = el._renderScaleView(el._computeData());
+  const html = el._renderScaleView(computeLegacyData(el));
   assert.ok(html.includes("rtc-marker-cold"), "cold marker must still render");
   assert.ok(html.includes("rtc-marker-warm"), "warm marker must still render");
   env.cleanup(el);

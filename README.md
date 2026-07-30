@@ -626,8 +626,8 @@ built from ES-module sources rather than edited directly:
 
 ```text
 src/
-  index.js                 composition root (still holds the pointer gestures,
-                           the event wiring and the custom element)
+  index.js                 registration root: imports the element, registers it,
+                           announces it to the card picker. Nothing else.
   core/                    numbers, text, colour, easing, card metadata
   config/                  YAML normalization: defaults, primitives, rooms,
                            views, classification profiles
@@ -670,6 +670,13 @@ src/
     carousel-runtime.js    the active view, both timers, the track and the
                            accessibility sync
     resize-runtime.js      resize observation, frame coalescing, fonts-ready
+    interaction-logic.js   swipe detection, thresholds and tap-versus-hold, as
+                           pure functions of numbers
+    interaction-runtime.js the pointer, the drag and the click suppression
+    action-runtime.js      building and dispatching a Home Assistant action
+  element/
+    room-climate-card.js   the custom element: lifecycle, render coordination,
+                           state transitions, diagnostics
 dist/room-climate-card.js  the built card — generated, committed, never edited by hand
 ```
 
@@ -684,7 +691,15 @@ handed the view registry rather than importing it. The controllers reach the
 browser only through an explicit platform object, and `browser-platform.js` is
 the only file in the tree that touches a clock, a timer, an observer or the
 document directly — which is also what makes the carousel testable without a
-browser.
+browser. The one exception is `index.js`, which registers the custom element and
+adds the card to the dashboard's picker; those cannot be reached any other way.
+
+State has exactly one owner each: the carousel runtime owns the active view and
+both timers, the interaction runtime owns the pointer and the drag, the resize
+runtime owns the observer and the fonts subscription, and the element owns the
+configuration, the hass object and the render signatures. Where the element
+exposes any of the others it does so as an accessor onto the owner, never as a
+second copy.
 
 Adding a language means adding one file under `src/i18n/languages/`, a locale
 entry in `src/i18n/locales.js`, and one line in `src/i18n/registry.js`. Adding

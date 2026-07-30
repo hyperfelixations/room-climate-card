@@ -10,6 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -26,7 +27,7 @@ test("rangeMinColor/rangeMaxColor never equal the range_entity's own current val
     "sensor.range": mkState("sensor.range", 7, { unit_of_measurement: "°C", minimum: 18, maximum: 25, value_color: "#ff00ff", value_level: "Whatever" }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.notEqual(data.rangeMinColor, "#ff00ff");
   assert.notEqual(data.rangeMaxColor, "#ff00ff");
   env.cleanup(el);
@@ -38,7 +39,7 @@ test("18°C (cool tier) and 25°C (very-warm tier) get distinct fallback colors,
     "sensor.range": mkState("sensor.range", 7, { unit_of_measurement: "°C", minimum: 18, maximum: 25, value_color: "#ff00ff" }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.notEqual(data.rangeMinColor, data.rangeMaxColor, `min(18°C) and max(25°C) must classify to different fallback tiers, got ${data.rangeMinColor} for both`);
   env.cleanup(el);
 });
@@ -49,7 +50,7 @@ test("without a range_entity value_color at all, min/max are still classified pu
     "sensor.range": mkState("sensor.range", 7, { unit_of_measurement: "°C", minimum: 18, maximum: 25 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(/^#[0-9a-f]{3,8}$/i.test(data.rangeMinColor), data.rangeMinColor);
   assert.ok(/^#[0-9a-f]{3,8}$/i.test(data.rangeMaxColor), data.rangeMaxColor);
   env.cleanup(el);

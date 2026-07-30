@@ -123,6 +123,15 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     return currentTranslate;
   }
 
+  // The same freeze, but the controller finds its own track — so the interaction runtime
+  // never has to query the DOM. With no track mounted there is nothing to freeze and the
+  // index-derived position is the honest answer.
+  function freezeTrackAtCurrentPosition() {
+    const track = getTrack();
+    if (!track) return -(activeIndex || 0) * viewWidthPct(viewCount());
+    return pauseTrackAtCurrentPosition(track);
+  }
+
   function setTrackTranslate(translatePct) {
     const track = getTrack();
     if (!track) return;
@@ -285,6 +294,11 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     trackAnimationCss: () => trackAnimationCss(timing(), activeIndex),
     slideKeyframes: () => slideKeyframes(timing()),
     maxTrackOffsetPct,
+    // Whether the track is currently detached from the synchronized animation. The
+    // interaction runtime needs to know this — a tap must not schedule a resume for a
+    // state that never applied — and asking the controller keeps the "rtc-manual" class
+    // an implementation detail of exactly one module.
+    isTrackManual: () => Boolean(getTrack()?.classList.contains("rtc-manual")),
     currentVisualIndex,
     phaseHoldsView,
     delayUntilPhaseHolds,
@@ -315,6 +329,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     updateTrackTransform,
     trackTranslatePct,
     pauseTrackAtCurrentPosition,
+    freezeTrackAtCurrentPosition,
     setTrackTranslate,
     setTrackTransition,
 

@@ -12,6 +12,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -177,7 +178,7 @@ test("a font-ready promise rejection does not produce an unhandled rejection (th
 
 // ==== The production render path consumes the CardViewModel ====
 
-test("a full render and a partial update both go through _computeViewModel(), never through the legacy DTO", () => {
+test("a full render and a partial update each compute exactly one view model", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -189,28 +190,23 @@ test("a full render and a partial update both go through _computeViewModel(), ne
   );
 
   let viewModelCalls = 0;
-  let legacyCalls = 0;
   const realViewModel = el._computeViewModel.bind(el);
   el._computeViewModel = function () {
     viewModelCalls += 1;
     return realViewModel();
   };
-  const realLegacy = el._computeData.bind(el);
-  el._computeData = function () {
-    legacyCalls += 1;
-    return realLegacy();
-  };
+  // There is nothing else to count any more: the flat DTO has no producer in the
+  // card at all, which an architecture test now proves for the whole of src/.
+  assert.equal(el._computeData, undefined, "the compatibility method is gone");
 
   // A partial update (the common per-second path).
   el._render(false);
   assert.equal(viewModelCalls, 1, "exactly one view model per render, not one per view");
-  assert.equal(legacyCalls, 0, "the flat DTO is not on the render path at all");
 
   // A structural rebuild.
   el._rendered = false;
   el._render(false);
   assert.equal(viewModelCalls, 2);
-  assert.equal(legacyCalls, 0);
   assert.ok(el.shadowRoot.querySelector(".rtc-scale-view"), "and the card still rendered");
   env.cleanup(el);
 });
@@ -218,7 +214,7 @@ test("a full render and a partial update both go through _computeViewModel(), ne
 test("the legacy compatibility method still reproduces the flat shape on demand", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.empty, false);
   assert.equal(data.metricType, "temperature");
   assert.equal(typeof data.avg, "number");

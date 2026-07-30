@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 let el;
@@ -227,8 +228,8 @@ test("DATA-01 integration: rooms hidden by room_columns/room_rows still count in
   const hass = mkHass(states);
   const capped = env.createCard({ entity: "sensor.avg", rooms, room_columns: 4, room_rows: 2 }, hass); // only 8 of 10 visible
   const uncapped = env.createCard({ entity: "sensor.avg", rooms }, hass);
-  const cappedData = capped._computeData();
-  const uncappedData = uncapped._computeData();
+  const cappedData = computeLegacyData(capped);
+  const uncappedData = computeLegacyData(uncapped);
 
   assert.equal(cappedData.rooms.length, 8, "only 8 chips actually rendered");
   assert.equal(cappedData.roomCount, 10, "roomCount reflects all valid rooms, not just visible chips");
@@ -259,7 +260,7 @@ test("DATA-01 integration: which rooms get capped-out is decided by configuratio
   for (const room of rooms) states[room.entity] = mkState(room.entity, values[room.name], { device_class: "temperature", unit_of_measurement: "°C" });
   const hass = mkHass(states);
   const el2 = env.createCard({ entity: "sensor.avg", rooms, room_columns: 3, room_rows: 1 }, hass); // cap to 3
-  const data = el2._computeData();
+  const data = computeLegacyData(el2);
   assert.equal(data.rooms.length, 3);
   const visibleNames = new Set(normalize(data.rooms).map((r) => r.name));
   assert.deepEqual(visibleNames, new Set(["R0", "R1", "R2"]), "capped selection must be the first 3 declared (R0/R1/R2), not the 3 lowest values (R1/R3/R2)");

@@ -1,8 +1,8 @@
 "use strict";
 
-// Phase 0 characterization: the _computeData() DTO, verbatim.
+// Phase 0 characterization: the computeLegacyData() DTO, verbatim.
 //
-// _computeData()'s return value is the single contract between the card's
+// computeLegacyData()'s return value is the single contract between the card's
 // data layer and every renderer/patcher, and the existing unit suite asserts
 // against it from 177 call sites. Before the source split it had no
 // whole-object baseline at all — individual fields were asserted, the SHAPE
@@ -17,6 +17,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { SCENARIOS, buildHass } = require("../helpers/characterization-scenarios.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 let console_;
@@ -35,19 +36,19 @@ test.after(() => {
 });
 
 for (const scenario of SCENARIOS) {
-  test(`_computeData() DTO baseline: ${scenario.name}`, () => {
+  test(`computeLegacyData() DTO baseline: ${scenario.name}`, () => {
     const el = env.createCard(scenario.config, buildHass(scenario));
-    const data = el._computeData();
+    const data = computeLegacyData(el);
     expectBaseline(`model/${scenario.name}.json`, stableStringify(data));
     env.cleanup(el);
   });
 }
 
-test("_computeData() is a pure function of (config, hass): repeated calls return an identical DTO", () => {
+test("computeLegacyData() is a pure function of (config, hass): repeated calls return an identical DTO", () => {
   for (const scenario of SCENARIOS) {
     const el = env.createCard(scenario.config, buildHass(scenario));
-    const first = stableStringify(el._computeData());
-    const second = stableStringify(el._computeData());
+    const first = stableStringify(computeLegacyData(el));
+    const second = stableStringify(computeLegacyData(el));
     assert.equal(second, first, `scenario ${scenario.name} must not depend on call order or accumulated state`);
     env.cleanup(el);
   }
@@ -58,8 +59,8 @@ test("the DTO key set is stable across two independently constructed cards with 
     const a = env.createCard(scenario.config, buildHass(scenario));
     const b = env.createCard(scenario.config, buildHass(scenario));
     assert.deepEqual(
-      Object.keys(a._computeData()).sort(),
-      Object.keys(b._computeData()).sort(),
+      Object.keys(computeLegacyData(a)).sort(),
+      Object.keys(computeLegacyData(b)).sort(),
       `scenario ${scenario.name}`
     );
     env.cleanup(a);

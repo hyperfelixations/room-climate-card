@@ -10,6 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -83,7 +84,7 @@ test("trend policy: each metric uses its own inclusive stable deadband in canoni
 
     for (const [value, expectedDirection] of cases) {
       const el = trendCard(metric, value);
-      const data = el._computeData();
+      const data = computeLegacyData(el);
       assert.deepEqual(
         normalize({
           direction: data.trend?.direction,
@@ -116,7 +117,7 @@ test("trend policy: Fahrenheit rates are classified after conversion to canonica
     { entity: "sensor.avg", trend_entity: "sensor.trend" },
     mkHass(states)
   );
-  const data = stable._computeData();
+  const data = computeLegacyData(stable);
   assert.equal(data.trend.direction, "stable");
   assert.ok(Math.abs(data.trend.canonicalValue - 0.1) < 1e-12);
   assert.ok(Math.abs(data.trend.value - 0.18) < 1e-12);
@@ -132,7 +133,7 @@ test("trend policy: Fahrenheit rates are classified after conversion to canonica
       }),
     })
   );
-  assert.equal(rising._computeData().trend.direction, "rising");
+  assert.equal(computeLegacyData(rising).trend.direction, "rising");
   env.cleanup(rising);
 });
 
@@ -169,7 +170,7 @@ test("trend model: missing, unavailable, non-numeric, unitless, and incompatible
     };
     if (variant.state) states["sensor.trend"] = variant.state;
     const el = env.createCard(variant.config, mkHass(states));
-    const data = el._computeData();
+    const data = computeLegacyData(el);
     assert.equal(data.trend, null);
     assert.equal(el.shadowRoot.querySelector(".rtc-avg-button").classList.contains("rtc-has-trend"), false);
     assert.equal(el.shadowRoot.querySelector(".rtc-avg-trend"), null);
@@ -222,7 +223,7 @@ test("trend rendering: all four metrics expose semantic direction, SVG indicator
 
   for (const [metric, value, direction, text] of cases) {
     const el = trendCard(metric, value);
-    const data = el._computeData();
+    const data = computeLegacyData(el);
     const avg = el.shadowRoot.querySelector(".rtc-avg-button");
     assert.equal(data.trend.direction, direction);
     assert.equal(Object.hasOwn(data.trend, "symbol"), false, "presentation glyphs do not belong in the trend data model");
@@ -258,7 +259,7 @@ test("scale footer: a valid configured trend is restored as the localized third 
       }),
     }
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   const footer = el.shadowRoot.querySelector(".rtc-scale-view .rtc-scale-footer");
   assert.ok(footer);
   assert.match(footer.textContent, /comfort/i);

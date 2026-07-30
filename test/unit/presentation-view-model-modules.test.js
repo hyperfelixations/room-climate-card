@@ -58,7 +58,7 @@ test.before(async () => {
   roomLayout = await import("../../src/presentation/view-model/room-layout.js");
   scaleViewModel = await import("../../src/presentation/view-model/scale-view-model.js");
   cardViewModel = await import("../../src/presentation/view-model/card-view-model.js");
-  legacyData = await import("../../src/presentation/view-model/legacy-data.js");
+  legacyData = require("../helpers/legacy-dto.js");
   viewContent = await import("../../src/presentation/view-model/view-content/index.js");
 });
 

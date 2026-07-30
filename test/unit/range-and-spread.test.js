@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -29,7 +30,7 @@ test("DATA-02: negative range_entity state does not activate hasRange", () => {
     "sensor.range": mkState("sensor.range", -5, { unit_of_measurement: "°C", minimum: 18, maximum: 13 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, false);
   assert.equal(el._views.length, 1);
   assert.equal(el._views[0], "scale");
@@ -42,7 +43,7 @@ test("DATA-02 control: a positive range_entity state does activate hasRange", ()
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   env.cleanup(el);
 });
@@ -53,7 +54,7 @@ test("DATA-02: a zero range_entity state is valid (min === max, a physically pos
     "sensor.range": mkState("sensor.range", 0, { unit_of_measurement: "°C", minimum: 20, maximum: 20 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   assert.equal(data.rangeMin, 20);
   assert.equal(data.rangeMax, 20);
@@ -73,7 +74,7 @@ test("AP-06: data.rangeState is exposed and equals the converted range_entity st
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   assert.equal(data.rangeState, 3, "rangeState must be the range_entity's own converted state, not rangeMax - rangeMin (5)");
   env.cleanup(el);
@@ -85,7 +86,7 @@ test("AP-06: rangeState === 0 is valid and exposed as 0, not null/false", () => 
     "sensor.range": mkState("sensor.range", 0, { unit_of_measurement: "°C", minimum: 20, maximum: 20 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   assert.equal(data.rangeState, 0);
   env.cleanup(el);
@@ -97,7 +98,7 @@ test("AP-06: a range_entity with no unit at all exposes rangeState as null (rang
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, false);
   assert.equal(data.rangeState, null);
   env.cleanup(el);
@@ -112,7 +113,7 @@ test("DATA-03: negative spread attribute is rejected, falls back to the locally-
     "sensor.r2": mkState("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.spread, 5, "must fall back to warmest(25) - coolest(20) = 5, not the negative attribute");
   env.cleanup(el);
 });
@@ -124,7 +125,7 @@ test("DATA-03 control: a valid non-negative spread attribute is used as-is", () 
     "sensor.r2": mkState("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.spread, 3.1, "a valid attribute must win over the locally-computed value");
   env.cleanup(el);
 });
@@ -136,7 +137,7 @@ test("DATA-03: a zero spread attribute is valid (all rooms report the same value
     "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.spread, 0);
   env.cleanup(el);
 });
@@ -157,21 +158,21 @@ function rangeScaleFixture(avg, rangeState, minimum, maximum) {
 
 test("rangeScale axis: avg outside [min,max] is not clamped to the 0/100% edge", () => {
   const el = rangeScaleFixture(30, 5, 18, 23); // avg way above the daily range
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.rangeCurrentPos > 0 && data.rangeCurrentPos < 100, `rangeCurrentPos=${data.rangeCurrentPos} must not be clamped to an edge`);
   env.cleanup(el);
 });
 
 test("rangeScale axis: avg inside [min,max] sits strictly between 0 and 100%", () => {
   const el = rangeScaleFixture(20, 5, 18, 23);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.rangeCurrentPos > 0 && data.rangeCurrentPos < 100);
   env.cleanup(el);
 });
 
 test("rangeScale axis: min === max (a fully flat day) does not throw or divide by zero", () => {
   const el = rangeScaleFixture(20, 0, 20, 20);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   assert.equal(Number.isFinite(data.rangeCurrentPos), true);
   assert.equal(Number.isFinite(data.rangeMinPos), true);
@@ -181,7 +182,7 @@ test("rangeScale axis: min === max (a fully flat day) does not throw or divide b
 
 test("rangeScale axis: avg === min === max (all three identical) does not throw", () => {
   const el = rangeScaleFixture(20, 0, 20, 20);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(Number.isFinite(data.rangeCurrentPos), true);
   env.cleanup(el);
 });
@@ -192,7 +193,7 @@ test("rangeScale: missing minimum_zeitpunkt/maximum_zeitpunkt attributes leave t
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 21 }), // no *_zeitpunkt
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, true);
   assert.equal(data.rangeMinTime, null);
   assert.equal(data.rangeMaxTime, null);
@@ -306,7 +307,7 @@ test("DATA-03: main scale expands to include avg when avg is above both coolest 
     "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.avgPos < 100, `avgPos=${data.avgPos} must not be clamped to the right edge`);
   assert.ok(data.scaleMax >= data.avg, "scaleMax must cover avg");
   env.cleanup(el);
@@ -319,7 +320,7 @@ test("DATA-03: main scale expands to include avg when avg is below both coolest 
     "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.avgPos > 0, `avgPos=${data.avgPos} must not be clamped to the left edge`);
   assert.ok(data.scaleMin <= data.avg, "scaleMin must cover avg");
   env.cleanup(el);
@@ -332,7 +333,7 @@ test("DATA-03: main scale unaffected when avg already sits inside [coolest, warm
     "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.avgPos > 0 && data.avgPos < 100);
   env.cleanup(el);
 });
@@ -353,7 +354,7 @@ test("review fix: range_entity reporting in a DIFFERENT unit than the display un
     "sensor.range": mkState("sensor.range", 9, { unit_of_measurement: "°F", minimum: 64.4, maximum: 73.4 }), // 9°F delta, 18°C..23°C as °F
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(el._unit(), "°C");
   assert.equal(data.hasRange, true);
   assert.ok(Math.abs(data.rangeMin - 18) < 1e-9, `rangeMin must convert 64.4°F -> 18°C, got ${data.rangeMin}`);
@@ -372,7 +373,7 @@ test("review fix: range_entity's own state is converted as a DELTA (not an absol
     "sensor.range": mkState("sensor.range", -18, { unit_of_measurement: "°F", minimum: 60, maximum: 70 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, false, "a negative range_entity delta (even after correct unit conversion) must never activate the range view");
   env.cleanup(el);
 });
@@ -383,7 +384,7 @@ test("review fix: range_entity with an explicit but UNRESOLVABLE unit is diagnos
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "hPa", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, false, "an incompatible range_entity unit must disable the range view, never show an unconverted number");
   assert.equal(data.rangeMin, null);
   assert.equal(data.rangeMax, null);
@@ -404,7 +405,7 @@ test("review fix (P0, post-2.21.1): range_entity with NO unit_of_measurement at 
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.hasRange, false, "a missing range_entity unit must disable the range view, never silently assume canonical");
   assert.equal(data.rangeMin, null);
   assert.equal(data.rangeMax, null);
@@ -417,7 +418,7 @@ test("review fix: trend_entity reporting a different unit is converted as a RATE
     "sensor.trend": mkState("sensor.trend", 1.8, { unit_of_measurement: "°F" }), // +1.8°F/h == +1°C/h
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(Math.abs(data.trendValue - 1) < 1e-9, `trendValue must convert 1.8°F/h -> 1°C/h, got ${data.trendValue}`);
   assert.equal(data.trendUnit, "°C/h", "trendUnit must match the DISPLAY unit the (now-converted) number is actually expressed in");
   env.cleanup(el);
@@ -429,7 +430,7 @@ test("review fix: trend_entity using the conventional '<unit>/h' suffix (e.g. HA
     "sensor.trend": mkState("sensor.trend", -15, { unit_of_measurement: "ppm/h" }),
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.trendValue, -15, "'ppm/h' must resolve via the stripped 'ppm' unitProfile (co2's only, an identity conversion), not be rejected as unresolvable");
   assert.equal(data.trendUnit, "ppm/h");
   env.cleanup(el);
@@ -441,7 +442,7 @@ test("review fix: trend_entity with an unresolvable unit is unusable (trendValue
     "sensor.trend": mkState("sensor.trend", 3, { unit_of_measurement: "hPa" }),
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.trendValue, null);
   env.cleanup(el);
 });

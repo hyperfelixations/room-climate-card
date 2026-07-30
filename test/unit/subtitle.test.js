@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -31,7 +32,7 @@ test("audit counterexample: comfort 20-24, avg 23.9, coolest 19.8 (4.1 from avg)
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
     hass
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.avg >= 20 && data.avg <= 24, "avg itself must be within the 20-24 comfort band");
   assert.equal(data.warmest.name, "WarmRoom");
   assert.equal(data.coolest.name, "CoolRoom");
@@ -50,7 +51,7 @@ test("mirrored counterexample: warmest farther from avg than coolest -> names th
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
     hass
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.match(data.subtitle, /WarmRoom/, data.subtitle);
   assert.doesNotMatch(data.subtitle, /CoolRoom/, data.subtitle);
   env.cleanup(el);
@@ -66,7 +67,7 @@ test("regression: exact tie at the extreme value names the same room as the warm
     { entity: "sensor.avg", rooms: [{ name: "Arbeitszimmer", entity: "sensor.az" }, { name: "Kueche", entity: "sensor.ku" }] },
     hass
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.equal(data.warmest.name, "Kueche", "warmest picks the alphabetically-last name on an exact tie");
   assert.match(data.subtitle, /Kueche/, data.subtitle);
   assert.doesNotMatch(data.subtitle, /Arbeitszimmer/, data.subtitle);
@@ -83,7 +84,7 @@ test("only one side outside comfort: names that side without a distance comparis
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
     hass
   );
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.match(data.subtitle, /CoolRoom/, "only the cool room is outside the 20-24 comfort band");
   env.cleanup(el);
 });
@@ -95,7 +96,7 @@ test("avg itself out of comfort: subtitle uses the aboveComfort/belowComfort wor
     "sensor.r2": mkState("sensor.r2", 27, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.ok(data.avg > 24, "avg must be above the comfort max for this branch");
   assert.match(data.subtitle, /above comfort/i, data.subtitle);
   env.cleanup(el);
@@ -108,7 +109,7 @@ test("all rooms within comfort: subtitle reports the all-good case, no room name
     "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = el._computeData();
+  const data = computeLegacyData(el);
   assert.match(data.subtitle, /within target range|all good|all rooms/i, data.subtitle);
   env.cleanup(el);
 });

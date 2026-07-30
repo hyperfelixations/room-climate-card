@@ -4,7 +4,7 @@
 // MetricDefinition/UnitProfile/QuantityKind registry — the foundation for
 // native Fahrenheit/Kelvin support and future metric kinds (e.g. absolute
 // humidity). This block is PURELY ADDITIVE: METRIC_DEFINITIONS and its
-// helpers are not wired into _computeData(), any scale-rendering method, or
+// helpers are not wired into computeLegacyData(), any scale-rendering method, or
 // the view system yet (that migration is a later, separate block per the
 // audit's own commit/review sequencing in section 20.3 — mixing correctness
 // fixes with a refactor is explicitly warned against). These tests exercise
@@ -26,6 +26,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
+const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 let el;
