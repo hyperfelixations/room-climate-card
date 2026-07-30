@@ -626,8 +626,8 @@ built from ES-module sources rather than edited directly:
 
 ```text
 src/
-  index.js                 composition root (still holds the carousel runtime,
-                           the pointer gestures and the custom element)
+  index.js                 composition root (still holds the pointer gestures,
+                           the event wiring and the custom element)
   core/                    numbers, text, colour, easing, card metadata
   config/                  YAML normalization: defaults, primitives, rooms,
                            views, classification profiles
@@ -662,6 +662,14 @@ src/
   views/                   one module per view, plus the registry composed
                            from the view definitions' own order
   styles/                  the stylesheet, in sections
+  controllers/runtime/
+    browser-platform.js    the one place that touches a clock, a timer, an
+                           observer or the document
+    carousel-timing.js     hold sequence, phase and keyframes, as pure
+                           functions of the view count and the time
+    carousel-runtime.js    the active view, both timers, the track and the
+                           accessibility sync
+    resize-runtime.js      resize observation, frame coalescing, fonts-ready
 dist/room-climate-card.js  the built card — generated, committed, never edited by hand
 ```
 
@@ -672,7 +680,11 @@ Import direction is enforced by a test. The layers, lowest first, are
 `core` has no project-internal dependencies, no module may import from a layer
 above it, and there are no cycles or external runtime imports. A view may use a
 render primitive; a primitive can never reach a view, and the card shell is
-handed the view registry rather than importing it.
+handed the view registry rather than importing it. The controllers reach the
+browser only through an explicit platform object, and `browser-platform.js` is
+the only file in the tree that touches a clock, a timer, an observer or the
+document directly — which is also what makes the carousel testable without a
+browser.
 
 Adding a language means adding one file under `src/i18n/languages/`, a locale
 entry in `src/i18n/locales.js`, and one line in `src/i18n/registry.js`. Adding

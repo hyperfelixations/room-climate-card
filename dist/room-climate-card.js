@@ -8550,6 +8550,692 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
   ].join("");
 }
 
+// The platform contract, and its single production implementation.
+//
+// Everything the controllers need from the outside world arrives through this object
+// and nothing else: a clock, timeouts, animation frames, the reduced-motion
+// preference, document visibility, a ResizeObserver, the font-loading promise, event
+// construction, and one transform read. That list is deliberately closed. A general
+// `window` handed around as a service locator would make every controller able to
+// reach anything, which is exactly what makes a controller untestable.
+//
+// THE CONTRACT
+//
+//   now()                          -> milliseconds since the epoch
+//   setTimeout(fn, ms)             -> handle
+//   clearTimeout(handle)           -> void
+//   requestAnimationFrame(fn)      -> handle
+//   cancelAnimationFrame(handle)   -> void
+//   prefersReducedMotion()         -> boolean
+//   isDocumentHidden()             -> boolean
+//   onVisibilityChange(listener)   -> unsubscribe function
+//   createResizeObserver(callback) -> observer, or null when unsupported
+//   fontsReady()                   -> Promise, or null when unsupported
+//   createEvent(type, init)        -> an Event from the card's own realm
+//   readTranslateXPx(element)      -> the element's current translate X in CSS
+//                                     pixels, or null when it cannot be read
+//
+// A test substitutes a fake with the same shape and gets a deterministic controller.
+// createFakePlatform() lives in the test suite, not here: production must not ship a
+// second implementation, and a fake that lives next to its tests can be as
+// inspectable as those tests need.
+//
+// ON REALMS. The adapter resolves its document on EVERY call through the thunk it was
+// given, never once at construction. A card can be adopted into another document —
+// moved between dashboards, re-parented by a view transition — and an adapter that
+// had captured the original document would keep scheduling timers, reading visibility
+// and constructing events in a realm the card no longer lives in. Resolving late costs
+// one property read and cannot go stale.
+
+// Reading the transform needs BOTH the element's computed style and its realm's
+// DOMMatrixReadOnly. Doing it here keeps the only two realm-bound globals the carousel
+// needs in the one module that is allowed to touch them.
+function readTranslateXPx(element) {
+  if (!element) return null;
+  const view = element.ownerDocument?.defaultView;
+  if (!view) return null;
+  try {
+    const transform = view.getComputedStyle(element).transform;
+    if (!transform || transform === "none") return null;
+    return new view.DOMMatrixReadOnly(transform).m41;
+  } catch (_error) {
+    // A browser without DOMMatrixReadOnly, or an unparsable transform. The caller has
+    // a value-derived fallback; guessing here would be worse than saying "unknown".
+    return null;
+  }
+}
+
+function createBrowserPlatform(getDocument) {
+  const documentOf = () => getDocument() || null;
+  const viewOf = () => documentOf()?.defaultView || null;
+
+  return {
+    now: () => Date.now(),
+
+    setTimeout: (fn, ms) => viewOf()?.setTimeout(fn, ms) ?? null,
+    clearTimeout: (handle) => {
+      if (handle !== null && handle !== undefined) viewOf()?.clearTimeout(handle);
+    },
+
+    requestAnimationFrame: (fn) => viewOf()?.requestAnimationFrame(fn) ?? null,
+    cancelAnimationFrame: (handle) => {
+      if (handle !== null && handle !== undefined) viewOf()?.cancelAnimationFrame(handle);
+    },
+
+    // Mirrors the CSS media query in JavaScript, so a reduced-motion user avoids the
+    // timers as well as the animation. Optional-chained: a browser or test realm
+    // without matchMedia degrades to "no preference", which is the safe reading.
+    prefersReducedMotion: () => Boolean(viewOf()?.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches),
+
+    isDocumentHidden: () => Boolean(documentOf()?.hidden),
+
+    onVisibilityChange: (listener) => {
+      const target = documentOf();
+      if (!target) return () => {};
+      target.addEventListener("visibilitychange", listener);
+      // Returning the unsubscribe rather than exposing a remove* twin means a caller
+      // cannot detach a listener it did not attach, and cannot forget which arguments
+      // the pair has to agree on.
+      return () => target.removeEventListener("visibilitychange", listener);
+    },
+
+    // null rather than a stub when unsupported: the caller has to decide what a card
+    // without resize observation does, and a silently inert observer would hide that.
+    createResizeObserver: (callback) => {
+      const view = viewOf();
+      if (!view || typeof view.ResizeObserver !== "function") return null;
+      return new view.ResizeObserver(callback);
+    },
+
+    fontsReady: () => documentOf()?.fonts?.ready ?? null,
+
+    createEvent: (type, init) => {
+      const view = viewOf();
+      // The realm matters: an Event constructed from another realm does not pass
+      // `instanceof` checks in the listener's own realm, which is how a cross-document
+      // card would silently stop dispatching actions.
+      const EventConstructor = view?.Event ?? Event;
+      return new EventConstructor(type, init);
+    },
+
+    readTranslateXPx,
+  };
+}
+
+// The carousel's arithmetic, as pure functions.
+//
+// Every value below is derived from four numbers — how many views there are, how long
+// a view is held, how long a slide takes, and what time it is — and nothing else. No
+// DOM, no card, no clock of its own: the caller passes `nowMs` in. That is what makes
+// the whole timing model testable by writing down a millisecond, and it is why the
+// auto-slide can be reasoned about at all.
+//
+// WHY WALL-CLOCK TIME. The track is moved by a CSS keyframe animation with a negative
+// delay derived from the absolute time. Two cards on the same dashboard therefore show
+// the same view at the same moment without talking to each other, and an entity update
+// never restarts the animation. The price is that JavaScript has to be able to compute
+// the animation's current phase from the same clock — which is what most of this file
+// is.
+
+
+// The hold-index sequence for one full cycle: a linear ping-pong straight through the
+// views in their actual left-to-right DOM order — 0,1,…,N-1,N-2,…,1, then wrapping
+// back to 0 — so every transition, including the wrap, moves exactly one position and
+// no view is ever skipped. A pure function of the count; it neither knows nor cares
+// which key sits at which index.
+function holdSequence(viewCount) {
+  const n = Math.max(0, viewCount | 0);
+  if (n < 2) return [];
+  const forward = Array.from({ length: n }, (_, index) => index);
+  const backwardInterior = Array.from({ length: Math.max(0, n - 2) }, (_, index) => n - 2 - index);
+  return [...forward, ...backwardInterior];
+}
+
+// One view's width as a percentage of the track's own width. The track is
+// viewCount * 100% wide, so a view is 100/viewCount of it.
+function viewWidthPct(viewCount) {
+  return 100 / Math.max(1, viewCount | 0);
+}
+
+function slideTiming({ holdSeconds, slideSeconds, viewCount, nowMs }) {
+  const holdMs = Math.max(0, Number(holdSeconds) * 1000);
+  const slideMs = Math.max(1, Number(slideSeconds) * 1000);
+  const positions = holdSequence(viewCount);
+  const enabled = holdMs > 0 && slideMs > 0 && positions.length >= 2;
+  const segMs = holdMs + slideMs;
+  const cycleMs = Math.max(1, positions.length * segMs);
+
+  return {
+    enabled,
+    holdMs,
+    slideMs,
+    segMs,
+    cycleMs,
+    phaseMs: phaseForTimestamp(nowMs, cycleMs),
+    positions,
+    viewWidthPct: viewWidthPct(viewCount),
+  };
+}
+
+function phaseForTimestamp(timestampMs, cycleMs) {
+  return ((timestampMs % cycleMs) + cycleMs) % cycleMs;
+}
+
+// A compact CSS percentage, so the generated keyframes stay readable.
+function formatPercent(value) {
+  return clamp(Number(value) || 0, 0, 100)
+    .toFixed(5)
+    .replace(/\.?0+$/, "");
+}
+
+// The track's initial animation declarations. A manual swipe later overrides them with
+// inline styles; the negative delay is what synchronizes every card instance to the
+// same absolute cycle.
+function trackAnimationCss(timing, activeIndex) {
+  if (!timing.enabled) {
+    const x = -(activeIndex || 0) * timing.viewWidthPct;
+    return `animation:none;transform:translate3d(${x}%,0,0);`;
+  }
+  return `animation:rtc-track-slide ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
+}
+
+// Each hold position produces two breakpoints — the hold's start (linear, so it does
+// not drift) and its end (eased, so the slide out of it matches the visual easing) —
+// and a final 100% breakpoint returns to the first position.
+function slideKeyframes(timing) {
+  if (!timing.enabled) return "";
+
+  const frames = timing.positions.map((position, index) => {
+    const x = -(position * timing.viewWidthPct);
+    const holdStartPct = ((index * timing.segMs) / timing.cycleMs) * 100;
+    const holdEndPct = ((index * timing.segMs + timing.holdMs) / timing.cycleMs) * 100;
+    return `
+          ${formatPercent(holdStartPct)}% {
+            transform: translate3d(${x}%,0,0);
+            animation-timing-function: linear;
+          }
+          ${formatPercent(holdEndPct)}% {
+            transform: translate3d(${x}%,0,0);
+            animation-timing-function: ${SLIDE_EASING_CSS};
+          }`;
+  });
+  const closeX = -(timing.positions[0] * timing.viewWidthPct);
+
+  return `
+        @keyframes rtc-track-slide {
+          ${frames.join("\n")}
+          100% {
+            transform: translate3d(${closeX}%,0,0);
+          }
+        }
+      `;
+}
+
+// Which view is VISUALLY in front at a given phase.
+//
+// Mirrors slideKeyframes()'s structure: segment i spans [i*segMs, (i+1)*segMs) — a
+// holdMs-long stable hold at positions[i], then a slideMs-long transition into
+// positions[(i+1) % n]. The current view flips where the EASED, spatial progress of
+// that transition crosses 50%, which for the card's easing curve is about 35.4% of the
+// slide's TIME — not 50% of it. Using the raw temporal midpoint was a real bug: for
+// roughly 15% of every slide the outgoing view stayed the "accessible" one while the
+// incoming one was already spatially dominant.
+function accessibleViewIndexAt(phaseMs, timing) {
+  const n = timing.positions.length;
+  if (n === 0) return 0;
+  const segIndex = Math.min(n - 1, Math.floor(phaseMs / timing.segMs));
+  const subPhase = phaseMs - segIndex * timing.segMs;
+  const flipOffset = timing.holdMs + timing.slideMs * A11Y_FLIP_TIME_FRACTION;
+  return subPhase < flipOffset ? timing.positions[segIndex] : timing.positions[(segIndex + 1) % n];
+}
+
+// How long until accessibleViewIndexAt() would next return something different, so the
+// caller can arm one precisely-timed timer instead of polling. Uses the same flip
+// offset as the function above — a second, independently derived one would let the two
+// disagree about when a flip actually happens.
+function msUntilNextAccessibilityFlip(phaseMs, timing) {
+  const n = timing.positions.length;
+  if (n === 0) return timing.segMs;
+  const segIndex = Math.min(n - 1, Math.floor(phaseMs / timing.segMs));
+  const subPhase = phaseMs - segIndex * timing.segMs;
+  const flipOffset = timing.holdMs + timing.slideMs * A11Y_FLIP_TIME_FRACTION;
+  if (subPhase < flipOffset) return flipOffset - subPhase;
+  return timing.segMs - subPhase + flipOffset;
+}
+
+// The phases at which it is SAFE to hand the track back to the synchronized animation
+// while showing targetIndex — one window per occurrence of that index in the hold
+// sequence, since a view can be held more than once per cycle. Each window is trimmed
+// by a margin so the handover never lands on a hold's very edge, where the animation
+// is about to move.
+function holdWindowsForView(targetIndex, timing) {
+  const holdMs = Math.max(0, timing.holdMs);
+  const marginMs = Math.min(150, Math.max(0, holdMs / 4));
+  const windows = [];
+  (timing.positions || []).forEach((position, index) => {
+    if (position !== targetIndex) return;
+    const start = index * timing.segMs;
+    const end = start + holdMs;
+    windows.push({ start: Math.min(start + marginMs, end), end: Math.max(start, end - marginMs) });
+  });
+  return windows;
+}
+
+function isPhaseInStableViewHold(targetIndex, phaseMs, timing) {
+  return holdWindowsForView(targetIndex, timing).some(
+    (holdWindow) => holdWindow.end >= holdWindow.start && phaseMs >= holdWindow.start && phaseMs <= holdWindow.end
+  );
+}
+
+// How much longer after `timestampMs` the phase needs before it holds targetIndex.
+// Zero when it already does.
+function waitFromTimestampUntilViewHold(targetIndex, timestampMs, timing) {
+  const phaseMs = phaseForTimestamp(timestampMs, timing.cycleMs);
+  if (isPhaseInStableViewHold(targetIndex, phaseMs, timing)) return 0;
+
+  const windows = holdWindowsForView(targetIndex, timing);
+  let best = Infinity;
+  for (const holdWindow of windows) {
+    let waitMs = holdWindow.start - phaseMs;
+    if (waitMs < 0) waitMs += timing.cycleMs;
+    if (waitMs < best) best = waitMs;
+  }
+  return Number.isFinite(best) ? Math.max(0, best) : 0;
+}
+
+// The carousel controller: everything that MOVES, and everything that has to be
+// cleaned up afterwards.
+//
+// It owns three pieces of state and nothing else owns them: the active view index, the
+// resume timer, and the accessibility-sync timer. Before this module existed those
+// three lived on the custom element next to the configuration, the hass object and the
+// render pipeline, which is why "who resets this timer" had no answer.
+//
+// What it is NOT allowed to know is deliberate and complete: no hass, no configuration
+// object, no domain model, no renderer, no view model. It receives four things —
+// a platform, two narrow DOM ports, and a handful of scalar values — and everything
+// else is a callback into the element for a decision it genuinely cannot make itself
+// (is the user currently touching the card?).
+//
+// The wall-clock model is what makes it testable: nothing here reads a clock, it asks
+// the platform. A fake platform therefore makes the entire auto-slide deterministic,
+// which is the only way to assert an animation phase without waiting for one.
+
+
+// Guards against a 0ms re-arm loop if a phase lands exactly on — or a floating-point
+// hair past — a flip boundary.
+const MIN_RESCHEDULE_MS = 50;
+
+// How long the eased settle after a manual swipe takes, and how long the card waits
+// before it even considers rejoining the synchronized animation.
+const SETTLE_MS = 420;
+
+function createCarouselController({ platform, getTrack, getViewElements, getTimingConfig, isInteracting }) {
+  // ---- owned state ----------------------------------------------------------
+  let viewKeys = [];
+  let activeIndex = 0;
+  let resumeTimer = null;
+  let a11yTimer = null;
+
+  const viewCount = () => viewKeys.length;
+  const interacting = () => Boolean(isInteracting?.());
+
+  // ---- timing ---------------------------------------------------------------
+  // PULLED, not pushed. Three scalars, read on demand from the one place that owns
+  // them. A pushed copy would need a synchronization point before every timing read —
+  // and there is one that happens before any render at all: a card connected before its
+  // first hass update starts the rotation, which would then run against stale zeros.
+  // The controller still cannot see the configuration object, only these three numbers.
+  const config = () => getTimingConfig() || {};
+  const holdSecondsOf = () => Number(config().rotationSeconds);
+  const slideSecondsOf = () => Number(config().slideSeconds);
+
+  const timing = () =>
+    slideTiming({
+      holdSeconds: holdSecondsOf(),
+      slideSeconds: slideSecondsOf(),
+      viewCount: viewCount(),
+      nowMs: platform.now(),
+    });
+
+  // Auto-rotation needs at least two views, positive durations, an explicit opt-in and
+  // a user who has not asked for reduced motion. Note that this gates only the timer
+  // and the synchronized CSS animation — swiping is a separate decision the element
+  // makes, and is not read here at all.
+  const hasAutoSlide = () => {
+    const holdSeconds = holdSecondsOf();
+    const slideSeconds = slideSecondsOf();
+    return (
+      config().autoSlide !== false &&
+      Number.isFinite(holdSeconds) &&
+      Number.isFinite(slideSeconds) &&
+      holdSeconds > 0 &&
+      slideSeconds > 0 &&
+      viewCount() >= 2 &&
+      !platform.prefersReducedMotion()
+    );
+  };
+
+  const maxTrackOffsetPct = () => -((Math.max(1, viewCount()) - 1) * viewWidthPct(viewCount()));
+
+  // ---- track manipulation ---------------------------------------------------
+  // Every path that takes manual control marks the track "rtc-manual" and kills the
+  // animation. That class is also the single signal for "the JS index IS the visible
+  // position", which currentVisualIndex() reads back.
+  function takeManualControl(track) {
+    track.classList.add("rtc-manual");
+    track.style.animation = "none";
+    return track;
+  }
+
+  function trackTranslatePct(track) {
+    const fallback = -(activeIndex || 0) * viewWidthPct(viewCount());
+    if (!track) return fallback;
+    const translateXPx = platform.readTranslateXPx(track);
+    if (translateXPx === null) return fallback;
+    const width = track.getBoundingClientRect().width || 1;
+    return clamp((translateXPx / width) * 100, maxTrackOffsetPct(), 0);
+  }
+
+  function updateTrackTransform(transition = true) {
+    const track = getTrack();
+    if (!track) return;
+    takeManualControl(track);
+    track.style.transition = transition ? `transform ${SETTLE_MS}ms ${SLIDE_EASING_CSS}` : "none";
+    track.style.transform = `translate3d(${-(activeIndex || 0) * viewWidthPct(viewCount())}%,0,0)`;
+  }
+
+  // Freezes the synchronized animation exactly where it currently is, so a swipe that
+  // starts mid-slide does not jump.
+  function pauseTrackAtCurrentPosition(track) {
+    const currentTranslate = trackTranslatePct(track);
+    takeManualControl(track);
+    track.style.transition = "none";
+    track.style.transform = `translate3d(${currentTranslate}%,0,0)`;
+    return currentTranslate;
+  }
+
+  function setTrackTranslate(translatePct) {
+    const track = getTrack();
+    if (!track) return;
+    takeManualControl(track);
+    track.style.transform = `translate3d(${clamp(translatePct, maxTrackOffsetPct(), 0)}%,0,0)`;
+  }
+
+  function setTrackTransition(enable) {
+    const track = getTrack();
+    if (!track) return;
+    takeManualControl(track);
+    track.style.transition = enable ? `transform ${SETTLE_MS}ms ${SLIDE_EASING_CSS}` : "none";
+  }
+
+  // ---- which view is actually in front --------------------------------------
+  // The single shared answer, used both by the accessibility sync and by the
+  // active-view preservation across a structural rebuild, so the two can never quietly
+  // disagree. While the synchronized animation drives the track, the JS index is stale
+  // between discrete updates and the phase is authoritative; the moment anything takes
+  // manual control, the JS index IS the visible position.
+  function currentVisualIndex() {
+    const track = getTrack();
+    const current = timing();
+    const autoEngaged = current.enabled && track && !track.classList.contains("rtc-manual");
+    return autoEngaged ? accessibleViewIndexAt(current.phaseMs, current) : activeIndex;
+  }
+
+  // Keeps offscreen views out of the tab order and hidden from assistive technology.
+  // Every view stays permanently mounted, so without this a keyboard user could tab
+  // into a card that is not on screen.
+  function updateViewAccessibility() {
+    const views = getViewElements();
+    if (!views) return;
+    const visibleIndex = currentVisualIndex();
+    views.forEach((view, index) => {
+      const isActive = index === visibleIndex;
+      if (isActive) view.removeAttribute("aria-hidden");
+      else view.setAttribute("aria-hidden", "true");
+      view.toggleAttribute("inert", !isActive);
+    });
+  }
+
+  // One precisely-timed timer per flip rather than continuous polling. Re-arms itself
+  // for as long as the track stays in synchronized mode; a hidden document stops the
+  // chain entirely, because nothing can be looked at and a background tab throttles the
+  // timer anyway.
+  function scheduleAccessibilitySync() {
+    clearA11yTimer();
+    updateViewAccessibility();
+    if (platform.isDocumentHidden()) return;
+    const track = getTrack();
+    const current = timing();
+    if (!(current.enabled && track && !track.classList.contains("rtc-manual"))) return;
+    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(current.phaseMs, current));
+    a11yTimer = platform.setTimeout(() => {
+      a11yTimer = null;
+      scheduleAccessibilitySync();
+    }, waitMs);
+  }
+
+  // ---- engaging and leaving the synchronized animation ----------------------
+  function applyAutoSlideStyles() {
+    const track = getTrack();
+    if (!track || interacting()) return;
+
+    if (!hasAutoSlide()) {
+      updateTrackTransform(false);
+      scheduleAccessibilitySync();
+      return;
+    }
+
+    const current = timing();
+    track.classList.remove("rtc-manual");
+    track.style.transition = "";
+    track.style.transform = "";
+    track.style.animation = `rtc-track-slide ${current.cycleMs}ms linear infinite`;
+    track.style.animationDelay = `-${current.phaseMs}ms`;
+    scheduleAccessibilitySync();
+  }
+
+  // Rejoin the synchronized animation only once its global phase already HOLDS the
+  // view the user is parked on. Handing the track back at any other moment would make
+  // it visibly jump to wherever the wall clock happens to be.
+  function resumeWhenAligned(targetIndex, minDelayMs = 10000) {
+    clearResumeTimer();
+    if (!hasAutoSlide()) return;
+
+    const index = clamp(Math.round(targetIndex) || 0, 0, Math.max(0, viewCount() - 1));
+    const delayMs = delayUntilPhaseHolds(index, minDelayMs);
+
+    resumeTimer = platform.setTimeout(() => {
+      resumeTimer = null;
+      if (interacting() || !hasAutoSlide()) return;
+      // The phase may have drifted past the window while the timer was pending — a
+      // slow frame, a throttled background tab. Re-aim rather than hand over wrongly.
+      if (!phaseHoldsView(index)) {
+        resumeWhenAligned(index, 0);
+        return;
+      }
+      applyAutoSlideStyles();
+    }, delayMs);
+  }
+
+  function delayUntilPhaseHolds(targetIndex, minDelayMs) {
+    const current = timing();
+    const delayMs = Math.max(0, minDelayMs);
+    if (!current.enabled) return delayMs;
+    return delayMs + waitFromTimestampUntilViewHold(targetIndex, platform.now() + delayMs, current);
+  }
+
+  function phaseHoldsView(targetIndex) {
+    const current = timing();
+    if (!current.enabled) return false;
+    return isPhaseInStableViewHold(targetIndex, current.phaseMs, current);
+  }
+
+  // ---- timers ---------------------------------------------------------------
+  function clearResumeTimer() {
+    if (resumeTimer !== null) {
+      platform.clearTimeout(resumeTimer);
+      resumeTimer = null;
+    }
+  }
+
+  function clearA11yTimer() {
+    if (a11yTimer !== null) {
+      platform.clearTimeout(a11yTimer);
+      a11yTimer = null;
+    }
+  }
+
+  function stop() {
+    clearResumeTimer();
+    clearA11yTimer();
+  }
+
+  return {
+    // ---- state the controller owns ------------------------------------------
+    get activeIndex() {
+      return activeIndex;
+    },
+    set activeIndex(index) {
+      activeIndex = index;
+    },
+    get viewKeys() {
+      return viewKeys;
+    },
+
+    // The element hands over the resolved view list after each render; the timing is
+    // pulled through getTimingConfig() instead (see there).
+    setViews(keys) {
+      viewKeys = Array.isArray(keys) ? keys : [];
+    },
+
+    // ---- queries -------------------------------------------------------------
+    timing,
+    hasAutoSlide,
+    holdSequence: () => holdSequence(viewCount()),
+    viewWidthPct: () => viewWidthPct(viewCount()),
+    trackAnimationCss: () => trackAnimationCss(timing(), activeIndex),
+    slideKeyframes: () => slideKeyframes(timing()),
+    maxTrackOffsetPct,
+    currentVisualIndex,
+    phaseHoldsView,
+    delayUntilPhaseHolds,
+    // The raw handles, not booleans. The element exposes them read-only for tests that
+    // assert "no timer lingers"; a derived boolean would be a second representation of
+    // the same fact and could drift from it.
+    get resumeTimerHandle() {
+      return resumeTimer;
+    },
+    get accessibilityTimerHandle() {
+      return a11yTimer;
+    },
+
+    // ---- commands ------------------------------------------------------------
+    start: applyAutoSlideStyles,
+    stop,
+    restart() {
+      stop();
+      applyAutoSlideStyles();
+    },
+    applyAutoSlideStyles,
+    scheduleAccessibilitySync,
+    updateViewAccessibility,
+    resumeWhenAligned,
+    resumeAfterInteraction(delayMs = 1800) {
+      resumeWhenAligned(activeIndex, delayMs);
+    },
+    updateTrackTransform,
+    trackTranslatePct,
+    pauseTrackAtCurrentPosition,
+    setTrackTranslate,
+    setTrackTransition,
+
+    // Everything this controller could still be holding. Called on disconnect, and
+    // safe to call twice.
+    destroy: stop,
+  };
+}
+
+// Everything that re-measures the card after the card itself did nothing.
+//
+// Two triggers, both outside the data flow. A container resize — a sidebar toggling, a
+// dashboard column reflowing, a device rotating — changes the rendered width without
+// any entity changing, and the labels are positioned in pixels against that width.
+// Web fonts finishing loading does the same thing: the first synchronous measurement
+// on a cold dashboard reload runs against fallback-font metrics, which produce a
+// slightly wrong position that looks like an overlap until something else happens to
+// re-render.
+//
+// Both are handled here rather than in the element, because both need the same three
+// things and all three come from the platform: an observer, an animation frame to
+// coalesce onto, and a promise. And both need to be undone on disconnect, which is the
+// part that is easy to get wrong when it lives next to a render pipeline.
+
+function createResizeRuntime({ platform, onMeasure }) {
+  let observer = null;
+  let frameHandle = null;
+  let fontsSubscribed = false;
+
+  function cancelPendingFrame() {
+    if (frameHandle !== null) {
+      platform.cancelAnimationFrame(frameHandle);
+      frameHandle = null;
+    }
+  }
+
+  return {
+    // Safe to call repeatedly: an already-connected runtime is a no-op, and a platform
+    // without ResizeObserver simply stays unobserved rather than pretending.
+    connect(element) {
+      if (observer || !element) return;
+      observer = platform.createResizeObserver(() => {
+        // A resize drag fires many callbacks per second. Coalescing onto a single
+        // animation frame is what keeps that from turning into one layout pass per
+        // callback — and re-measuring more than once per frame could not change the
+        // result anyway.
+        if (frameHandle !== null) return;
+        frameHandle = platform.requestAnimationFrame(() => {
+          frameHandle = null;
+          onMeasure();
+        });
+      });
+      if (!observer) return;
+      // Observes the element the caller passes — the card host, which survives every
+      // structural rebuild. Observing something inside the shadow root would need
+      // re-observing after each rebuild.
+      observer.observe(element);
+    },
+
+    disconnect() {
+      cancelPendingFrame();
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+    },
+
+    // Subscribes exactly once per card instance, not once per rebuild: a fresh .then()
+    // on every rebuild that happens before fonts finish would each capture that call's
+    // own state and could re-apply a stale measurement after a newer render already
+    // ran. A no-op in the common case where fonts were already ready, and on a platform
+    // without the Fonts API at all.
+    measureOnceFontsReady(isStillConnected) {
+      if (fontsSubscribed) return;
+      const ready = platform.fontsReady();
+      if (!ready) return;
+      fontsSubscribed = true;
+      ready
+        .then(() => {
+          if (isStillConnected()) onMeasure();
+        })
+        .catch(() => {});
+    },
+
+    hasPendingFrame: () => frameHandle !== null,
+    isObserving: () => observer !== null,
+  };
+}
+
 // Build entry module. Rollup bundles this into the single, dependency-free
 // IIFE that Home Assistant loads (dist/room-climate-card.js) — the IIFE
 // wrapper and "use strict" prologue that used to be written by hand here are
@@ -8642,12 +9328,39 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       // rendering, slider position, and pointer interaction.
       this._config = null;
       this._hass = null;
-      this._activeView = 0;
-      // Current view list (keys from VIEW_DEFINITIONS, e.g. "range"/"scale"/
-      // "extremes"); populated from the view model's views.keys in
-      // _renderAll(), empty before the first render so _hasAutoSlide()/
-      // _slideTiming() default safely to "no rotator".
-      this._views = [];
+
+      // The only route to the outside world: a clock, timers, animation frames, the
+      // reduced-motion preference, visibility, a ResizeObserver, the fonts promise,
+      // event construction and one transform read. The document is resolved through a
+      // thunk on every call rather than captured here, so a card adopted into another
+      // document keeps scheduling and dispatching in the realm it now lives in.
+      this._platform = createBrowserPlatform(() => this.ownerDocument);
+
+      // Owns the active view index, both timers and every clock read. It is given a
+      // platform, two narrow DOM ports and scalar timing values — never hass, the
+      // configuration object, the domain model or a renderer.
+      this._carousel = createCarouselController({
+        platform: this._platform,
+        getTrack: () => this.shadowRoot?.querySelector(".rtc-track") ?? null,
+        getViewElements: () => this.shadowRoot?.querySelectorAll(".rtc-view") ?? null,
+        // Three scalars, pulled on demand. The controller never sees the config object,
+        // and there is no push that could be missed before the first render.
+        getTimingConfig: () => ({
+          rotationSeconds: this._config?.rotation_seconds ?? DEFAULT_CONFIG.rotation_seconds,
+          slideSeconds: this._config?.slide_seconds ?? DEFAULT_CONFIG.slide_seconds,
+          autoSlide: this._config?.auto_slide,
+        }),
+        // The pointer gestures still live on the element this round, so whether a
+        // gesture is in flight is a question the controller has to ask.
+        isInteracting: () => this._isDragging || Boolean(this._pointer),
+      });
+
+      // Container resizes and the web font finishing loading — the two triggers that
+      // change the rendered width without any entity changing.
+      this._resize = createResizeRuntime({
+        platform: this._platform,
+        onMeasure: () => this._resolveViewLayouts(this._lastViewModel),
+      });
       // P1 fix (post-2.22.1): sibling to this._views, since the key list
       // alone can't distinguish a deliberately empty/collapsed view area
       // from one that's requested-but-unavailable — both resolve to an
@@ -8661,11 +9374,6 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       // call; _renderAll() falls back to computing live whenever it's
       // undefined (which is the normal, hass-driven-update case).
       this._preConfigChangeVisualKey = undefined;
-      this._resumeAutoTimer = null;
-      // Timer for _scheduleAccessibilitySync() (A11Y-01) — keeps
-      // aria-hidden/inert following the actual CSS-driven visual position
-      // during synced auto-slide; cleared in _stopRotation().
-      this._a11ySyncTimer = null;
       this._pointer = null;
       this._lastRenderSignature = "";
       this._structuralConfigSignature = null;
@@ -8673,6 +9381,9 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       // alongside the other two, only after a render path actually succeeded.
       this._structureSignature = null;
       this._eventsBound = false;
+      // Returned by the platform when the visibility listener is attached; the only
+      // thing that knows how to detach it again.
+      this._unlistenVisibility = null;
       this._suppressClickUntil = 0;
       this._rendered = false;
       this._isDragging = false;
@@ -8680,9 +9391,6 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       // _render()); a pending update is applied once the drag ends (see
       // _handlePointerUp()/_handlePointerCancel()) so it's never silently lost.
       this._renderPending = false;
-      // Guards document.fonts.ready from being subscribed more than once
-      // across repeated full rebuilds (see _renderAll()).
-      this._fontsReadyBound = false;
       // _language() memoization — see _language().
       this._languageCacheHass = undefined;
       this._languageCacheConfigLanguage = undefined;
@@ -8698,8 +9406,6 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       // Most recent view model, kept so the resize observer below can re-resolve
       // every mounted view's measured layout without needing a fresh hass update.
       this._lastViewModel = null;
-      this._resizeObserver = null;
-      this._resizeRafId = null;
 
       // Bind handlers once so add/removeEventListener always reference the
       // same function.
@@ -8711,6 +9417,34 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       this._boundPointerCancel = this._handlePointerCancel.bind(this);
       this._boundContextMenu = this._handleContextMenu.bind(this);
       this._boundVisibilityChange = this._handleVisibilityChange.bind(this);
+    }
+
+    // ==== Accessors over controller-owned state ====
+    // Read-write where the render path legitimately assigns (the resolved view list,
+    // the active index), read-only for the timer handles. None of them stores
+    // anything: there is exactly one owner, and these are the window onto it.
+    get _views() {
+      return this._carousel.viewKeys;
+    }
+
+    set _views(keys) {
+      this._carousel.setViews(keys);
+    }
+
+    get _activeView() {
+      return this._carousel.activeIndex;
+    }
+
+    set _activeView(index) {
+      this._carousel.activeIndex = index;
+    }
+
+    get _resumeAutoTimer() {
+      return this._carousel.resumeTimerHandle;
+    }
+
+    get _a11ySyncTimer() {
+      return this._carousel.accessibilityTimerHandle;
     }
 
     static getStubConfig() {
@@ -8867,47 +9601,23 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 
     disconnectedCallback() {
       // Card is removed/rebuilt by Home Assistant; clean up timers and listeners.
-      this._stopRotation();
+      this._carousel.destroy();
       this._unbindEvents();
       this._unbindResizeObserver();
     }
 
     _bindResizeObserver() {
-      // Re-resolves the optimal-label position on a pure container resize
-      // (sidebar toggle, dashboard column reflow, browser resize, device
-      // rotation) — previously only a fresh hass update triggered
-      // _resolveOptimalLabelPosition(), so the label stayed stale (and could
-      // visually overlap) after any resize until the entity's next update.
-      // Safe to observe repeatedly because _resolveOptimalLabelPosition() is
-      // idempotent (always derives the position fresh from
-      // data.optimalCenter, never reads back its own previous pixel output) —
-      // the double-interpretation bug that led to removing the observer in
-      // 2.11.1 cannot recur here, see readme climate card.md, "Skala".
-      // Observes the card root (stable across _renderAll() rebuilds)
-      // instead of ".rtc-scale-bar" (recreated on every structural
-      // rebuild, which would need re-observing each time).
-      if (this._resizeObserver || typeof ResizeObserver === "undefined") return;
-      this._resizeObserver = new ResizeObserver(() => {
-        // A resize drag fires many callbacks per second; batch to at most
-        // one recalculation per animation frame.
-        if (this._resizeRafId !== null) return;
-        this._resizeRafId = requestAnimationFrame(() => {
-          this._resizeRafId = null;
-          this._resolveViewLayouts(this._lastViewModel);
-        });
-      });
-      this._resizeObserver.observe(this);
+      // Re-measures the labels on a pure container resize (sidebar toggle, dashboard
+      // column reflow, browser resize, device rotation). Safe to observe repeatedly
+      // because the layout pass is idempotent — it always derives the position fresh
+      // from the view model and never reads back its own previous pixel output, so the
+      // double-interpretation bug that led to removing the observer in 2.11.1 cannot
+      // recur. Observes the card host, which survives every structural rebuild.
+      this._resize.connect(this);
     }
 
     _unbindResizeObserver() {
-      if (this._resizeRafId !== null) {
-        cancelAnimationFrame(this._resizeRafId);
-        this._resizeRafId = null;
-      }
-      if (this._resizeObserver) {
-        this._resizeObserver.disconnect();
-        this._resizeObserver = null;
-      }
+      this._resize.disconnect();
     }
 
     getCardSize() {
@@ -9014,178 +9724,63 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       return resolveProfileIcon(this._classificationPolicy(), metricType, unitProfile, value) || metricMetaFor(metricType).icon;
     }
 
-    // ==== Auto-slide: timing, keyframes, resume alignment ====
+    // ==== Auto-slide, track and accessibility: delegations to the controller ====
+    // Everything below forwards to this._carousel, which owns the active index, both
+    // timers and every read of the wall clock. The methods stay on the element because
+    // a large number of tests call them directly; not one of them holds state of its
+    // own, and the two timer accessors expose the controller's actual handles rather
+    // than a second copy.
     _startRotation() {
-      // Auto-rotation runs as a CSS animation with a negative delay derived
-      // from wall-clock time, so multiple card instances stay in sync and
-      // entity updates never restart it.
-      this._applyAutoSlideStyles();
+      this._carousel.start();
     }
 
     _stopRotation() {
-      if (this._resumeAutoTimer) {
-        window.clearTimeout(this._resumeAutoTimer);
-        this._resumeAutoTimer = null;
-      }
-      if (this._a11ySyncTimer) {
-        window.clearTimeout(this._a11ySyncTimer);
-        this._a11ySyncTimer = null;
-      }
+      this._carousel.stop();
     }
 
     _restartRotation() {
-      this._stopRotation();
-      this._startRotation();
+      this._carousel.restart();
     }
 
     _hasAutoSlide() {
-      // Whether auto-rotation should run at all — needs at least two views.
-      // AP-C1: auto_slide:false disables only this (the timer/synced CSS
-      // animation) — independent of swipe, which gates manual dragging in
-      // _handlePointerDown() and isn't read here at all.
-      const holdSeconds = Number(this._config?.rotation_seconds);
-      const slideSeconds = Number(this._config?.slide_seconds);
-      return (
-        this._config?.auto_slide !== false &&
-        Number.isFinite(holdSeconds) &&
-        Number.isFinite(slideSeconds) &&
-        holdSeconds > 0 &&
-        slideSeconds > 0 &&
-        (this._views?.length || 0) >= 2 &&
-        !this._prefersReducedMotion()
-      );
+      return this._carousel.hasAutoSlide();
     }
 
     _prefersReducedMotion() {
-      // JS mirrors the CSS media query so reduced-motion users also avoid timers.
-      return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+      return this._platform.prefersReducedMotion();
     }
 
     _viewWidthPct() {
-      // Width of one view as a percentage of the track's own width (the
-      // track itself is views.length*100% wide).
-      const count = Math.max(1, (this._views || []).length);
-      return 100 / count;
+      return this._carousel.viewWidthPct();
     }
 
     _holdSequence() {
-      // Hold-index sequence for one full auto-slide cycle: a linear
-      // ping-pong straight through this._views in its actual
-      // left-to-right DOM order — 0,1,...,N-1,N-2,...,1, then wrapping back
-      // to 0 — so every transition (including the wrap) moves exactly one
-      // position and no view is ever skipped over. Pure function of the
-      // view count; doesn't know or care which key sits at which index (see
-      // readme climate card.md, "Auto-Slide und Bedienung").
-      const n = (this._views || []).length;
-      if (n < 2) return [];
-      const forward = Array.from({ length: n }, (_, i) => i);
-      const backwardInterior = Array.from({ length: Math.max(0, n - 2) }, (_, i) => n - 2 - i);
-      return [...forward, ...backwardInterior];
+      return this._carousel.holdSequence();
     }
 
     _slideTiming() {
-      // Computes all timing values for the multi-view slider from wall-clock
-      // time (so multiple card instances stay in sync); positions is the
-      // hold-index sequence from _holdSequence(), each position holds for
-      // holdMs with slideMs transitions in between.
-      const holdMs = Math.max(0, Number(this._config?.rotation_seconds ?? DEFAULT_CONFIG.rotation_seconds) * 1000);
-      const slideMs = Math.max(1, Number(this._config?.slide_seconds ?? DEFAULT_CONFIG.slide_seconds) * 1000);
-      const positions = this._holdSequence();
-      const enabled = holdMs > 0 && slideMs > 0 && positions.length >= 2;
-      const segMs = holdMs + slideMs;
-      const cycleMs = Math.max(1, positions.length * segMs);
-      const phaseMs = ((Date.now() % cycleMs) + cycleMs) % cycleMs;
-
-      return {
-        enabled,
-        holdMs,
-        slideMs,
-        segMs,
-        cycleMs,
-        phaseMs,
-        positions,
-        viewWidthPct: this._viewWidthPct(),
-      };
+      return this._carousel.timing();
     }
 
     _pct(value) {
-      // Formats a CSS percentage compactly so the keyframes stay readable.
-      return this._clamp(Number(value) || 0, 0, 100).toFixed(5).replace(/\.?0+$/, "");
+      return formatPercent(value);
     }
 
     _trackAnimationCss() {
-      // Initial CSS for the slider track; a manual swipe later overrides it with inline styles.
-      const timing = this._slideTiming();
-      if (!timing.enabled) {
-        const x = -(this._activeView || 0) * timing.viewWidthPct;
-        return `animation:none;transform:translate3d(${x}%,0,0);`;
-      }
-
-      // Negative delay synchronizes every instance to the same absolute time cycle.
-      return `animation:rtc-track-slide ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
+      return this._carousel.trackAnimationCss();
     }
 
     _slideKeyframes() {
-      // Builds keyframes for rotation_seconds/slide_seconds and the current
-      // hold sequence: each hold position produces two breakpoints (hold
-      // start: linear, hold end: cubic-bezier easing into the next slide);
-      // the final 100% breakpoint returns to the first position.
-      const timing = this._slideTiming();
-      if (!timing.enabled) return "";
-
-      const frames = timing.positions.map((pos, i) => {
-        const x = -(pos * timing.viewWidthPct);
-        const holdStartPct = ((i * timing.segMs) / timing.cycleMs) * 100;
-        const holdEndPct = ((i * timing.segMs + timing.holdMs) / timing.cycleMs) * 100;
-        return `
-          ${this._pct(holdStartPct)}% {
-            transform: translate3d(${x}%,0,0);
-            animation-timing-function: linear;
-          }
-          ${this._pct(holdEndPct)}% {
-            transform: translate3d(${x}%,0,0);
-            animation-timing-function: ${SLIDE_EASING_CSS};
-          }`;
-      });
-      const closeX = -(timing.positions[0] * timing.viewWidthPct);
-
-      return `
-        @keyframes rtc-track-slide {
-          ${frames.join("\n")}
-          100% {
-            transform: translate3d(${closeX}%,0,0);
-          }
-        }
-      `;
+      return this._carousel.slideKeyframes();
     }
 
-    // ==== Auto-slide: JS-side visual-position mirror (A11Y-01) ====
-    // The CSS keyframe animation is the only thing that moves the track
-    // during synchronized auto-slide (_applyAutoSlideStyles() below) —
-    // this._activeView is only ever updated at discrete JS-known moments
-    // (initial render, a completed swipe, a pointer-cancel settling back).
-    // Anything that needs to know which view is *currently visually front*
-    // (accessibility state, "which view was the user just looking at")
-    // must derive it from the same wall-clock phase math the CSS keyframes
-    // themselves are built from (_slideKeyframes()), not from
-    // this._activeView, which goes stale the moment auto-slide starts
-    // moving between holds. See readme climate card.md, "Rendering und
-    // Robustheit".
-
     _timeFractionForEasedProgress(easing, targetY) {
-      // Thin delegate to the module-level pure function, for direct
-      // testability of the bezier-inversion logic in isolation (see
-      // accessibility-carousel-timing.test.js) — matches this file's
-      // existing convention of exposing pure timing logic exclusively via
-      // el._method() for tests, never as a separate global.
+      // Thin delegate to the module-level pure function, for direct testability of the
+      // bezier inversion in isolation (see accessibility-carousel-timing.test.js).
       return timeFractionForEasedProgress(easing, targetY);
     }
 
     _boolOption(defaultValue) {
-      // Thin delegate to the module-level pure function, for direct
-      // testability of the view-customizer options resolver in isolation
-      // (see view-options-resolver.test.js) — same established convention
-      // as _timeFractionForEasedProgress() above.
       return boolOption(defaultValue);
     }
 
@@ -9194,188 +9789,83 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
     }
 
     _accessibleViewIndexAt(phaseMs, timing) {
-      // Mirrors _slideKeyframes()'s hold/transition structure: each
-      // segment i spans [i*segMs, (i+1)*segMs) — a holdMs-long stable hold
-      // at positions[i], then a slideMs-long transition into
-      // positions[(i+1) % n]. AP-08 (audit 17, A11Y-01): the visually
-      // "current" view flips where the EASED/spatial progress of that
-      // transition crosses 50% (A11Y_FLIP_TIME_FRACTION, ~35.375% of the
-      // slide's time for cubic-bezier(.45,0,.16,1) — NOT at 50% of the
-      // slide's raw TIME, which is a different point on this curve and was
-      // the pre-AP-08 bug: the outgoing view stayed "accessible" for the
-      // ~14.6% of the slide's time where the incoming view was already
-      // spatially dominant).
-      const n = timing.positions.length;
-      if (n === 0) return 0;
-      const segIndex = Math.min(n - 1, Math.floor(phaseMs / timing.segMs));
-      const subPhase = phaseMs - segIndex * timing.segMs;
-      const flipOffset = timing.holdMs + timing.slideMs * A11Y_FLIP_TIME_FRACTION;
-      const nextSegIndex = (segIndex + 1) % n;
-      return subPhase < flipOffset ? timing.positions[segIndex] : timing.positions[nextSegIndex];
+      return accessibleViewIndexAt(phaseMs, timing);
     }
 
     _msUntilNextAccessibilityFlip(phaseMs, timing) {
-      // Time remaining until _accessibleViewIndexAt()'s return value would
-      // next change, for scheduling a single precisely-timed timer instead
-      // of polling. Must use the exact same flipOffset as
-      // _accessibleViewIndexAt() above (AP-08: the spatial-midpoint
-      // fraction, not the raw temporal one) or the two would disagree
-      // about when the next flip actually happens.
-      const n = timing.positions.length;
-      if (n === 0) return timing.segMs;
-      const segIndex = Math.min(n - 1, Math.floor(phaseMs / timing.segMs));
-      const subPhase = phaseMs - segIndex * timing.segMs;
-      const flipOffset = timing.holdMs + timing.slideMs * A11Y_FLIP_TIME_FRACTION;
-      if (subPhase < flipOffset) return flipOffset - subPhase;
-      return timing.segMs - subPhase + flipOffset;
+      return msUntilNextAccessibilityFlip(phaseMs, timing);
     }
 
     _currentVisualViewIndex() {
-      // Single shared source for "which view is the user currently looking
-      // at" — used both by _updateViewAccessibility() (aria-hidden/inert)
-      // and by _renderAll()'s active-view-preservation logic, so the two
-      // can never quietly disagree. The track carries "rtc-manual"
-      // whenever it's NOT driven by the synced CSS animation (frozen
-      // mid-drag, snapped back after a swipe/cancel, or auto-slide
-      // disabled — see _updateTrackTransform()/_pauseTrackAtCurrentPosition()/
-      // _setTrackTranslate()/_setTrackTransition(), cleared by
-      // _applyAutoSlideStyles() below) — in that state this._activeView
-      // already IS the visible position.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      const timing = this._slideTiming();
-      const autoEngaged = timing.enabled && track && !track.classList.contains("rtc-manual");
-      return autoEngaged ? this._accessibleViewIndexAt(timing.phaseMs, timing) : this._activeView;
+      return this._carousel.currentVisualIndex();
     }
 
     _applyAutoSlideStyles() {
-      // Switches the track back to the synchronized auto animation, after
-      // rendering or once a manual swipe has finished.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      if (!track || this._isDragging || this._pointer) return;
-
-      if (!this._hasAutoSlide()) {
-        this._updateTrackTransform(false);
-        this._scheduleAccessibilitySync();
-        return;
-      }
-
-      const timing = this._slideTiming();
-      track.classList.remove("rtc-manual");
-      track.style.transition = "";
-      track.style.transform = "";
-      track.style.animation = `rtc-track-slide ${timing.cycleMs}ms linear infinite`;
-      track.style.animationDelay = `-${timing.phaseMs}ms`;
-      this._scheduleAccessibilitySync();
+      this._carousel.applyAutoSlideStyles();
     }
 
     _scheduleAccessibilitySync() {
-      // Keeps aria-hidden/inert following _currentVisualViewIndex() for as
-      // long as the track stays in synced auto-slide mode, via a single
-      // precisely-timed timer per flip rather than continuous polling.
-      if (this._a11ySyncTimer) {
-        window.clearTimeout(this._a11ySyncTimer);
-        this._a11ySyncTimer = null;
-      }
-      this._updateViewAccessibility();
-      if (document.hidden) return;
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      const timing = this._slideTiming();
-      const autoEngaged = timing.enabled && track && !track.classList.contains("rtc-manual");
-      if (!autoEngaged) return;
-      // Guards against a 0/near-0ms re-arm loop if phaseMs ever lands
-      // exactly on (or a floating-point hair past) a flip boundary.
-      const MIN_RESCHEDULE_MS = 50;
-      const waitMs = Math.max(MIN_RESCHEDULE_MS, this._msUntilNextAccessibilityFlip(timing.phaseMs, timing));
-      this._a11ySyncTimer = window.setTimeout(() => {
-        this._a11ySyncTimer = null;
-        this._scheduleAccessibilitySync();
-      }, waitMs);
+      this._carousel.scheduleAccessibilitySync();
     }
 
     _resumeSynchronizedSlide(delayMs = 1800) {
-      // After manual interaction, hold briefly then rejoin the synchronized auto-slide.
-      this._resumeSynchronizedSlideWhenAligned(this._activeView, delayMs);
+      this._carousel.resumeAfterInteraction(delayMs);
     }
 
     _resumeSynchronizedSlideWhenAligned(targetView, minDelayMs = 10000) {
-      // Resume only when the global CSS phase already holds the manual view.
-      if (this._resumeAutoTimer) {
-        window.clearTimeout(this._resumeAutoTimer);
-        this._resumeAutoTimer = null;
-      }
-      if (!this._hasAutoSlide()) return;
-
-      const view = this._clamp(Math.round(targetView) || 0, 0, (this._views?.length || 1) - 1);
-      const delayMs = this._delayUntilAutoPhaseMatchesView(view, minDelayMs);
-
-      this._resumeAutoTimer = window.setTimeout(() => {
-        this._resumeAutoTimer = null;
-        if (this._isDragging || this._pointer || !this._hasAutoSlide()) return;
-        if (!this._autoPhaseMatchesView(view)) {
-          this._resumeSynchronizedSlideWhenAligned(view, 0);
-          return;
-        }
-        this._applyAutoSlideStyles();
-      }, delayMs);
+      this._carousel.resumeWhenAligned(targetView, minDelayMs);
     }
 
     _delayUntilAutoPhaseMatchesView(targetView, minDelayMs = 10000) {
-      const timing = this._slideTiming();
-      const delayMs = Math.max(0, minDelayMs);
-      if (!timing.enabled) return delayMs;
-
-      const earliestTs = Date.now() + delayMs;
-      return delayMs + this._waitFromTimestampUntilViewHold(targetView, earliestTs, timing);
+      return this._carousel.delayUntilPhaseHolds(targetView, minDelayMs);
     }
 
     _autoPhaseMatchesView(targetView) {
-      const timing = this._slideTiming();
-      if (!timing.enabled) return false;
-      return this._isPhaseInStableViewHold(targetView, timing.phaseMs, timing);
+      return this._carousel.phaseHoldsView(targetView);
     }
 
     _waitFromTimestampUntilViewHold(targetView, timestampMs, timing = this._slideTiming()) {
-      const phaseMs = this._phaseForTimestamp(timestampMs, timing.cycleMs);
-      if (this._isPhaseInStableViewHold(targetView, phaseMs, timing)) return 0;
-
-      // targetView can occur more than once in the hold sequence (e.g. the
-      // anchor with more than one other view); pick whichever occurrence is soonest.
-      const windows = this._holdWindowsForView(targetView, timing);
-      let best = Infinity;
-      for (const w of windows) {
-        let waitMs = w.start - phaseMs;
-        if (waitMs < 0) waitMs += timing.cycleMs;
-        if (waitMs < best) best = waitMs;
-      }
-      return Number.isFinite(best) ? Math.max(0, best) : 0;
+      return waitFromTimestampUntilViewHold(targetView, timestampMs, timing);
     }
 
     _isPhaseInStableViewHold(targetView, phaseMs, timing = this._slideTiming()) {
-      return this._holdWindowsForView(targetView, timing).some(
-        (w) => w.end >= w.start && phaseMs >= w.start && phaseMs <= w.end
-      );
+      return isPhaseInStableViewHold(targetView, phaseMs, timing);
     }
 
     _holdWindowsForView(targetView, timing = this._slideTiming()) {
-      // Safe resume windows for targetView — one entry per occurrence of
-      // targetView in the hold sequence (can be more than one, see _holdSequence()).
-      const holdMs = Math.max(0, timing.holdMs);
-      const marginMs = Math.min(150, Math.max(0, holdMs / 4));
-      const windows = [];
-      (timing.positions || []).forEach((pos, i) => {
-        if (pos !== targetView) return;
-        const start = i * timing.segMs;
-        const end = start + holdMs;
-        windows.push({
-          start: Math.min(start + marginMs, end),
-          end: Math.max(start, end - marginMs),
-        });
-      });
-      return windows;
+      return holdWindowsForView(targetView, timing);
     }
 
     _phaseForTimestamp(timestampMs, cycleMs) {
-      return ((timestampMs % cycleMs) + cycleMs) % cycleMs;
+      return phaseForTimestamp(timestampMs, cycleMs);
+    }
+
+    _maxTrackOffsetPct() {
+      return this._carousel.maxTrackOffsetPct();
+    }
+
+    _updateTrackTransform(transition = true) {
+      this._carousel.updateTrackTransform(transition);
+    }
+
+    _updateViewAccessibility() {
+      this._carousel.updateViewAccessibility();
+    }
+
+    _getTrackTranslatePct(track) {
+      return this._carousel.trackTranslatePct(track);
+    }
+
+    _pauseTrackAtCurrentPosition(track) {
+      return this._carousel.pauseTrackAtCurrentPosition(track);
+    }
+
+    _setTrackTranslate(translate) {
+      this._carousel.setTrackTranslate(translate);
+    }
+
+    _setTrackTransition(enable) {
+      this._carousel.setTrackTransition(enable);
     }
 
     _hasEntity(entityId) {
@@ -9983,29 +10473,14 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
         this._applyAutoSlideStyles();
       }
       this._resolveViewLayouts(viewModel);
-      // On a cold dashboard reload, this first synchronous measurement can
-      // run before the page's web font has actually loaded (the card
-      // inherits its font from the page, no @font-face of its own) — the
-      // fallback-font metrics produce a slightly wrong position that looks
-      // like an overlap until the next real render corrects it. Re-resolve
-      // once, exactly once per card instance (not once per full rebuild —
-      // _fontsReadyBound guards against registering a fresh .then() on
-      // every hasRoomsView/hasRange/hasRangeScale-triggered rebuild before
-      // fonts finish loading, which would each close over that call's own
-      // view model and could re-apply a stale one after a newer rebuild
-      // already ran); a no-op in the common case where fonts were already
-      // ready. Uses this._lastViewModel at fire time, not the model closed
-      // over here, so it's never stale even if it fires after a later
-      // update.
-      const fonts = this.ownerDocument.fonts;
-      if (!viewModel.empty && fonts?.ready && !this._fontsReadyBound) {
-        this._fontsReadyBound = true;
-        fonts.ready
-          .then(() => {
-            if (this.isConnected) this._resolveViewLayouts(this._lastViewModel);
-          })
-          .catch(() => {});
-      }
+      // On a cold dashboard reload the measurement above can run before the page's
+      // web font has loaded (the card inherits its font from the page and has no
+      // @font-face of its own), and fallback-font metrics produce a slightly wrong
+      // position that looks like an overlap until something else re-renders. The
+      // runtime subscribes exactly once per card instance and measures from
+      // this._lastViewModel at fire time, so a later render cannot be undone by an
+      // older one arriving late.
+      if (!viewModel.empty) this._resize.measureOnceFontsReady(() => this.isConnected);
     }
 
     // Every mounted view re-measures its own labels. The card holds no knowledge of
@@ -10029,88 +10504,6 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       if (!root) return;
       this._lastViewModel = viewModel;
       patchCardBody(this._renderContext(), root, viewModel, VIEW_RENDERERS);
-    }
-
-    _maxTrackOffsetPct() {
-      // Magnitude of the maximum (negative) track offset — the last view's position.
-      const count = Math.max(1, (this._views || []).length);
-      return -((count - 1) * this._viewWidthPct());
-    }
-
-    _updateTrackTransform(transition = true) {
-      // Manually moves the slider to the current _activeView position.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      if (!track) return;
-      track.classList.add("rtc-manual");
-      track.style.animation = "none";
-      track.style.transition = transition ? `transform 420ms ${SLIDE_EASING_CSS}` : "none";
-      track.style.transform = `translate3d(${-(this._activeView || 0) * this._viewWidthPct()}%,0,0)`;
-    }
-
-    _updateViewAccessibility() {
-      // Keeps offscreen carousel views out of the tab order and hidden
-      // from assistive tech — every view stays permanently mounted in the
-      // DOM (see "Rendering und Robustheit"), so without this a keyboard
-      // user could tab into an extreme-value/range card that isn't
-      // currently visible. Reflects _currentVisualViewIndex(), which
-      // during synced CSS auto-slide tracks the actual wall-clock-driven
-      // visible position (A11Y-01) rather than the JS-only this._activeView
-      // (which is stale between discrete updates — see
-      // _currentVisualViewIndex()). Called directly for a one-off sync, or
-      // via _scheduleAccessibilitySync() to keep tracking auto-slide.
-      const views = this.shadowRoot?.querySelectorAll(".rtc-view");
-      if (!views) return;
-      const activeIndex = this._currentVisualViewIndex();
-      views.forEach((view, index) => {
-        const isActive = index === activeIndex;
-        if (isActive) view.removeAttribute("aria-hidden");
-        else view.setAttribute("aria-hidden", "true");
-        view.toggleAttribute("inert", !isActive);
-      });
-    }
-
-    _getTrackTranslatePct(track) {
-      // Reads the track's current CSS transform position (needed when a swipe starts mid-animation).
-      const fallback = -(this._activeView || 0) * this._viewWidthPct();
-      if (!track) return fallback;
-
-      try {
-        const transform = computedStyleOf(track).transform;
-        if (!transform || transform === "none") return fallback;
-        const matrix = new DOMMatrixReadOnly(transform);
-        const width = track.getBoundingClientRect().width || 1;
-        return this._clamp((matrix.m41 / width) * 100, this._maxTrackOffsetPct(), 0);
-      } catch (_err) {
-        return fallback;
-      }
-    }
-
-    _pauseTrackAtCurrentPosition(track) {
-      // Freezes the auto animation at its current position so a manual swipe doesn't jump.
-      const currentTranslate = this._getTrackTranslatePct(track);
-      track.classList.add("rtc-manual");
-      track.style.animation = "none";
-      track.style.transition = "none";
-      track.style.transform = `translate3d(${currentTranslate}%,0,0)`;
-      return currentTranslate;
-    }
-
-    _setTrackTranslate(translate) {
-      // Moves the track while dragging.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      if (!track) return;
-      track.classList.add("rtc-manual");
-      track.style.animation = "none";
-      track.style.transform = `translate3d(${this._clamp(translate, this._maxTrackOffsetPct(), 0)}%,0,0)`;
-    }
-
-    _setTrackTransition(enable) {
-      // Toggles the eased settle transition after a swipe.
-      const track = this.shadowRoot?.querySelector(".rtc-track");
-      if (!track) return;
-      track.classList.add("rtc-manual");
-      track.style.animation = "none";
-      track.style.transition = enable ? `transform 420ms ${SLIDE_EASING_CSS}` : "none";
     }
 
     // ==== Compatibility delegations for element-level tests ====
@@ -10181,10 +10574,11 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       this.shadowRoot.addEventListener("pointercancel", this._boundPointerCancel);
       this.shadowRoot.addEventListener("pointerleave", this._boundPointerCancel);
       this.shadowRoot.addEventListener("contextmenu", this._boundContextMenu);
-      // Not shadow-root-scoped (visibilitychange only fires on document) —
-      // resyncs A11Y-01's accessibility timer when the tab becomes visible
-      // again after _scheduleAccessibilitySync() paused it while hidden.
-      document.addEventListener("visibilitychange", this._boundVisibilityChange);
+      // Not shadow-root-scoped (visibilitychange only fires on the document) —
+      // resyncs the accessibility timer when the tab becomes visible again after the
+      // sync paused itself while hidden. The platform hands back the unsubscribe, so
+      // the pair can never disagree about what was attached.
+      this._unlistenVisibility = this._platform.onVisibilityChange(this._boundVisibilityChange);
       this._eventsBound = true;
     }
 
@@ -10198,12 +10592,13 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       this.shadowRoot.removeEventListener("pointercancel", this._boundPointerCancel);
       this.shadowRoot.removeEventListener("pointerleave", this._boundPointerCancel);
       this.shadowRoot.removeEventListener("contextmenu", this._boundContextMenu);
-      document.removeEventListener("visibilitychange", this._boundVisibilityChange);
+      this._unlistenVisibility?.();
+      this._unlistenVisibility = null;
       this._eventsBound = false;
     }
 
     _handleVisibilityChange() {
-      if (document.hidden || !this._rendered) return;
+      if (this._platform.isDocumentHidden() || !this._rendered) return;
       this._scheduleAccessibilitySync();
     }
 
@@ -10215,7 +10610,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 
     _handleClick(event) {
       // Plain click; a short lock prevents this from double-firing right after pointerup already handled it.
-      if (Date.now() < this._suppressClickUntil) {
+      if (this._platform.now() < this._suppressClickUntil) {
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -10260,7 +10655,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
         id: event.pointerId,
         x: event.clientX,
         y: event.clientY,
-        time: Date.now(),
+        time: this._platform.now(),
         rotator: Boolean(rotator) && this._config?.swipe !== false,
         entityTarget,
         startTranslate: -(this._activeView || 0) * this._viewWidthPct(),
@@ -10289,7 +10684,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
           ? this._pauseTrackAtCurrentPosition(track)
           : -(this._activeView || 0) * this._viewWidthPct();
         if (this._resumeAutoTimer) {
-          window.clearTimeout(this._resumeAutoTimer);
+          this._carousel.stop();
           this._resumeAutoTimer = null;
         }
       }
@@ -10308,7 +10703,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
       const dy = event.clientY - this._pointer.y;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
-      const elapsedSeconds = (Date.now() - this._pointer.time) / 1000;
+      const elapsedSeconds = (this._platform.now() - this._pointer.time) / 1000;
       const entityTarget = this._findInPath(event, "[data-entity]") || this._pointer.entityTarget;
 
       if (this._pointer.rotator && this._pointer.dragging) {
@@ -10432,7 +10827,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 
     _suppressNextClick() {
       // Prevents a click right after pointerup from firing the same action again.
-      this._suppressClickUntil = Date.now() + 450;
+      this._suppressClickUntil = this._platform.now() + 450;
     }
 
     _fireHassAction(target, action) {
@@ -10445,7 +10840,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 
       if (!selectedAction || selectedAction.action === "none") return;
 
-      const event = new Event("hass-action", { bubbles: true, composed: true });
+      const event = this._platform.createEvent("hass-action", { bubbles: true, composed: true });
       event.detail = {
         config: actionConfig,
         action: eventAction,

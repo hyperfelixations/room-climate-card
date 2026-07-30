@@ -106,7 +106,11 @@ test("P1: setConfig() with no active drag (the normal case) behaves exactly as b
   const el = threeViewCard();
   assert.equal(el._isDragging, false);
   assert.equal(el._pointer, null);
-  el._resumeAutoTimer = null;
+  // The resume timer is owned by the carousel controller, so it is cleared through the
+  // owner rather than by writing the field. el._resumeAutoTimer is a read-only window
+  // onto that handle, which is exactly what keeps a second copy from existing.
+  el._stopRotation();
+  assert.equal(el._resumeAutoTimer, null, "starting point: nothing pending");
 
   el.setConfig({ ...BASE_CONFIG, avg_label: "Custom" });
 

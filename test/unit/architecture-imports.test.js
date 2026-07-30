@@ -197,6 +197,43 @@ const FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS = [
   "this",
 ];
 
+// The controller layer schedules, times and observes — which is precisely why it must
+// not reach any of it ambiently. Everything comes from the platform object, and the
+// platform has exactly ONE production implementation. That one file is the only place
+// in the whole source tree where a timer, an observer, a clock or a document is
+// touched directly, which makes "what does this card do to the browser" a question
+// with a single file for an answer.
+const BROWSER_ADAPTER = "controllers/runtime/browser-platform.js";
+const FORBIDDEN_CONTROLLER_GLOBALS = [
+  "globalThis",
+  "window",
+  "document",
+  "navigator",
+  "location",
+  "customElements",
+  "localStorage",
+  "sessionStorage",
+  "fetch",
+  "XMLHttpRequest",
+  "WebSocket",
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+  "performance",
+  "ResizeObserver",
+  "MutationObserver",
+  "IntersectionObserver",
+  "matchMedia",
+  "getComputedStyle",
+  "DOMMatrix",
+  "DOMMatrixReadOnly",
+  "Event",
+  "CustomEvent",
+];
+
 function listSourceFiles(dir, prefix = "") {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -544,6 +581,44 @@ test("no module in the rendering layers reads the legacy DTO adapter", () => {
   // reachability check would already have caught: the composition root keeps it alive
   // for _computeData().
   assert.ok(files.includes(LEGACY), "the adapter still exists during the migration");
+});
+
+test("the controller layer exists and imports nothing above itself", () => {
+  const controllers = files.filter((file) => classify(file).name === "controllers/runtime");
+  assert.ok(controllers.length > 0, "controllers/runtime must exist");
+  assert.ok(controllers.includes(BROWSER_ADAPTER), "the browser adapter must be the named one");
+  for (const file of controllers) {
+    for (const specifier of graph.get(file).specifiers) {
+      const target = resolveSpecifier(file, specifier);
+      assert.ok(
+        !target.startsWith("element/") && target !== ENTRY,
+        `${file} imports ${target} — a controller is driven BY the element, it does not reach back into it`
+      );
+    }
+  }
+});
+
+test("only the named browser adapter touches an ambient platform global", () => {
+  const violations = [];
+  for (const file of files) {
+    if (classify(file).name !== "controllers/runtime" || file === BROWSER_ADAPTER) continue;
+    const code = stripCommentsAndStringText(readSource(file));
+    for (const identifier of FORBIDDEN_CONTROLLER_GLOBALS) {
+      if (referencesGlobal(code, identifier)) violations.push(`${file} references the global ${identifier}`);
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `a controller receives its clock, timers and observers from the platform:\n  ${violations.join("\n  ")}`
+  );
+});
+
+test("the browser adapter is the only production implementation of the platform", () => {
+  // A second implementation would be a second answer to "what does this card do to the
+  // browser", and the fake belongs to the tests, not to the shipped bundle.
+  const implementations = files.filter((file) => /platform/i.test(file));
+  assert.deepEqual(implementations, [BROWSER_ADAPTER]);
 });
 
 test("no render primitive knows about a view", () => {
