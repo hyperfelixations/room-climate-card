@@ -10,9 +10,9 @@
 // THE CONTRACT
 //
 //   now()                          -> milliseconds since the epoch
-//   setTimeout(fn, ms)             -> handle
+//   setTimeout(fn, ms)             -> an OPAQUE handle, or null
 //   clearTimeout(handle)           -> void
-//   requestAnimationFrame(fn)      -> handle
+//   requestAnimationFrame(fn)      -> an OPAQUE handle, or null
 //   cancelAnimationFrame(handle)   -> void
 //   prefersReducedMotion()         -> boolean
 //   isDocumentHidden()             -> boolean
@@ -28,12 +28,25 @@
 // second implementation, and a fake that lives next to its tests can be as
 // inspectable as those tests need.
 //
-// ON REALMS. The adapter resolves its document on EVERY call through the thunk it was
-// given, never once at construction. A card can be adopted into another document —
-// moved between dashboards, re-parented by a view transition — and an adapter that
-// had captured the original document would keep scheduling timers, reading visibility
-// and constructing events in a realm the card no longer lives in. Resolving late costs
-// one property read and cannot go stale.
+// ON REALMS, and the distinction that matters.
+//
+// There are two different questions, and answering both the same way is a bug:
+//
+//   "which realm should this NEW capability come from?"  -> the CURRENT one
+//   "which realm should this EXISTING handle be cancelled in?" -> the one that made it
+//
+// The adapter therefore resolves its document on every call through the thunk it was
+// given, never once at construction: a card can be adopted into another document —
+// moved between dashboards, re-parented by a view transition — and an adapter that had
+// captured the original document would keep scheduling timers, reading visibility and
+// constructing events in a realm the card no longer lives in.
+//
+// But a timer handle is just a number, and it is only meaningful to the window that
+// issued it. Cancelling it against a DIFFERENT window either does nothing — leaving a
+// callback to fire into an adopted card — or, worse, cancels an unrelated timer that
+// happens to have the same number there. Timeout and animation-frame handles are
+// therefore opaque tokens that carry their own cancellation, bound to the realm that
+// created them. Nothing outside this file may look inside one.
 
 // Reading the transform needs BOTH the element's computed style and its realm's
 // DOMMatrixReadOnly. Doing it here keeps the only two realm-bound globals the carousel
@@ -60,14 +73,26 @@ export function createBrowserPlatform(getDocument) {
   return {
     now: () => Date.now(),
 
-    setTimeout: (fn, ms) => viewOf()?.setTimeout(fn, ms) ?? null,
-    clearTimeout: (handle) => {
-      if (handle !== null && handle !== undefined) viewOf()?.clearTimeout(handle);
+    setTimeout(fn, ms) {
+      const view = viewOf();
+      if (!view) return null;
+      const id = view.setTimeout(fn, ms);
+      // The closure is the handle. It holds the window that issued the id, so cancelling
+      // works even after the card has been adopted into another document.
+      return { cancel: () => view.clearTimeout(id) };
+    },
+    clearTimeout(handle) {
+      handle?.cancel?.();
     },
 
-    requestAnimationFrame: (fn) => viewOf()?.requestAnimationFrame(fn) ?? null,
-    cancelAnimationFrame: (handle) => {
-      if (handle !== null && handle !== undefined) viewOf()?.cancelAnimationFrame(handle);
+    requestAnimationFrame(fn) {
+      const view = viewOf();
+      if (!view) return null;
+      const id = view.requestAnimationFrame(fn);
+      return { cancel: () => view.cancelAnimationFrame(id) };
+    },
+    cancelAnimationFrame(handle) {
+      handle?.cancel?.();
     },
 
     // Mirrors the CSS media query in JavaScript, so a reduced-motion user avoids the
@@ -81,9 +106,10 @@ export function createBrowserPlatform(getDocument) {
       const target = documentOf();
       if (!target) return () => {};
       target.addEventListener("visibilitychange", listener);
-      // Returning the unsubscribe rather than exposing a remove* twin means a caller
-      // cannot detach a listener it did not attach, and cannot forget which arguments
-      // the pair has to agree on.
+      // The unsubscribe closes over the document that was actually subscribed to — the
+      // same realm rule as the timer handles. Returning it rather than exposing a
+      // remove* twin means a caller cannot detach a listener it did not attach, and
+      // cannot forget which arguments the pair has to agree on.
       return () => target.removeEventListener("visibilitychange", listener);
     },
 

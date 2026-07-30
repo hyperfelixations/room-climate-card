@@ -673,6 +673,59 @@ test("the source scanner preserves line numbers", () => {
   assert.equal(stripCommentsAndStringText(source).split("\n").length, source.split("\n").length);
 });
 
+test("nothing assigns to a read-only window onto controller-owned state", () => {
+  // Since the runtime extraction, some element fields are accessors onto state a
+  // controller owns. Those with a getter but NO setter are read-only on purpose: a
+  // setter would either create a second copy of the same fact or, in the strict-mode
+  // bundle, throw. The second one actually happened — `this._resumeAutoTimer = null`
+  // right after the owner had already cleared it, inside a pointermove listener, where
+  // a throw is invisible: the card just stops responding to gestures.
+  //
+  // This derives the read-only names from the source instead of listing them, so a
+  // future accessor is covered the day it is added.
+  const violations = [];
+  for (const file of files) {
+    const code = stripCommentsAndStringText(readSource(file));
+    const getters = new Set([...code.matchAll(/^\s{2,}get\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\(/gm)].map((m) => m[1]));
+    const setters = new Set([...code.matchAll(/^\s{2,}set\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\(/gm)].map((m) => m[1]));
+    const readOnly = [...getters].filter((name) => !setters.has(name));
+    if (readOnly.length === 0) continue;
+    for (const name of readOnly) {
+      // `this.x =` but not `this.x ==` / `this.x ===`.
+      const assignment = new RegExp(`\\bthis\\s*\\.\\s*${name}\\s*(?:=(?!=)|[-+*/|&^]?=(?!=))`);
+      if (assignment.test(code)) violations.push(`${file} assigns to the read-only accessor ${name}`);
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `clear controller-owned state through its owner, not through the window onto it:\n  ${violations.join("\n  ")}`
+  );
+});
+
+test("the ownership guard actually recognizes an assignment", () => {
+  // Guards the guard: the regexes above are the whole check, so a typo in one would
+  // silently disable it.
+  const sample = [
+    "class X {",
+    "  get _readOnly() { return 1; }",
+    "  get _readWrite() { return 2; }",
+    "  set _readWrite(v) {}",
+    "  method() { this._readWrite = 3; }",
+    "}",
+  ].join("\n");
+  const code = stripCommentsAndStringText(sample);
+  const getters = new Set([...code.matchAll(/^\s{2,}get\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\(/gm)].map((m) => m[1]));
+  const setters = new Set([...code.matchAll(/^\s{2,}set\s+([_a-zA-Z][a-zA-Z0-9]*)\s*\(/gm)].map((m) => m[1]));
+  assert.deepEqual([...getters].filter((name) => !setters.has(name)), ["_readOnly"]);
+
+  const assigns = (name, source) => new RegExp(`\\bthis\\s*\\.\\s*${name}\\s*(?:=(?!=)|[-+*/|&^]?=(?!=))`).test(source);
+  assert.equal(assigns("_readOnly", "this._readOnly = null;"), true);
+  assert.equal(assigns("_readOnly", "if (this._readOnly === null) {}"), false, "a comparison is not an assignment");
+  assert.equal(assigns("_readOnly", "if (this._readOnly == null) {}"), false);
+  assert.equal(assigns("_readOnly", "return this._readOnly;"), false);
+});
+
 test("the composition root declares no method name twice", () => {
   // A duplicate class member is legal JavaScript: the later definition silently wins
   // and the earlier one becomes unreachable. During an extraction that is exactly how

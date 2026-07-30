@@ -14,12 +14,14 @@
 
 function createFakePlatform(options = {}) {
   let now = options.now ?? 1750000000000;
-  let nextHandle = 1;
+  // Opaque handles, exactly like the browser adapter: the map is keyed by the token
+  // object itself, so no numeric detail leaks into anything a caller could rely on.
   const timers = new Map();
   const frames = new Map();
   const visibilityListeners = new Set();
   let hidden = Boolean(options.hidden);
   let reducedMotion = Boolean(options.reducedMotion);
+  let currentFontsReady = options.fontsReady ?? null;
   const observers = [];
   const calls = { setTimeout: 0, clearTimeout: 0, requestAnimationFrame: 0, cancelAnimationFrame: 0 };
 
@@ -28,24 +30,24 @@ function createFakePlatform(options = {}) {
 
     setTimeout(fn, ms) {
       calls.setTimeout += 1;
-      const handle = nextHandle++;
+      const handle = { cancel: () => timers.delete(handle) };
       timers.set(handle, { fn, dueAt: now + Math.max(0, Number(ms) || 0) });
       return handle;
     },
     clearTimeout(handle) {
       calls.clearTimeout += 1;
-      timers.delete(handle);
+      handle?.cancel?.();
     },
 
     requestAnimationFrame(fn) {
       calls.requestAnimationFrame += 1;
-      const handle = nextHandle++;
+      const handle = { cancel: () => frames.delete(handle) };
       frames.set(handle, fn);
       return handle;
     },
     cancelAnimationFrame(handle) {
       calls.cancelAnimationFrame += 1;
-      frames.delete(handle);
+      handle?.cancel?.();
     },
 
     prefersReducedMotion: () => reducedMotion,
@@ -76,7 +78,7 @@ function createFakePlatform(options = {}) {
       return observer;
     },
 
-    fontsReady: () => options.fontsReady ?? null,
+    fontsReady: () => currentFontsReady,
 
     createEvent: (type, init) => ({ type, ...init, __fake: true }),
 
@@ -105,6 +107,10 @@ function createFakePlatform(options = {}) {
     },
     setNow(value) {
       now = value;
+    },
+    // Simulates the card being adopted into a document with its own font loading state.
+    setFontsReady(promise) {
+      currentFontsReady = promise ?? null;
     },
     setReducedMotion(value) {
       reducedMotion = Boolean(value);

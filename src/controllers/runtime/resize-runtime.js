@@ -16,7 +16,10 @@
 export function createResizeRuntime({ platform, onMeasure }) {
   let observer = null;
   let frameHandle = null;
-  let fontsSubscribed = false;
+  // The fonts.ready promise this runtime is currently subscribed to, or null. Keyed on
+  // the promise rather than on a boolean so an adopted card resubscribes to its new
+  // document exactly once (see measureOnceFontsReady()).
+  let fontsSubscribedTo = null;
 
   function cancelPendingFrame() {
     if (frameHandle !== null) {
@@ -56,19 +59,28 @@ export function createResizeRuntime({ platform, onMeasure }) {
       }
     },
 
-    // Subscribes exactly once per card instance, not once per rebuild: a fresh .then()
-    // on every rebuild that happens before fonts finish would each capture that call's
-    // own state and could re-apply a stale measurement after a newer render already
-    // ran. A no-op in the common case where fonts were already ready, and on a platform
+    // Subscribes exactly once per FONT SOURCE, not once per rebuild and not once for
+    // all time.
+    //
+    // Once per rebuild would be wrong: a fresh .then() on every rebuild that happens
+    // before the fonts land would each capture that call's own state, and a stale one
+    // could re-apply an old measurement after a newer render already ran.
+    //
+    // Once for all time would also be wrong: a card adopted into another document gets
+    // a DIFFERENT fonts.ready, whose loading state has nothing to do with the one that
+    // was subscribed to. So the subscription is keyed on the promise itself, and the
+    // callback re-checks that its source is still the current one — a promise from a
+    // document the card has since left must not trigger a measurement in the new one.
+    //
+    // A no-op in the common case where fonts were already ready, and on a platform
     // without the Fonts API at all.
     measureOnceFontsReady(isStillConnected) {
-      if (fontsSubscribed) return;
       const ready = platform.fontsReady();
-      if (!ready) return;
-      fontsSubscribed = true;
+      if (!ready || ready === fontsSubscribedTo) return;
+      fontsSubscribedTo = ready;
       ready
         .then(() => {
-          if (isStillConnected()) onMeasure();
+          if (platform.fontsReady() === ready && isStillConnected()) onMeasure();
         })
         .catch(() => {});
     },

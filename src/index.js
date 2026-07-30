@@ -1551,10 +1551,12 @@ import { createResizeRuntime } from "./controllers/runtime/resize-runtime.js";
         this._pointer.startTranslate = track
           ? this._pauseTrackAtCurrentPosition(track)
           : -(this._activeView || 0) * this._viewWidthPct();
-        if (this._resumeAutoTimer) {
-          this._carousel.stop();
-          this._resumeAutoTimer = null;
-        }
+        // A resume from a PREVIOUS swipe may still be pending; it would hand the track
+        // back to the synchronized animation in the middle of this one. Cleared through
+        // its owner, which is the only thing that can clear it — the element's
+        // _resumeAutoTimer is a read-only window onto the controller's handle, not a
+        // second copy to null out.
+        this._carousel.stop();
       }
       event.preventDefault();
       event.stopPropagation();

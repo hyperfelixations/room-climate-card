@@ -646,3 +646,133 @@ test("a detached document leaves the adapter inert instead of throwing", () => {
   assert.doesNotThrow(() => platform.cancelAnimationFrame(null));
   assert.doesNotThrow(() => platform.onVisibilityChange(() => {})());
 });
+
+// -------------------------------------------------- realm-bound lifetimes ----
+//
+// The distinction the platform contract has to make: a NEW capability comes from the
+// CURRENT realm, but an EXISTING handle must be cancelled in the realm that created it.
+// A timer id is only meaningful to the window that issued it — cancelling it against a
+// different window either does nothing (leaving a callback to fire into an adopted
+// card) or cancels an unrelated timer that happens to share the number there.
+
+function twoRealms() {
+  const first = new JSDOM("<!doctype html><html><body><div id='host'></div></body></html>", { pretendToBeVisual: true });
+  const second = new JSDOM("<!doctype html><html><body><div id='host'></div></body></html>", { pretendToBeVisual: true });
+  let current = first.window.document;
+  const platform = browserPlatform.createBrowserPlatform(() => current);
+  return { first, second, platform, adopt: () => (current = second.window.document) };
+}
+
+test("a timeout created before adoption is still cancelled in its own realm afterwards", async () => {
+  const { first, second, platform, adopt } = twoRealms();
+  let fired = 0;
+  const handle = platform.setTimeout(() => (fired += 1), 5);
+
+  // The card is adopted; the adapter now resolves everything against the new document.
+  adopt();
+  platform.clearTimeout(handle);
+
+  await new Promise((resolve) => first.window.setTimeout(resolve, 30));
+  await new Promise((resolve) => second.window.setTimeout(resolve, 30));
+  assert.equal(fired, 0, "the old realm's timer must genuinely have been cancelled");
+});
+
+test("an animation frame created before adoption is cancelled in its own realm too", async () => {
+  const { first, second, platform, adopt } = twoRealms();
+  let fired = 0;
+  const handle = platform.requestAnimationFrame(() => (fired += 1));
+  adopt();
+  platform.cancelAnimationFrame(handle);
+
+  await new Promise((resolve) => first.window.setTimeout(resolve, 50));
+  await new Promise((resolve) => second.window.setTimeout(resolve, 50));
+  assert.equal(fired, 0);
+});
+
+test("handles created after adoption belong to the new realm and are untouched by the old one", async () => {
+  const { first, second, platform, adopt } = twoRealms();
+  const beforeAdoption = platform.setTimeout(() => {}, 1000);
+  adopt();
+  let fired = 0;
+  const afterAdoption = platform.setTimeout(() => (fired += 1), 5);
+
+  // Cancelling the OLD handle must not disturb the new one, even though a naive
+  // implementation could have handed out the same numeric id in both realms.
+  platform.clearTimeout(beforeAdoption);
+  await new Promise((resolve) => second.window.setTimeout(resolve, 40));
+  assert.equal(fired, 1, "the new realm's timer must still have fired");
+  platform.clearTimeout(afterAdoption);
+  await new Promise((resolve) => first.window.setTimeout(resolve, 10));
+});
+
+test("a timeout handle is opaque: nothing outside the adapter may read a number out of it", () => {
+  const jsdom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
+  const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
+  const handle = platform.setTimeout(() => {}, 1000);
+  assert.equal(typeof handle, "object", "a bare number would tempt a caller to use it directly");
+  assert.equal(typeof handle.cancel, "function");
+  platform.clearTimeout(handle);
+  assert.doesNotThrow(() => platform.clearTimeout(handle), "cancelling twice is harmless");
+  assert.doesNotThrow(() => platform.clearTimeout(null));
+  assert.doesNotThrow(() => platform.clearTimeout(undefined));
+});
+
+test("the visibility unsubscribe detaches from the document it subscribed to, not the current one", () => {
+  const { first, second, platform, adopt } = twoRealms();
+  let fired = 0;
+  const unsubscribe = platform.onVisibilityChange(() => (fired += 1));
+  first.window.document.dispatchEvent(new first.window.Event("visibilitychange"));
+  assert.equal(fired, 1);
+
+  adopt();
+  unsubscribe();
+  first.window.document.dispatchEvent(new first.window.Event("visibilitychange"));
+  assert.equal(fired, 1, "the listener in the ORIGINAL document must be gone");
+});
+
+test("fonts-ready resubscribes exactly once per source, and a stale source measures nothing", async () => {
+  const platform = createFakePlatform();
+  let measures = 0;
+  const resize = resizeRuntime.createResizeRuntime({ platform, onMeasure: () => (measures += 1) });
+
+  let resolveOld;
+  const oldReady = new Promise((resolve) => (resolveOld = resolve));
+  platform.setFontsReady(oldReady);
+  resize.measureOnceFontsReady(() => true);
+  resize.measureOnceFontsReady(() => true);
+
+  // The card is adopted into a document with its own font-loading state, before the old
+  // promise ever settles.
+  let resolveNew;
+  const newReady = new Promise((resolve) => (resolveNew = resolve));
+  platform.setFontsReady(newReady);
+  resize.measureOnceFontsReady(() => true);
+  resize.measureOnceFontsReady(() => true);
+
+  resolveOld();
+  await oldReady;
+  await Promise.resolve();
+  assert.equal(measures, 0, "the abandoned document's fonts must not measure the adopted card");
+
+  resolveNew();
+  await newReady;
+  await Promise.resolve();
+  assert.equal(measures, 1, "and the new source measures exactly once");
+});
+
+test("a disconnected card is not measured when its fonts finally land", async () => {
+  const platform = createFakePlatform();
+  let measures = 0;
+  const resize = resizeRuntime.createResizeRuntime({ platform, onMeasure: () => (measures += 1) });
+  let resolveFonts;
+  const ready = new Promise((resolve) => (resolveFonts = resolve));
+  platform.setFontsReady(ready);
+
+  let connected = true;
+  resize.measureOnceFontsReady(() => connected);
+  connected = false;
+  resolveFonts();
+  await ready;
+  await Promise.resolve();
+  assert.equal(measures, 0);
+});

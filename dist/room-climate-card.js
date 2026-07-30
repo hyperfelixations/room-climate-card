@@ -8562,9 +8562,9 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 // THE CONTRACT
 //
 //   now()                          -> milliseconds since the epoch
-//   setTimeout(fn, ms)             -> handle
+//   setTimeout(fn, ms)             -> an OPAQUE handle, or null
 //   clearTimeout(handle)           -> void
-//   requestAnimationFrame(fn)      -> handle
+//   requestAnimationFrame(fn)      -> an OPAQUE handle, or null
 //   cancelAnimationFrame(handle)   -> void
 //   prefersReducedMotion()         -> boolean
 //   isDocumentHidden()             -> boolean
@@ -8580,12 +8580,25 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 // second implementation, and a fake that lives next to its tests can be as
 // inspectable as those tests need.
 //
-// ON REALMS. The adapter resolves its document on EVERY call through the thunk it was
-// given, never once at construction. A card can be adopted into another document —
-// moved between dashboards, re-parented by a view transition — and an adapter that
-// had captured the original document would keep scheduling timers, reading visibility
-// and constructing events in a realm the card no longer lives in. Resolving late costs
-// one property read and cannot go stale.
+// ON REALMS, and the distinction that matters.
+//
+// There are two different questions, and answering both the same way is a bug:
+//
+//   "which realm should this NEW capability come from?"  -> the CURRENT one
+//   "which realm should this EXISTING handle be cancelled in?" -> the one that made it
+//
+// The adapter therefore resolves its document on every call through the thunk it was
+// given, never once at construction: a card can be adopted into another document —
+// moved between dashboards, re-parented by a view transition — and an adapter that had
+// captured the original document would keep scheduling timers, reading visibility and
+// constructing events in a realm the card no longer lives in.
+//
+// But a timer handle is just a number, and it is only meaningful to the window that
+// issued it. Cancelling it against a DIFFERENT window either does nothing — leaving a
+// callback to fire into an adopted card — or, worse, cancels an unrelated timer that
+// happens to have the same number there. Timeout and animation-frame handles are
+// therefore opaque tokens that carry their own cancellation, bound to the realm that
+// created them. Nothing outside this file may look inside one.
 
 // Reading the transform needs BOTH the element's computed style and its realm's
 // DOMMatrixReadOnly. Doing it here keeps the only two realm-bound globals the carousel
@@ -8612,14 +8625,26 @@ function createBrowserPlatform(getDocument) {
   return {
     now: () => Date.now(),
 
-    setTimeout: (fn, ms) => viewOf()?.setTimeout(fn, ms) ?? null,
-    clearTimeout: (handle) => {
-      if (handle !== null && handle !== undefined) viewOf()?.clearTimeout(handle);
+    setTimeout(fn, ms) {
+      const view = viewOf();
+      if (!view) return null;
+      const id = view.setTimeout(fn, ms);
+      // The closure is the handle. It holds the window that issued the id, so cancelling
+      // works even after the card has been adopted into another document.
+      return { cancel: () => view.clearTimeout(id) };
+    },
+    clearTimeout(handle) {
+      handle?.cancel?.();
     },
 
-    requestAnimationFrame: (fn) => viewOf()?.requestAnimationFrame(fn) ?? null,
-    cancelAnimationFrame: (handle) => {
-      if (handle !== null && handle !== undefined) viewOf()?.cancelAnimationFrame(handle);
+    requestAnimationFrame(fn) {
+      const view = viewOf();
+      if (!view) return null;
+      const id = view.requestAnimationFrame(fn);
+      return { cancel: () => view.cancelAnimationFrame(id) };
+    },
+    cancelAnimationFrame(handle) {
+      handle?.cancel?.();
     },
 
     // Mirrors the CSS media query in JavaScript, so a reduced-motion user avoids the
@@ -8633,9 +8658,10 @@ function createBrowserPlatform(getDocument) {
       const target = documentOf();
       if (!target) return () => {};
       target.addEventListener("visibilitychange", listener);
-      // Returning the unsubscribe rather than exposing a remove* twin means a caller
-      // cannot detach a listener it did not attach, and cannot forget which arguments
-      // the pair has to agree on.
+      // The unsubscribe closes over the document that was actually subscribed to — the
+      // same realm rule as the timer handles. Returning it rather than exposing a
+      // remove* twin means a caller cannot detach a listener it did not attach, and
+      // cannot forget which arguments the pair has to agree on.
       return () => target.removeEventListener("visibilitychange", listener);
     },
 
@@ -9174,7 +9200,10 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
 function createResizeRuntime({ platform, onMeasure }) {
   let observer = null;
   let frameHandle = null;
-  let fontsSubscribed = false;
+  // The fonts.ready promise this runtime is currently subscribed to, or null. Keyed on
+  // the promise rather than on a boolean so an adopted card resubscribes to its new
+  // document exactly once (see measureOnceFontsReady()).
+  let fontsSubscribedTo = null;
 
   function cancelPendingFrame() {
     if (frameHandle !== null) {
@@ -9214,19 +9243,28 @@ function createResizeRuntime({ platform, onMeasure }) {
       }
     },
 
-    // Subscribes exactly once per card instance, not once per rebuild: a fresh .then()
-    // on every rebuild that happens before fonts finish would each capture that call's
-    // own state and could re-apply a stale measurement after a newer render already
-    // ran. A no-op in the common case where fonts were already ready, and on a platform
+    // Subscribes exactly once per FONT SOURCE, not once per rebuild and not once for
+    // all time.
+    //
+    // Once per rebuild would be wrong: a fresh .then() on every rebuild that happens
+    // before the fonts land would each capture that call's own state, and a stale one
+    // could re-apply an old measurement after a newer render already ran.
+    //
+    // Once for all time would also be wrong: a card adopted into another document gets
+    // a DIFFERENT fonts.ready, whose loading state has nothing to do with the one that
+    // was subscribed to. So the subscription is keyed on the promise itself, and the
+    // callback re-checks that its source is still the current one — a promise from a
+    // document the card has since left must not trigger a measurement in the new one.
+    //
+    // A no-op in the common case where fonts were already ready, and on a platform
     // without the Fonts API at all.
     measureOnceFontsReady(isStillConnected) {
-      if (fontsSubscribed) return;
       const ready = platform.fontsReady();
-      if (!ready) return;
-      fontsSubscribed = true;
+      if (!ready || ready === fontsSubscribedTo) return;
+      fontsSubscribedTo = ready;
       ready
         .then(() => {
-          if (isStillConnected()) onMeasure();
+          if (platform.fontsReady() === ready && isStillConnected()) onMeasure();
         })
         .catch(() => {});
     },
@@ -10683,10 +10721,12 @@ function createResizeRuntime({ platform, onMeasure }) {
         this._pointer.startTranslate = track
           ? this._pauseTrackAtCurrentPosition(track)
           : -(this._activeView || 0) * this._viewWidthPct();
-        if (this._resumeAutoTimer) {
-          this._carousel.stop();
-          this._resumeAutoTimer = null;
-        }
+        // A resume from a PREVIOUS swipe may still be pending; it would hand the track
+        // back to the synchronized animation in the middle of this one. Cleared through
+        // its owner, which is the only thing that can clear it — the element's
+        // _resumeAutoTimer is a read-only window onto the controller's handle, not a
+        // second copy to null out.
+        this._carousel.stop();
       }
       event.preventDefault();
       event.stopPropagation();
