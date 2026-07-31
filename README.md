@@ -3,14 +3,14 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the entity's `device_class`. Will automatically adapt to your dashboard's light or dark mode.
+A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the configured entities. It automatically adapts to your dashboard's light or dark mode.
 
 ![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
 ![Room Climate Card in dark mode](screenshot-dark.png)
 
 ## Features
 
-- One card, four modes: temperature, humidity, CO₂, PM2.5 (detected automatically from the average entity's `device_class`, with a unit-based fallback)
+- One card, four modes: temperature, humidity, CO₂, PM2.5 (detected from the usable primary entity's `device_class`, with unit and compatible-room fallbacks)
 - Optional per-room breakdown with a coldest/warmest room comparison, shown as a swipeable/auto-rotating carousel alongside the main scale, automatically wrapping into multiple rows past 7 rooms (or laid out to an explicit grid you choose)
 - Optional daily range (min/max) views and a compact rate-of-change segment
   in the main scale footer, when the matching entities are configured
@@ -33,48 +33,35 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ## Requirements
 
-- **Entities**: any numeric sensor-like entity works. `device_class:
-  temperature | humidity | carbon_dioxide | pm25` selects the mode
-  automatically; without a recognized `device_class`, a recognized unit
-  (e.g. `°C`, `%`, `ppm`, `µg/m³`) is used as a fallback. There is no fixed
+- **Entities**: any numeric sensor-like entity works. A usable primary entity's
+  `device_class: temperature | humidity | carbon_dioxide | pm25` selects the
+  mode; without a recognized `device_class`, a recognized unit (e.g. `°C`,
+  `%`, `ppm`, `µg/m³`) is used. If the primary value is unavailable or invalid,
+  compatible usable rooms can supply a room-consensus average. There is no fixed
   domain restriction, but `sensor.*` entities are the practical case.
 - **Home Assistant / browser**: no minimum Home Assistant version is
   enforced — the card is a dependency-free custom element with no backend
   integration. It does use CSS container queries for its responsive
   layout, so the dashboard needs a reasonably current browser (any
   currently supported version of Chrome, Edge, Firefox, or Safari).
-- **Visual editor**: not available yet. The card is configured entirely
-  through YAML; see [Quickstart](#quickstart) and
-  [Configuration](#configuration) below.
-- **Known limitations**:
-  - Daily range and trend features require separate template sensors that
-    provide the corresponding data. The card cannot derive historical daily
-    minimum/maximum values or a trend from the current room values alone.
-  - In some layouts, four-digit CO₂ values and two- or three-digit PM2.5
-    values can overlap nearby content. This will be fixed in a later release.
-
 ## Installation
 
 ### HACS
 
 [![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
 
-Until Room Climate Card is included in the default HACS store, add it as a
-custom repository using the button above or manually:
+Add Room Climate Card as a custom repository using the button above or
+manually:
 
 1. Open HACS → the three-dot menu → **Custom repositories**.
 2. Add `https://github.com/hyperfelixations/room-climate-card`, category
    **Dashboard**.
 3. Install "Room Climate Card" and reload your browser.
 
-Once it is included in the default store, you can search for
-"Room Climate Card" directly in HACS instead.
-
 ### Manual
 
-1. Download `room-climate-card.js` from the
-   [latest release](https://github.com/hyperfelixations/room-climate-card/releases/latest)
-   (in the repository it lives at `dist/room-climate-card.js`) and copy it
+1. Download the repository's built
+   [`dist/room-climate-card.js`](dist/room-climate-card.js) file and copy it
    into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
 2. Add it as a dashboard resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
 3. Add a card with `type: custom:room-climate-card` to a dashboard.
@@ -304,7 +291,7 @@ the card's original behavior.
 | `range_scale` | `footer` | `detailed` / `compact` / `false` | `detailed` | Full footer with times, shorter footer without times, or no footer. Global `hide_footer: true` always wins. |
 | `scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides both the comfort band and its label. |
 | `scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `scale` | `footer` | `true` / `false` | `true` | Shows or hides this view's comfort/spread footer. The footer also requires room comparison data, and global `hide_footer: true` always wins. The average trend summary is independent of this option. |
+| `scale` | `footer` | `true` / `false` | `true` | Shows or hides this view's comfort/spread/trend-rate footer. The footer also requires room comparison data, and global `hide_footer: true` always wins. The trend direction arrow above the average unit remains independent. |
 | `scale` | `markers` | `extremes` / `average` / `all` | `extremes` | `extremes` shows the lowest room, average, and highest room (the default); `average` shows only the average; `all` shows a smaller marker for every currently valid configured room plus a larger average marker. |
 | `extremes` | `show_value` | `true` / `false` | `true` | Shows or hides the numeric values; the coldest/warmest labels and room names remain visible. |
 
@@ -577,6 +564,19 @@ views:
       show_value: true
 ```
 
+## Known limitations
+
+- There is no visual card editor; all configuration is YAML. Start with the
+  [Quickstart](#quickstart), then use the complete
+  [configuration reference](#configuration).
+- Daily minimum/maximum and trend features require separate entities that
+  provide those values. The card reads current Home Assistant states and does
+  not query Recorder or derive historical statistics itself.
+- A single card instance displays one detected metric kind. Rooms with a
+  different metric kind or an incompatible unit are excluded; if no usable
+  primary value exists and usable rooms contain mixed metric kinds, the card
+  shows a configuration/no-data state instead of choosing a majority.
+
 ## Troubleshooting
 
 **The card doesn't appear after installing.**
@@ -619,131 +619,8 @@ If none of this helps, please open a
 - the relevant part of your card's YAML configuration;
 - any error message from the browser console.
 
-## Development
-
-The card that Home Assistant loads is a single, dependency-free file. It is
-built from ES-module sources rather than edited directly:
-
-```text
-src/
-  index.js                 registration root: imports the element, registers it,
-                           announces it to the card picker. Nothing else.
-  core/                    numbers, text, colour, easing, card metadata
-  config/                  YAML normalization: defaults, primitives, rooms,
-                           views, classification profiles
-  i18n/
-    languages/<code>.js    one file per supported language
-    registry.js            assembles the translation table
-    translate.js           language resolution and key lookup
-    formatters.js          Intl number/time formatting, plural helpers
-  domain/
-    trend.js               trend deadbands and direction tokens
-    units/                 unit tokens and value conversion
-    metrics/               metric definitions, unit profiles, kind resolution
-    scale/                 axis bounds, rounding steps, band and marker geometry
-    classification/
-      profiles/<kind>/     one file per classification profile
-      registry.js          which profiles exist per metric kind
-      resolve.js           which profile applies, and the per-value priority
-      projection.js        re-expressing a profile in the displayed unit
-  application/model/       what the card knows, independent of any language,
-                           format or colour: one model per entity, the
-                           card-wide measurement context, the room, range
-                           and trend models, and the assembled domain model
-  presentation/view-model/ what the card shows: titles and icons, tones, room
-                           layout, which views are active, one content model
-                           per view, and the assembled view model
-  render/
-    primitives/            the render context, plus the average, room grid,
-                           metric card, marker, scale bar and empty state
-    layout/                long/short label choice and collision-free label
-                           placement, measured against real widths
-    composition/           the card shell: header, average, view area, chips
-  views/                   one module per view, plus the registry composed
-                           from the view definitions' own order
-  styles/                  the stylesheet, in sections
-  controllers/runtime/
-    browser-platform.js    the one place that touches a clock, a timer, an
-                           observer or the document
-    carousel-timing.js     hold sequence, phase and keyframes, as pure
-                           functions of the view count and the time
-    carousel-runtime.js    the active view, both timers, the track and the
-                           accessibility sync
-    resize-runtime.js      resize observation, frame coalescing, fonts-ready
-    interaction-logic.js   swipe detection, thresholds and tap-versus-hold, as
-                           pure functions of numbers
-    interaction-runtime.js the pointer, the drag and the click suppression
-    action-runtime.js      building and dispatching a Home Assistant action
-  element/
-    room-climate-card.js   the custom element: lifecycle, render coordination,
-                           state transitions, diagnostics
-dist/room-climate-card.js  the built card — generated, committed, never edited by hand
-```
-
-Import direction is enforced by a test. The layers, lowest first, are
-`core` → `config`/`i18n`/`domain` → `application/model` →
-`presentation/view-model` → `render/primitives`+`render/layout`+`styles` →
-`views`+`render/composition` → `controllers/runtime` → `element` → `index.js`.
-`core` has no project-internal dependencies, no module may import from a layer
-above it, and there are no cycles or external runtime imports. A view may use a
-render primitive; a primitive can never reach a view, and the card shell is
-handed the view registry rather than importing it. The controllers reach the
-browser only through an explicit platform object, and `browser-platform.js` is
-the only file in the tree that touches a clock, a timer, an observer or the
-document directly — which is also what makes the carousel testable without a
-browser. The one exception is `index.js`, which registers the custom element and
-adds the card to the dashboard's picker; those cannot be reached any other way.
-
-State has exactly one owner each: the carousel runtime owns the active view and
-both timers, the interaction runtime owns the pointer and the drag, the resize
-runtime owns the observer and the fonts subscription, and the element owns the
-configuration, the hass object and the render signatures. Where the element
-exposes any of the others it does so as an accessor onto the owner, never as a
-second copy.
-
-Adding a language means adding one file under `src/i18n/languages/`, a locale
-entry in `src/i18n/locales.js`, and one line in `src/i18n/registry.js`. Adding
-a classification profile means adding one file under
-`src/domain/classification/profiles/<kind>/` and one entry in
-`src/domain/classification/registry.js`. Adding a view means one entry in
-`src/presentation/view-model/view-state.js`, one content builder beside it, and
-one module under `src/views/` — the registry composes itself from the
-definitions, and a missing piece fails at load rather than rendering an empty
-carousel slot.
-
-The bundle is not a concatenation of these files: Rollup bundles the ES
-modules, drops import/export statements, and may move or rename top-level
-declarations. What the build guarantees is that it is deterministic,
-unminified, self-contained, dependency-free, and covered by the full test
-suite.
-
-`dist/` is committed on purpose: HACS serves the file straight out of the
-repository, so it has to be there. `npm run verify:dist` rebuilds the bundle
-in memory and compares it with the committed copy, which is also the first
-thing CI does — a bundle that no longer matches its sources fails the build.
-
-```bash
-npm install          # rollup, jsdom, @playwright/test
-npm run test:install # once: Playwright's own Chromium
-
-npm run build        # src/ -> dist/room-climate-card.js
-npm run verify:dist  # committed bundle still matches src/?
-npm test             # verify:dist + syntax check + unit + browser tests
-npm run test:unit    # fast Node/jsdom layer only
-npm run test:browser # real-Chromium layer only (layout, gestures, screenshots)
-npm run test:fuzz    # the seeded randomized property test on its own
-```
-
-Every command that loads the bundle verifies first that it is up to date, so
-none of them can silently test a stale artifact. `npm test` uses the internal
-`*:run` variants to run that check exactly once instead of once per step.
-
-After changing anything under `src/`, run `npm run build` and commit the
-regenerated `dist/room-climate-card.js` together with the source change. The
-test suite loads the built artifact, not the sources, so it tests exactly what
-users run.
-
 ## Links
 
 - [Releases](https://github.com/hyperfelixations/room-climate-card/releases)
+- [Issues](https://github.com/hyperfelixations/room-climate-card/issues)
 - [License](LICENSE) (MIT)
