@@ -24,7 +24,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -141,19 +140,19 @@ test("the round trip is idempotent: one to two to one leaves the original struct
 
 test("the values and the visible view stay consistent across the structural flip", () => {
   const el = env.createCard(config(), oneValidRoom());
-  const before = computeLegacyData(el);
-  assert.equal(before.hasRoomsView, false);
+  const before = el._computeViewModel();
+  assert.equal(before.rooms.hasRoomsView, false);
   assert.deepEqual([...el._views], ["scale"]);
   assert.equal(el._activeView, 0);
 
   el.hass = twoValidRooms(1000);
-  const after = computeLegacyData(el);
-  assert.equal(after.hasRoomsView, true);
-  assert.equal(after.roomCount, 2);
+  const after = el._computeViewModel();
+  assert.equal(after.rooms.hasRoomsView, true);
+  assert.equal(after.rooms.count, 2);
   assert.deepEqual([...el._views], ["scale"], "the view list itself did not change");
   assert.equal(el._activeView, 0, "and the visible view is preserved");
-  assert.ok(after.scaleMin <= 21 && after.scaleMax >= 23, "the axis covers both rooms");
-  for (const position of [after.avgPos, after.coolestPos, after.warmestPos]) {
+  assert.ok(after.scale.scaleMin <= 21 && after.scale.scaleMax >= 23, "the axis covers both rooms");
+  for (const position of [after.average.position, (after.extremes?.coolestPosition ?? 0), (after.extremes?.warmestPosition ?? 0)]) {
     assert.ok(position >= 0 && position <= 100, `marker position ${position} must be on the bar`);
   }
   env.cleanup(el);

@@ -14,7 +14,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -76,27 +75,27 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
       warnings.some((w) => w.includes("show_comfort_band") && w.includes("falling back")),
       `invalid value ${JSON.stringify(invalid)} must be diagnosed`
     );
-    assert.equal(computeLegacyData(el).viewOptions.scale.show_comfort_band, true, `invalid value ${JSON.stringify(invalid)} must fall back to the default (true)`);
+    assert.equal(el._computeViewModel().views.options.scale.show_comfort_band, true, `invalid value ${JSON.stringify(invalid)} must fall back to the default (true)`);
   }
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
   env.cleanup(el);
 });
 
-// ==== data.viewOptions resolution ====
+// ==== data.views.options resolution ====
 
 // AP-C3 added footer/markers (scale) and footer (range_scale) to these same
 // two schemas -- the assertions below include their defaults (footer:true/
 // markers:"extremes" for scale, footer:"detailed" for range_scale) alongside the
-// band flags this file itself is about, since data.viewOptions.<view> is a
+// band flags this file itself is about, since data.views.options.<view> is a
 // single fully-resolved object per the Baukasten's own design (see
 // resolveViewOptions() in room-climate-card.js).
 
-test("data.viewOptions: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
+test("data.views.options: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.viewOptions.scale), { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" });
-  assert.deepEqual(normalize(data.viewOptions.range_scale), { show_comfort_band: true, show_optimal_band: true, footer: "detailed" });
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" });
+  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: true, footer: "detailed" });
   env.cleanup(el);
 });
 
@@ -108,14 +107,14 @@ const COMBINATIONS = [
 ];
 
 for (const combo of COMBINATIONS) {
-  test(`data.viewOptions: scale resolves explicit options ${JSON.stringify(combo)}`, () => {
+  test(`data.views.options: scale resolves explicit options ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    assert.deepEqual(normalize(computeLegacyData(el).viewOptions.scale), { ...combo, footer: true, markers: "extremes" });
+    assert.deepEqual(normalize(el._computeViewModel().views.options.scale), { ...combo, footer: true, markers: "extremes" });
     env.cleanup(el);
   });
 }
 
-test("data.viewOptions: scale and range_scale resolve independently in the same card", () => {
+test("data.views.options: scale and range_scale resolve independently in the same card", () => {
   const el = env.createCard(
     baseConfig({
       range_entity: "sensor.range",
@@ -129,9 +128,9 @@ test("data.viewOptions: scale and range_scale resolve independently in the same 
       "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
     })
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.viewOptions.scale), { show_comfort_band: false, show_optimal_band: true, footer: true, markers: "extremes" });
-  assert.deepEqual(normalize(data.viewOptions.range_scale), { show_comfort_band: true, show_optimal_band: false, footer: "detailed" });
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: false, show_optimal_band: true, footer: true, markers: "extremes" });
+  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: false, footer: "detailed" });
   env.cleanup(el);
 });
 
@@ -141,18 +140,18 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
   const elBothVisible = env.createCard(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: true, show_optimal_band: true } }] }), twoRoomStates());
   const elBothHidden = env.createCard(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false, show_optimal_band: false } }] }), twoRoomStates());
 
-  const a = computeLegacyData(elBothVisible);
-  const b = computeLegacyData(elBothHidden);
+  const a = elBothVisible._computeViewModel();
+  const b = elBothHidden._computeViewModel();
 
-  assert.equal(a.comfortMin, b.comfortMin);
-  assert.equal(a.comfortMax, b.comfortMax);
-  assert.equal(a.optimalMin, b.optimalMin);
-  assert.equal(a.optimalMax, b.optimalMax);
-  assert.equal(a.inComfort, b.inComfort);
-  assert.equal(a.avgColor, b.avgColor);
-  assert.equal(a.coolestColor, b.coolestColor);
-  assert.equal(a.warmestColor, b.warmestColor);
-  assert.equal(internals.footerText(elBothVisible, "scale", a), internals.footerText(elBothHidden, "scale", b));
+  assert.equal(a.comfort.min, b.comfort.min);
+  assert.equal(a.comfort.max, b.comfort.max);
+  assert.equal(a.scale.optimalMin, b.scale.optimalMin);
+  assert.equal(a.scale.optimalMax, b.scale.optimalMax);
+  assert.equal(a.comfort.inComfort, b.comfort.inComfort);
+  assert.equal(a.average.color, b.average.color);
+  assert.equal((a.extremes?.coolestColor ?? null), (b.extremes?.coolestColor ?? null));
+  assert.equal((a.extremes?.warmestColor ?? null), (b.extremes?.warmestColor ?? null));
+  assert.equal(internals.footerText(elBothVisible, "scale"), internals.footerText(elBothHidden, "scale"));
 
   env.cleanup(elBothVisible);
   env.cleanup(elBothHidden);
@@ -163,7 +162,7 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
 for (const combo of COMBINATIONS) {
   test(`_renderScaleView(): bands and their labels match ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
+    const html = internals.viewMarkup(el, "scale");
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-scale-comfort-label"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
@@ -186,7 +185,7 @@ for (const combo of COMBINATIONS) {
         "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
       })
     );
-    const html = internals.viewMarkup(el, "range_scale", computeLegacyData(el));
+    const html = internals.viewMarkup(el, "range_scale");
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
     assert.equal(html.includes('class="rtc-scale-label-center"'), combo.show_optimal_band);

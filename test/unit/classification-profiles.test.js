@@ -8,7 +8,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -123,13 +122,13 @@ test("outdoor main and range scales share the same unanchored winter bounds and 
       "sensor.range": mkState("sensor.range", 10, { unit_of_measurement: "°C", minimum: -2, maximum: 8 }),
     })
   );
-  const data = computeLegacyData(card);
-  assert.deepEqual(normalize([data.scaleMin, data.scaleMax]), [-3, 9]);
-  assert.deepEqual(normalize([data.rangeScaleGeometry.scaleMin, data.rangeScaleGeometry.scaleMax]), [-3, 9]);
-  assert.equal(data.comfortVisible, false);
-  assert.equal(data.optimalVisible, false);
-  assert.equal(data.rangeScaleGeometry.comfortVisible, false);
-  assert.equal(data.rangeScaleGeometry.optimalVisible, false);
+  const data = card._computeViewModel();
+  assert.deepEqual(normalize([data.scale.scaleMin, data.scale.scaleMax]), [-3, 9]);
+  assert.deepEqual(normalize([data.rangeScale.scaleMin, data.rangeScale.scaleMax]), [-3, 9]);
+  assert.equal(data.scale.comfortVisible, false);
+  assert.equal(data.scale.optimalVisible, false);
+  assert.equal(data.rangeScale.comfortVisible, false);
+  assert.equal(data.rangeScale.optimalVisible, false);
   assert.match(internals.viewMarkup(card, "scale", data), /rtc-comfort-band[^>]* hidden/);
   assert.match(internals.viewMarkup(card, "range_scale", data), /rtc-optimal-band[^>]* hidden/);
   env.cleanup(card);
@@ -298,7 +297,7 @@ test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thres
           }),
         })
       );
-      assert.equal(computeLegacyData(card).tone.icon, expectedIcon, `${deviceClass} at ${value}${unit}`);
+      assert.equal(card._computeViewModel().tone.icon, expectedIcon, `${deviceClass} at ${value}${unit}`);
       env.cleanup(card);
     }
   }
@@ -330,21 +329,21 @@ function humidityCardWithIcons(value, classification = customHumidityWithIcons) 
 
 test("a custom non-temperature profile can configure icons as a descending {min, icon} list", () => {
   const above = humidityCardWithIcons(65);
-  assert.equal(computeLegacyData(above).tone.icon, "mdi:water-percent-alert");
+  assert.equal(above._computeViewModel().tone.icon, "mdi:water-percent-alert");
   env.cleanup(above);
 
   const mid = humidityCardWithIcons(45);
-  assert.equal(computeLegacyData(mid).tone.icon, "mdi:water-percent");
+  assert.equal(mid._computeViewModel().tone.icon, "mdi:water-percent");
   env.cleanup(mid);
 
   const low = humidityCardWithIcons(10);
-  assert.equal(computeLegacyData(low).tone.icon, "mdi:water-minus");
+  assert.equal(low._computeViewModel().tone.icon, "mdi:water-minus");
   env.cleanup(low);
 });
 
 test("a custom non-temperature profile without icons: keeps the metric's static default icon", () => {
   const card = humidityCardWithIcons(65, { ...customHumidityWithIcons, icons: undefined });
-  assert.equal(computeLegacyData(card).tone.icon, "mdi:water-percent");
+  assert.equal(card._computeViewModel().tone.icon, "mdi:water-percent");
   env.cleanup(card);
 });
 
@@ -384,14 +383,14 @@ test("auto accepts entity classification only when both color and level are vali
     value_score: 42,
     value_zone: "comfort",
   });
-  assert.equal(computeLegacyData(complete).tone.color, "#123456");
-  assert.equal(computeLegacyData(complete).tone.label, "Entity level");
+  assert.equal(complete._computeViewModel().tone.color, "#123456");
+  assert.equal(complete._computeViewModel().tone.label, "Entity level");
   env.cleanup(complete);
 
   const colorOnly = createTemperatureCard(undefined, 25.5, {
     value_color: "#123456",
   });
-  const colorOnlyTone = computeLegacyData(colorOnly).tone;
+  const colorOnlyTone = colorOnly._computeViewModel().tone;
   assert.equal(colorOnlyTone.color, "#C98A67", "the entire incomplete entity classification must fall back to indoor");
   assert.equal(colorOnlyTone.label, "Very warm");
   env.cleanup(colorOnly);
@@ -399,7 +398,7 @@ test("auto accepts entity classification only when both color and level are vali
   const levelOnly = createTemperatureCard(undefined, 25.5, {
     value_level: "Entity level",
   });
-  const levelOnlyTone = computeLegacyData(levelOnly).tone;
+  const levelOnlyTone = levelOnly._computeViewModel().tone;
   assert.equal(levelOnlyTone.color, "#C98A67");
   assert.equal(levelOnlyTone.label, "Very warm", "entity level must not be mixed with a profile color");
   env.cleanup(levelOnly);
@@ -411,7 +410,7 @@ test("source entity deliberately accepts partial attributes but never fills them
     value_score: 9,
     value_zone: "outside",
   });
-  const tone = computeLegacyData(colorOnly).tone;
+  const tone = colorOnly._computeViewModel().tone;
   assert.equal(tone.color, "#123456");
   assert.equal(tone.label, "—");
   assert.equal(tone.score, 9);
@@ -419,7 +418,7 @@ test("source entity deliberately accepts partial attributes but never fills them
   env.cleanup(colorOnly);
 
   const noAttributes = createTemperatureCard({ source: "entity" });
-  const neutral = computeLegacyData(noAttributes).tone;
+  const neutral = noAttributes._computeViewModel().tone;
   assert.equal(neutral.color, "#B4B2A9");
   assert.equal(neutral.label, "—");
   assert.equal(neutral.source, "entity");
@@ -437,7 +436,7 @@ test("source profile ignores even a complete entity classification", () => {
       value_zone: "optimal",
     }
   );
-  const tone = computeLegacyData(card).tone;
+  const tone = card._computeViewModel().tone;
   assert.equal(tone.color, "#9DA85A");
   assert.equal(tone.label, "Slightly warm");
   assert.equal(tone.score, 7);
@@ -454,13 +453,13 @@ test("live setConfig profile changes patch level, icon, and bands without stale 
   assert.equal(iconNode.getAttribute("icon"), "mdi:fire-alert");
 
   card.setConfig({ entity: "sensor.avg", classification: "outdoor" });
-  const data = computeLegacyData(card);
+  const data = card._computeViewModel();
   assert.equal(card.shadowRoot.querySelector(".rtc-status-pill"), statusNode);
   assert.equal(card.shadowRoot.querySelector(".rtc-icon-badge ha-icon"), iconNode);
   assert.equal(statusNode.textContent, "Hot");
   assert.equal(iconNode.getAttribute("icon"), "mdi:thermometer-high");
-  assert.deepEqual({ min: data.comfortMin, max: data.comfortMax }, { min: 14, max: 26 });
-  assert.deepEqual({ min: data.optimalMin, max: data.optimalMax }, { min: 18, max: 22 });
+  assert.deepEqual({ min: data.comfort.min, max: data.comfort.max }, { min: 14, max: 26 });
+  assert.deepEqual({ min: data.scale.optimalMin, max: data.scale.optimalMax }, { min: 18, max: 22 });
   env.cleanup(card);
 });
 
@@ -485,16 +484,16 @@ test("custom profile is authoritative and drives classification plus scale as on
     value_color: "#123456",
     value_level: "Entity level",
   });
-  const data = computeLegacyData(card);
+  const data = card._computeViewModel();
   assert.equal(data.tone.color, "#00AA00");
   assert.equal(data.tone.label, "Custom ideal");
   assert.equal(data.tone.score, 2);
   assert.equal(data.tone.zone, "optimal");
   assert.equal(data.tone.source, "custom");
-  assert.deepEqual({ min: data.comfortMin, max: data.comfortMax }, { min: 10, max: 30 });
-  assert.deepEqual({ min: data.optimalMin, max: data.optimalMax }, { min: 18, max: 22 });
-  assert.equal(data.scaleMin, 0);
-  assert.equal(data.scaleMax, 40);
+  assert.deepEqual({ min: data.comfort.min, max: data.comfort.max }, { min: 10, max: 30 });
+  assert.deepEqual({ min: data.scale.optimalMin, max: data.scale.optimalMax }, { min: 18, max: 22 });
+  assert.equal(data.scale.scaleMin, 0);
+  assert.equal(data.scale.scaleMax, 40);
   env.cleanup(card);
 });
 
@@ -521,10 +520,10 @@ test("custom Fahrenheit thresholds are canonicalized and project back coherently
     }),
   });
   const card = env.createCard({ entity: "sensor.avg", classification: fahrenheitProfile }, hass);
-  const data = computeLegacyData(card);
+  const data = card._computeViewModel();
   assert.equal(data.tone.label, "Ideal F");
-  assert.deepEqual({ min: data.comfortMin, max: data.comfortMax }, { min: 50, max: 86 });
-  assert.deepEqual({ min: data.optimalMin, max: data.optimalMax }, { min: 64, max: 72 });
+  assert.deepEqual({ min: data.comfort.min, max: data.comfort.max }, { min: 50, max: 86 });
+  assert.deepEqual({ min: data.scale.optimalMin, max: data.scale.optimalMax }, { min: 64, max: 72 });
   env.cleanup(card);
 
   const outsideRange = env.createCard(
@@ -536,7 +535,7 @@ test("custom Fahrenheit thresholds are canonicalized and project back coherently
       }),
     })
   );
-  assert.equal(computeLegacyData(outsideRange).empty, true);
+  assert.equal(outsideRange._computeViewModel().empty, true);
   env.cleanup(outsideRange);
 });
 
@@ -604,7 +603,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
     context.diagnostics.some((d) => d.code === "excluded_foreign_metric_kind" && d.entityId === "sensor.hum1"),
     "the foreign-kind room must be excluded and diagnosed, not cause a throw"
   );
-  const data = computeLegacyData(card);
+  const data = card._computeViewModel();
   assert.equal(data.empty, false);
   assert.equal(data.tone.score, 7); // 25°C falls in the outdoor profile's [22,26) "slightlyWarm" tier
   assert.equal(data.tone.zone, "comfort");
@@ -626,7 +625,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
   assert.ok(
     context.diagnostics.some((d) => d.code === "excluded_foreign_metric_kind" && d.entityId === "sensor.hum1")
   );
-  assert.equal(computeLegacyData(card).empty, false);
+  assert.equal(card._computeViewModel().empty, false);
   env.cleanup(card);
 });
 
@@ -704,6 +703,6 @@ test("custom profile with gaps just wide enough to survive Fahrenheit rounding d
     ],
   };
   const card = env.createCard({ entity: "sensor.avg", classification: safeProfile }, fahrenheitHass());
-  assert.equal(computeLegacyData(card).empty, false);
+  assert.equal(card._computeViewModel().empty, false);
   env.cleanup(card);
 });

@@ -22,7 +22,6 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { SeededRandom } = require("../helpers/seeded-random.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 test.before(() => {
@@ -126,16 +125,16 @@ function checkInvariants(el, data, metricType, roomValues) {
   }
 
   if (!data.empty) {
-    push(Number.isFinite(data.scaleMin) && Number.isFinite(data.scaleMax), "scaleMin/scaleMax must be finite");
-    push(data.scaleMin < data.scaleMax, `scaleMin=${data.scaleMin} must be < scaleMax=${data.scaleMax}`);
-    if (data.hasRoomsView) {
-      push(data.coolest.value <= data.warmest.value, "coolest.value must be <= warmest.value");
+    push(Number.isFinite(data.scale.scaleMin) && Number.isFinite(data.scale.scaleMax), "scaleMin/scaleMax must be finite");
+    push(data.scale.scaleMin < data.scale.scaleMax, `scaleMin=${data.scale.scaleMin} must be < scaleMax=${data.scale.scaleMax}`);
+    if (data.rooms.hasRoomsView) {
+      push(data.extremes.coolest.value <= data.extremes.warmest.value, "coolest.value must be <= warmest.value");
       push(Number.isFinite(data.spread) && data.spread >= 0, `spread=${data.spread} must be finite and >= 0`);
-      push(data.roomCount >= 0 && data.inComfort >= 0 && data.inComfort <= data.roomCount, `inComfort=${data.inComfort} must be in [0, roomCount=${data.roomCount}]`);
+      push(data.rooms.count >= 0 && data.comfort.inComfort >= 0 && data.comfort.inComfort <= data.rooms.count, `inComfort=${data.comfort.inComfort} must be in [0, roomCount=${data.rooms.count}]`);
       // DATA-02: physically invalid room readings (co2<=0, pm25<0,
       // humidity outside [0,100]) must never be picked as coolest/warmest.
-      push(isPhysicallyValid(metricType, data.coolest.value), `coolest.value=${data.coolest.value} must be physically valid for ${metricType}`);
-      push(isPhysicallyValid(metricType, data.warmest.value), `warmest.value=${data.warmest.value} must be physically valid for ${metricType}`);
+      push(isPhysicallyValid(metricType, data.extremes.coolest.value), `coolest.value=${data.extremes.coolest.value} must be physically valid for ${metricType}`);
+      push(isPhysicallyValid(metricType, data.extremes.warmest.value), `warmest.value=${data.extremes.warmest.value} must be physically valid for ${metricType}`);
     }
     // hasRoomsView/roomCount must exactly reflect the physically-valid
     // subset of generated room values, not the raw configured room count —
@@ -143,14 +142,14 @@ function checkInvariants(el, data, metricType, roomValues) {
     // are actually excluded from the pipeline, not just recolored.
     const expectedValidRoomCount = roomValues.filter((v) => v.numeric !== null && isPhysicallyValid(metricType, v.numeric)).length;
     push(
-      data.hasRoomsView === expectedValidRoomCount >= 2,
-      `hasRoomsView=${data.hasRoomsView} must match (expectedValidRoomCount=${expectedValidRoomCount} >= 2)`
+      data.rooms.hasRoomsView === expectedValidRoomCount >= 2,
+      `hasRoomsView=${data.rooms.hasRoomsView} must match (expectedValidRoomCount=${expectedValidRoomCount} >= 2)`
     );
-    if (data.hasRoomsView) {
-      push(data.roomCount === expectedValidRoomCount, `roomCount=${data.roomCount} must equal expectedValidRoomCount=${expectedValidRoomCount}`);
+    if (data.rooms.hasRoomsView) {
+      push(data.rooms.count === expectedValidRoomCount, `roomCount=${data.rooms.count} must equal expectedValidRoomCount=${expectedValidRoomCount}`);
     }
 
-    const views = data.views || [];
+    const views = data.views.keys || [];
     push(new Set(views).size === views.length, `views has duplicates: ${views.join(",")}`);
     push(views.filter((v) => v === "scale").length === 1, `"scale" must appear exactly once in views: ${views.join(",")}`);
 
@@ -190,7 +189,7 @@ function runOne(seed, roomCount) {
   let el;
   try {
     el = env.createCard(config, hass);
-    const data = computeLegacyData(el);
+    const data = el._computeViewModel();
     problems = checkInvariants(el, data, metricType, roomValues);
   } catch (err) {
     threw = err;

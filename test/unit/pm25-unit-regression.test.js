@@ -4,7 +4,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -38,7 +37,7 @@ test("PM2.5 accepts equivalent Home Assistant unit spellings at the UnitProfile 
     assert.equal(model.metricKind, "pm25", `metric kind for ${JSON.stringify(unit)}`);
     assert.equal(model.unitProfile, "microgram_per_m3", `unit profile for ${JSON.stringify(unit)}`);
     assert.equal(model.validUnit, true, `unit validity for ${JSON.stringify(unit)}`);
-    assert.equal(computeLegacyData(el).empty, false, `card data for ${JSON.stringify(unit)}`);
+    assert.equal(el._computeViewModel().empty, false, `card data for ${JSON.stringify(unit)}`);
     env.cleanup(el);
   }
 });
@@ -74,15 +73,15 @@ test("reported PM2.5 dashboard configuration stays usable with normalized primar
     ],
   }, mkHass(states, "de"));
 
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(data.empty, false);
-  assert.equal(data.metricType, "pm25");
-  assert.equal(data.roomCount, 4);
-  assert.equal(data.hasRange, true);
-  assert.equal(data.rangeMin, 1.7);
-  assert.equal(data.rangeMax, 4.5);
-  assert.equal(data.trendValue, -0.4);
-  assert.equal(data.trendUnit, "µg/m³/h");
+  assert.equal(data.metric.kind, "pm25");
+  assert.equal(data.rooms.count, 4);
+  assert.equal(data.range.hasRange, true);
+  assert.equal(data.range.min, 1.7);
+  assert.equal(data.range.max, 4.5);
+  assert.equal(data.trend.value, -0.4);
+  assert.equal(data.trend.unit, "µg/m³/h");
   assert.equal(el.shadowRoot.querySelector(".rtc-empty"), null, "must not render the reported empty state");
   assert.equal(el.shadowRoot.querySelectorAll(".rtc-room-chip").length, 4, "all configured PM2.5 rooms must render");
   env.cleanup(el);
@@ -97,7 +96,7 @@ test("PM2.5 normalization does not accept a physically different or unknown expl
     const model = internals.entityModel(el, entityId, "primary");
     assert.equal(model.unitProfile, null);
     assert.equal(model.validUnit, false);
-    assert.equal(computeLegacyData(el).empty, true);
+    assert.equal(el._computeViewModel().empty, true);
     env.cleanup(el);
   }
 });

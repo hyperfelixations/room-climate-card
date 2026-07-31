@@ -3,17 +3,15 @@
 // AP-01 (v2.17.0 consolidated audit, sections 4, 9.2-9.5, 10): a generic
 // MetricDefinition/UnitProfile/QuantityKind registry — the foundation for
 // native Fahrenheit/Kelvin support and future metric kinds (e.g. absolute
-// humidity). This block is PURELY ADDITIVE: METRIC_DEFINITIONS and its
-// helpers are not wired into computeLegacyData(), any scale-rendering method, or
-// the view system yet (that migration is a later, separate block per the
-// audit's own commit/review sequencing in section 20.3 — mixing correctness
-// fixes with a refactor is explicitly warned against). These tests exercise
-// the new module directly via thin instance-method wrappers
-// (_getMetricDefinition/_getUnitProfile/_convertMetricValue/
-// _deriveThresholdsForProfile/_deriveBandForProfile), the same pattern this
-// codebase already uses for other pure helpers (_isPhysicallyValid,
-// _floorToStep/_ceilToStep) — a bare element with no setConfig()/hass is
-// enough, no rendering involved.
+// humidity).
+//
+// The registry was purely additive when it was introduced. It is not any more:
+// METRIC_DEFINITIONS, its unit profiles and its derived thresholds are what the
+// measurement context, the domain model and both scale views run on. These tests
+// therefore import domain/metrics/access.js, domain/units/conversion.js and
+// core/numbers.js directly and pass explicit fixtures — no element, no
+// configuration, no rendering. The card only appears where a rule genuinely needs a
+// live classification policy, and then through test/helpers/card-internals.js.
 //
 // Celsius stays the single manually-maintained source of truth: this file
 // also asserts that the temperature MetricDefinition's classification tiers
@@ -26,7 +24,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 // The modules under test, imported directly. These used to be reached through
 // thin delegating methods on the custom element; the element no longer carries

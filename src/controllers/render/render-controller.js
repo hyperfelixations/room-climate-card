@@ -75,7 +75,14 @@ export function createRenderController({
       // Deliberately before any model or view-model work: an unchanged signature means
       // an unchanged card, and computing a view model only to throw it away would make
       // every no-op hass push cost a full pipeline run.
-      if (allowSkip && nextDataSignature === dataSignature) return RENDER_PATH.SKIPPED;
+      //
+      // A skip settles an outstanding debt as much as a render does: the committed
+      // signature equals the one being asked for, so whatever was deferred is already
+      // what the card is showing.
+      if (allowSkip && nextDataSignature === dataSignature) {
+        renderPending = false;
+        return RENDER_PATH.SKIPPED;
+      }
 
       const viewModel = computeViewModel();
       const currentlyEmpty = isCurrentlyEmpty();
@@ -92,6 +99,12 @@ export function createRenderController({
         structuralConfigSignature = nextStructuralConfig;
         structureSignature = nextStructure;
         lastViewModel = viewModel;
+        // Whatever was deferred, this render has now caught up with it. Clearing the
+        // debt HERE rather than at the call site is what ties it to success: a render
+        // path that throws leaves the obligation standing, and the next opportunity —
+        // the end of the gesture, or the card being put back into the document — pays
+        // it. Clearing it before the render would lose the update on any failure.
+        renderPending = false;
       };
 
       const structureChanged = nextStructure !== structureSignature;
@@ -127,27 +140,17 @@ export function createRenderController({
     get hasRendered() {
       return rendered;
     },
+    // Whether an update has been received but not yet shown. Only ever set by a
+    // deferral and only ever cleared by a render that completed, so there is no way to
+    // forget an update by hand — which is exactly how one used to be lost across a
+    // disconnect, where the debt was dropped because the GESTURE that caused it was
+    // gone. The gesture and the data are two different obligations: the first must not
+    // survive a disconnect, the second must.
     get isRenderPending() {
       return renderPending;
     },
 
     // ---- commands --------------------------------------------------------------
-    // A deferred update is now due. Returns whether there actually was one, so the
-    // caller can decide whether a render is warranted at all, and clears it either way:
-    // a pending render is a one-shot debt, not a mode.
-    takePendingRender() {
-      const wasPending = renderPending;
-      renderPending = false;
-      return wasPending;
-    },
-
-    // The reason for deferring is gone and the state it referred to is stale — a config
-    // change replacing it, or the card leaving the document. Distinct from
-    // takePendingRender() because nothing is owed afterwards.
-    dropPendingRender() {
-      renderPending = false;
-    },
-
     // A new configuration can change the output without changing a single entity, so
     // the data signature stops being evidence of anything.
     invalidateDataSignature() {

@@ -141,12 +141,29 @@ test("disconnect while a resume timer is pending clears both, and reconnect re-a
   env.cleanup(el);
 });
 
-test("a hass update that arrived during the drag is not lost across disconnect and reconnect", () => {
+// ------------------------------------------- the deferred render across a disconnect --
+//
+// Two obligations end differently at a disconnect, and conflating them is what this
+// group exists to prevent:
+//
+//   the GESTURE      must not survive. Its geometry, its click suppression and its
+//                    timers all refer to a card that is no longer on screen.
+//   the DATA         must. `_hass` already holds the newest state; the card simply had
+//                    not been allowed to show it yet. Forgetting that leaves the card
+//                    displaying a value Home Assistant superseded before the removal,
+//                    for as long as it takes some unrelated update to arrive.
+//
+// The tests below assert the VISIBLE value after a reconnect, with no further hass
+// assignment and no `_render()` call, because those two are exactly what an earlier
+// version of this file used to paper over the gap with.
+
+test("a hass update deferred by a drag becomes visible on reconnect, with no further update", () => {
   const el = threeViewCard();
   el._handlePointerDown(pointerDown(el));
   el._handlePointerMove(pointerMove(1, -60));
 
-  // A real update mid-gesture: _render() defers it rather than jumping the track.
+  // A real update mid-gesture: the render controller defers it rather than jumping the
+  // track out from under the finger.
   el.hass = states(30, 1000);
   assert.match(
     el.shadowRoot.querySelector(".rtc-avg-value-num").textContent,
@@ -156,10 +173,198 @@ test("a hass update that arrived during the drag is not lost across disconnect a
 
   el.remove();
   env.document.body.appendChild(el);
-  // The very next update must show the newest value; nothing may still be waiting on a
-  // pointer end.
-  el.hass = states(31, 2000);
-  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /31/);
+
+  // Nothing else happens. Home Assistant has already handed over 30 and has no reason to
+  // send it again; the card owes that render and must pay it here.
+  assert.match(
+    el.shadowRoot.querySelector(".rtc-avg-value-num").textContent,
+    /30/,
+    "the value received before the removal must be on screen after the reconnect"
+  );
+  env.cleanup(el);
+});
+
+test("the deferred render is paid exactly once, not on every subsequent connect", () => {
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+  el.hass = states(30, 1000);
+
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
+
+  // A second connect has nothing left to catch up on: the debt was settled, and the
+  // signature fast path is what makes the repeat free.
+  let renders = 0;
+  const realComputeViewModel = el._computeViewModel.bind(el);
+  el._computeViewModel = () => {
+    renders += 1;
+    return realComputeViewModel();
+  };
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.equal(renders, 0, "an unchanged card must not recompute a view model on reconnect");
+  env.cleanup(el);
+});
+
+test("a disconnect with no deferred render owes nothing on reconnect", () => {
+  const el = threeViewCard();
+  let renders = 0;
+  const realComputeViewModel = el._computeViewModel.bind(el);
+  el._computeViewModel = () => {
+    renders += 1;
+    return realComputeViewModel();
+  };
+
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.equal(renders, 0, "nothing was owed, so nothing is recomputed");
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/);
+  env.cleanup(el);
+});
+
+test("a bare pointerdown defers nothing, so a disconnect during one owes nothing", () => {
+  // Only a CONFIRMED drag defers a render; an unclassified press renders normally.
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el.hass = states(28, 1000);
+  assert.match(
+    el.shadowRoot.querySelector(".rtc-avg-value-num").textContent,
+    /28/,
+    "an unconfirmed press does not defer anything"
+  );
+
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /28/);
+  env.cleanup(el);
+});
+
+test("a structural update deferred by a drag rebuilds correctly on reconnect", () => {
+  // The deferred update is not always a value change. Losing a STRUCTURAL one leaves the
+  // card with markup for a view composition that no longer applies.
+  const el = threeViewCard();
+  assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"]);
+
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+
+  // The second room drops out: "extremes" needs two, so the view list itself changes.
+  el.hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 24, C),
+    "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
+    "sensor.r1": mkState("sensor.r1", 21, C),
+  });
+  assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"], "still deferred");
+
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.deepEqual(Array.from(el._views), ["range", "scale"], "the structural change is applied on reconnect");
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /24/);
+  env.cleanup(el);
+});
+
+test("a card that fell into the empty state mid-drag shows the empty state on reconnect", () => {
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+
+  el.hass = mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", C) });
+  assert.equal(el.shadowRoot.querySelector(".rtc-empty"), null, "still deferred");
+
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.ok(el.shadowRoot.querySelector(".rtc-empty"), "crossing into the empty state survives the disconnect too");
+  env.cleanup(el);
+});
+
+test("a setConfig during the disconnect drops the debt, because it renders on its own", () => {
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+  el.hass = states(30, 1000);
+
+  el.remove();
+  // A live config edit while the card is out of the document renders immediately against
+  // the newest hass, so the earlier debt is already settled by the time it returns.
+  el.setConfig({
+    entity: "sensor.avg",
+    range_entity: "sensor.range",
+    rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
+    auto_slide: true,
+    avg_label: "Custom",
+  });
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
+
+  let renders = 0;
+  const realComputeViewModel = el._computeViewModel.bind(el);
+  el._computeViewModel = () => {
+    renders += 1;
+    return realComputeViewModel();
+  };
+  env.document.body.appendChild(el);
+  assert.equal(renders, 0, "the reconnect has nothing left to catch up on");
+  env.cleanup(el);
+});
+
+test("a render that throws while catching up leaves the debt outstanding", () => {
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+  el.hass = states(30, 1000);
+
+  el.remove();
+  const realComputeViewModel = el._computeViewModel.bind(el);
+  el._computeViewModel = () => {
+    throw new Error("induced failure during the reconnect render");
+  };
+  const originalConsoleError = env.window.console.error;
+  const logged = [];
+  env.window.console.error = (...args) => logged.push(args);
+  env.document.body.appendChild(el);
+  env.window.console.error = originalConsoleError;
+
+  assert.equal(logged.length, 1, "a failing catch-up render is logged, not thrown into the dashboard");
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/, "nothing was committed");
+
+  // Commit-on-success: the debt is still owed, so the next connect pays it properly.
+  el._computeViewModel = realComputeViewModel;
+  el.remove();
+  env.document.body.appendChild(el);
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
+  env.cleanup(el);
+});
+
+test("catching up happens after the events and the carousel are wired, not before", () => {
+  // Order matters: the catch-up render can rebuild the whole shadow DOM, and a carousel
+  // started against the OLD view list would then be pointing at markup that is gone.
+  const el = threeViewCard();
+  el._handlePointerDown(pointerDown(el));
+  el._handlePointerMove(pointerMove(1, -60));
+  el.hass = states(30, 1000);
+  el.remove();
+
+  const order = [];
+  const realBindEvents = el._bindEvents.bind(el);
+  const realStartRotation = el._startRotation.bind(el);
+  const realComputeViewModel = el._computeViewModel.bind(el);
+  el._bindEvents = () => {
+    order.push("events");
+    realBindEvents();
+  };
+  el._startRotation = () => {
+    order.push("carousel");
+    realStartRotation();
+  };
+  el._computeViewModel = () => {
+    order.push("render");
+    return realComputeViewModel();
+  };
+
+  env.document.body.appendChild(el);
+  assert.deepEqual(order, ["events", "carousel", "render"]);
+  assert.equal(el._carousel.accessibilityTimerHandle !== null, true, "and the carousel is running afterwards");
   env.cleanup(el);
 });
 

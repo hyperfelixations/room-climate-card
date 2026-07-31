@@ -20,8 +20,12 @@
 //
 //   core -> config / i18n / domain -> application/model
 //        -> presentation/view-model -> render/primitives + render/layout + styles
-//        -> views + render/composition -> controllers/runtime -> this file
-//        -> index.js
+//        -> views + render/composition
+//        -> controllers/runtime + controllers/render -> this file -> index.js
+//
+// The two controller groups sit on the same layer and may not import each other:
+// controllers/render decides WHETHER and HOW MUCH to render, controllers/runtime
+// decides WHEN things move. This file is the only place that knows both exist.
 //
 // Nothing below may be imported by a module above it, and Rollup's onwarn (see
 // rollup.config.mjs) turns any cycle or unresolved specifier into a build failure.
@@ -169,11 +173,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // into the action runtime: that method is the seam existing tests substitute to
         // observe which action a gesture resolved to, and it holds no logic of its own.
         fireAction: (target, action) => this._fireHassAction(target, action),
-        // The gesture reports what it did; whether that warrants a render, and whether
-        // one was already owed, is the render controller's to answer.
+        // The gesture reports what it did; whether anything was already owed is the
+        // render controller's to answer. The debt is only READ here — the render that
+        // follows clears it, and only if it succeeds.
         requestRender: ({ viewChanged }) => {
-          const wasPending = this._renderController.takePendingRender();
-          if (!viewChanged && !wasPending) return;
+          if (!viewChanged && !this._renderController.isRenderPending) return;
           this._render(false);
         },
       });
@@ -271,10 +275,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     _cancelInteractionForConfigChange() {
       // A configuration change can arrive mid-swipe — live editing in the dashboard
-      // editor. The gesture itself is the interaction runtime's to abort; the pending
-      // render is the element's.
+      // editor. Only the gesture is aborted here. A render deferred by that gesture is
+      // NOT dropped: setConfig() renders immediately afterwards and settles it, and if
+      // the new configuration is rejected and that render never happens, the update is
+      // still genuinely owed.
       this._interaction.cancelForConfigChange();
-      this._renderController.dropPendingRender();
     }
 
     setConfig(config) {
@@ -371,9 +376,42 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     connectedCallback() {
       // Card is attached to the dashboard DOM; safe to bind events and start auto-slide.
+      //
+      // The order is not arbitrary. Events and the carousel come first because the
+      // catch-up render below can rebuild the entire shadow DOM, and a carousel engaged
+      // afterwards is engaged against the markup that will actually be on screen. The
+      // resize observer comes last for the same reason: it decides whether a fonts
+      // measurement is still owed by looking at the view model on screen, which the
+      // catch-up may have just replaced.
       this._bindEvents();
       this._startRotation();
+      this._catchUpDeferredRender();
       this._bindResizeObserver();
+    }
+
+    // Pays a render deferred by a gesture that the disconnect then ended.
+    //
+    // Home Assistant hands over a new hass and does not hand it over again. If that
+    // arrived mid-swipe it was deliberately not rendered, and if the card was then
+    // removed from the document the gesture that would have released it never ends. Left
+    // alone the card comes back showing a value Home Assistant superseded before the
+    // removal, until some unrelated update happens along.
+    //
+    // Cheap when nothing is owed: the debt is a plain flag, and a card that never
+    // deferred anything does no work at all here. `_render(false)` rather than
+    // `_render()` because the point is to apply an update the signature fast path would
+    // otherwise be entitled to skip — the deferral means the signature was never
+    // committed, but bypassing it says so explicitly.
+    _catchUpDeferredRender() {
+      if (!this._renderController.isRenderPending) return;
+      try {
+        this._render(false);
+      } catch (err) {
+        // Same contract as set hass(): a bad state must not turn a dashboard reflow into
+        // a thrown connectedCallback. The debt stays outstanding (see the controller's
+        // commit-on-success), so the next connect tries again.
+        console.error(`${CARD_NAME}: render failed`, err);
+      }
     }
 
     disconnectedCallback() {
@@ -386,12 +424,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // carousel from starting and turns every hass update into a deferred render
       // waiting on a pointerup that can never arrive.
       //
-      // The deferred render itself is cleared here too. It was deferred because a
-      // gesture was in flight; that reason is gone, and the state it referred to is
-      // stale by the time the card comes back. The next hass update renders the current
-      // truth, which is what a reconnected card should show anyway.
+      // The deferred render is deliberately NOT cleared here. It is a different kind of
+      // obligation: the gesture must not survive, but the DATA behind the deferral must.
+      // `_hass` already holds the newest state and Home Assistant will not send it again,
+      // so dropping the debt here left the card showing a superseded value until some
+      // unrelated update happened along. connectedCallback() pays it instead.
       this._interaction.disconnect();
-      this._renderController.dropPendingRender();
       this._carousel.destroy();
       this._unbindEvents();
       this._unbindResizeObserver();
@@ -455,10 +493,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Auto-slide, track and accessibility: delegations to the controller ====
     // Everything below forwards to this._carousel, which owns the active index, both
-    // timers and every read of the wall clock. The methods stay on the element because
-    // a large number of tests call them directly; not one of them holds state of its
-    // own, and the two timer accessors expose the controller's actual handles rather
-    // than a second copy.
+    // timers and every read of the wall clock. They are named entry points the render
+    // and lifecycle paths above call — a structural rebuild freezes the track and
+    // reschedules the accessibility sync through exactly these — and none of them holds
+    // state of its own. An element member without a production caller is a failing
+    // architecture test (see architecture-imports.test.js), so nothing below survives
+    // only because a test likes the name.
     _startRotation() {
       this._carousel.start();
     }
@@ -827,14 +867,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       if (!root) return;
       patchCardBody(this._renderContext(), root, viewModel, VIEW_RENDERERS);
     }
-
-    // ==== Compatibility delegations for element-level tests ====
-    // Production never calls anything below. A large number of tests were written
-    // against the pre-extraction method names on the element, and rewriting all of them
-    // in the same round as extracting the renderers would have made a refactoring
-    // mistake indistinguishable from an intended change. Each of these forwards to the
-    // rendering layer and holds no logic of its own; they are removed together with the
-    // flat DTO in the element/test cleanup round.
 
     // ==== Event handling ====
     // Event listeners for click, keyboard, and touch/pointer interaction.

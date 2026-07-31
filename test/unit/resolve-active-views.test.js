@@ -8,7 +8,7 @@
 // (not a method — see room-climate-card.js), not exposed on window by design
 // (the card stays a dependency-free browser IIFE with no exports for HACS),
 // so it's exercised the same way a real user would ever observe it: through
-// computeLegacyData().views (the resolved view list) and through the
+// the view model's views.keys (the resolved view list) and through the
 // console.warn diagnostics setConfig() emits once per config change via
 // _warnAboutViewConfigOnce().
 
@@ -16,7 +16,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -41,8 +40,8 @@ test("no views: configured -> registry order unchanged, range_scale still never 
     { entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["range", "scale", "extremes"], "range_scale's own defaultEnabled() is false, so 'auto' leaves it off exactly like the old range_scale_view default");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["range", "scale", "extremes"], "range_scale's own defaultEnabled() is false, so 'auto' leaves it off exactly like the old range_scale_view default");
   env.cleanup(el);
 });
 
@@ -51,8 +50,8 @@ test("views: [string, string] reorders the views that are present, in the reques
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: ["extremes", "scale"] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes", "scale"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes", "scale"]);
   env.cleanup(el);
 });
 
@@ -61,8 +60,8 @@ test("views: is fully authoritative — a type it doesn't mention never appears,
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "extremes", enabled: true }] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes"], "scale must NOT be silently appended just because views: omitted it — a deliberate behavior change from the old view_order");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes"], "scale must NOT be silently appended just because views: omitted it — a deliberate behavior change from the old view_order");
   env.cleanup(el);
 });
 
@@ -75,8 +74,8 @@ test("views: object form with enabled:false hides a view even though its conditi
     },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["scale"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["scale"]);
   env.cleanup(el);
 });
 
@@ -85,8 +84,8 @@ test("views: 'scale' can be omitted entirely — the former 'mandatory' protecti
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "extremes", enabled: true }] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.ok(!data.views.includes("scale"), "scale must be genuinely absent, not force-reinstated");
+  const data = el._computeViewModel();
+  assert.ok(!data.views.keys.includes("scale"), "scale must be genuinely absent, not force-reinstated");
   env.cleanup(el);
 });
 
@@ -100,8 +99,8 @@ test("views: range_scale with enabled:true actually shows when available, replac
     },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["range", "range_scale", "scale", "extremes"], "the exact audit counterexample configuration, expressed in the new schema");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["range", "range_scale", "scale", "extremes"], "the exact audit counterexample configuration, expressed in the new schema");
   env.cleanup(el);
 });
 
@@ -119,7 +118,7 @@ test("views: object form without enabled is an explicit request, exactly like th
     { type: "range_scale", enabled: true },
     { type: "scale", enabled: true },
   ]);
-  assert.deepEqual(normalize(computeLegacyData(el).views), ["range", "range_scale", "scale"]);
+  assert.deepEqual(normalize(el._computeViewModel().views.keys), ["range", "range_scale", "scale"]);
   env.cleanup(el);
 });
 
@@ -132,8 +131,8 @@ test("views: range_scale with explicitly enabled:'auto' stays off even when avai
     },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["range", "scale"], "only an explicitly written 'auto' delegates to range_scale's off-by-default policy");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["range", "scale"], "only an explicitly written 'auto' delegates to range_scale's off-by-default policy");
   env.cleanup(el);
 });
 
@@ -142,8 +141,8 @@ test("views: range_scale requested but NOT available (no valid range_entity) doe
     { entity: "sensor.avg", views: [{ type: "range_scale", enabled: true }, { type: "scale" }] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["scale"], "requested && available must both hold; range_scale has no range_entity here");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["scale"], "requested && available must both hold; range_scale has no range_entity here");
   env.cleanup(el);
 });
 
@@ -152,8 +151,8 @@ test("views: an unknown type is diagnosed and simply skipped, the rest of the li
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: ["bogus", "extremes", "scale"] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes", "scale"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes", "scale"]);
   env.cleanup(el);
 });
 
@@ -162,15 +161,15 @@ test("views: a duplicate type is diagnosed — only the first occurrence is hono
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: ["extremes", "extremes", "scale"] },
     fourViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes", "scale"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes", "scale"]);
   env.cleanup(el);
 });
 
 test("views: an explicit empty list resolves to zero active views (authoritative even when empty, not treated as 'not configured')", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [] }, fourViewHass());
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), []);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), []);
   env.cleanup(el);
 });
 
@@ -184,7 +183,7 @@ test("setConfig() warns exactly once for a bad views: config, and does not repea
   el.ownerDocument.defaultView.console.warn = (...args) => warnings.push(args.join(" "));
 
   // A plain hass update (no setConfig()) must not re-emit the diagnostics —
-  // computeLegacyData() itself never warns, only _warnAboutViewConfigOnce()
+  // _computeViewModel() itself never warns, only _warnAboutViewConfigOnce()
   // inside setConfig() does (see room-climate-card.js).
   el.hass = fourViewHass();
   assert.equal(warnings.length, 0, "a hass update alone must not emit view-config warnings");
@@ -254,8 +253,8 @@ test("review fix (P1): a non-array views: value is diagnosed and the card falls 
     el._config._viewsDiagnostics.some((d) => d.includes("views:") && d.includes("array")),
     "the non-array value must be diagnosed"
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["scale", "extremes"], "falls back to the registry-order default resolution, exactly like views: omitted");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["scale", "extremes"], "falls back to the registry-order default resolution, exactly like views: omitted");
   env.cleanup(el);
 });
 
@@ -267,8 +266,8 @@ test("review fix (P1): every unparseable views: list entry (wrong type, empty ob
   assert.equal(el._config.views.length, 1, "only the one genuinely parseable entry ('extremes') survives normalization");
   assert.equal(el._config.views[0].type, "extremes");
   assert.equal(el._config._viewsDiagnostics.length, 4, "each of the 4 unparseable entries gets its own diagnostic");
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes"]);
   env.cleanup(el);
 });
 
@@ -283,8 +282,8 @@ test("review fix (P1): an invalid enabled: value is diagnosed but non-destructiv
     el._config._viewsDiagnostics.some((d) => d.includes("enabled") && d.includes("scale")),
     "the invalid enabled: value must be diagnosed"
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["scale"], "'auto' resolves via scale's own defaultEnabled(), which is unconditionally true");
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["scale"], "'auto' resolves via scale's own defaultEnabled(), which is unconditionally true");
   env.cleanup(el);
 });
 
@@ -345,9 +344,9 @@ test("P1 fix: an omitted options: field is NOT diagnosed — 'not provided' is t
 // render-dispatch source — no hardcoded Scale-solo path — and each of the
 // four views must work standalone. Covers: solo-render DOM assertions per
 // view (previously only "extremes" had any views:-solo test, and it only
-// asserted data.views, not the DOM), timer-freedom at 0/1 views, the
+// asserted data.views.keys, not the DOM), timer-freedom at 0/1 views, the
 // collapse-vs-hint null-view policy, and start_view on the very first
-// render. See room-climate-card.js's computeLegacyData() (data.viewAreaCollapsed)
+// render. See the view model's views.collapsed (presentation/view-model/view-state.js)
 // and _renderContent(). ====
 
 function soloViewHass() {
@@ -378,8 +377,8 @@ for (const [type, { extraConfig, viewClass }] of Object.entries(SOLO_CASES)) {
       { entity: "sensor.avg", ...extraConfig, views: [{ type, enabled: true }] },
       soloViewHass()
     );
-    const data = computeLegacyData(el);
-    assert.deepEqual(normalize(data.views), [type]);
+    const data = el._computeViewModel();
+    assert.deepEqual(normalize(data.views.keys), [type]);
     const solo = el.shadowRoot.querySelector(".rtc-rotator-solo");
     assert.ok(solo, "a single active view must use the solo wrapper, not the carousel");
     assert.ok(solo.querySelector(`.${viewClass}`), `the solo wrapper must contain .${viewClass}`);
@@ -412,8 +411,8 @@ test("AP-05: 1 active view has neither a .rtc-track carousel nor auto-slide time
 
 test("AP-05 null-view policy: a deliberately empty views: config collapses the view area entirely (no .rtc-no-views markup)", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
-  const data = computeLegacyData(el);
-  assert.equal(data.viewAreaCollapsed, true);
+  const data = el._computeViewModel();
+  assert.equal(data.views.collapsed, true);
   assert.equal(el.shadowRoot.querySelector(".rtc-no-views"), null, "a deliberately empty config must not show the 'no view' hint");
   assert.equal(el.shadowRoot.querySelector(".rtc-rotator-solo"), null);
   // The header/average/room chips stay visible regardless — only the view area itself collapses.
@@ -429,8 +428,8 @@ test("AP-05 null-view policy: every view entry explicitly disabled ALSO collapse
     },
     soloViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.equal(data.viewAreaCollapsed, true);
+  const data = el._computeViewModel();
+  assert.equal(data.views.collapsed, true);
   assert.equal(el.shadowRoot.querySelector(".rtc-no-views"), null);
   env.cleanup(el);
 });
@@ -438,8 +437,8 @@ test("AP-05 null-view policy: every view entry explicitly disabled ALSO collapse
 test("AP-05 null-view policy: a view requested but systemically unavailable shows the localized hint, not a collapse", () => {
   // range_scale requested with enabled:true, but no range_entity configured at all -> unavailable.
   const el = env.createCard({ entity: "sensor.avg", views: [{ type: "range_scale", enabled: true }] }, soloViewHass());
-  const data = computeLegacyData(el);
-  assert.equal(data.viewAreaCollapsed, false);
+  const data = el._computeViewModel();
+  assert.equal(data.views.collapsed, false);
   const hint = el.shadowRoot.querySelector(".rtc-no-views");
   assert.ok(hint, "a requested-but-unavailable view must show the localized hint");
   assert.match(hint.textContent, /No view available/);
@@ -447,8 +446,8 @@ test("AP-05 null-view policy: a view requested but systemically unavailable show
 });
 
 test("P1 fix: setConfig() from a collapsed (deliberately empty) views: to a requested-but-unavailable views: must actually swap in the .rtc-no-views hint", () => {
-  // Both states resolve data.views to [] — before the fix, _render()'s
-  // viewsChanged check only compared data.views against this._views (both
+  // Both states resolve data.views.keys to [] — before the fix, _render()'s
+  // viewsChanged check only compared data.views.keys against this._views (both
   // [] in both cases), so this transition never triggered _renderAll() and
   // the DOM stayed stuck on the collapsed (no markup) state.
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
@@ -483,8 +482,8 @@ test("AP-05 acceptance: views: [extremes] renders the actual Extremes view (DOM-
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "extremes", enabled: true }] },
     soloViewHass()
   );
-  const data = computeLegacyData(el);
-  assert.deepEqual(normalize(data.views), ["extremes"]);
+  const data = el._computeViewModel();
+  assert.deepEqual(normalize(data.views.keys), ["extremes"]);
   assert.ok(el.shadowRoot.querySelector(".rtc-extremes-view"), "the Extremes view must actually be in the DOM");
   assert.equal(el.shadowRoot.querySelector(".rtc-scale-view"), null, "Scale must never render implicitly when views: omits it");
   env.cleanup(el);

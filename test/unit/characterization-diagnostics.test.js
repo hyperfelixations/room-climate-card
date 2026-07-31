@@ -21,7 +21,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { st } = require("../helpers/characterization-scenarios.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 const C = { device_class: "temperature", unit_of_measurement: "°C" };
 const F = { device_class: "temperature", unit_of_measurement: "°F" };
@@ -340,7 +339,7 @@ test("incompatible room metric kinds warn once and are exposed as a defined conf
 
   assert.equal(afterFirst, 1, "exactly one warning for the first occurrence");
   assert.equal(recorder.warnings.length, 1, "an unchanged diagnosis must not re-warn");
-  assert.equal(computeLegacyData(el).configurationState, "mixed_metric_kinds");
+  assert.equal(el._computeViewModel().configurationState, "mixed_metric_kinds");
   expectBaseline("diagnostics/mixed-metric-kinds.json", stableStringify(recorder.warnings));
   el.remove();
 });

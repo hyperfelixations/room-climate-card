@@ -13,7 +13,7 @@
 // deterministic integer Fahrenheit boundaries); AP-02 made the measurement
 // pipeline atomic and canonicalizes correctly, but deliberately kept
 // display Celsius-only. AP-03 completes native display: _resolveMetricContext()
-// now resolves a real displayUnitProfile (section 9.4), and computeLegacyData()
+// now resolves a real displayUnitProfile (section 9.4), and the view model
 // converts every displayed number into that unit before classification,
 // comfort/optimal/scale, and icon decisions are made — never a raw
 // Fahrenheit number compared against Celsius bounds again.
@@ -22,7 +22,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -50,15 +49,15 @@ test.after(() => {
 test("pure Celsius card: unaffected regression anchor — identical to pre-AP-03 behavior", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "°C");
-  assert.equal(data.avg, 22);
-  assert.equal(data.comfortMin, 20);
-  assert.equal(data.comfortMax, 24);
-  assert.equal(data.optimalMin, 21);
-  assert.equal(data.optimalMax, 23);
-  assert.equal(data.scaleMin, 19);
-  assert.equal(data.scaleMax, 25);
+  assert.equal(data.average.value, 22);
+  assert.equal(data.comfort.min, 20);
+  assert.equal(data.comfort.max, 24);
+  assert.equal(data.scale.optimalMin, 21);
+  assert.equal(data.scale.optimalMax, 23);
+  assert.equal(data.scale.scaleMin, 19);
+  assert.equal(data.scale.scaleMax, 25);
   env.cleanup(el);
 });
 
@@ -69,31 +68,31 @@ test("pure Fahrenheit card: audit 9.1 reproduction is fixed — 72°F with 70/74
     "sensor.r2": mkState("sensor.r2", 74, { unit_of_measurement: "°F" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.metricType, "temperature");
+  const data = el._computeViewModel();
+  assert.equal(data.metric.kind, "temperature");
   assert.equal(el._unit(), "°F");
-  assert.ok(Math.abs(data.avg - 72) < 1e-9, `avg must display as 72, not the canonical 22.2 — got ${data.avg}`);
-  assert.equal(data.comfortMin, 68);
-  assert.equal(data.comfortMax, 75);
-  assert.equal(data.optimalMin, 70);
-  assert.equal(data.optimalMax, 73);
-  const tone = internals.averageTone(el, data.avg, data.avgEntity, data.metricType, data.displayUnitProfile);
+  assert.ok(Math.abs(data.average.value - 72) < 1e-9, `avg must display as 72, not the canonical 22.2 — got ${data.average.value}`);
+  assert.equal(data.comfort.min, 68);
+  assert.equal(data.comfort.max, 75);
+  assert.equal(data.scale.optimalMin, 70);
+  assert.equal(data.scale.optimalMax, 73);
+  const tone = internals.averageTone(el, data.average.value, data.average.entity, data.metric.kind, data.metric.displayUnitProfile);
   assert.notEqual(tone.label, "Very hot", "audit 9.1's exact bug must not reproduce");
   assert.equal(tone.label, "Optimal", "72°F (=22.2°C) is squarely in the optimal band");
-  assert.equal(data.inComfort, 2, "both 70°F and 74°F rooms are within the 68-75°F comfort band");
+  assert.equal(data.comfort.inComfort, 2, "both 70°F and 74°F rooms are within the 68-75°F comfort band");
   env.cleanup(el);
 });
 
 test("pure Kelvin card: comfort/optimal bands are exact fromCanonical conversions, unrounded (no thresholdRounding for kelvin)", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 295.15, { unit_of_measurement: "K" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "K");
-  assert.ok(Math.abs(data.avg - 295.15) < 1e-9);
-  assert.equal(data.comfortMin, 293.15);
-  assert.equal(data.comfortMax, 297.15);
-  assert.equal(data.optimalMin, 294.15);
-  assert.equal(data.optimalMax, 296.15);
+  assert.ok(Math.abs(data.average.value - 295.15) < 1e-9);
+  assert.equal(data.comfort.min, 293.15);
+  assert.equal(data.comfort.max, 297.15);
+  assert.equal(data.scale.optimalMin, 294.15);
+  assert.equal(data.scale.optimalMax, 296.15);
   env.cleanup(el);
 });
 
@@ -107,9 +106,9 @@ test("mixed °C/°F/K rooms, no usable primary: canonically averaged correctly, 
     "sensor.k": mkState("sensor.k", 295.15, { unit_of_measurement: "K" }), // = 22°C
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.c" }, { entity: "sensor.f" }, { entity: "sensor.k" }] }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "°C", "disagreeing room unit profiles must not pick an arbitrary display unit");
-  assert.ok(Math.abs(data.avg - (20 + 22 + 22) / 3) < 1e-9, "the °F/K rooms must be canonicalized before averaging with the °C room");
+  assert.ok(Math.abs(data.average.value - (20 + 22 + 22) / 3) < 1e-9, "the °F/K rooms must be canonicalized before averaging with the °C room");
   env.cleanup(el);
 });
 
@@ -120,11 +119,11 @@ test("Primary °F, rooms °C: display follows the usable primary's unit (section
     "sensor.r2": mkState("sensor.r2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "°F");
-  assert.ok(Math.abs(data.avg - 72) < 1e-9);
-  const r1 = data.rooms.find((r) => r.entity === "sensor.r1");
-  const r2 = data.rooms.find((r) => r.entity === "sensor.r2");
+  assert.ok(Math.abs(data.average.value - 72) < 1e-9);
+  const r1 = data.rooms.visible.find((r) => r.entity === "sensor.r1");
+  const r2 = data.rooms.visible.find((r) => r.entity === "sensor.r2");
   assert.ok(Math.abs(r1.value - 68) < 1e-9, "20°C room must display as 68°F, not 20");
   assert.ok(Math.abs(r2.value - 75.2) < 1e-9, "24°C room must display as 75.2°F, not 24");
   env.cleanup(el);
@@ -137,9 +136,9 @@ test("Primary unavailable, rooms in a compatible unit (all °F): room-consensus 
     "sensor.r2": mkState("sensor.r2", 74, { unit_of_measurement: "°F" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "°F");
-  assert.ok(Math.abs(data.avg - 72) < 1e-9, "mean of canonicalized 70°F/74°F round-trips back to exactly 72°F");
+  assert.ok(Math.abs(data.average.value - 72) < 1e-9, "mean of canonicalized 70°F/74°F round-trips back to exactly 72°F");
   env.cleanup(el);
 });
 
@@ -155,8 +154,8 @@ test("-40°C = -40°F end to end: both cards resolve to the identical canonical 
   const ctxF = elF._resolveMetricContext();
   assert.ok(Math.abs(ctxC.averageSource.canonicalValue - ctxF.averageSource.canonicalValue) < 1e-9, "-40°C and -40°F must resolve to the same canonical value");
 
-  const dataF = computeLegacyData(elF);
-  assert.ok(Math.abs(dataF.avg - (-40)) < 1e-9, "-40°C converted to °F and back must still read -40");
+  const dataF = elF._computeViewModel();
+  assert.ok(Math.abs(dataF.average.value - (-40)) < 1e-9, "-40°C converted to °F and back must still read -40");
   env.cleanup(elC);
   env.cleanup(elF);
 });
@@ -172,7 +171,7 @@ test("Fahrenheit classification: all 10 generated boundaries classify exactly at
   const el = fahrenheitCard(70); // context only needs A usable °F primary to resolve the profile; the boundary values themselves are tested directly
   // Teil C (review fix 3): _fallbackTone() no longer self-resolves its own
   // unitProfile — the caller (here, the test itself, standing in for
-  // computeLegacyData()) explicitly resolves it once and passes it through.
+  // buildCardViewModel()) explicitly resolves it once and passes it through.
   const profile = el._resolveMetricContext().displayUnitProfile;
   const label = (value) => internals.fallbackTone(el, value, "temperature", profile).label;
 
@@ -221,9 +220,9 @@ test("dynamic scale step: a narrow span (<=20°F) rounds to multiples of 2°F", 
     "sensor.r2": mkState("sensor.r2", 74, { unit_of_measurement: "°F" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.scaleMin % 2, 0, `scaleMin=${data.scaleMin} must be a multiple of 2`);
-  assert.equal(data.scaleMax % 2, 0, `scaleMax=${data.scaleMax} must be a multiple of 2`);
+  const data = el._computeViewModel();
+  assert.equal(data.scale.scaleMin % 2, 0, `scaleMin=${data.scale.scaleMin} must be a multiple of 2`);
+  assert.equal(data.scale.scaleMax % 2, 0, `scaleMax=${data.scale.scaleMax} must be a multiple of 2`);
   env.cleanup(el);
 });
 
@@ -234,17 +233,17 @@ test("dynamic scale step: a medium span (>20, <=40°F) rounds to multiples of 5�
     "sensor.r2": mkState("sensor.r2", 95, { unit_of_measurement: "°F" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.scaleMin % 5, 0, `scaleMin=${data.scaleMin} must be a multiple of 5`);
-  assert.equal(data.scaleMax % 5, 0, `scaleMax=${data.scaleMax} must be a multiple of 5`);
+  const data = el._computeViewModel();
+  assert.equal(data.scale.scaleMin % 5, 0, `scaleMin=${data.scale.scaleMin} must be a multiple of 5`);
+  assert.equal(data.scale.scaleMax % 5, 0, `scaleMax=${data.scale.scaleMax} must be a multiple of 5`);
   env.cleanup(el);
 });
 
 test("dynamic scale step: a wide span (>40°F) rounds to multiples of 10°F", () => {
   const el = fahrenheitCard(130);
-  const data = computeLegacyData(el);
-  assert.equal(data.scaleMin % 10, 0, `scaleMin=${data.scaleMin} must be a multiple of 10`);
-  assert.equal(data.scaleMax % 10, 0, `scaleMax=${data.scaleMax} must be a multiple of 10`);
+  const data = el._computeViewModel();
+  assert.equal(data.scale.scaleMin % 10, 0, `scaleMin=${data.scale.scaleMin} must be a multiple of 10`);
+  assert.equal(data.scale.scaleMax % 10, 0, `scaleMax=${data.scale.scaleMax} must be a multiple of 10`);
   env.cleanup(el);
 });
 
@@ -257,7 +256,7 @@ test("spread attribute (a delta) must round-trip without the Fahrenheit absolute
     "sensor.r2": mkState("sensor.r2", 74, { unit_of_measurement: "°F" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.ok(Math.abs(data.spread - 4) < 1e-9, `spread must round-trip to exactly 4, not be offset by +32 (got ${data.spread})`);
   env.cleanup(el);
 });
@@ -351,10 +350,10 @@ test("review fix (closes the former KNOWN GAP): range_entity min/max ARE convert
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(el._unit(), "°F", "the card's resolved display unit is Fahrenheit");
-  assert.ok(Math.abs(data.rangeMin - 64.4) < 1e-9, `rangeMin must convert 18°C -> 64.4°F, got ${data.rangeMin}`);
-  assert.ok(Math.abs(data.rangeMax - 73.4) < 1e-9, `rangeMax must convert 23°C -> 73.4°F, got ${data.rangeMax}`);
+  assert.ok(Math.abs(data.range.min - 64.4) < 1e-9, `rangeMin must convert 18°C -> 64.4°F, got ${data.range.min}`);
+  assert.ok(Math.abs(data.range.max - 73.4) < 1e-9, `rangeMax must convert 23°C -> 73.4°F, got ${data.range.max}`);
   env.cleanup(el);
 });
 
@@ -371,12 +370,12 @@ test("review fix (closes the former KNOWN GAP), rangeScale geometry: converted r
     { entity: "sensor.avg", range_entity: "sensor.range", views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] },
     hass
   );
-  const data = computeLegacyData(el);
-  assert.equal(data.hasRangeScale, true);
-  assert.ok(data.rangeScaleGeometry.scaleMin < data.rangeScaleGeometry.scaleMax);
-  assert.ok(Math.abs(data.rangeMin - 64.4) < 1e-9);
-  assert.ok(Math.abs(data.rangeMax - 73.4) < 1e-9);
-  for (const pos of [data.rangeCurrentPos, data.rangeMinPos, data.rangeMaxPos]) {
+  const data = el._computeViewModel();
+  assert.equal(data.views.hasRangeScale, true);
+  assert.ok(data.rangeScale.scaleMin < data.rangeScale.scaleMax);
+  assert.ok(Math.abs(data.range.min - 64.4) < 1e-9);
+  assert.ok(Math.abs(data.range.max - 73.4) < 1e-9);
+  for (const pos of [(data.rangeScale?.markerPositions.current ?? 0), (data.rangeScale?.markerPositions.min ?? 0), (data.rangeScale?.markerPositions.max ?? 0)]) {
     assert.equal(Number.isFinite(pos), true);
     assert.ok(pos >= 0 && pos <= 100);
   }

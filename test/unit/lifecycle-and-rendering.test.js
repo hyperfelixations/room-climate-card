@@ -12,7 +12,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 // The render paths, imported from the source module so the test names the same
@@ -220,7 +219,7 @@ test("a full render and a partial update each compute exactly one view model", (
   };
   // There is nothing else to count any more: the flat DTO has no producer in the
   // card at all, which an architecture test now proves for the whole of src/.
-  assert.equal(el._computeData, undefined, "the compatibility method is gone");
+  assert.equal(el._computeData, undefined, "the pre-2H flat-DTO entry point is gone from the element");
 
   // A partial update (the common per-second path).
   el._render(false);
@@ -239,12 +238,12 @@ test("a full render and a partial update each compute exactly one view model", (
 test("the legacy compatibility method still reproduces the flat shape on demand", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(data.empty, false);
-  assert.equal(data.metricType, "temperature");
-  assert.equal(typeof data.avg, "number");
-  assert.equal(typeof data.scaleMin, "number");
-  assert.ok(Array.isArray(data.views));
+  assert.equal(data.metric.kind, "temperature");
+  assert.equal(typeof data.average.value, "number");
+  assert.equal(typeof data.scale.scaleMin, "number");
+  assert.ok(Array.isArray(data.views.keys));
   env.cleanup(el);
 });
 

@@ -16,7 +16,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -73,10 +72,10 @@ test("a humidity room reading below 0% or above 100% is excluded from the room a
     { entity: "sensor.avg", rooms: [{ name: "TooLow", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }, { name: "TooHigh", entity: "sensor.r4" }] },
     hass
   );
-  const data = computeLegacyData(el);
-  assert.equal(data.roomCount, 2, "only 2 of 4 rooms are physically valid");
-  assert.equal(data.coolest.name, "R2");
-  assert.equal(data.warmest.name, "R3");
+  const data = el._computeViewModel();
+  assert.equal(data.rooms.count, 2, "only 2 of 4 rooms are physically valid");
+  assert.equal(data.extremes.coolest.name, "R2");
+  assert.equal(data.extremes.warmest.name, "R3");
   env.cleanup(el);
 });
 
@@ -87,9 +86,9 @@ test("a humidity primary (average) entity reading of -1% is rejected — falls b
     "sensor.r2": mkState("sensor.r2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.avgSource, "calculated", "the invalid -1% primary reading must not be used directly");
-  assert.equal(data.avg, 50, "falls back to the mean of the 2 valid rooms");
+  const data = el._computeViewModel();
+  assert.equal(data.average.source, "calculated", "the invalid -1% primary reading must not be used directly");
+  assert.equal(data.average.value, 50, "falls back to the mean of the 2 valid rooms");
   env.cleanup(el);
 });
 
@@ -101,10 +100,10 @@ test("a CO2 room reading of exactly 0 is excluded from the room average, extrema
     "sensor.r3": mkState("sensor.r3", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ name: "Stuck", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.roomCount, 2, "only 2 of 3 rooms are physically valid");
-  assert.equal(data.coolest.name, "R2", "the stuck 0-reading room must never be picked as coolest");
-  assert.equal(data.warmest.name, "R3");
+  const data = el._computeViewModel();
+  assert.equal(data.rooms.count, 2, "only 2 of 3 rooms are physically valid");
+  assert.equal(data.extremes.coolest.name, "R2", "the stuck 0-reading room must never be picked as coolest");
+  assert.equal(data.extremes.warmest.name, "R3");
   env.cleanup(el);
 });
 
@@ -116,10 +115,10 @@ test("a negative PM2.5 room reading is excluded from the room average, extrema, 
     "sensor.r3": mkState("sensor.r3", 12, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ name: "Faulty", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.roomCount, 2);
-  assert.equal(data.coolest.name, "R2");
-  assert.equal(data.warmest.name, "R3");
+  const data = el._computeViewModel();
+  assert.equal(data.rooms.count, 2);
+  assert.equal(data.extremes.coolest.name, "R2");
+  assert.equal(data.extremes.warmest.name, "R3");
   env.cleanup(el);
 });
 
@@ -130,9 +129,9 @@ test("a CO2 primary (average) entity reading of 0 is rejected — falls back to 
     "sensor.r2": mkState("sensor.r2", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.avgSource, "calculated", "the invalid 0 primary reading must not be used directly");
-  assert.equal(data.avg, 700, "falls back to the mean of the 2 valid rooms");
+  const data = el._computeViewModel();
+  assert.equal(data.average.source, "calculated", "the invalid 0 primary reading must not be used directly");
+  assert.equal(data.average.value, 700, "falls back to the mean of the 2 valid rooms");
   env.cleanup(el);
 });
 
@@ -143,7 +142,7 @@ test("all CO2 room readings physically invalid + no valid primary entity -> empt
     "sensor.r2": mkState("sensor.r2", -10, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   assert.equal(data.empty, true);
   env.cleanup(el);
 });
@@ -151,7 +150,7 @@ test("all CO2 room readings physically invalid + no valid primary entity -> empt
 // "Range-State und Trend" from the audit checklist: hasRange/hasRangeScale
 // axis and trendValue are exempt from _isPhysicallyValid() by design (they
 // are deltas/day-spans, not absolute concentration readings — see
-// computeLegacyData()'s comment on rangeMin/rangeMax) — DATA-02's negative-range
+// the range model's own comment on min/max) — DATA-02's negative-range
 // concern for those is separately covered by DATA-02/DATA-03's own sign
 // checks (range-and-spread.test.js), not the physical-plausibility filter.
 test("a CO2 trend value is not filtered by _isPhysicallyValid() (a negative trend is a legitimate falling rate, not an invalid reading)", () => {
@@ -165,7 +164,7 @@ test("a CO2 trend value is not filtered by _isPhysicallyValid() (a negative tren
     { entity: "sensor.avg", trend_entity: "sensor.trend", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] },
     hass
   );
-  const data = computeLegacyData(el);
-  assert.equal(data.trendValue, -15, "a negative trend (falling CO2) must be shown as-is, not filtered out");
+  const data = el._computeViewModel();
+  assert.equal(data.trend.value, -15, "a negative trend (falling CO2) must be shown as-is, not filtered out");
   env.cleanup(el);
 });

@@ -1,7 +1,7 @@
 "use strict";
 
 // Configuration cases A/B/C/D (+ rangeScale) from "Ansichten und
-// Konfigurationsfaelle" in the dev doc, and the generic data.views vs
+// Konfigurationsfaelle" in the dev doc, and the generic data.views.keys vs
 // this._views comparison formula from _render() (ARCH-01, audit section
 // 9.5: "View-Struktur generisch vergleichen").
 
@@ -9,7 +9,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -100,8 +99,8 @@ test("hasRoomsView requires >= 2 valid room values, not just >= 2 configured roo
     "sensor.r2": mkState("sensor.r2", "unavailable", { device_class: "temperature" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, oneRoomHass);
-  const data = computeLegacyData(el);
-  assert.equal(data.hasRoomsView, false, "only 1 of 2 configured rooms is valid -> minimal mode");
+  const data = el._computeViewModel();
+  assert.equal(data.rooms.hasRoomsView, false, "only 1 of 2 configured rooms is valid -> minimal mode");
   assert.deepEqual(normalize(el._views), ["scale"]);
   env.cleanup(el);
 });

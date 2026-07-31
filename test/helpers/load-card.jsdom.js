@@ -118,7 +118,7 @@ function createTestEnvironment() {
 
 // vm.runInContext() gives room-climate-card.js a genuinely separate V8
 // realm — correct isolation, but it means every array/plain-object value
-// returned by a card method (e.g. _holdSequence(), computeLegacyData()) has that
+// returned by a card method (e.g. _computeViewModel(), _carousel.holdSequence()) has that
 // realm's Array.prototype/Object.prototype, not this process's. Array.isArray
 // is realm-safe by design and still reports true, but assert.deepStrictEqual
 // (and assert/strict's deepEqual, which is an alias for it) also compares
@@ -127,7 +127,7 @@ function createTestEnvironment() {
 // this realm's constructors before assertions; primitives (including NaN,
 // Infinity, null, undefined) pass through unchanged. Only ever call this on
 // pure data returned by the card's data-only methods (_holdSequence(),
-// computeLegacyData(), _roomGridRows(), ...) — never on a live element/DOM node,
+// _computeViewModel(), _roomGridRows(), ...) — never on a live element/DOM node,
 // which this deliberately does not special-case.
 function normalize(value) {
   // Array.from (this realm's, not the foreign array's own .map()/species

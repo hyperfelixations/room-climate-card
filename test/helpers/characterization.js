@@ -17,7 +17,7 @@
 // visual-golden.spec.js already owns them with real Chromium screenshots,
 // and jsdom has no layout engine at all (getBoundingClientRect() is always
 // zero). This harness covers the contracts that demonstrably had no
-// verbatim coverage before: the computeLegacyData() DTO, the shadow-DOM markup,
+// verbatim coverage before: the flat Phase 0 DTO, the shadow-DOM markup,
 // the generated CSS, the custom-element/HACS registration, the exact
 // diagnostic strings, and the wall-clock carousel timing.
 //

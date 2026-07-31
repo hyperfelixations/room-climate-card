@@ -286,7 +286,7 @@ test.describe("visual golden: native Fahrenheit (AP-03, audit 9.7 'Golden-Screen
   // Rule 6: functional/textual assertions must pass BEFORE the golden
   // snapshot is generated/committed — this proves the audit 9.1
   // reproduction is actually fixed in the real rendered DOM (not just in
-  // computeLegacyData()'s return value), not merely that pixels didn't change.
+  // the CardViewModel it renders from), not merely that pixels didn't change.
   async function assertNativeFahrenheit(page, cardId) {
     const text = await page.locator(`#${cardId} .rtc-card`).innerText();
     expect(text).toContain("72");

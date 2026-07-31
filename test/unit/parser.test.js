@@ -16,7 +16,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
 
@@ -30,9 +29,9 @@ test.after(() => {
 function parseAsAvg(rawState) {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", rawState, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   env.cleanup(el);
-  return data.empty ? null : data.avg;
+  return data.empty ? null : data.average.value;
 }
 
 test("invalid states are rejected: unknown/unavailable/none/null/undefined/empty", () => {
@@ -98,8 +97,8 @@ test("a number that is actually delivered as a JS number (not string) still work
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
-  const data = computeLegacyData(el);
-  assert.equal(data.rangeMin, 18);
-  assert.equal(data.rangeMax, 24);
+  const data = el._computeViewModel();
+  assert.equal(data.range.min, 18);
+  assert.equal(data.range.max, 24);
   env.cleanup(el);
 });

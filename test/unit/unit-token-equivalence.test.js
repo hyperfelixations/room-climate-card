@@ -17,7 +17,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -81,7 +80,7 @@ for (const [metricKind, { deviceClass, profiles }] of Object.entries(CASES)) {
         assert.equal(model.metricKind, metricKind, `metricKind for ${JSON.stringify(unit)}`);
         assert.equal(model.unitProfile, profileKey, `unitProfile for ${JSON.stringify(unit)}`);
         assert.equal(model.validUnit, true, `validUnit for ${JSON.stringify(unit)}`);
-        assert.equal(computeLegacyData(el).empty, false, `card must not be empty for ${JSON.stringify(unit)}`);
+        assert.equal(el._computeViewModel().empty, false, `card must not be empty for ${JSON.stringify(unit)}`);
         env.cleanup(el);
       }
     });

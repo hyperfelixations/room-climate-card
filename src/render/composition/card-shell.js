@@ -56,9 +56,9 @@ function renderViewArea(context, viewModel, viewRenderers) {
 // A DOM patcher can only change nodes that exist. Every optional part of the markup is
 // therefore a structural decision: when its presence changes, patching cannot express
 // it and the card has to be rebuilt. This composes exactly those decisions — the
-// shell's own, plus whatever each view declares about itself — so that _render() can
-// compare one value instead of maintaining a list of booleans that silently omits
-// whatever nobody remembered to add.
+// shell's own, plus whatever each view declares about itself — so that the render
+// controller can compare one value instead of maintaining a list of booleans that
+// silently omits whatever nobody remembered to add.
 //
 // The rule for a view's own contribution is precise: list the optional nodes the view
 // does NOT reconcile in its patch(). Anything it does reconcile must stay out, or a

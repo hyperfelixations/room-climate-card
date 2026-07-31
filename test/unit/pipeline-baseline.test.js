@@ -2,10 +2,11 @@
 
 // Proves the extracted pipeline independently of the custom element.
 //
-// Every other test that touches _computeData() goes through the element: jsdom, a
-// shadow root, a config setter, a hass setter. That is a valid integration test,
-// but it cannot tell you whether the LOGIC moved correctly or whether the element
-// is quietly compensating. This file bypasses the element entirely — it composes
+// The element-level characterization test builds a real card in jsdom — a shadow root,
+// a config setter, a hass setter — and compares the result against the committed
+// baselines. That is a valid integration test, but it cannot tell you whether the LOGIC
+// moved correctly or whether the element is quietly compensating for a difference. This
+// file bypasses the element entirely — it composes
 //
 //   resolveMeasurementContext -> buildCardDomainModel -> buildCardViewModel
 //                             -> toLegacyData

@@ -594,6 +594,76 @@ test("the legacy DTO adapter is gone from the shipped source entirely", () => {
   assert.ok(fs.existsSync(helper), "the frozen oracle must still exist for the baselines");
 });
 
+// The only tests allowed to reach the frozen adapter, and why each one is.
+//
+// The flat DTO is a Phase 0 recording of a card that no longer exists. A test that
+// reads it is testing what the card USED to expose, through a shape production has not
+// produced since Phase 2H — which is a fine thing for a historical oracle to do and a
+// misleading thing for a behavioural test to do. Every current test was moved onto the
+// CardViewModel, the module under test, or the rendered DOM; these three remain.
+const LEGACY_DTO_ALLOWLIST = new Map([
+  [
+    "characterization-model.test.js",
+    "the 32 committed DTO baselines themselves — a Phase 0 oracle recorded against the " +
+      "ORIGINAL monolithic card, and the only independent evidence that the extracted " +
+      "pipeline still computes what it always computed",
+  ],
+  [
+    "pipeline-baseline.test.js",
+    "replays the same baselines through the pure pipeline, with no element involved, so " +
+      "it needs the identical projection to compare against",
+  ],
+  [
+    "presentation-view-model-modules.test.js",
+    "pins the adapter's own flattening and its documented no-extremes/no-range-scale " +
+      "defaults, which is what makes the two above trustworthy",
+  ],
+]);
+
+test("only the historical characterization tests reach the frozen legacy DTO", () => {
+  // Without this, the adapter quietly becomes a convenient shortcut again: it reads
+  // nicely, it is one flat object, and every use of it is a test asserting against a
+  // shape the product abandoned. The allowlist is small on purpose and each entry
+  // states its reason.
+  const testDir = path.join(SRC_DIR, "..", "test");
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "baseline") walk(full);
+        continue;
+      }
+      if (!/\.(test|spec)\.js$/.test(entry.name)) continue;
+      // This file names both functions in the patterns that do the checking.
+      if (entry.name === "architecture-imports.test.js") continue;
+      const code = stripCommentsAndStringText(fs.readFileSync(full, "utf8"));
+      if (!/\b(computeLegacyData|toLegacyData)\b/.test(code)) continue;
+      if (!LEGACY_DTO_ALLOWLIST.has(entry.name)) offenders.push(path.relative(testDir, full));
+    }
+  };
+  walk(testDir);
+
+  assert.deepEqual(
+    offenders,
+    [],
+    "these tests read the frozen flat DTO instead of today's contract — assert against the " +
+      "CardViewModel, the module under test or the rendered DOM instead:\n  " + offenders.join("\n  ")
+  );
+
+  // The allowlist may not rot the other way either: an entry that no longer uses the
+  // adapter is an entry that should be deleted.
+  for (const name of LEGACY_DTO_ALLOWLIST.keys()) {
+    const full = path.join(testDir, "unit", name);
+    assert.ok(fs.existsSync(full), `${name} is allowlisted but does not exist`);
+    assert.match(
+      fs.readFileSync(full, "utf8"),
+      /helpers\/legacy-dto\.js/,
+      `${name} no longer uses the frozen adapter — remove it from the allowlist`
+    );
+  }
+});
+
 test("the controller layer exists and imports nothing above itself", () => {
   const controllers = files.filter((file) => classify(file).name === "controllers/runtime");
   assert.ok(controllers.length > 0, "controllers/runtime must exist");

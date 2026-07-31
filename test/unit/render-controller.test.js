@@ -176,7 +176,7 @@ test("the view model on screen is only updated once a render path has succeeded"
 
 // ------------------------------------------------------------ deferred work --
 
-test("a render arriving mid-gesture is deferred, and the debt is paid exactly once", () => {
+test("a render arriving mid-gesture is deferred and nothing is computed for it", () => {
   const { controller, render, state, calls } = harness();
   render();
 
@@ -184,21 +184,57 @@ test("a render arriving mid-gesture is deferred, and the debt is paid exactly on
   assert.equal(render({ dataSignature: "d2" }), RENDER_PATH.DEFERRED);
   assert.equal(calls.computeViewModel, 1, "nothing may be computed for a render that cannot be applied");
   assert.equal(controller.isRenderPending, true);
-
-  assert.equal(controller.takePendingRender(), true);
-  assert.equal(controller.isRenderPending, false, "a pending render is a one-shot debt, not a mode");
-  assert.equal(controller.takePendingRender(), false);
 });
 
-test("dropPendingRender forgets the debt without paying it", () => {
+test("a completed render settles the debt, whichever path it took", () => {
+  for (const [name, arrange] of [
+    ["content", (h) => h],
+    ["full", (h) => (h.state.viewModel = viewModelOf({ structure: "s2" })) && h],
+    ["empty", (h) => (h.state.viewModel = viewModelOf({ empty: true })) && h],
+  ]) {
+    const h = harness();
+    h.render();
+    h.state.dragging = true;
+    h.render({ dataSignature: "d2" });
+    assert.equal(h.controller.isRenderPending, true, name);
+
+    arrange(h);
+    h.state.dragging = false;
+    h.render({ dataSignature: "d2" });
+    assert.equal(h.controller.isRenderPending, false, `${name}: the render caught up, so nothing is owed`);
+  }
+});
+
+test("a skip settles the debt too, because the card already shows what was deferred", () => {
+  const { controller, render, state } = harness();
+  render();
+  state.dragging = true;
+  render({ dataSignature: "d1" }); // the same data that is already committed
+  assert.equal(controller.isRenderPending, true);
+
+  state.dragging = false;
+  assert.equal(render({ dataSignature: "d1" }), RENDER_PATH.SKIPPED);
+  assert.equal(controller.isRenderPending, false);
+});
+
+test("a render that throws leaves the debt standing, so the update cannot be lost", () => {
+  // This is the whole reason the debt is cleared inside commit() and not at the call
+  // site: a failure that also forgot the update would strand the card on stale data
+  // with nothing left to retry from.
   const { controller, render, state } = harness();
   render();
   state.dragging = true;
   render({ dataSignature: "d2" });
+  assert.equal(controller.isRenderPending, true);
 
-  controller.dropPendingRender();
+  state.dragging = false;
+  state.throwOnCompute = new Error("induced");
+  assert.throws(() => render({ dataSignature: "d2" }), /induced/);
+  assert.equal(controller.isRenderPending, true, "still owed");
+
+  state.throwOnCompute = null;
+  render({ dataSignature: "d2" });
   assert.equal(controller.isRenderPending, false);
-  assert.equal(controller.takePendingRender(), false);
 });
 
 // ------------------------------------------------- configuration boundaries --

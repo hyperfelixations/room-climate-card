@@ -89,6 +89,77 @@ test("a card removed mid-drag and reinserted keeps updating", async ({ page }) =
   expect(shown).toContain("27");
 });
 
+test("an update received during a real drag is on screen after a real reconnect, with no further update", async ({ page }) => {
+  // The same contract as the jsdom layer, with a genuine pointer gesture and a genuine
+  // document removal. Nothing is pushed into the card after the reconnect and no private
+  // render entry point is called: what Home Assistant already handed over must simply be
+  // visible again.
+  const { card, errors } = await setUpCard(page);
+  const box = await card.locator(".rtc-rotator").boundingBox();
+  expect(await card.locator(".rtc-avg-value-num").innerText()).toContain("22");
+
+  await startDrag(page, box);
+  expect(await card.evaluate((el) => el._isDragging)).toBe(true);
+
+  // Home Assistant pushes a new state while the finger is still down.
+  await page.evaluate((states) => {
+    window.__card.hass = { language: "en", locale: { language: "en" }, states, callService: () => {} };
+  }, threeViewStates(30));
+  expect(
+    await page.evaluate(() => window.__card.shadowRoot.querySelector(".rtc-avg-value-num").textContent),
+    "the update is deliberately deferred while the track is being dragged"
+  ).toContain("22");
+
+  // The dashboard reflows the card away before the finger is lifted.
+  await page.evaluate(() => window.__card.remove());
+  await page.mouse.up(); // lands on a detached card: a harmless no-op
+  await page.evaluate(() => document.getElementById("stage").appendChild(window.__card));
+
+  const shown = await page.evaluate(() => window.__card.shadowRoot.querySelector(".rtc-avg-value-num").textContent);
+  expect(shown, "the value received before the removal must be visible again").toContain("30");
+  expect(errors, `unexpected page errors: ${errors.join(" | ")}`).toEqual([]);
+});
+
+test("after catching up on reconnect, auto-slide and the accessibility sync run again", async ({ page }) => {
+  const { card, errors } = await setUpCard(page);
+  const box = await card.locator(".rtc-rotator").boundingBox();
+
+  await startDrag(page, box);
+  await page.evaluate((states) => {
+    window.__card.hass = { language: "en", locale: { language: "en" }, states, callService: () => {} };
+  }, threeViewStates(30));
+  await page.evaluate(() => window.__card.remove());
+  await page.mouse.up();
+  await page.evaluate(() => document.getElementById("stage").appendChild(window.__card));
+
+  // The catch-up render can rebuild the whole shadow DOM. Whatever it did, the card must
+  // end up animating again and keeping its accessibility state in step with the track.
+  expect(await page.evaluate(() => window.__card.shadowRoot.querySelector(".rtc-avg-value-num").textContent)).toContain("30");
+  expect(
+    await page.evaluate(() => window.__card._carousel.accessibilityTimerHandle !== null),
+    "the accessibility sync is armed again"
+  ).toBe(true);
+
+  // Exactly one view is reachable at any moment, and it is the one the model says.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const views = Array.from(window.__card.shadowRoot.querySelectorAll(".rtc-view"));
+          return views.filter((view) => !view.hasAttribute("inert")).length;
+        }),
+      { message: "exactly one view stays outside inert" }
+    )
+    .toBe(1);
+  expect(
+    await page.evaluate(() => {
+      const views = Array.from(window.__card.shadowRoot.querySelectorAll(".rtc-view"));
+      return views.findIndex((view) => !view.hasAttribute("inert")) === window.__card._carousel.currentVisualIndex();
+    })
+  ).toBe(true);
+  expect(errors, `unexpected page errors: ${errors.join(" | ")}`).toEqual([]);
+});
+
 test("a card removed after a completed swipe leaves no timer behind and re-engages on reconnect", async ({ page }) => {
   const { card, errors } = await setUpCard(page);
   const box = await card.locator(".rtc-rotator").boundingBox();

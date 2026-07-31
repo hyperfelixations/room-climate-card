@@ -10,7 +10,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
-const { computeLegacyData } = require("../helpers/legacy-dto.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
 // The compositions the element used to expose only for tests (see the helper).
@@ -89,12 +88,12 @@ test("trend policy: each metric uses its own inclusive stable deadband in canoni
 
     for (const [value, expectedDirection] of cases) {
       const el = trendCard(metric, value);
-      const data = computeLegacyData(el);
+      const data = el._computeViewModel();
       assert.deepEqual(
         normalize({
-          direction: data.trend?.direction,
-          fallingBelow: data.trend?.policy?.fallingBelow,
-          risingAbove: data.trend?.policy?.risingAbove,
+          direction: data.trend.model?.direction,
+          fallingBelow: data.trend.model?.policy?.fallingBelow,
+          risingAbove: data.trend.model?.policy?.risingAbove,
         }),
         {
           direction: expectedDirection,
@@ -122,11 +121,11 @@ test("trend policy: Fahrenheit rates are classified after conversion to canonica
     { entity: "sensor.avg", trend_entity: "sensor.trend" },
     mkHass(states)
   );
-  const data = computeLegacyData(stable);
-  assert.equal(data.trend.direction, "stable");
-  assert.ok(Math.abs(data.trend.canonicalValue - 0.1) < 1e-12);
-  assert.ok(Math.abs(data.trend.value - 0.18) < 1e-12);
-  assert.equal(data.trend.unit, "°F/h");
+  const data = stable._computeViewModel();
+  assert.equal(data.trend.model.direction, "stable");
+  assert.ok(Math.abs(data.trend.model.canonicalValue - 0.1) < 1e-12);
+  assert.ok(Math.abs(data.trend.model.value - 0.18) < 1e-12);
+  assert.equal(data.trend.model.unit, "°F/h");
   env.cleanup(stable);
 
   const rising = env.createCard(
@@ -138,7 +137,7 @@ test("trend policy: Fahrenheit rates are classified after conversion to canonica
       }),
     })
   );
-  assert.equal(computeLegacyData(rising).trend.direction, "rising");
+  assert.equal(rising._computeViewModel().trend.model.direction, "rising");
   env.cleanup(rising);
 });
 
@@ -175,8 +174,8 @@ test("trend model: missing, unavailable, non-numeric, unitless, and incompatible
     };
     if (variant.state) states["sensor.trend"] = variant.state;
     const el = env.createCard(variant.config, mkHass(states));
-    const data = computeLegacyData(el);
-    assert.equal(data.trend, null);
+    const data = el._computeViewModel();
+    assert.equal(data.trend.model, null);
     assert.equal(el.shadowRoot.querySelector(".rtc-avg-button").classList.contains("rtc-has-trend"), false);
     assert.equal(el.shadowRoot.querySelector(".rtc-avg-trend"), null);
     assert.equal(el.shadowRoot.querySelector(".rtc-avg-reading"), null);
@@ -228,15 +227,15 @@ test("trend rendering: all four metrics expose semantic direction, SVG indicator
 
   for (const [metric, value, direction, text] of cases) {
     const el = trendCard(metric, value);
-    const data = computeLegacyData(el);
+    const data = el._computeViewModel();
     const avg = el.shadowRoot.querySelector(".rtc-avg-button");
-    assert.equal(data.trend.direction, direction);
-    assert.equal(Object.hasOwn(data.trend, "symbol"), false, "presentation glyphs do not belong in the trend data model");
+    assert.equal(data.trend.model.direction, direction);
+    assert.equal(Object.hasOwn(data.trend.model, "symbol"), false, "presentation glyphs do not belong in the trend data model");
     assert.equal(avg.dataset.trendDirection, direction);
     assert.equal(avg.querySelectorAll(".rtc-avg-trend-arrow svg").length, 1);
     assert.equal(avg.querySelector(".rtc-avg-trend-arrow").textContent.trim(), "");
     assert.equal(avg.querySelector(".rtc-avg-trend"), null);
-    assert.equal(internals.trendText(el, data.trend), text);
+    assert.equal(internals.trendText(el, data.trend.model), text);
     env.cleanup(el);
   }
 });
@@ -264,13 +263,13 @@ test("scale footer: a valid configured trend is restored as the localized third 
       }),
     }
   );
-  const data = computeLegacyData(el);
+  const data = el._computeViewModel();
   const footer = el.shadowRoot.querySelector(".rtc-scale-view .rtc-scale-footer");
   assert.ok(footer);
   assert.match(footer.textContent, /comfort/i);
   assert.match(footer.textContent, /spread/i);
   assert.match(footer.textContent, /trend \+0\.2 °C\/h/i);
-  assert.equal(internals.footerText(el, "scale", data).split("·").length, 3);
+  assert.equal(internals.footerText(el, "scale").split("·").length, 3);
   env.cleanup(el);
 });
 
