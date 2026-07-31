@@ -143,7 +143,7 @@ test("pointercancel settles the track without throwing and clears the drag state
 
   await page.evaluate((id) => {
     const el = document.getElementById(id);
-    const pointerId = el._pointer?.id ?? 1;
+    const pointerId = el._interaction.pointer?.id ?? 1;
     el.shadowRoot.dispatchEvent(new PointerEvent("pointercancel", { pointerId, bubbles: true, composed: true }));
   }, cardId);
   await page.mouse.up();
@@ -152,7 +152,7 @@ test("pointercancel settles the track without throwing and clears the drag state
   expect(errors, `unexpected page errors: ${errors.map((e) => e.message).join(", ")}`).toHaveLength(0);
   const isDragging = await card.evaluate((el) => el._isDragging);
   expect(isDragging).toBe(false);
-  const pointer = await card.evaluate((el) => el._pointer);
+  const pointer = await card.evaluate((el) => el._interaction.pointer);
   expect(pointer).toBe(null);
 });
 
@@ -178,14 +178,14 @@ test("an HA update arriving mid-drag is applied once the drag ends, not silently
   const updatedStates = { ...threeViewStates() };
   updatedStates["sensor.avg"] = mkStateObj("sensor.avg", 25.5, { device_class: "temperature", unit_of_measurement: "°C" });
   await updateHass(page, cardId, updatedStates);
-  const renderPendingDuring = await card.evaluate((el) => el._renderPending);
+  const renderPendingDuring = await card.evaluate((el) => el._renderController.isRenderPending);
   expect(renderPendingDuring).toBe(true);
 
   await page.mouse.move(startX - 5, startY, { steps: 2 }); // release back near start -> below threshold, snaps back
   await page.mouse.up();
   await page.waitForTimeout(500);
 
-  const renderPendingAfter = await card.evaluate((el) => el._renderPending);
+  const renderPendingAfter = await card.evaluate((el) => el._renderController.isRenderPending);
   expect(renderPendingAfter).toBe(false);
   const avgText = await card.locator(".rtc-avg-value").first().innerText();
   expect(avgText).toContain("25.5");

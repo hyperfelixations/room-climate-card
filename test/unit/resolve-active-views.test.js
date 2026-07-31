@@ -395,18 +395,18 @@ for (const [type, { extraConfig, viewClass }] of Object.entries(SOLO_CASES)) {
 test("AP-05: 0 active views (deliberately empty config) has neither a .rtc-track carousel nor auto-slide timers", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-track"), null);
-  assert.equal(el._hasAutoSlide(), false);
-  assert.equal(el._resumeAutoTimer, null);
-  assert.equal(el._a11ySyncTimer, null);
+  assert.equal(el._carousel.hasAutoSlide(), false);
+  assert.equal(el._carousel.resumeTimerHandle, null);
+  assert.equal(el._carousel.accessibilityTimerHandle, null);
   env.cleanup(el);
 });
 
 test("AP-05: 1 active view has neither a .rtc-track carousel nor auto-slide timers", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [{ type: "scale", enabled: true }] }, soloViewHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-track"), null);
-  assert.equal(el._hasAutoSlide(), false);
-  assert.equal(el._resumeAutoTimer, null);
-  assert.equal(el._a11ySyncTimer, null);
+  assert.equal(el._carousel.hasAutoSlide(), false);
+  assert.equal(el._carousel.resumeTimerHandle, null);
+  assert.equal(el._carousel.accessibilityTimerHandle, null);
   env.cleanup(el);
 });
 

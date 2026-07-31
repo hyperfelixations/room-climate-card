@@ -9,10 +9,22 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
+
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let access;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
+  access = await import("../../src/domain/metrics/access.js");
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -42,7 +54,7 @@ test("omitted classification normalizes to auto + metric default profile", () =>
     profile: null,
     custom: null,
   });
-  assert.equal(card._resolveClassificationProfile("temperature").id, "indoor");
+  assert.equal(internals.canonicalProfile(card, "temperature").id, "indoor");
   env.cleanup(card);
 });
 
@@ -53,41 +65,41 @@ test("classification: outdoor is the shorthand for auto + outdoor", () => {
     profile: "outdoor",
     custom: null,
   });
-  assert.equal(card._resolveClassificationProfile("temperature").id, "outdoor");
+  assert.equal(internals.canonicalProfile(card, "temperature").id, "outdoor");
   env.cleanup(card);
 });
 
 test("outdoor profile owns tiers and bands but explicitly opts out of the retained 10-30 reference-scale anchor", () => {
   const card = createTemperatureCard("outdoor");
-  const celsius = card._getUnitProfile("temperature", "celsius");
-  const scale = card._scaleConfigFor("temperature", celsius);
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const scale = internals.scaleConfigFor(card, "temperature", celsius);
   assert.deepEqual(normalize(scale.comfort), { min: 14, max: 26 });
   assert.deepEqual(normalize(scale.optimal), { min: 18, max: 22 });
   assert.deepEqual(normalize(scale.scale), { min: 10, max: 30 });
   assert.equal(scale.step, 1);
   assert.equal(scale.anchorScale, false);
 
-  assert.equal(card._fallbackTone(25.99, "temperature", celsius).score, 7);
-  assert.equal(card._fallbackTone(25.99, "temperature", celsius).zone, "comfort");
-  assert.equal(card._fallbackTone(26, "temperature", celsius).score, 8);
-  assert.equal(card._fallbackTone(18, "temperature", celsius).score, 6);
-  assert.equal(card._fallbackTone(14, "temperature", celsius).score, 5);
-  assert.equal(card._fallbackTone(10, "temperature", celsius).score, 4);
+  assert.equal(internals.fallbackTone(card, 25.99, "temperature", celsius).score, 7);
+  assert.equal(internals.fallbackTone(card, 25.99, "temperature", celsius).zone, "comfort");
+  assert.equal(internals.fallbackTone(card, 26, "temperature", celsius).score, 8);
+  assert.equal(internals.fallbackTone(card, 18, "temperature", celsius).score, 6);
+  assert.equal(internals.fallbackTone(card, 14, "temperature", celsius).score, 5);
+  assert.equal(internals.fallbackTone(card, 10, "temperature", celsius).score, 4);
   env.cleanup(card);
 });
 
 test("outdoor dynamic scale uses only the live data range plus the shared headroom, while indoor remains base-anchored", () => {
   const outdoor = createTemperatureCard("outdoor");
   const indoor = createTemperatureCard("indoor");
-  const celsius = outdoor._getUnitProfile("temperature", "celsius");
+  const celsius = access.getUnitProfile("temperature", "celsius");
 
   assert.deepEqual(
-    normalize(outdoor._dynamicScale(2, 8, "temperature", celsius)),
+    normalize(internals.dynamicScale(outdoor, 2, 8, "temperature", celsius)),
     { min: 1, max: 9, step: 1 },
     "winter outdoor values must not drag the obsolete 10-30 reference scale into the rendered axis"
   );
   assert.deepEqual(
-    normalize(indoor._dynamicScale(2, 8, "temperature", celsius)),
+    normalize(internals.dynamicScale(indoor, 2, 8, "temperature", celsius)),
     { min: 1, max: 25, step: 1 },
     "the existing anchored expansion policy must remain byte-for-byte equivalent for indoor temperature"
   );
@@ -118,8 +130,8 @@ test("outdoor main and range scales share the same unanchored winter bounds and 
   assert.equal(data.optimalVisible, false);
   assert.equal(data.rangeScaleGeometry.comfortVisible, false);
   assert.equal(data.rangeScaleGeometry.optimalVisible, false);
-  assert.match(card._renderScaleView(data), /rtc-comfort-band[^>]* hidden/);
-  assert.match(card._renderRangeScaleView(data), /rtc-optimal-band[^>]* hidden/);
+  assert.match(internals.viewMarkup(card, "scale", data), /rtc-comfort-band[^>]* hidden/);
+  assert.match(internals.viewMarkup(card, "range_scale", data), /rtc-optimal-band[^>]* hidden/);
   env.cleanup(card);
 });
 
@@ -156,25 +168,25 @@ test("outdoor off-axis bands reappear through the partial-update path when live 
 
 test("outdoor temperature icons follow outdoor thresholds instead of indoor thresholds", () => {
   const card = createTemperatureCard("outdoor");
-  const celsius = card._getUnitProfile("temperature", "celsius");
-  assert.equal(card._fallbackTemperatureIcon(35, celsius), "mdi:fire-alert");
-  assert.equal(card._fallbackTemperatureIcon(30, celsius), "mdi:thermometer-high");
-  assert.equal(card._fallbackTemperatureIcon(14, celsius), "mdi:thermometer");
-  assert.equal(card._fallbackTemperatureIcon(5, celsius), "mdi:thermometer-low");
-  assert.equal(card._fallbackTemperatureIcon(4.99, celsius), "mdi:snowflake");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  assert.equal(internals.temperatureIcon(card, 35, celsius), "mdi:fire-alert");
+  assert.equal(internals.temperatureIcon(card, 30, celsius), "mdi:thermometer-high");
+  assert.equal(internals.temperatureIcon(card, 14, celsius), "mdi:thermometer");
+  assert.equal(internals.temperatureIcon(card, 5, celsius), "mdi:thermometer-low");
+  assert.equal(internals.temperatureIcon(card, 4.99, celsius), "mdi:snowflake");
   env.cleanup(card);
 });
 
 test("classification: fridge is a built-in temperature profile independent of indoor/outdoor", () => {
   const card = createTemperatureCard("fridge");
-  assert.equal(card._resolveClassificationProfile("temperature").id, "fridge");
+  assert.equal(internals.canonicalProfile(card, "temperature").id, "fridge");
   env.cleanup(card);
 });
 
 test("fridge profile targets an appliance-appropriate band, not room temperature", () => {
   const card = createTemperatureCard("fridge");
-  const celsius = card._getUnitProfile("temperature", "celsius");
-  const scale = card._scaleConfigFor("temperature", celsius);
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const scale = internals.scaleConfigFor(card, "temperature", celsius);
   assert.deepEqual(normalize(scale.comfort), { min: 1, max: 6 });
   assert.deepEqual(normalize(scale.optimal), { min: 3, max: 5 });
   assert.deepEqual(normalize(scale.scale), { min: 0, max: 8 });
@@ -185,8 +197,8 @@ test("fridge profile targets an appliance-appropriate band, not room temperature
 
 test("fridge classification tiers follow food-safety-appropriate boundaries", () => {
   const card = createTemperatureCard("fridge");
-  const celsius = card._getUnitProfile("temperature", "celsius");
-  const at = (value) => card._fallbackTone(value, "temperature", celsius);
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const at = (value) => internals.fallbackTone(card, value, "temperature", celsius);
   assert.equal(at(12).score, 11);
   assert.equal(at(12).zone, "outside");
   assert.equal(at(6).score, 8);
@@ -208,28 +220,28 @@ test("fridge classification tiers follow food-safety-appropriate boundaries", ()
 
 test("fridge temperature icons follow fridge-specific thresholds, not room thresholds", () => {
   const card = createTemperatureCard("fridge");
-  const celsius = card._getUnitProfile("temperature", "celsius");
-  assert.equal(card._fallbackTemperatureIcon(12, celsius), "mdi:fire-alert");
-  assert.equal(card._fallbackTemperatureIcon(10, celsius), "mdi:thermometer-high");
-  assert.equal(card._fallbackTemperatureIcon(4, celsius), "mdi:thermometer");
-  assert.equal(card._fallbackTemperatureIcon(-2, celsius), "mdi:thermometer-low");
-  assert.equal(card._fallbackTemperatureIcon(-2.01, celsius), "mdi:snowflake");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  assert.equal(internals.temperatureIcon(card, 12, celsius), "mdi:fire-alert");
+  assert.equal(internals.temperatureIcon(card, 10, celsius), "mdi:thermometer-high");
+  assert.equal(internals.temperatureIcon(card, 4, celsius), "mdi:thermometer");
+  assert.equal(internals.temperatureIcon(card, -2, celsius), "mdi:thermometer-low");
+  assert.equal(internals.temperatureIcon(card, -2.01, celsius), "mdi:snowflake");
   env.cleanup(card);
 });
 
 test("fridge profile is projected atomically into Fahrenheit without collapsing tiers", () => {
   const card = createTemperatureCard("fridge");
-  const fahrenheit = card._getUnitProfile("temperature", "fahrenheit");
-  const scale = card._scaleConfigFor("temperature", fahrenheit);
+  const fahrenheit = access.getUnitProfile("temperature", "fahrenheit");
+  const scale = internals.scaleConfigFor(card, "temperature", fahrenheit);
   assert.deepEqual(normalize(scale.comfort), { min: 34, max: 43 });
   assert.deepEqual(normalize(scale.optimal), { min: 37, max: 41 });
   assert.deepEqual(normalize(scale.scale), { min: 32, max: 46 });
 
-  const table = card._classificationTableFor("temperature", fahrenheit);
+  const table = internals.displayProfile(card, "temperature", fahrenheit);
   const warmTier = table.tiers.find((tier) => tier.score === 8);
   assert.equal(warmTier.min, 43, "6 °C must become the rounded 43 °F tier boundary");
-  assert.equal(card._fallbackTemperatureIcon(54, fahrenheit), "mdi:fire-alert");
-  assert.equal(card._fallbackTemperatureIcon(28, fahrenheit), "mdi:thermometer-low");
+  assert.equal(internals.temperatureIcon(card, 54, fahrenheit), "mdi:fire-alert");
+  assert.equal(internals.temperatureIcon(card, 28, fahrenheit), "mdi:thermometer-low");
   env.cleanup(card);
 });
 
@@ -351,17 +363,17 @@ test("custom non-temperature icons: validation reuses the shared tiers list cont
 
 test("outdoor profile is projected atomically into Fahrenheit", () => {
   const card = createTemperatureCard("outdoor");
-  const fahrenheit = card._getUnitProfile("temperature", "fahrenheit");
-  const scale = card._scaleConfigFor("temperature", fahrenheit);
+  const fahrenheit = access.getUnitProfile("temperature", "fahrenheit");
+  const scale = internals.scaleConfigFor(card, "temperature", fahrenheit);
   assert.deepEqual(normalize(scale.comfort), { min: 57, max: 79 });
   assert.deepEqual(normalize(scale.optimal), { min: 64, max: 72 });
   assert.deepEqual(normalize(scale.scale), { min: 50, max: 86 });
 
-  const table = card._classificationTableFor("temperature", fahrenheit);
+  const table = internals.displayProfile(card, "temperature", fahrenheit);
   const warmTier = table.tiers.find((tier) => tier.score === 8);
   assert.equal(warmTier.min, 79, "26 °C must become the rounded 79 °F tier boundary");
-  assert.equal(card._fallbackTemperatureIcon(95, fahrenheit), "mdi:fire-alert");
-  assert.equal(card._fallbackTemperatureIcon(86, fahrenheit), "mdi:thermometer-high");
+  assert.equal(internals.temperatureIcon(card, 95, fahrenheit), "mdi:fire-alert");
+  assert.equal(internals.temperatureIcon(card, 86, fahrenheit), "mdi:thermometer-high");
   env.cleanup(card);
 });
 

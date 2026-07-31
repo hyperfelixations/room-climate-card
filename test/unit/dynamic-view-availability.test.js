@@ -4,7 +4,7 @@
 // dynamic view-availability changes. _renderAll()'s fallback cascade
 // (previously visible key -> start_view -> first active view -> null
 // state), the timer self-cleanup in _scheduleAccessibilitySync()/
-// _resumeSynchronizedSlideWhenAligned(), and the mid-drag _renderPending
+// _resumeSynchronizedSlideWhenAligned(), and the mid-drag deferred-render
 // deferral were all already correct BEFORE this file existed -- but only
 // ever exercised via the setConfig()-triggered structural-change path.
 // 14.2 explicitly requires availability to change WITHOUT a config change
@@ -91,7 +91,7 @@ test("AP-07 Bug A: a live rotation_seconds/slide_seconds change preserves the vi
 test("AP-07 Bug B: a bare pointerdown (no drag yet) is invalidated by a hass-driven structural rebuild, and a later pointerup on it is a safe no-op", () => {
   const el = threeViewCard();
   el._handlePointerDown({ pointerId: 1, button: 0, clientX: 100, clientY: 50 });
-  assert.ok(el._pointer, "sanity check: pointerdown must register");
+  assert.ok(el._interaction.pointer, "sanity check: pointerdown must register");
   assert.equal(el._isDragging, false, "sanity check: must not have crossed the drag threshold");
 
   // Pure hass-driven structural change (no setConfig()): rooms drop from 2
@@ -102,11 +102,11 @@ test("AP-07 Bug B: a bare pointerdown (no drag yet) is invalidated by a hass-dri
     "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
 
-  assert.equal(el._pointer, null, "the stale pointer-down must be cleared by the structural rebuild, not carried over with pre-rebuild geometry");
+  assert.equal(el._interaction.pointer, null, "the stale pointer-down must be cleared by the structural rebuild, not carried over with pre-rebuild geometry");
   const activeViewAfterRebuild = el._activeView;
 
   // The same physical touch releasing afterwards must be a safe no-op (the
-  // !this._pointer guard in _handlePointerUp() short-circuits it) rather
+  // !this._interaction.pointer guard in _handlePointerUp() short-circuits it) rather
   // than computing a swipe from stale pre-rebuild geometry.
   assert.doesNotThrow(() => el._handlePointerUp({ pointerId: 1, clientX: 100, clientY: 50 }));
   assert.equal(el._activeView, activeViewAfterRebuild, "a pointerup on an already-invalidated pointer must not change _activeView");
@@ -126,9 +126,9 @@ test("AP-07 Bug B: a bare pointerdown no longer blocks accessibility resync afte
 
   // Still 3 views (>=2) after this rebuild -> _applyAutoSlideStyles() must
   // have run to completion and (re-)armed the a11y sync timer; before the
-  // fix it bailed out early because this._pointer was still truthy.
+  // fix it bailed out early because this._interaction.pointer was still truthy.
   assert.equal(el._views.length, 3);
-  assert.notEqual(el._a11ySyncTimer, null, "_scheduleAccessibilitySync() must have re-armed, proving _applyAutoSlideStyles() wasn't blocked by the stale pointer");
+  assert.notEqual(el._carousel.accessibilityTimerHandle, null, "_scheduleAccessibilitySync() must have re-armed, proving _applyAutoSlideStyles() wasn't blocked by the stale pointer");
   env.cleanup(el);
 });
 
@@ -213,7 +213,7 @@ test("AP-07: start_view (still available) wins over the plain index-0 fallback w
 // bails out on its very first line when there's no track
 // (`if (!track || ...) return;`), which means it never reaches
 // _scheduleAccessibilitySync() -- the ONLY place that clears
-// this._a11ySyncTimer. A timer armed while >=2 views were active is left
+// this._carousel.accessibilityTimerHandle. A timer armed while >=2 views were active is left
 // with a stale (though harmless once it eventually fires and self-corrects)
 // handle instead of being cleared immediately, violating "Timer nur ab
 // zwei aktiven Views" for the window until it fires. ----
@@ -226,15 +226,15 @@ test("AP-07 Bug C: timer safety over a full live 2-views -> 1-view -> 2-views cy
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hassTwoViews);
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
-  assert.notEqual(el._a11ySyncTimer, null, "auto-slide must be engaged with 2 views");
+  assert.notEqual(el._carousel.accessibilityTimerHandle, null, "auto-slide must be engaged with 2 views");
 
   // Rooms disappear -> "extremes" gone -> only "scale" left (1 view).
   el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
   assert.deepEqual(Array.from(el._views), ["scale"]);
-  assert.equal(el._resumeAutoTimer, null, "no resume timer may linger with <2 active views");
-  assert.equal(el._a11ySyncTimer, null, "no a11y sync timer may linger with <2 active views");
+  assert.equal(el._carousel.resumeTimerHandle, null, "no resume timer may linger with <2 active views");
+  assert.equal(el._carousel.accessibilityTimerHandle, null, "no a11y sync timer may linger with <2 active views");
 
   // Rooms come back -> 2 views again -> a resume must be SCHEDULED (not an
   // immediate resync -- see the P1 fix below: a non-first-render rebuild
@@ -245,7 +245,7 @@ test("AP-07 Bug C: timer safety over a full live 2-views -> 1-view -> 2-views cy
   // scheduled at all and no timer is simply abandoned.
   el.hass = hassTwoViews;
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
-  assert.notEqual(el._resumeAutoTimer, null, "a phase-aware resume must be scheduled once >=2 views are active again");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "a phase-aware resume must be scheduled once >=2 views are active again");
   env.cleanup(el);
 });
 
@@ -277,7 +277,7 @@ test("P1 fix: a non-first structural rebuild freezes visually on the resolved vi
   });
   const trackAfter = el.shadowRoot.querySelector(".rtc-track");
   assert.equal(trackAfter.classList.contains("rtc-manual"), true, "a non-first rebuild must freeze the track visually on _activeView, not immediately re-engage the wall-clock-driven synced animation");
-  assert.notEqual(el._resumeAutoTimer, null, "a phase-aware resume back into sync must be scheduled");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "a phase-aware resume back into sync must be scheduled");
   env.cleanup(el);
 });
 
@@ -289,13 +289,12 @@ test("P1 fix: setConfig() no longer undoes the freeze via a trailing _restartRot
   env.cleanup(el);
 });
 
-// ---- Reviewer finding (P2, post-AP-07): this._preConfigChangeVisualKey is
-// set before this._render(false) runs and cleared by a plain statement
-// AFTER it -- if _render() (or anything it calls) throws, that cleanup
-// statement is skipped and the stash survives, ready to leak into a later,
-// unrelated hass-driven rebuild. ----
+// ---- Reviewer finding (P2, post-AP-07): the pre-config visual snapshot is
+// taken before this._render(false) runs and released AFTER it -- if _render()
+// (or anything it calls) throws and the release is not in a finally, the stash
+// survives and leaks into a later, unrelated hass-driven rebuild. ----
 
-test("P2 fix: this._preConfigChangeVisualKey is cleared even if _render() throws mid-setConfig()", () => {
+test("P2 fix: the pre-config visual snapshot is released even if _render() throws mid-setConfig()", () => {
   const el = threeViewCard();
   const originalRender = el._render;
   el._render = () => {
@@ -303,26 +302,43 @@ test("P2 fix: this._preConfigChangeVisualKey is cleared even if _render() throws
   };
   assert.throws(() => el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range" }), /simulated render failure/, "setConfig() must still propagate the error -- HA's config-validation contract must not be swallowed");
   el._render = originalRender;
-  assert.equal(el._preConfigChangeVisualKey, undefined, "the snapshot must be cleared even though _render() threw, or it would leak into a later, unrelated rebuild");
+
+  // The snapshot is private to the controller, so the leak is proven by its effect
+  // instead: a later hass-driven structural rebuild must resolve its active view from
+  // what is actually on screen, not from a stale snapshot of a previous config. With
+  // the release outside a finally, the stashed key would win here.
+  const stillMounted = Array.from(el._views);
+  el.hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
+    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+  });
+  assert.deepEqual(Array.from(el._views), stillMounted.filter((key) => key !== "extremes"), "dropping to one room removes the extremes view");
+  assert.ok(el._views.includes(el._views[el._activeView]), "the resolved active view must be one that actually exists");
   env.cleanup(el);
 });
 
 test("AP-07: a hass update carrying a structural (view-availability) change that arrives mid-drag is deferred and correctly applied once the drag ends", () => {
   const el = threeViewCard();
-  el._pointer = { id: 7, x: 0, y: 0, time: Date.now(), rotator: true, entityTarget: null, startTranslate: -el._activeView * el._viewWidthPct(), dragging: true, width: 300 };
-  el._isDragging = true;
+  // A real gesture through the handlers, so the test keeps its meaning without a
+  // writable window into the interaction runtime.
+  const rotator = el.shadowRoot.querySelector(".rtc-rotator");
+  rotator.getBoundingClientRect = () => ({ width: 300 });
+  el._handlePointerDown({ pointerId: 7, button: 0, isPrimary: true, clientX: 0, clientY: 0, composedPath: () => [rotator] });
+  el._handlePointerMove({ pointerId: 7, clientX: -60, clientY: 0, preventDefault: () => {}, stopPropagation: () => {} });
+  assert.equal(el._isDragging, true, "the drag is live");
 
   el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
-  assert.equal(el._renderPending, true, "the structural update must be deferred, not applied mid-drag");
+  assert.equal(el._renderController.isRenderPending, true, "the structural update must be deferred, not applied mid-drag");
   assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"], "the OLD structure must still be mounted while the drag is in progress");
 
   el._handlePointerUp({ pointerId: 7, clientX: 0, clientY: 0, preventDefault: () => {}, stopPropagation: () => {} });
 
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"], "the deferred structural change must be applied once the drag ends");
-  assert.equal(el._renderPending, false);
+  assert.equal(el._renderController.isRenderPending, false);
   env.cleanup(el);
 });

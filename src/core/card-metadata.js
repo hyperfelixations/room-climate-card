@@ -12,4 +12,4 @@
 
 export const CARD_TYPE = "room-climate-card";
 export const CARD_NAME = "Room Climate Card";
-export const CARD_VERSION = "2.36.0";
+export const CARD_VERSION = "2.36.1";

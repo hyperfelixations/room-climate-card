@@ -23,6 +23,16 @@ const { JSDOM } = require("jsdom");
 const { createTestEnvironment, CARD_SOURCE_PATH } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
+
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let access;
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
@@ -48,7 +58,9 @@ test("all TRANSLATIONS language blocks stay in sync with en (the file's own load
 });
 
 let env;
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
+  access = await import("../../src/domain/metrics/access.js");
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -213,10 +225,10 @@ test("I18N-02: JS-derived classification is localized, while HA-provided value_l
   }, "de");
   for (const [lang, expected] of Object.entries(expectedDerivedLevel)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hass);
-    const profile = el._getUnitProfile("temperature", "celsius");
-    assert.equal(el._fallbackTone(26, "temperature", profile).label, expected, `lang=${lang}: derived fallback`);
+    const profile = access.getUnitProfile("temperature", "celsius");
+    assert.equal(internals.fallbackTone(el, 26, "temperature", profile).label, expected, `lang=${lang}: derived fallback`);
     assert.equal(
-      el._avgTone(26, "sensor.avg", "temperature", profile).label,
+      internals.averageTone(el, 26, "sensor.avg", "temperature", profile).label,
       "SERVER-PROVIDED LEVEL",
       `lang=${lang}: HA attribute must remain verbatim`
     );

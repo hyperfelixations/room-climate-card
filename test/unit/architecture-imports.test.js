@@ -23,7 +23,8 @@
 //      src/styles/                    } the stylesheet, no view knowledge
 //   5  src/views/                     } one module per view; may use layer 4
 //      src/render/composition/        } the card shell; gets the registry injected
-//   6  src/controllers/runtime/
+//   6  src/controllers/runtime/       } timers, gestures, the platform
+//      src/controllers/render/        } what to render and how much of it
 //   7  src/element/                   no domain computation
 //   8  src/index.js                   composition root
 //
@@ -41,11 +42,21 @@
 //     registry are separate groups of the same layer. The composition root hands
 //     the registry to the shell, so a shell that hardcoded a view key would have
 //     nowhere to get it from.
+//
+// Layer 6 is split the same way and for the same reason: the render controller
+// decides WHETHER and HOW MUCH to render, the runtime controllers decide WHEN
+// things move. Neither may import the other, so a render decision can never come
+// to depend on a timer, and a timer can never trigger a render behind the
+// element's back. The element wires them together and is the only thing that
+// knows both exist.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+
+test.before(async () => {
+});
 
 const SRC_DIR = path.join(__dirname, "..", "..", "src");
 const ENTRY = "index.js";
@@ -69,6 +80,7 @@ const LAYERS = [
   { layer: 5, name: "views", group: "views", prefix: "views/" },
   { layer: 5, name: "render/composition", group: "render/composition", prefix: "render/composition/" },
   { layer: 6, name: "controllers/runtime", group: "controllers/runtime", prefix: "controllers/runtime/" },
+  { layer: 6, name: "controllers/render", group: "controllers/render", prefix: "controllers/render/" },
   { layer: 7, name: "element", group: "element", prefix: "element/" },
 ];
 const COMPOSITION_ROOT = { layer: 8, name: "composition root", group: "(root)" };
@@ -670,6 +682,77 @@ test("the source scanner preserves line numbers", () => {
   // violation can still be located.
   const source = "const a = 1;\n// window\nconst b = `x\ny`;\nconst c = 3;\n";
   assert.equal(stripCommentsAndStringText(source).split("\n").length, source.split("\n").length);
+});
+
+// Home Assistant's own card surface. Every one of these is called by the dashboard, not
+// by anything in src/, so "no caller here" says nothing about them.
+const HOST_API = new Set([
+  "constructor",
+  "connectedCallback",
+  "disconnectedCallback",
+  "setConfig",
+  "hass",
+  "getCardSize",
+  "getGridOptions",
+  "getStubConfig",
+]);
+
+test("the element carries no member that production never calls", () => {
+  // The element accumulated seventy thin methods that existed only so element-level
+  // tests could reach a pure function through a card — one line each, forwarding to a
+  // module that was perfectly reachable on its own. They were indistinguishable from
+  // real behaviour when reading the class, they made the element look like it still
+  // owned the whole data path, and every one of them was a second name for something
+  // that already had one.
+  //
+  // A test-only member is a failing test now rather than a habit. What a test genuinely
+  // needs from a LIVE card lives in test/helpers/card-internals.js, where it is
+  // explicitly test scaffolding and names the module it exercises.
+  const code = stripCommentsAndStringText(readSource(ELEMENT));
+
+  const declared = [
+    ...new Set([...code.matchAll(/^ {4}(?:static\s+)?(?:get\s+|set\s+|async\s+)?([_a-zA-Z][\w$]*)\s*\(/gm)].map((m) => m[1])),
+  ];
+
+  // A bound handler counts as called: `this._boundClick = this._handleClick.bind(this)`
+  // is a real reference, and this sees it as one.
+  const uncalled = declared
+    .filter((name) => !HOST_API.has(name))
+    .filter((name) => !new RegExp(`this\\s*\\.\\s*${name}(?![\\w$])`).test(code));
+
+  assert.deepEqual(
+    uncalled,
+    [],
+    `these element members have no caller in production — delete them, or move what a test needs into test/helpers/:\n  ${uncalled.join("\n  ")}`
+  );
+});
+
+test("the uncalled-member guard actually recognizes an orphan", () => {
+  // Guards the guard: one regex is the whole check, so a typo would silently disable it.
+  const sample = ["class X {", "  _used() { return 1; }", "  _orphan() { return 2; }", "  run() { return this._used(); }", "}"].join("\n");
+  const declared = [...sample.matchAll(/^ {2}(?:static\s+)?(?:get\s+|set\s+|async\s+)?([_a-zA-Z][\w$]*)\s*\(/gm)].map((m) => m[1]);
+  const uncalled = declared.filter((name) => name !== "run" && !new RegExp(`this\\s*\\.\\s*${name}(?![\\w$])`).test(sample));
+  assert.deepEqual(uncalled, ["_orphan"]);
+});
+
+test("the element imports nothing it does not use", () => {
+  // The build does not tree-shake (see rollup.config.mjs: treeshake:false, chosen after
+  // it silently dropped two DEFAULT_CONFIG keys), so an import that outlived its last
+  // caller is not free. It is also the most convincing possible evidence that a module
+  // still does something it stopped doing several rounds ago.
+  const raw = readSource(ELEMENT);
+  const statements = [...raw.matchAll(/^import\s*\{([^}]*)\}\s*from\s*"([^"]+)";/gms)];
+  const last = [...raw.matchAll(/^import\s(?:\{[^}]*\}|[\w$]+)\s*from\s*"[^"]+";/gms)].pop();
+  const body = stripCommentsAndStringText(raw.slice(last.index + last[0].length));
+
+  const unused = [];
+  for (const statement of statements) {
+    for (const spec of statement[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+      const local = spec.includes(" as ") ? spec.split(" as ").pop().trim() : spec;
+      if (!new RegExp(`(?<![\\w$.])${local}(?![\\w$])`).test(body)) unused.push(`${local} (from ${statement[2]})`);
+    }
+  }
+  assert.deepEqual(unused, [], `unused imports in ${ELEMENT}:\n  ${unused.join("\n  ")}`);
 });
 
 test("nothing assigns to a read-only window onto controller-owned state", () => {

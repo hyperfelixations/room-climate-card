@@ -3,7 +3,7 @@
 // AP-C1 (audit 23.1): auto_slide/swipe carousel options. Independent of
 // each other -- auto_slide only gates the automatic rotation timer
 // (_hasAutoSlide()), swipe only gates the manual horizontal drag gesture
-// (_handlePointerDown()'s this._pointer.rotator flag). Both default true
+// (_handlePointerDown()'s this._interaction.pointer.rotator flag). Both default true
 // (today's unchanged behavior). Reduced Motion and 0/1-view behavior must
 // stay correct regardless of these options.
 
@@ -85,17 +85,17 @@ test("integration: any non-false value is treated as true (same tolerant style a
 test("_hasAutoSlide(): auto_slide:false disables the timer even with >=2 views and no reduced motion", () => {
   const el = threeViewCard({ auto_slide: false });
   assert.equal(el._views.length, 3);
-  assert.equal(el._hasAutoSlide(), false);
+  assert.equal(el._carousel.hasAutoSlide(), false);
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.ok(track, "sanity check: carousel must still render (auto_slide only affects rotation, not the carousel itself)");
   assert.equal(track.classList.contains("rtc-manual"), true, "the track must be statically parked, not animating");
-  assert.equal(el._resumeAutoTimer, null);
+  assert.equal(el._carousel.resumeTimerHandle, null);
   env.cleanup(el);
 });
 
 test("_hasAutoSlide(): true by default with >=2 views and no reduced motion (regression)", () => {
   const el = threeViewCard();
-  assert.equal(el._hasAutoSlide(), true);
+  assert.equal(el._carousel.hasAutoSlide(), true);
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.equal(track.classList.contains("rtc-manual"), false, "must be auto-engaged by default");
   env.cleanup(el);
@@ -104,7 +104,7 @@ test("_hasAutoSlide(): true by default with >=2 views and no reduced motion (reg
 test("_hasAutoSlide(): auto_slide:true does not override Reduced Motion", () => {
   env.setReducedMotion(true);
   const el = threeViewCard({ auto_slide: true });
-  assert.equal(el._hasAutoSlide(), false);
+  assert.equal(el._carousel.hasAutoSlide(), false);
   env.cleanup(el);
   env.setReducedMotion(false);
 });
@@ -113,30 +113,30 @@ test("_hasAutoSlide(): auto_slide:false on 0/1-view configs changes nothing visi
   const soloHass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const elOneView = env.createCard({ entity: "sensor.avg", auto_slide: false }, soloHass);
   assert.equal(elOneView._views.length, 1);
-  assert.equal(elOneView._hasAutoSlide(), false);
+  assert.equal(elOneView._carousel.hasAutoSlide(), false);
   assert.equal(elOneView.shadowRoot.querySelector(".rtc-track"), null, "solo view never has a carousel track at all");
   env.cleanup(elOneView);
 
   const elNoViews = env.createCard({ entity: "sensor.avg", auto_slide: false, views: [] }, soloHass);
   assert.equal(elNoViews._views.length, 0);
-  assert.equal(elNoViews._hasAutoSlide(), false);
+  assert.equal(elNoViews._carousel.hasAutoSlide(), false);
   env.cleanup(elNoViews);
 });
 
-// ==== swipe: false gates _handlePointerDown()'s this._pointer.rotator ====
+// ==== swipe: false gates _handlePointerDown()'s this._interaction.pointer.rotator ====
 
 test("swipe:false: a pointerdown inside the rotator is NOT tracked as a rotator gesture", () => {
   const el = threeViewCard({ swipe: false });
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
-  assert.ok(el._pointer, "pointerdown itself must still register (needed for tap detection)");
-  assert.equal(el._pointer.rotator, false, "swipe:false must suppress rotator tracking even though the pointerdown targeted .rtc-rotator");
+  assert.ok(el._interaction.pointer, "pointerdown itself must still register (needed for tap detection)");
+  assert.equal(el._interaction.pointer.rotator, false, "swipe:false must suppress rotator tracking even though the pointerdown targeted .rtc-rotator");
   env.cleanup(el);
 });
 
 test("swipe:true (default): a pointerdown inside the rotator IS tracked as a rotator gesture (regression)", () => {
   const el = threeViewCard();
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
-  assert.equal(el._pointer.rotator, true);
+  assert.equal(el._interaction.pointer.rotator, true);
   env.cleanup(el);
 });
 
@@ -145,7 +145,7 @@ test("swipe:false: a confirmed drag inside the rotator does not move the track o
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
   let prevented = false;
   el._handlePointerMove({ pointerId: 1, clientX: 140, clientY: 50, preventDefault: () => { prevented = true; } });
-  assert.equal(el._isDragging, false, "_handlePointerMove() early-returns once this._pointer.rotator is false");
+  assert.equal(el._isDragging, false, "_handlePointerMove() early-returns once this._interaction.pointer.rotator is false");
   assert.equal(prevented, false);
   env.cleanup(el);
 });
@@ -165,22 +165,22 @@ test("swipe:false: tap on a room chip still fires its action (entityTarget-based
 
 test("auto_slide:false and swipe:false together: rotation stays off AND manual dragging stays off", () => {
   const el = threeViewCard({ auto_slide: false, swipe: false });
-  assert.equal(el._hasAutoSlide(), false);
+  assert.equal(el._carousel.hasAutoSlide(), false);
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
-  assert.equal(el._pointer.rotator, false);
+  assert.equal(el._interaction.pointer.rotator, false);
   env.cleanup(el);
 });
 
 test("auto_slide:false alone leaves swipe fully functional", () => {
   const el = threeViewCard({ auto_slide: false });
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
-  assert.equal(el._pointer.rotator, true, "swipe must remain unaffected by auto_slide:false");
+  assert.equal(el._interaction.pointer.rotator, true, "swipe must remain unaffected by auto_slide:false");
   env.cleanup(el);
 });
 
 test("swipe:false alone leaves auto-rotation fully functional", () => {
   const el = threeViewCard({ swipe: false });
-  assert.equal(el._hasAutoSlide(), true, "auto_slide must remain unaffected by swipe:false");
+  assert.equal(el._carousel.hasAutoSlide(), true, "auto_slide must remain unaffected by swipe:false");
   env.cleanup(el);
 });
 
@@ -196,9 +196,9 @@ test("setConfig(): live auto_slide true -> false stops the running animation", (
 
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], auto_slide: false });
   track = el.shadowRoot.querySelector(".rtc-track");
-  assert.equal(el._hasAutoSlide(), false);
+  assert.equal(el._carousel.hasAutoSlide(), false);
   assert.equal(track.classList.contains("rtc-manual"), true, "the track must now be statically parked");
-  assert.equal(el._resumeAutoTimer, null);
+  assert.equal(el._carousel.resumeTimerHandle, null);
   env.cleanup(el);
 });
 
@@ -206,16 +206,16 @@ test("setConfig(): live auto_slide false -> true schedules the phase-aware resum
   const el = threeViewCard({ auto_slide: false });
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.equal(track.classList.contains("rtc-manual"), true, "sanity check: starts statically parked");
-  assert.equal(el._resumeAutoTimer, null, "sanity check: no resume scheduled while auto_slide is off");
+  assert.equal(el._carousel.resumeTimerHandle, null, "sanity check: no resume scheduled while auto_slide is off");
 
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], auto_slide: true });
-  assert.equal(el._hasAutoSlide(), true);
+  assert.equal(el._carousel.hasAutoSlide(), true);
   // A structural rebuild that isn't the very first render freezes visually
   // on the current view first, then schedules a phase-aware resume (AP-07,
   // "keine Sprünge") -- it does not immediately flip the track back to
   // synced animation. The resume timer being armed is what proves
   // auto_slide:true actually took effect here, not an immediate class
   // change on the track.
-  assert.notEqual(el._resumeAutoTimer, null, "a resume must now be scheduled");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "a resume must now be scheduled");
   env.cleanup(el);
 });

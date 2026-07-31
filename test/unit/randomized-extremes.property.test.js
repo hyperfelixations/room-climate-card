@@ -154,7 +154,7 @@ function checkInvariants(el, data, metricType, roomValues) {
     push(new Set(views).size === views.length, `views has duplicates: ${views.join(",")}`);
     push(views.filter((v) => v === "scale").length === 1, `"scale" must appear exactly once in views: ${views.join(",")}`);
 
-    const holdSeq = el._holdSequence();
+    const holdSeq = el._carousel.holdSequence();
     const n = views.length;
     if (n >= 2) {
       push(holdSeq.length === 2 * n - 2, `hold sequence length=${holdSeq.length} must be 2*${n}-2=${2 * n - 2}`);

@@ -21,10 +21,18 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let carouselTiming, easingMath;
+
 let env;
 let el;
 
-test.before(() => {
+test.before(async () => {
+  carouselTiming = await import("../../src/controllers/runtime/carousel-timing.js");
+  easingMath = await import("../../src/core/easing.js");
   env = createTestEnvironment();
   el = env.document.createElement("room-climate-card"); // bare element, no setConfig needed for pure-function calls
 });
@@ -36,13 +44,13 @@ test.after(() => {
 
 test("_timeFractionForEasedProgress: SLIDE_EASING (cubic-bezier(.45,0,.16,1)) inverts to ~0.35375 at Y=0.5", () => {
   const easing = { x1: 0.45, y1: 0, x2: 0.16, y2: 1 };
-  const fraction = el._timeFractionForEasedProgress(easing, 0.5);
+  const fraction = easingMath.timeFractionForEasedProgress(easing, 0.5);
   assert.ok(Math.abs(fraction - 0.35375) < 1e-9, `expected ~0.35375, got ${fraction}`);
 });
 
 test("_timeFractionForEasedProgress: a point-symmetric easing curve inverts to exactly 0.5 at Y=0.5 (proves the inversion is general, not hardcoded to one known number)", () => {
   const symmetricEasing = { x1: 0.5, y1: 0, x2: 0.5, y2: 1 };
-  const fraction = el._timeFractionForEasedProgress(symmetricEasing, 0.5);
+  const fraction = easingMath.timeFractionForEasedProgress(symmetricEasing, 0.5);
   assert.ok(Math.abs(fraction - 0.5) < 1e-9, `expected exactly 0.5 for a symmetric curve, got ${fraction}`);
 });
 
@@ -80,37 +88,37 @@ test("_accessibleViewIndexAt: samples across a full slide transition match the i
     const phaseMs = timing2.holdMs + t * timing2.slideMs;
     const easedY = easedProgressForTimeFraction(SLIDE_EASING, t);
     const expectedIndex = easedY < 0.5 ? timing2.positions[0] : timing2.positions[1];
-    const actualIndex = el._accessibleViewIndexAt(phaseMs, timing2);
+    const actualIndex = carouselTiming.accessibleViewIndexAt(phaseMs, timing2);
     assert.equal(actualIndex, expectedIndex, `at ${pct}% (phaseMs=${phaseMs}, eased progress=${easedY.toFixed(4)}): expected position ${expectedIndex}`);
   }
 });
 
 test("_accessibleViewIndexAt: stays at positions[0] throughout its hold and the spatially-outgoing part of its transition", () => {
-  assert.equal(el._accessibleViewIndexAt(0, timing2), 0);
-  assert.equal(el._accessibleViewIndexAt(999, timing2), 0);
-  assert.equal(el._accessibleViewIndexAt(1000, timing2), 0, "hold just ended, transition just started");
-  assert.equal(el._accessibleViewIndexAt(1282, timing2), 0, "one ms before the spatial-midpoint flip point");
+  assert.equal(carouselTiming.accessibleViewIndexAt(0, timing2), 0);
+  assert.equal(carouselTiming.accessibleViewIndexAt(999, timing2), 0);
+  assert.equal(carouselTiming.accessibleViewIndexAt(1000, timing2), 0, "hold just ended, transition just started");
+  assert.equal(carouselTiming.accessibleViewIndexAt(1282, timing2), 0, "one ms before the spatial-midpoint flip point");
 });
 
 test("_accessibleViewIndexAt: flips to positions[1] exactly at the spatial-midpoint flip point (flipOffset)", () => {
-  assert.equal(el._accessibleViewIndexAt(1283, timing2), 1);
-  assert.equal(el._accessibleViewIndexAt(1799, timing2), 1, "just before the next hold segment starts");
-  assert.equal(el._accessibleViewIndexAt(1800, timing2), 1, "positions[1]'s own hold segment start");
-  assert.equal(el._accessibleViewIndexAt(3082, timing2), 1, "just before positions[1]'s own flip point");
+  assert.equal(carouselTiming.accessibleViewIndexAt(1283, timing2), 1);
+  assert.equal(carouselTiming.accessibleViewIndexAt(1799, timing2), 1, "just before the next hold segment starts");
+  assert.equal(carouselTiming.accessibleViewIndexAt(1800, timing2), 1, "positions[1]'s own hold segment start");
+  assert.equal(carouselTiming.accessibleViewIndexAt(3082, timing2), 1, "just before positions[1]'s own flip point");
 });
 
 test("_accessibleViewIndexAt: wraps back to positions[0] at the cycle's closing flip point", () => {
-  assert.equal(el._accessibleViewIndexAt(3083, timing2), 0, "positions[1]'s flip point (segIndex*segMs + flipOffset)");
-  assert.equal(el._accessibleViewIndexAt(3599, timing2), 0, "one ms before the cycle wraps to 0");
+  assert.equal(carouselTiming.accessibleViewIndexAt(3083, timing2), 0, "positions[1]'s flip point (segIndex*segMs + flipOffset)");
+  assert.equal(carouselTiming.accessibleViewIndexAt(3599, timing2), 0, "one ms before the cycle wraps to 0");
 });
 
 test("_msUntilNextAccessibilityFlip: complements _accessibleViewIndexAt() -- waiting exactly that long always lands on the next flip", () => {
   for (const phaseMs of [0, 500, 999, 1000, 1283, 1500, 1800, 3599]) {
-    const currentIndex = el._accessibleViewIndexAt(phaseMs, timing2);
-    const waitMs = el._msUntilNextAccessibilityFlip(phaseMs, timing2);
+    const currentIndex = carouselTiming.accessibleViewIndexAt(phaseMs, timing2);
+    const waitMs = carouselTiming.msUntilNextAccessibilityFlip(phaseMs, timing2);
     assert.ok(waitMs > 0, `waitMs must be positive at phaseMs=${phaseMs}`);
     const nextPhase = (phaseMs + waitMs) % timing2.cycleMs;
-    const nextIndex = el._accessibleViewIndexAt(nextPhase, timing2);
+    const nextIndex = carouselTiming.accessibleViewIndexAt(nextPhase, timing2);
     assert.notEqual(nextIndex, currentIndex, `phaseMs=${phaseMs} + waitMs=${waitMs} must land on a different view`);
   }
 });
@@ -123,28 +131,28 @@ test("_msUntilNextAccessibilityFlip: complements _accessibleViewIndexAt() -- wai
 const timing3 = { positions: [0, 1, 2, 1], holdMs: 1000, slideMs: 800, segMs: 1800, cycleMs: 7200 };
 
 test("_accessibleViewIndexAt: 3-view ping-pong -- forward segment 0->1", () => {
-  assert.equal(el._accessibleViewIndexAt(0, timing3), 0);
-  assert.equal(el._accessibleViewIndexAt(1282, timing3), 0, "one ms before the flip");
-  assert.equal(el._accessibleViewIndexAt(1283, timing3), 1, "flip point");
-  assert.equal(el._accessibleViewIndexAt(1800, timing3), 1);
+  assert.equal(carouselTiming.accessibleViewIndexAt(0, timing3), 0);
+  assert.equal(carouselTiming.accessibleViewIndexAt(1282, timing3), 0, "one ms before the flip");
+  assert.equal(carouselTiming.accessibleViewIndexAt(1283, timing3), 1, "flip point");
+  assert.equal(carouselTiming.accessibleViewIndexAt(1800, timing3), 1);
 });
 
 test("_accessibleViewIndexAt: 3-view ping-pong -- forward segment 1->2", () => {
-  assert.equal(el._accessibleViewIndexAt(3082, timing3), 1, "one ms before the flip (segIndex 1: 1800+1282)");
-  assert.equal(el._accessibleViewIndexAt(3083, timing3), 2, "flip point (1800+1283)");
-  assert.equal(el._accessibleViewIndexAt(3600, timing3), 2);
+  assert.equal(carouselTiming.accessibleViewIndexAt(3082, timing3), 1, "one ms before the flip (segIndex 1: 1800+1282)");
+  assert.equal(carouselTiming.accessibleViewIndexAt(3083, timing3), 2, "flip point (1800+1283)");
+  assert.equal(carouselTiming.accessibleViewIndexAt(3600, timing3), 2);
 });
 
 test("_accessibleViewIndexAt: 3-view ping-pong -- backward/interior segment 2->1", () => {
-  assert.equal(el._accessibleViewIndexAt(4882, timing3), 2, "one ms before the flip (segIndex 2: 3600+1282)");
-  assert.equal(el._accessibleViewIndexAt(4883, timing3), 1, "flip point (3600+1283) -- backward, position value decreases");
-  assert.equal(el._accessibleViewIndexAt(5400, timing3), 1);
+  assert.equal(carouselTiming.accessibleViewIndexAt(4882, timing3), 2, "one ms before the flip (segIndex 2: 3600+1282)");
+  assert.equal(carouselTiming.accessibleViewIndexAt(4883, timing3), 1, "flip point (3600+1283) -- backward, position value decreases");
+  assert.equal(carouselTiming.accessibleViewIndexAt(5400, timing3), 1);
 });
 
 test("_accessibleViewIndexAt: 3-view ping-pong -- wrap segment back to positions[0]", () => {
-  assert.equal(el._accessibleViewIndexAt(6682, timing3), 1, "one ms before the flip (segIndex 3: 5400+1282)");
-  assert.equal(el._accessibleViewIndexAt(6683, timing3), 0, "flip point (5400+1283) -- wraps to the cycle's first position");
-  assert.equal(el._accessibleViewIndexAt(7199, timing3), 0, "one ms before the cycle itself wraps");
+  assert.equal(carouselTiming.accessibleViewIndexAt(6682, timing3), 1, "one ms before the flip (segIndex 3: 5400+1282)");
+  assert.equal(carouselTiming.accessibleViewIndexAt(6683, timing3), 0, "flip point (5400+1283) -- wraps to the cycle's first position");
+  assert.equal(carouselTiming.accessibleViewIndexAt(7199, timing3), 0, "one ms before the cycle itself wraps");
 });
 
 // ---- N = 2 to 10 (audit 17.2, mandatory matrix item 4) ----
@@ -170,10 +178,10 @@ test("_msUntilNextAccessibilityFlip/_accessibleViewIndexAt: complements hold for
     const cycleMs = positions.length * segMs;
     const timing = { positions, holdMs, slideMs, segMs, cycleMs };
     for (const phaseMs of [0, holdMs - 1, holdMs, holdMs + 283, segMs, cycleMs - 1]) {
-      const currentIndex = el._accessibleViewIndexAt(phaseMs, timing);
-      const waitMs = el._msUntilNextAccessibilityFlip(phaseMs, timing);
+      const currentIndex = carouselTiming.accessibleViewIndexAt(phaseMs, timing);
+      const waitMs = carouselTiming.msUntilNextAccessibilityFlip(phaseMs, timing);
       assert.ok(waitMs > 0, `N=${n}, phaseMs=${phaseMs}: waitMs must be positive`);
-      const nextIndex = el._accessibleViewIndexAt((phaseMs + waitMs) % cycleMs, timing);
+      const nextIndex = carouselTiming.accessibleViewIndexAt((phaseMs + waitMs) % cycleMs, timing);
       assert.notEqual(nextIndex, currentIndex, `N=${n}, phaseMs=${phaseMs}: waiting waitMs must land on a different view`);
     }
   }
@@ -181,8 +189,8 @@ test("_msUntilNextAccessibilityFlip/_accessibleViewIndexAt: complements hold for
 
 test("_accessibleViewIndexAt: n=0 (no positions, defensive edge case) always returns 0", () => {
   const emptyTiming = { positions: [], holdMs: 0, slideMs: 0, segMs: 1, cycleMs: 1 };
-  assert.equal(el._accessibleViewIndexAt(0, emptyTiming), 0);
-  assert.equal(el._accessibleViewIndexAt(500, emptyTiming), 0);
+  assert.equal(carouselTiming.accessibleViewIndexAt(0, emptyTiming), 0);
+  assert.equal(carouselTiming.accessibleViewIndexAt(500, emptyTiming), 0);
 });
 
 test("_currentVisualViewIndex(): a bare element with no track falls back to this._activeView (no throw)", () => {
@@ -209,12 +217,12 @@ test("prefers-reduced-motion: a freshly rendered >=2-view card arms no _a11ySync
   } finally {
     env.setReducedMotion(false);
   }
-  assert.equal(reduced._a11ySyncTimer, null, "reduced motion must arm no accessibility-sync timer");
+  assert.equal(reduced._carousel.accessibilityTimerHandle, null, "reduced motion must arm no accessibility-sync timer");
 
   // Control: the identical config WITHOUT reduced motion does arm one --
   // proves the assertion above is actually meaningful, not just vacuously true.
   const normal = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
-  assert.notEqual(normal._a11ySyncTimer, null, "control: without reduced motion, the same config must arm the timer");
+  assert.notEqual(normal._carousel.accessibilityTimerHandle, null, "control: without reduced motion, the same config must arm the timer");
 
   env.cleanup(reduced);
   env.cleanup(normal);

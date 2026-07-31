@@ -51,7 +51,7 @@ test("Tab only reaches per-view content (extrema/range cards) in the visible vie
   await card.evaluate((el) => {
     el._activeView = el._views.indexOf("extremes");
     el._updateTrackTransform(false);
-    el._updateViewAccessibility();
+    el._carousel.updateViewAccessibility();
   });
   const activeIndex = await card.evaluate((el) => el._activeView);
 
@@ -87,7 +87,7 @@ test("after a completed swipe, Tab reaches the NEW active view, not the old one"
     (el, targetIndex) => {
       el._activeView = targetIndex;
       el._updateTrackTransform(false);
-      el._updateViewAccessibility();
+      el._carousel.updateViewAccessibility();
     },
     targetIndex
   );

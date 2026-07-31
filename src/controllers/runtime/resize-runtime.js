@@ -13,13 +13,26 @@
 // coalesce onto, and a promise. And both need to be undone on disconnect, which is the
 // part that is easy to get wrong when it lives next to a render pipeline.
 
+// What has happened to the current document's fonts.ready promise. One tiny state
+// machine per SOURCE, because "have we measured yet" and "which promise was that" are
+// two different questions and answering them with one boolean loses the case that
+// matters: the promise settled while the card was out of the DOM.
+const FONTS = {
+  PENDING: "pending", // subscribed, still loading
+  DEFERRED: "deferred", // settled, but the card was disconnected — owed one measurement
+  MEASURED: "measured", // settled and measured; nothing further is owed
+  REJECTED: "rejected", // settled as a failure; never retried for this source
+};
+
 export function createResizeRuntime({ platform, onMeasure }) {
   let observer = null;
   let frameHandle = null;
-  // The fonts.ready promise this runtime is currently subscribed to, or null. Keyed on
-  // the promise rather than on a boolean so an adopted card resubscribes to its new
-  // document exactly once (see measureOnceFontsReady()).
-  let fontsSubscribedTo = null;
+  // The fonts.ready promise this runtime is subscribed to, and what became of it. Keyed
+  // on the promise itself rather than on a flag, so a card adopted into another document
+  // subscribes to its NEW source exactly once and a settled promise from the document it
+  // left can never measure the card it no longer belongs to.
+  let fontsSource = null;
+  let fontsState = null;
 
   function cancelPendingFrame() {
     if (frameHandle !== null) {
@@ -59,31 +72,62 @@ export function createResizeRuntime({ platform, onMeasure }) {
       }
     },
 
-    // Subscribes exactly once per FONT SOURCE, not once per rebuild and not once for
-    // all time.
+    // Measures once the web font has actually loaded — and exactly once per source.
     //
-    // Once per rebuild would be wrong: a fresh .then() on every rebuild that happens
-    // before the fonts land would each capture that call's own state, and a stale one
-    // could re-apply an old measurement after a newer render already ran.
+    // Three wrong answers this replaces, in the order they were wrong:
     //
-    // Once for all time would also be wrong: a card adopted into another document gets
-    // a DIFFERENT fonts.ready, whose loading state has nothing to do with the one that
-    // was subscribed to. So the subscription is keyed on the promise itself, and the
-    // callback re-checks that its source is still the current one — a promise from a
-    // document the card has since left must not trigger a measurement in the new one.
+    //   once per rebuild:  a fresh .then() on every rebuild before the fonts land would
+    //                      each capture that call's own state, and a stale one could
+    //                      re-apply an old measurement after a newer render;
+    //   once ever:         a card adopted into another document gets a DIFFERENT
+    //                      fonts.ready whose loading state has nothing to do with the
+    //                      one subscribed to;
+    //   once per promise:  correct about identity, but silently loses the measurement
+    //                      when the promise settles while the card is disconnected —
+    //                      nothing measures then, and the stored identity blocks any
+    //                      retry after the reconnect.
     //
-    // A no-op in the common case where fonts were already ready, and on a platform
-    // without the Fonts API at all.
+    // So the source carries a state, and a settled-while-disconnected source stays OWED
+    // one measurement until the card is back.
     measureOnceFontsReady(isStillConnected) {
       const ready = platform.fontsReady();
-      if (!ready || ready === fontsSubscribedTo) return;
-      fontsSubscribedTo = ready;
-      ready
-        .then(() => {
-          if (platform.fontsReady() === ready && isStillConnected()) onMeasure();
-        })
-        .catch(() => {});
+      if (!ready) return; // no Fonts API: a clean no-op, not an error
+
+      if (ready !== fontsSource) {
+        // A new realm's source supersedes whatever the old one was waiting for. The old
+        // promise may still settle; its handler checks identity and does nothing.
+        fontsSource = ready;
+        fontsState = FONTS.PENDING;
+        ready.then(
+          () => {
+            if (fontsSource !== ready) return; // superseded while loading
+            if (isStillConnected()) {
+              fontsState = FONTS.MEASURED;
+              onMeasure();
+              return;
+            }
+            // Settled while the card was out of the DOM. Measuring now would be work on
+            // a detached node; the debt is remembered instead.
+            fontsState = FONTS.DEFERRED;
+          },
+          () => {
+            if (fontsSource === ready) fontsState = FONTS.REJECTED;
+          }
+        );
+        return;
+      }
+
+      // Same source as before. The only thing left to do is settle an outstanding debt —
+      // which is what a reconnect looks like from here.
+      if (fontsState === FONTS.DEFERRED && isStillConnected()) {
+        fontsState = FONTS.MEASURED;
+        onMeasure();
+      }
     },
+
+    // For tests and diagnostics: which of the four states the current source is in, or
+    // null when there is no source. Reading it changes nothing.
+    fontsStateForCurrentSource: () => fontsState,
 
     hasPendingFrame: () => frameHandle !== null,
     isObserving: () => observer !== null,

@@ -20,10 +20,17 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let labelForm;
+
 let env;
 let el; // pure helper/translation access, no config/hass needed
 
-test.before(() => {
+test.before(async () => {
+  labelForm = await import("../../src/render/layout/label-form.js");
   env = createTestEnvironment();
   el = env.document.createElement("room-climate-card");
 });
@@ -40,7 +47,7 @@ function fakeLabelEl() {
 test("_resolveLabelForm: identical long/short forms always resolve to the long form, without ever calling fitsWithWidth", () => {
   const node = fakeLabelEl();
   let fitsCalled = false;
-  const width = el._resolveLabelForm(node, "now", "now", () => {
+  const width = labelForm.resolveLabelForm(node, "now", "now", () => {
     fitsCalled = true;
     return false;
   });
@@ -51,20 +58,20 @@ test("_resolveLabelForm: identical long/short forms always resolve to the long f
 
 test("_resolveLabelForm: distinct forms, long form fits -> stays on the long form", () => {
   const node = fakeLabelEl();
-  el._resolveLabelForm(node, "maintenant", "act.", () => true);
+  labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);
   assert.equal(node.textContent, "maintenant");
 });
 
 test("_resolveLabelForm: distinct forms, long form does not fit -> substitutes the short form", () => {
   const node = fakeLabelEl();
-  el._resolveLabelForm(node, "maintenant", "act.", () => false);
+  labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
   assert.equal(node.textContent, "act.");
 });
 
 test("_resolveLabelForm: fitsWithWidth is called with the long form's measured width, not the short form's", () => {
   const node = fakeLabelEl();
   const seenWidths = [];
-  el._resolveLabelForm(node, "maintenant", "act.", (width) => {
+  labelForm.resolveLabelForm(node, "maintenant", "act.", (width) => {
     seenWidths.push(width);
     return false;
   });
@@ -73,13 +80,13 @@ test("_resolveLabelForm: fitsWithWidth is called with the long form's measured w
 
 test("_resolveLabelForm: reverts a previously-shortened element back to the long form once it fits again (idempotent across repeated calls)", () => {
   const node = fakeLabelEl();
-  el._resolveLabelForm(node, "maintenant", "act.", () => false);
+  labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
   assert.equal(node.textContent, "act.");
   // A later resolve pass (e.g. the card grew wider) must not be stuck on
   // the short form just because a previous pass left it there -- every
   // call re-derives fresh from the long form, exactly like
   // _resolveOptimalLabelPosition()'s own idempotency requirement.
-  el._resolveLabelForm(node, "maintenant", "act.", () => true);
+  labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);
   assert.equal(node.textContent, "maintenant");
 });
 

@@ -9,11 +9,23 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
+
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let color;
 
 let env;
 let el;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
+  color = await import("../../src/core/color.js");
   env = createTestEnvironment();
   el = env.document.createElement("room-climate-card");
 });
@@ -26,7 +38,7 @@ test.after(() => {
 function classificationFor(valueColor) {
   env.document.body.appendChild(el);
   el.hass = mkHass({ "sensor.x": mkState("sensor.x", 22, { value_color: valueColor, value_level: "Test" }) });
-  const result = el._getEntityClassification("sensor.x");
+  const result = internals.entityClassification(el, "sensor.x");
   el.remove();
   return result;
 }
@@ -55,47 +67,47 @@ test("value_color: case-insensitive hex is accepted", () => {
 // ---- _rgba() ----
 
 test("_rgba(): 3-digit hex expands correctly", () => {
-  assert.equal(el._rgba("#fff", 0.5), "rgba(255,255,255,0.5)");
-  assert.equal(el._rgba("#f00", 0.3), "rgba(255,0,0,0.3)");
+  assert.equal(color.rgba("#fff", 0.5), "rgba(255,255,255,0.5)");
+  assert.equal(color.rgba("#f00", 0.3), "rgba(255,0,0,0.3)");
 });
 
 test("_rgba(): 6-digit hex parses correctly", () => {
-  assert.equal(el._rgba("#ff0000", 0.3), "rgba(255,0,0,0.3)");
-  assert.equal(el._rgba("#00ff00", 1), "rgba(0,255,0,1)");
+  assert.equal(color.rgba("#ff0000", 0.3), "rgba(255,0,0,0.3)");
+  assert.equal(color.rgba("#00ff00", 1), "rgba(0,255,0,1)");
 });
 
 test("_rgba(): 4-digit hex uses only the RGB part, ignores the embedded alpha nibble", () => {
-  assert.equal(el._rgba("#f00f", 0.3), "rgba(255,0,0,0.3)");
+  assert.equal(color.rgba("#f00f", 0.3), "rgba(255,0,0,0.3)");
 });
 
 test("_rgba(): 8-digit hex uses only the RGB part, ignores the embedded alpha byte", () => {
-  assert.equal(el._rgba("#ff0000ff", 0.3), "rgba(255,0,0,0.3)");
-  assert.equal(el._rgba("#ff000000", 0.3), "rgba(255,0,0,0.3)", "even a fully-transparent embedded alpha is ignored — contract is 'this color at the given opacity'");
+  assert.equal(color.rgba("#ff0000ff", 0.3), "rgba(255,0,0,0.3)");
+  assert.equal(color.rgba("#ff000000", 0.3), "rgba(255,0,0,0.3)", "even a fully-transparent embedded alpha is ignored — contract is 'this color at the given opacity'");
 });
 
 test("_rgba(): invalid length (5/7 digit) falls back to opaque-white rgba", () => {
-  assert.equal(el._rgba("#aabbc", 0.5), "rgba(255,255,255,0.5)");
+  assert.equal(color.rgba("#aabbc", 0.5), "rgba(255,255,255,0.5)");
 });
 
 test("_rgba(): rgb()/rgba() input passes through unchanged", () => {
-  assert.equal(el._rgba("rgb(1,2,3)", 0.5), "rgb(1,2,3)");
-  assert.equal(el._rgba("rgba(1,2,3,0.9)", 0.5), "rgba(1,2,3,0.9)");
+  assert.equal(color.rgba("rgb(1,2,3)", 0.5), "rgb(1,2,3)");
+  assert.equal(color.rgba("rgba(1,2,3,0.9)", 0.5), "rgba(1,2,3,0.9)");
 });
 
 test("_rgba(): CSS var() input becomes a color-mix() expression", () => {
-  assert.equal(el._rgba("var(--my-color)", 0.25), "color-mix(in srgb, var(--my-color) 25%, transparent)");
+  assert.equal(color.rgba("var(--my-color)", 0.25), "color-mix(in srgb, var(--my-color) 25%, transparent)");
 });
 
 test("_rgba(): non-string input falls back to opaque-white rgba", () => {
-  assert.equal(el._rgba(null, 0.5), "rgba(255,255,255,0.5)");
-  assert.equal(el._rgba(undefined, 0.5), "rgba(255,255,255,0.5)");
-  assert.equal(el._rgba(42, 0.5), "rgba(255,255,255,0.5)");
+  assert.equal(color.rgba(null, 0.5), "rgba(255,255,255,0.5)");
+  assert.equal(color.rgba(undefined, 0.5), "rgba(255,255,255,0.5)");
+  assert.equal(color.rgba(42, 0.5), "rgba(255,255,255,0.5)");
 });
 
 // ---- Built-in profile boundaries, all 4 modes, via _roomTone()/_avgTone() ----
 
 function toneLabel(value, metricType) {
-  return el._fallbackTone(value, metricType).label;
+  return internals.fallbackTone(el, value, metricType).label;
 }
 
 // Tiers are checked top-to-bottom by descending `min`, first match with

@@ -13,10 +13,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -298,7 +303,7 @@ test("show_rooms:false via setConfig() removes an already-rendered grid (forces 
 
 test("show_rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by hasRoomsView, not showRoomChips)", () => {
   const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
-  const html = el._renderScaleView(computeLegacyData(el));
+  const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
   assert.ok(html.includes("rtc-marker-cold"), "cold marker must still render");
   assert.ok(html.includes("rtc-marker-warm"), "warm marker must still render");
   env.cleanup(el);

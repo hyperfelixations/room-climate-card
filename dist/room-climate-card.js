@@ -17,202 +17,7 @@
 
 const CARD_TYPE = "room-climate-card";
 const CARD_NAME = "Room Climate Card";
-const CARD_VERSION = "2.36.0";
-
-// Colour primitives.
-//
-// isHexColor() is a trust boundary, not a convenience: a value_color attribute
-// arrives from an arbitrary integration or template sensor and ends up in CSS
-// custom properties and inline style attributes further down the render
-// pipeline. Anything that is not one of the four valid CSS hex lengths is
-// treated as absent rather than passed through verbatim. The same check
-// validates custom classification profiles from YAML.
-
-const HEX_COLOR_PATTERN = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-
-// Accepted shape for a colour coming from outside the card (HA attribute or
-// YAML). No global flag, so .test() stays stateless.
-function isHexColor(value) {
-  return HEX_COLOR_PATTERN.test(value);
-}
-
-// Builds a semi-transparent colour from a hex, rgb(), or CSS variable input.
-// Accepts all four valid CSS hex lengths (3/4/6/8, matching isHexColor); for
-// the two with an embedded alpha channel (4/8), only the RGB part is used —
-// this always applies the given alpha rather than any alpha already embedded
-// in the source colour, since the contract here is "this colour at the
-// requested opacity", not "this colour's own opacity, adjusted".
-function rgba(color, alpha) {
-  if (typeof color !== "string") return `rgba(255,255,255,${alpha})`;
-  if (color.startsWith("rgba") || color.startsWith("rgb")) return color;
-  if (color.startsWith("var(")) return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
-  const hex = color.replace("#", "").trim();
-  let rgbHex;
-  if (hex.length === 3 || hex.length === 4) {
-    rgbHex = hex.slice(0, 3).split("").map((c) => c + c).join("");
-  } else if (hex.length === 6 || hex.length === 8) {
-    rgbHex = hex.slice(0, 6);
-  } else {
-    return `rgba(255,255,255,${alpha})`;
-  }
-  const int = Number.parseInt(rgbHex, 16);
-  if (!Number.isFinite(int)) return `rgba(255,255,255,${alpha})`;
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-// Numeric primitives: reading numbers out of untrusted input, and the small
-// amount of arithmetic every layer above shares.
-//
-// Two distinct parsers live here on purpose, because they guard two different
-// trust boundaries and must not be confused:
-//
-//   parseNumericState()  a Home Assistant entity state or attribute — arrives
-//                        as a string, may use a comma decimal separator, and
-//                        has a fixed set of "not a measurement" sentinels.
-//   parseConfigNumber()  a YAML configuration value written by the dashboard
-//                        owner — may legitimately already be a number, and
-//                        must reject types that Number() would silently
-//                        coerce.
-
-// Home Assistant state values that never represent a usable measurement.
-const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
-
-// Shared numeric parser for entity states and attributes: accepts comma
-// decimals, treats HA's non-numeric states as invalid, and handles attributes
-// HA already delivers as a real number instead of a string. Validates the full
-// (normalized) string against a strict numeric format before parsing, rather
-// than handing it straight to parseFloat() — parseFloat() happily extracts a
-// numeric prefix from garbage like "25 °C" or "12abc", which would silently
-// legitimize a malformed/corrupted sensor value instead of treating it as
-// invalid.
-function parseNumericState(raw) {
-  if (raw === undefined || raw === null) return null;
-  const rawString = String(raw).trim().toLowerCase();
-  if (INVALID_STATES.has(rawString)) return null;
-  const normalized = rawString.replace(",", ".");
-  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?$/.test(normalized)) return null;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
-
-// Strict shared numeric parser for optional cosmetic/layout config fields:
-// only an actual `number` or a numeric-looking string is accepted.
-// Number(value) alone would silently coerce booleans (Number(true) === 1) and
-// other unintended types through, letting a typo'd YAML value like
-// `room_columns: true` or `decimals: true` pass as a valid 1 instead of being
-// rejected. Returns null for anything else (including non-finite results);
-// callers apply their own range checks on top.
-function parseConfigNumber(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(text)) return null;
-  const num = Number(text);
-  return Number.isFinite(num) ? num : null;
-}
-
-// Clamps a value to a fixed range.
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-// Converts a value into a percentage position inside [min, max].
-function percentInRange(value, min, max) {
-  if (max === min) return 0;
-  return clamp(((value - min) / (max - min)) * 100, 0, 100);
-}
-
-function floorToStep(value, step) {
-  return Math.floor(value / step) * step;
-}
-
-function ceilToStep(value, step) {
-  return Math.ceil(value / step) * step;
-}
-
-// Text primitives used at markup boundaries.
-//
-// escapeHtml() is the card's only HTML-escaping function. Every interpolation
-// of entity names, room labels, units, titles, tooltips and ARIA text into a
-// template string goes through it; keeping exactly one implementation is what
-// makes that reviewable. (A tagged template that escapes automatically is a
-// deliberate later step, in its own security-focused round — it changes how
-// call sites are written, which is not part of a structural refactoring.)
-
-// Hoisted so the replace() callback doesn't allocate a fresh object per
-// matched character.
-const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-
-// HTML-escapes a value before it enters a template string.
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ESC_MAP[char]);
-}
-
-// Matches a room-chip label that is exactly two Unicode uppercase letters
-// (e.g. "WZ", "KÜ") — the only case where a room's short code is guaranteed to
-// never shrink/ellipsize. No global flag, so .test() stays stateless and the
-// shared instance is safe to reuse.
-const TWO_UPPER_LETTER_RE = /^\p{Lu}\p{Lu}$/u;
-
-function isTwoUpperLetterLabel(text) {
-  return TWO_UPPER_LETTER_RE.test(text);
-}
-
-// Auto-slide easing: one shared definition for CSS and JS (AP-08, audit 17).
-//
-// CSS and JS used to each hardcode "cubic-bezier(.45,0,.16,1)" separately (the
-// keyframe animation, the manual-settle transition, the swipe-settle
-// transition) while the accessibility flip calculation used a completely
-// unrelated number (the raw temporal midpoint, slideMs/2). A cubic-bezier
-// easing's TIME axis and its EASED/spatial-progress axis are different curves,
-// so "50% of the time" and "50% of the visual motion" land at different
-// moments. The accessible view must follow whichever view is spatially
-// dominant, not raw time, so the flip has to happen where the EASED progress
-// crosses 50% — which requires inverting the same curve CSS renders with.
-//
-// Keeping the curve, its CSS spelling and its inversion in one module is what
-// makes drifting apart impossible.
-
-const SLIDE_EASING = Object.freeze({ x1: 0.45, y1: 0, x2: 0.16, y2: 1 });
-
-function cubicBezierPoint(easing, u) {
-  // Standard cubic-bezier evaluation with implicit P0=(0,0)/P3=(1,1) (the
-  // two endpoints every CSS cubic-bezier() curve is anchored to).
-  const mu = 1 - u;
-  return {
-    x: 3 * mu * mu * u * easing.x1 + 3 * mu * u * u * easing.x2 + u * u * u,
-    y: 3 * mu * mu * u * easing.y1 + 3 * mu * u * u * easing.y2 + u * u * u,
-  };
-}
-
-function timeFractionForEasedProgress(easing, targetY) {
-  // Inverts a cubic-bezier curve: given the desired EASED/spatial progress
-  // (targetY), finds the TIME fraction at which the curve produces it.
-  // Bisection on the curve parameter u (Y(u) is monotonic for any valid CSS
-  // easing curve) rather than a closed-form cubic solve — general-purpose,
-  // numerically robust, and precise enough after 50 iterations that the
-  // result is exact to well beyond double precision's useful range.
-  let lo = 0, hi = 1;
-  for (let i = 0; i < 50; i++) {
-    const mid = (lo + hi) / 2;
-    if (cubicBezierPoint(easing, mid).y < targetY) lo = mid; else hi = mid;
-  }
-  return cubicBezierPoint(easing, (lo + hi) / 2).x;
-}
-
-// The single, shared CSS string — every place that renders the slide easing
-// (keyframe animation, manual settle transitions) uses this exact string, so
-// they can never drift out of sync with each other or with the flip fraction
-// below.
-const SLIDE_EASING_CSS = `cubic-bezier(${SLIDE_EASING.x1},${SLIDE_EASING.y1},${SLIDE_EASING.x2},${SLIDE_EASING.y2})`;
-
-// Where the slide's SPATIAL midpoint (eased progress = 0.5) falls on the TIME
-// axis — ~0.35375 for cubic-bezier(.45,0,.16,1) (vs. 0.5 for the old, wrong
-// temporal-midpoint assumption). Computed once at module load.
-const A11Y_FLIP_TIME_FRACTION = timeFractionForEasedProgress(SLIDE_EASING, 0.5);
+const CARD_VERSION = "2.36.1";
 
 // Language codes and their Intl locales.
 //
@@ -2017,28 +1822,74 @@ const DEFAULT_CONFIG = {
   swipe: true, // AP-C1: manual horizontal drag gesture, independent of auto_slide
 };
 
-// Building blocks for declaring a validated, defaulted configuration option.
+// Numeric primitives: reading numbers out of untrusted input, and the small
+// amount of arithmetic every layer above shares.
 //
-// A schema descriptor used to be a bare presence marker (any truthy
-// placeholder), which meant an option key could be whitelisted but its VALUE
-// never checked. These factories upgrade that to a small {default, validate}
-// descriptor, so a raw YAML value can be both defaulted and type-checked.
+// Two distinct parsers live here on purpose, because they guard two different
+// trust boundaries and must not be confused:
 //
-// Kept as factories rather than inlined at each call site so every option of
-// the same kind shares identical validation semantics for free. An option
-// declared without a validate() is simply not value-checked, which stays a
-// valid choice for a future option whose values cannot be enumerated.
+//   parseNumericState()  a Home Assistant entity state or attribute — arrives
+//                        as a string, may use a comma decimal separator, and
+//                        has a fixed set of "not a measurement" sentinels.
+//   parseConfigNumber()  a YAML configuration value written by the dashboard
+//                        owner — may legitimately already be a number, and
+//                        must reject types that Number() would silently
+//                        coerce.
 
-function boolOption(defaultValue) {
-  return { default: defaultValue, validate: (value) => typeof value === "boolean" };
+// Home Assistant state values that never represent a usable measurement.
+const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
+
+// Shared numeric parser for entity states and attributes: accepts comma
+// decimals, treats HA's non-numeric states as invalid, and handles attributes
+// HA already delivers as a real number instead of a string. Validates the full
+// (normalized) string against a strict numeric format before parsing, rather
+// than handing it straight to parseFloat() — parseFloat() happily extracts a
+// numeric prefix from garbage like "25 °C" or "12abc", which would silently
+// legitimize a malformed/corrupted sensor value instead of treating it as
+// invalid.
+function parseNumericState(raw) {
+  if (raw === undefined || raw === null) return null;
+  const rawString = String(raw).trim().toLowerCase();
+  if (INVALID_STATES.has(rawString)) return null;
+  const normalized = rawString.replace(",", ".");
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
 }
 
-// For an option with a closed set of non-boolean values (e.g. a marker mode
-// "average"|"extremes"|"all"). An invalid value is diagnosed and dropped by the
-// normalizer, then the default is filled in — the same non-destructive
-// fallback an invalid boolean gets.
-function enumOption(defaultValue, allowedValues) {
-  return { default: defaultValue, validate: (value) => allowedValues.includes(value) };
+// Strict shared numeric parser for optional cosmetic/layout config fields:
+// only an actual `number` or a numeric-looking string is accepted.
+// Number(value) alone would silently coerce booleans (Number(true) === 1) and
+// other unintended types through, letting a typo'd YAML value like
+// `room_columns: true` or `decimals: true` pass as a valid 1 instead of being
+// rejected. Returns null for anything else (including non-finite results);
+// callers apply their own range checks on top.
+function parseConfigNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(text)) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+}
+
+// Clamps a value to a fixed range.
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+// Converts a value into a percentage position inside [min, max].
+function percentInRange(value, min, max) {
+  if (max === min) return 0;
+  return clamp(((value - min) / (max - min)) * 100, 0, 100);
+}
+
+function floorToStep(value, step) {
+  return Math.floor(value / step) * step;
+}
+
+function ceilToStep(value, step) {
+  return Math.ceil(value / step) * step;
 }
 
 // Configuration errors that name the offending path.
@@ -2356,6 +2207,50 @@ function normalizeViewOptions(type, rawOptions, index, { optionSchemaForView }) 
     diagnostics.push(`views[${index}] ("${type}"): ignoring unknown "options" key(s) ${unknownKeys.map((k) => JSON.stringify(k)).join(", ")}`);
   }
   return { options: result, diagnostics };
+}
+
+// Colour primitives.
+//
+// isHexColor() is a trust boundary, not a convenience: a value_color attribute
+// arrives from an arbitrary integration or template sensor and ends up in CSS
+// custom properties and inline style attributes further down the render
+// pipeline. Anything that is not one of the four valid CSS hex lengths is
+// treated as absent rather than passed through verbatim. The same check
+// validates custom classification profiles from YAML.
+
+const HEX_COLOR_PATTERN = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+// Accepted shape for a colour coming from outside the card (HA attribute or
+// YAML). No global flag, so .test() stays stateless.
+function isHexColor(value) {
+  return HEX_COLOR_PATTERN.test(value);
+}
+
+// Builds a semi-transparent colour from a hex, rgb(), or CSS variable input.
+// Accepts all four valid CSS hex lengths (3/4/6/8, matching isHexColor); for
+// the two with an embedded alpha channel (4/8), only the RGB part is used —
+// this always applies the given alpha rather than any alpha already embedded
+// in the source colour, since the contract here is "this colour at the
+// requested opacity", not "this colour's own opacity, adjusted".
+function rgba(color, alpha) {
+  if (typeof color !== "string") return `rgba(255,255,255,${alpha})`;
+  if (color.startsWith("rgba") || color.startsWith("rgb")) return color;
+  if (color.startsWith("var(")) return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+  const hex = color.replace("#", "").trim();
+  let rgbHex;
+  if (hex.length === 3 || hex.length === 4) {
+    rgbHex = hex.slice(0, 3).split("").map((c) => c + c).join("");
+  } else if (hex.length === 6 || hex.length === 8) {
+    rgbHex = hex.slice(0, 6);
+  } else {
+    return `rgba(255,255,255,${alpha})`;
+  }
+  const int = Number.parseInt(rgbHex, 16);
+  if (!Number.isFinite(int)) return `rgba(255,255,255,${alpha})`;
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // The shared "descending min + exactly one final default" list contract.
@@ -2781,290 +2676,6 @@ function normalizeConfig(config, collaborators) {
 // instead of repeating the list.
 
 const CLASSIFICATION_ZONES = Object.freeze(["optimal", "comfort", "outside", "invalid"]);
-
-// Reading a classification an integration or template sensor provides itself.
-//
-// This is a trust boundary. The attributes come from arbitrary third-party
-// integrations and end up in CSS custom properties, inline styles and visible
-// text, so each field is validated on its own and anything that fails is treated
-// as ABSENT rather than passed through:
-//
-//   value_color  must be a valid hex colour (it reaches a style attribute)
-//   value_level  a non-empty string, kept VERBATIM — it is the integration's own
-//                wording and is deliberately not translated
-//   value_score  a finite number, with "" and null rejected before Number()
-//                turns them into 0
-//   value_zone   a non-empty string
-//
-// allowPartial distinguishes the two modes. Automatic mode accepts the entity as
-// the source only when it supplies a complete colour+level pair, because a
-// half-filled attribute set would render worse than the card's own numeric
-// classification. Forced `entity` mode asks for whatever is there.
-
-
-function readEntityClassification(attributes, { allowPartial = false } = {}) {
-  if (!attributes) return null;
-
-  const color = typeof attributes.value_color === "string" && isHexColor(attributes.value_color.trim())
-    ? attributes.value_color.trim()
-    : null;
-  const level = typeof attributes.value_level === "string" && attributes.value_level.trim()
-    ? attributes.value_level.trim()
-    : null;
-  const numericScore = Number(attributes.value_score);
-  const score = attributes.value_score !== undefined && attributes.value_score !== null && attributes.value_score !== "" && Number.isFinite(numericScore)
-    ? numericScore
-    : null;
-  const zone = typeof attributes.value_zone === "string" && attributes.value_zone.trim() ? attributes.value_zone.trim() : null;
-
-  if (allowPartial ? (!color && !level && score === null && !zone) : (!color || !level)) return null;
-  return {
-    color,
-    level,
-    score,
-    zone,
-    source: "entity",
-    profileId: null,
-  };
-}
-
-// Classifying a numeric reading against a profile.
-//
-// Returns TOKENS, never rendered text: a built-in tier carries a `levelKey` that
-// the presentation layer translates, while a custom profile carries a `level`
-// string the user wrote and that must stay verbatim. Both are returned as they
-// are and the caller picks — `level || t(levelKey)` — so translation stays out of
-// the domain entirely.
-//
-// The profile handed in must already be projected into the unit the value is
-// expressed in; comparing a Fahrenheit reading against Celsius thresholds is the
-// one mistake this whole layer is built to prevent.
-
-const FALLBACK_INVALID = {
-  score: null,
-  levelKey: "level.invalidReading",
-  color: "#B4B2A9",
-  zone: "invalid",
-};
-
-// First tier whose threshold the value passes, using the profile's own
-// comparison operator. ">=" makes a boundary belong to the tier above it, ">"
-// makes it belong to the tier below — PM2.5 uses the latter so a reading of
-// exactly 5 is still optimal.
-function selectTier(profile, value) {
-  return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
-}
-
-function classifyNumericValue(profile, value) {
-  if (profile.invalidWhen?.(value)) {
-    const invalid = profile.invalidClassification || FALLBACK_INVALID;
-    return {
-      level: invalid.level || null,
-      levelKey: invalid.levelKey,
-      color: invalid.color,
-      score: invalid.score ?? null,
-      zone: invalid.zone ?? "invalid",
-    };
-  }
-  const tier = selectTier(profile, value);
-  return {
-    level: tier.level || null,
-    levelKey: tier.levelKey,
-    color: tier.color,
-    score: tier.score ?? null,
-    zone: tier.zone ?? null,
-  };
-}
-
-// The header icon that belongs to a reading.
-//
-// Icons are part of the active classification profile, exactly like colours and
-// levels — a fridge at 10 °C should not get the same icon as a living room at
-// 10 °C. Two shapes exist, mirroring how the profiles themselves are authored:
-//
-//   temperature  a fixed fire/high/normal/low threshold contract, which is also
-//                the public contract for custom temperature profiles
-//   other kinds  generic descending {min, icon} tiers
-//
-// A metric kind with no icon tiers returns null, and the caller falls back to the
-// metric's stable default icon. That way adding another kind never forces a
-// semantically dubious icon family onto it.
-
-
-const TEMPERATURE_ICONS = {
-  fire: "mdi:fire-alert",
-  high: "mdi:thermometer-high",
-  normal: "mdi:thermometer",
-  low: "mdi:thermometer-low",
-  below: "mdi:snowflake",
-};
-
-// The profile must already be projected into the unit `temp` is expressed in.
-function temperatureIconForProfile(temp, profile) {
-  const thresholds = profile.iconThresholds;
-  if (temp >= thresholds.fire) return TEMPERATURE_ICONS.fire;
-  if (temp >= thresholds.high) return TEMPERATURE_ICONS.high;
-  if (temp >= thresholds.normal) return TEMPERATURE_ICONS.normal;
-  if (temp >= thresholds.low) return TEMPERATURE_ICONS.low;
-  return TEMPERATURE_ICONS.below;
-}
-
-// Returns null when the profile declares no icon tiers, so the caller can apply
-// the metric's own default icon.
-function profileIconForValue(value, metricKind, profile) {
-  if (metricKind === "temperature") return temperatureIconForProfile(value, profile);
-  if (!profile.iconTiers) return null;
-  const tier = selectTier({ tiers: profile.iconTiers, comparison: profile.comparison }, value);
-  return tier?.icon ?? null;
-}
-
-// The axis parameters a profile contributes.
-//
-// Takes an already-projected display profile and pulls out exactly the fields the
-// scale maths needs, with the two defaults made explicit rather than left to
-// `undefined` checks scattered across call sites:
-//
-//   oneSided     the metric has no "too low" end (CO2, PM2.5), so the lower
-//                bound never grows away from the reference scale
-//   anchorScale  true unless a profile opts out. Outdoor temperature does opt
-//                out: its readings are seasonal, so the axis follows the live
-//                data instead of being pinned to a reference range that would be
-//                wrong for most of the year.
-
-function scaleConfigFor(displayProfile) {
-  return {
-    comfort: displayProfile.comfort,
-    optimal: displayProfile.optimal,
-    scale: displayProfile.scale,
-    step: displayProfile.step,
-    oneSided: displayProfile.oneSided === true,
-    headroom: displayProfile.headroom,
-    anchorScale: displayProfile.anchorScale !== false,
-  };
-}
-
-// Where the rendered axis actually starts and ends.
-//
-// The axis is never just "the data range": markers sitting exactly on an edge are
-// unreadable, and an axis that jumps on every sensor update is worse than one that
-// is slightly too wide. So the range is expanded by a buffer and then rounded
-// outwards to a step, and — unless the profile opts out — it never shrinks below
-// the profile's own reference scale.
-//
-// Pure numbers only. No units, no formatting, no translated text.
-
-
-// How coarsely to round the axis. A fixed step suits Celsius, Kelvin, humidity,
-// CO2 and PM2.5, but Fahrenheit spans roughly 1.8x as many units for the same
-// physical range: a fixed fine step would produce an absurd number of gridlines
-// on a wide range, a fixed coarse one would flatten a narrow range. Profiles that
-// need it therefore declare span-dependent steps, and only those.
-function resolveDynamicStep(staticStep, dynamicDisplaySteps, low, high, baseMin, baseMax, anchorScale = true) {
-  if (!dynamicDisplaySteps) return staticStep;
-  const dataMin = Number.isFinite(low) ? low : baseMin;
-  const dataMax = Number.isFinite(high) ? high : baseMax;
-  const spanMin = anchorScale ? Math.min(dataMin, baseMin) : dataMin;
-  const spanMax = anchorScale ? Math.max(dataMax, baseMax) : dataMax;
-  const span = spanMax - spanMin;
-  const tier = dynamicDisplaySteps.find((candidate) => span <= candidate.maxSpan);
-  return (tier || dynamicDisplaySteps[dynamicDisplaySteps.length - 1]).step;
-}
-
-// Expands the anchored reference scale — or, for an unanchored profile, only the
-// live data range — to leave headroom around real values. The buffer defaults to
-// one full step when the profile does not specify its own headroom.
-//
-// A one-sided metric never expands its lower bound: there is no "too little CO2"
-// in a room, so the axis stays rooted at the reference minimum.
-function dynamicScale(coolestValue, warmestValue, scaleConfig, dynamicDisplaySteps) {
-  const { scale, step: staticStep, oneSided, headroom, anchorScale } = scaleConfig;
-  const baseMin = scale.min;
-  const baseMax = scale.max;
-  const numericLow = Number(coolestValue);
-  const numericHigh = Number(warmestValue);
-  const low = Number.isFinite(numericLow) ? numericLow : baseMin;
-  const high = Number.isFinite(numericHigh) ? numericHigh : baseMax;
-  const step = resolveDynamicStep(
-    staticStep,
-    dynamicDisplaySteps,
-    oneSided ? baseMin : low,
-    high,
-    baseMin,
-    baseMax,
-    anchorScale
-  );
-  const buffer = headroom ?? step;
-
-  const warmLimit = ceilToStep(high + buffer, step);
-  let max = anchorScale ? Math.max(baseMax, warmLimit) : warmLimit;
-  max = ceilToStep(max, step);
-  if (!Number.isFinite(max)) max = baseMax;
-
-  let min = baseMin;
-  if (!oneSided) {
-    const coldLimit = floorToStep(low - buffer, step);
-    min = anchorScale ? Math.min(baseMin, coldLimit) : coldLimit;
-    min = floorToStep(min, step);
-    if (!Number.isFinite(min)) min = baseMin;
-  }
-
-  // A degenerate axis would divide by zero in every position calculation.
-  if (min >= max) max = min + step;
-  return { min, max, step };
-}
-
-// Turning values into positions on the axis, as percentages.
-//
-// Percentages rather than pixels: the card's width is decided by the dashboard
-// layout, so the only stable description of "where does this marker go" is a
-// fraction of the bar. Everything here is a pure number — the pixel-level
-// collision avoidance for LABELS is a rendering concern and lives elsewhere.
-
-
-// Left edge and width for a band, tolerant of an inverted pair.
-function rangePosition(minValue, maxValue, scaleMin, scaleMax) {
-  const left = percentInRange(minValue, scaleMin, scaleMax);
-  const right = percentInRange(maxValue, scaleMin, scaleMax);
-  return {
-    left: Math.min(left, right),
-    width: Math.abs(right - left),
-  };
-}
-
-// Everything needed to draw one scale bar's bands and edges. Both scale views use
-// this same function with different bounds, which is what structurally guarantees
-// identical geometry for identical input rather than leaving it to convention.
-function scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
-  const comfortBand = rangePosition(comfortMin, comfortMax, scaleMin, scaleMax);
-  const optimalBand = rangePosition(optimalMin, optimalMax, scaleMin, scaleMax);
-  return {
-    scaleMin,
-    scaleMax,
-    optimalMin,
-    optimalMax,
-    comfortLeft: comfortBand.left,
-    comfortWidth: comfortBand.width,
-    comfortCenter: comfortBand.left + comfortBand.width / 2,
-    optimalLeft: optimalBand.left,
-    optimalWidth: optimalBand.width,
-    optimalCenter: optimalBand.left + optimalBand.width / 2,
-    // A data-anchored axis can legitimately sit wholly outside the semantic bands
-    // (a winter outdoor scale at -3..9 °C, say). Their configured bounds stay in
-    // the model, but a zero-width band or a label pinned to an axis edge would be
-    // actively misleading, so visibility is reported separately.
-    comfortVisible: comfortMax > scaleMin && comfortMin < scaleMax,
-    optimalVisible: optimalMax > scaleMin && optimalMin < scaleMax,
-  };
-}
-
-// One position per named marker, against the same axis the geometry above uses.
-function markerPositions(markers, scaleMin, scaleMax) {
-  const positions = {};
-  for (const key of Object.keys(markers || {})) {
-    positions[key] = percentInRange(markers[key], scaleMin, scaleMax);
-  }
-  return positions;
-}
 
 // Indoor room temperature — the default temperature profile.
 //
@@ -3712,6 +3323,96 @@ function deriveBandForProfile(metricKind, profileKey, bandName) {
   return deriveBandForProfile$1(band, getUnitProfile(metricKind, profileKey));
 }
 
+// Classifying a numeric reading against a profile.
+//
+// Returns TOKENS, never rendered text: a built-in tier carries a `levelKey` that
+// the presentation layer translates, while a custom profile carries a `level`
+// string the user wrote and that must stay verbatim. Both are returned as they
+// are and the caller picks — `level || t(levelKey)` — so translation stays out of
+// the domain entirely.
+//
+// The profile handed in must already be projected into the unit the value is
+// expressed in; comparing a Fahrenheit reading against Celsius thresholds is the
+// one mistake this whole layer is built to prevent.
+
+const FALLBACK_INVALID = {
+  score: null,
+  levelKey: "level.invalidReading",
+  color: "#B4B2A9",
+  zone: "invalid",
+};
+
+// First tier whose threshold the value passes, using the profile's own
+// comparison operator. ">=" makes a boundary belong to the tier above it, ">"
+// makes it belong to the tier below — PM2.5 uses the latter so a reading of
+// exactly 5 is still optimal.
+function selectTier(profile, value) {
+  return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
+}
+
+function classifyNumericValue(profile, value) {
+  if (profile.invalidWhen?.(value)) {
+    const invalid = profile.invalidClassification || FALLBACK_INVALID;
+    return {
+      level: invalid.level || null,
+      levelKey: invalid.levelKey,
+      color: invalid.color,
+      score: invalid.score ?? null,
+      zone: invalid.zone ?? "invalid",
+    };
+  }
+  const tier = selectTier(profile, value);
+  return {
+    level: tier.level || null,
+    levelKey: tier.levelKey,
+    color: tier.color,
+    score: tier.score ?? null,
+    zone: tier.zone ?? null,
+  };
+}
+
+// The header icon that belongs to a reading.
+//
+// Icons are part of the active classification profile, exactly like colours and
+// levels — a fridge at 10 °C should not get the same icon as a living room at
+// 10 °C. Two shapes exist, mirroring how the profiles themselves are authored:
+//
+//   temperature  a fixed fire/high/normal/low threshold contract, which is also
+//                the public contract for custom temperature profiles
+//   other kinds  generic descending {min, icon} tiers
+//
+// A metric kind with no icon tiers returns null, and the caller falls back to the
+// metric's stable default icon. That way adding another kind never forces a
+// semantically dubious icon family onto it.
+
+
+const TEMPERATURE_ICONS = {
+  fire: "mdi:fire-alert",
+  high: "mdi:thermometer-high",
+  normal: "mdi:thermometer",
+  low: "mdi:thermometer-low",
+  below: "mdi:snowflake",
+};
+
+// The profile must already be projected into the unit `temp` is expressed in.
+function temperatureIconForProfile(temp, profile) {
+  const thresholds = profile.iconThresholds;
+  if (temp >= thresholds.fire) return TEMPERATURE_ICONS.fire;
+  if (temp >= thresholds.high) return TEMPERATURE_ICONS.high;
+  if (temp >= thresholds.normal) return TEMPERATURE_ICONS.normal;
+  if (temp >= thresholds.low) return TEMPERATURE_ICONS.low;
+  return TEMPERATURE_ICONS.below;
+}
+
+// Returns null when the profile declares no icon tiers, so the caller can apply
+// the metric's own default icon.
+function profileIconForValue(value, metricKind, profile) {
+  if (metricKind === "temperature") return temperatureIconForProfile(value, profile);
+  if (!profile.iconTiers) return null;
+  const tier = selectTier({ tiers: profile.iconTiers, comparison: profile.comparison }, value);
+  return tier?.icon ?? null;
+}
+
 // Rejects a profile that becomes degenerate when projected into a display unit.
 //
 // Projection rounds every boundary independently (integer Fahrenheit, so that a
@@ -3834,6 +3535,52 @@ function projectProfileToDisplayUnit(canonical, definition, unitProfile, metricK
   return projected;
 }
 
+// Reading a classification an integration or template sensor provides itself.
+//
+// This is a trust boundary. The attributes come from arbitrary third-party
+// integrations and end up in CSS custom properties, inline styles and visible
+// text, so each field is validated on its own and anything that fails is treated
+// as ABSENT rather than passed through:
+//
+//   value_color  must be a valid hex colour (it reaches a style attribute)
+//   value_level  a non-empty string, kept VERBATIM — it is the integration's own
+//                wording and is deliberately not translated
+//   value_score  a finite number, with "" and null rejected before Number()
+//                turns them into 0
+//   value_zone   a non-empty string
+//
+// allowPartial distinguishes the two modes. Automatic mode accepts the entity as
+// the source only when it supplies a complete colour+level pair, because a
+// half-filled attribute set would render worse than the card's own numeric
+// classification. Forced `entity` mode asks for whatever is there.
+
+
+function readEntityClassification(attributes, { allowPartial = false } = {}) {
+  if (!attributes) return null;
+
+  const color = typeof attributes.value_color === "string" && isHexColor(attributes.value_color.trim())
+    ? attributes.value_color.trim()
+    : null;
+  const level = typeof attributes.value_level === "string" && attributes.value_level.trim()
+    ? attributes.value_level.trim()
+    : null;
+  const numericScore = Number(attributes.value_score);
+  const score = attributes.value_score !== undefined && attributes.value_score !== null && attributes.value_score !== "" && Number.isFinite(numericScore)
+    ? numericScore
+    : null;
+  const zone = typeof attributes.value_zone === "string" && attributes.value_zone.trim() ? attributes.value_zone.trim() : null;
+
+  if (allowPartial ? (!color && !level && score === null && !zone) : (!color || !level)) return null;
+  return {
+    color,
+    level,
+    score,
+    zone,
+    source: "entity",
+    profileId: null,
+  };
+}
+
 // Which classification profile applies, and how a value is classified against
 // it once it has been chosen.
 //
@@ -3926,6 +3673,31 @@ function resolveValueClassification({ policy, attributes, numericFallback }) {
 function isPhysicallyValid(profile, value) {
   if (!profile) return true;
   return !profile.invalidWhen?.(value);
+}
+
+// The axis parameters a profile contributes.
+//
+// Takes an already-projected display profile and pulls out exactly the fields the
+// scale maths needs, with the two defaults made explicit rather than left to
+// `undefined` checks scattered across call sites:
+//
+//   oneSided     the metric has no "too low" end (CO2, PM2.5), so the lower
+//                bound never grows away from the reference scale
+//   anchorScale  true unless a profile opts out. Outdoor temperature does opt
+//                out: its readings are seasonal, so the axis follows the live
+//                data instead of being pinned to a reference range that would be
+//                wrong for most of the year.
+
+function scaleConfigFor(displayProfile) {
+  return {
+    comfort: displayProfile.comfort,
+    optimal: displayProfile.optimal,
+    scale: displayProfile.scale,
+    step: displayProfile.step,
+    oneSided: displayProfile.oneSided === true,
+    headroom: displayProfile.headroom,
+    anchorScale: displayProfile.anchorScale !== false,
+  };
 }
 
 // The application layer's access to classification.
@@ -4873,6 +4645,34 @@ function extremeRoomLabel(role, metricKind, texts) {
   return texts.t(role === "cold" ? meta.lowRoomKey : meta.highRoomKey);
 }
 
+// Text primitives used at markup boundaries.
+//
+// escapeHtml() is the card's only HTML-escaping function. Every interpolation
+// of entity names, room labels, units, titles, tooltips and ARIA text into a
+// template string goes through it; keeping exactly one implementation is what
+// makes that reviewable. (A tagged template that escapes automatically is a
+// deliberate later step, in its own security-focused round — it changes how
+// call sites are written, which is not part of a structural refactoring.)
+
+// Hoisted so the replace() callback doesn't allocate a fresh object per
+// matched character.
+const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+// HTML-escapes a value before it enters a template string.
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ESC_MAP[char]);
+}
+
+// Matches a room-chip label that is exactly two Unicode uppercase letters
+// (e.g. "WZ", "KÜ") — the only case where a room's short code is guaranteed to
+// never shrink/ellipsize. No global flag, so .test() stays stateless and the
+// shared instance is safe to reuse.
+const TWO_UPPER_LETTER_RE = /^\p{Lu}\p{Lu}$/u;
+
+function isTwoUpperLetterLabel(text) {
+  return TWO_UPPER_LETTER_RE.test(text);
+}
+
 // How the room chips are labelled, ordered and laid out.
 //
 // All three are presentation decisions and none of them may reach the
@@ -5022,6 +4822,30 @@ function buildRoomChipRows(chips, rowSizes) {
     cursor += itemCount;
     return { columnCount, chips: rowChips };
   });
+}
+
+// Building blocks for declaring a validated, defaulted configuration option.
+//
+// A schema descriptor used to be a bare presence marker (any truthy
+// placeholder), which meant an option key could be whitelisted but its VALUE
+// never checked. These factories upgrade that to a small {default, validate}
+// descriptor, so a raw YAML value can be both defaulted and type-checked.
+//
+// Kept as factories rather than inlined at each call site so every option of
+// the same kind shares identical validation semantics for free. An option
+// declared without a validate() is simply not value-checked, which stays a
+// valid choice for a future option whose values cannot be enumerated.
+
+function boolOption(defaultValue) {
+  return { default: defaultValue, validate: (value) => typeof value === "boolean" };
+}
+
+// For an option with a closed set of non-boolean values (e.g. a marker mode
+// "average"|"extremes"|"all"). An invalid value is diagnosed and dropped by the
+// normalizer, then the default is filled in — the same non-destructive
+// fallback an invalid boolean gets.
+function enumOption(defaultValue, allowedValues) {
+  return { default: defaultValue, validate: (value) => allowedValues.includes(value) };
 }
 
 // What the carousel shows: the view DEFINITIONS and the resolution of a
@@ -5179,6 +5003,129 @@ function buildViewState({ availability, config }) {
   };
 }
 
+// Where the rendered axis actually starts and ends.
+//
+// The axis is never just "the data range": markers sitting exactly on an edge are
+// unreadable, and an axis that jumps on every sensor update is worse than one that
+// is slightly too wide. So the range is expanded by a buffer and then rounded
+// outwards to a step, and — unless the profile opts out — it never shrinks below
+// the profile's own reference scale.
+//
+// Pure numbers only. No units, no formatting, no translated text.
+
+
+// How coarsely to round the axis. A fixed step suits Celsius, Kelvin, humidity,
+// CO2 and PM2.5, but Fahrenheit spans roughly 1.8x as many units for the same
+// physical range: a fixed fine step would produce an absurd number of gridlines
+// on a wide range, a fixed coarse one would flatten a narrow range. Profiles that
+// need it therefore declare span-dependent steps, and only those.
+function resolveDynamicStep(staticStep, dynamicDisplaySteps, low, high, baseMin, baseMax, anchorScale = true) {
+  if (!dynamicDisplaySteps) return staticStep;
+  const dataMin = Number.isFinite(low) ? low : baseMin;
+  const dataMax = Number.isFinite(high) ? high : baseMax;
+  const spanMin = anchorScale ? Math.min(dataMin, baseMin) : dataMin;
+  const spanMax = anchorScale ? Math.max(dataMax, baseMax) : dataMax;
+  const span = spanMax - spanMin;
+  const tier = dynamicDisplaySteps.find((candidate) => span <= candidate.maxSpan);
+  return (tier || dynamicDisplaySteps[dynamicDisplaySteps.length - 1]).step;
+}
+
+// Expands the anchored reference scale — or, for an unanchored profile, only the
+// live data range — to leave headroom around real values. The buffer defaults to
+// one full step when the profile does not specify its own headroom.
+//
+// A one-sided metric never expands its lower bound: there is no "too little CO2"
+// in a room, so the axis stays rooted at the reference minimum.
+function dynamicScale(coolestValue, warmestValue, scaleConfig, dynamicDisplaySteps) {
+  const { scale, step: staticStep, oneSided, headroom, anchorScale } = scaleConfig;
+  const baseMin = scale.min;
+  const baseMax = scale.max;
+  const numericLow = Number(coolestValue);
+  const numericHigh = Number(warmestValue);
+  const low = Number.isFinite(numericLow) ? numericLow : baseMin;
+  const high = Number.isFinite(numericHigh) ? numericHigh : baseMax;
+  const step = resolveDynamicStep(
+    staticStep,
+    dynamicDisplaySteps,
+    oneSided ? baseMin : low,
+    high,
+    baseMin,
+    baseMax,
+    anchorScale
+  );
+  const buffer = headroom ?? step;
+
+  const warmLimit = ceilToStep(high + buffer, step);
+  let max = anchorScale ? Math.max(baseMax, warmLimit) : warmLimit;
+  max = ceilToStep(max, step);
+  if (!Number.isFinite(max)) max = baseMax;
+
+  let min = baseMin;
+  if (!oneSided) {
+    const coldLimit = floorToStep(low - buffer, step);
+    min = anchorScale ? Math.min(baseMin, coldLimit) : coldLimit;
+    min = floorToStep(min, step);
+    if (!Number.isFinite(min)) min = baseMin;
+  }
+
+  // A degenerate axis would divide by zero in every position calculation.
+  if (min >= max) max = min + step;
+  return { min, max, step };
+}
+
+// Turning values into positions on the axis, as percentages.
+//
+// Percentages rather than pixels: the card's width is decided by the dashboard
+// layout, so the only stable description of "where does this marker go" is a
+// fraction of the bar. Everything here is a pure number — the pixel-level
+// collision avoidance for LABELS is a rendering concern and lives elsewhere.
+
+
+// Left edge and width for a band, tolerant of an inverted pair.
+function rangePosition(minValue, maxValue, scaleMin, scaleMax) {
+  const left = percentInRange(minValue, scaleMin, scaleMax);
+  const right = percentInRange(maxValue, scaleMin, scaleMax);
+  return {
+    left: Math.min(left, right),
+    width: Math.abs(right - left),
+  };
+}
+
+// Everything needed to draw one scale bar's bands and edges. Both scale views use
+// this same function with different bounds, which is what structurally guarantees
+// identical geometry for identical input rather than leaving it to convention.
+function scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
+  const comfortBand = rangePosition(comfortMin, comfortMax, scaleMin, scaleMax);
+  const optimalBand = rangePosition(optimalMin, optimalMax, scaleMin, scaleMax);
+  return {
+    scaleMin,
+    scaleMax,
+    optimalMin,
+    optimalMax,
+    comfortLeft: comfortBand.left,
+    comfortWidth: comfortBand.width,
+    comfortCenter: comfortBand.left + comfortBand.width / 2,
+    optimalLeft: optimalBand.left,
+    optimalWidth: optimalBand.width,
+    optimalCenter: optimalBand.left + optimalBand.width / 2,
+    // A data-anchored axis can legitimately sit wholly outside the semantic bands
+    // (a winter outdoor scale at -3..9 °C, say). Their configured bounds stay in
+    // the model, but a zero-width band or a label pinned to an axis edge would be
+    // actively misleading, so visibility is reported separately.
+    comfortVisible: comfortMax > scaleMin && comfortMin < scaleMax,
+    optimalVisible: optimalMax > scaleMin && optimalMin < scaleMax,
+  };
+}
+
+// One position per named marker, against the same axis the geometry above uses.
+function markerPositions(markers, scaleMin, scaleMax) {
+  const positions = {};
+  for (const key of Object.keys(markers || {})) {
+    positions[key] = percentInRange(markers[key], scaleMin, scaleMax);
+  }
+  return positions;
+}
+
 // A scale bar, from axis to labels.
 //
 // Everything on a scale bar is presentation: the axis bounds are chosen so the
@@ -5222,6 +5169,44 @@ function buildScaleAxis({ scaleConfig, displayUnitProfile, comfort, optimal, low
 function resolveMarkerNudge(firstPosition, secondPosition) {
   const overlapping = Math.abs(secondPosition - firstPosition) < MARKER_OVERLAP_PCT;
   return { first: overlapping ? -MARKER_NUDGE_PX : 0, second: overlapping ? MARKER_NUDGE_PX : 0 };
+}
+
+// One marker on a scale bar.
+//
+// A marker is a position, a colour, its own drop shadow and a tooltip. The shadow
+// is an rgba() derivation of the colour, which is exactly why markers are built
+// here and not in the domain: the position is a percentage of a rendered bar and
+// the shadow is a CSS value, neither of which is a fact about the reading.
+//
+// shiftPx exists only for the two extrema markers, which are nudged apart when they
+// would otherwise visually merge (see resolveMarkerNudge()). It is always 0 for
+// every other marker, so the render and patch paths need no special case.
+
+
+// The two shadow alphas. Room markers are deliberately fainter: with `markers:all`
+// there can be a dozen of them, and the extrema plus the average stay the ones the
+// eye is drawn to.
+const MARKER_SHADOW_ALPHA = 0.28;
+const ROOM_MARKER_SHADOW_ALPHA = 0.22;
+
+function buildMarker({ position, color, title, shiftPx = 0, shadowAlpha = MARKER_SHADOW_ALPHA }) {
+  return {
+    position,
+    shiftPx,
+    color,
+    shadow: rgba(color, shadowAlpha),
+    title,
+  };
+}
+
+function buildRoomMarker({ room, position, color, title }) {
+  return {
+    ...buildMarker({ position, color, title, shadowAlpha: ROOM_MARKER_SHADOW_ALPHA }),
+    index: room.index,
+    entity: room.entity,
+    name: room.name,
+    value: room.value,
+  };
 }
 
 // A classification turned into the tone the card actually paints with.
@@ -5278,44 +5263,6 @@ function buildTone({ classification, icon, texts }) {
 // reused by the patch path, so the two can never disagree.
 function toneStyleDeclaration(tone) {
   return `--tone-color:${tone.color};--tone-soft:${tone.soft};--tone-border:${rgba(tone.color, TONE_BORDER_ALPHA)};--tone-band:${rgba(tone.color, TONE_BAND_ALPHA)};`;
-}
-
-// One marker on a scale bar.
-//
-// A marker is a position, a colour, its own drop shadow and a tooltip. The shadow
-// is an rgba() derivation of the colour, which is exactly why markers are built
-// here and not in the domain: the position is a percentage of a rendered bar and
-// the shadow is a CSS value, neither of which is a fact about the reading.
-//
-// shiftPx exists only for the two extrema markers, which are nudged apart when they
-// would otherwise visually merge (see resolveMarkerNudge()). It is always 0 for
-// every other marker, so the render and patch paths need no special case.
-
-
-// The two shadow alphas. Room markers are deliberately fainter: with `markers:all`
-// there can be a dozen of them, and the extrema plus the average stay the ones the
-// eye is drawn to.
-const MARKER_SHADOW_ALPHA = 0.28;
-const ROOM_MARKER_SHADOW_ALPHA = 0.22;
-
-function buildMarker({ position, color, title, shiftPx = 0, shadowAlpha = MARKER_SHADOW_ALPHA }) {
-  return {
-    position,
-    shiftPx,
-    color,
-    shadow: rgba(color, shadowAlpha),
-    title,
-  };
-}
-
-function buildRoomMarker({ room, position, color, title }) {
-  return {
-    ...buildMarker({ position, color, title, shadowAlpha: ROOM_MARKER_SHADOW_ALPHA }),
-    index: room.index,
-    entity: room.entity,
-    name: room.name,
-    value: room.value,
-  };
 }
 
 // The card shape both the daily-range view and the extreme-value view use.
@@ -6098,25 +6045,6 @@ function htmlToElementIn(ownerDocument, html) {
   return wrapper.firstElementChild;
 }
 
-// The two DOM reads that must not go through a global.
-//
-// A card can be rendered into a document that is not the ambient one — a second
-// dashboard realm, a test harness with its own jsdom instance. Reading
-// `window.getComputedStyle` would silently mix realms: the style resolved would
-// belong to a different document than the element measured. Both helpers below take
-// the element and derive its own realm from it.
-
-function computedStyleOf(element) {
-  return element.ownerDocument.defaultView.getComputedStyle(element);
-}
-
-// The element's rendered width in CSS pixels. Every layout decision in
-// render/layout/ is expressed in these, because a percentage cannot know how wide a
-// label's text is.
-function measuredWidth(element) {
-  return element.getBoundingClientRect().width;
-}
-
 // Where focus goes when the element that had it disappears.
 //
 // The keyed patchers exist so this almost never happens, but two cases remain
@@ -6140,107 +6068,6 @@ function focusFallbackTarget(root) {
 function applyFocusFallback(root) {
   const target = focusFallbackTarget(root);
   if (target) target.focus();
-}
-
-// The metric card: one large tappable card with a label, a name and a value.
-//
-// Used by the daily-range view (today's minimum and maximum) and by the
-// extreme-value view (the coldest and warmest room). Both get the identical shape
-// from the identical model, which is why the two views cannot drift apart visually.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
-
-
-function renderMetricCard(model) {
-  // Only real rooms carry an index, so the action layer falls back to the card's
-  // default actions for a daily-range card instead of a nonexistent room.
-  const roomIndexAttr = model.roomIndex !== null ? ` data-room-index="${model.roomIndex}"` : "";
-
-  return `
-        <button
-          type="button"
-          class="rtc-extreme-card"
-          data-entity="${escapeHtml(model.entity)}"${roomIndexAttr}
-          style="--extreme-color:${model.color};--extreme-bg:${model.background};--extreme-border:${model.border};--extreme-line-shadow:${model.lineShadow};"
-          title="${escapeHtml(model.title)}"
-          aria-label="${escapeHtml(model.ariaLabel)}"
-        >
-          <span class="rtc-extreme-line"></span>
-          <span class="rtc-extreme-label">${escapeHtml(model.label)}</span>
-          <span class="rtc-extreme-name">${escapeHtml(model.nameText)}</span>
-          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">${escapeHtml(model.numText)}</span><span class="rtc-extreme-value-unit">${escapeHtml(model.unitText)}</span></span>
-        </button>
-      `;
-}
-
-// Field-for-field mirror of renderMetricCard(). The four custom properties are set
-// through style.setProperty() rather than by reassembling one style string, so an
-// update never re-parses a value as CSS.
-function patchMetricCard(element, model) {
-  element.setAttribute("data-entity", model.entity);
-  if (model.roomIndex !== null) element.setAttribute("data-room-index", String(model.roomIndex));
-  else element.removeAttribute("data-room-index");
-  element.style.setProperty("--extreme-color", model.color);
-  element.style.setProperty("--extreme-bg", model.background);
-  element.style.setProperty("--extreme-border", model.border);
-  element.style.setProperty("--extreme-line-shadow", model.lineShadow);
-  element.setAttribute("title", model.title);
-  element.setAttribute("aria-label", model.ariaLabel);
-  element.querySelector(".rtc-extreme-label").textContent = model.label;
-  element.querySelector(".rtc-extreme-name").textContent = model.nameText;
-  element.querySelector(".rtc-extreme-value-num").textContent = model.numText;
-  element.querySelector(".rtc-extreme-value-unit").textContent = model.unitText;
-}
-
-// The shared patch path for both two-card views. The pair is positionally fixed by
-// its render function, so index 0 and index 1 are stable slots — which is what lets
-// a focused card survive the room behind it changing. Falls back to a full
-// re-render only as a defensive guard if the DOM does not actually hold two cards;
-// these views only appear or disappear through a full rebuild, never mid-patch.
-function patchMetricCardPair(element, models, renderPairHtml) {
-  if (!element) return;
-  const cards = element.querySelectorAll(".rtc-extreme-card");
-  if (cards.length !== models.length) {
-    element.innerHTML = renderPairHtml();
-    return;
-  }
-  models.forEach((model, index) => patchMetricCard(cards[index], model));
-}
-
-function renderMetricCards(models) {
-  return `
-        ${models.map(renderMetricCard).join("\n        ")}
-      `;
-}
-
-// Long form or short form: decided at measure time, never in the translations.
-//
-// A collision-prone label is not permanently shortened for every language and every
-// card width. Instead both a canonical long form and a short fallback exist, and the
-// card picks between them here against the ACTUAL rendered width — the same way the
-// position resolvers measure real geometry rather than guessing from character
-// counts.
-//
-// The long form is always tried FIRST, and reverted to whenever there is room again.
-// This runs on every resolve pass — resize, font-ready, every data update — so
-// growing the card back out restores the long form on the very next pass rather than
-// staying shortened until a reload.
-//
-// The short form is a deliberate intermediate step BEFORE the CSS ellipsis fallback
-// the caller applies when even the short form does not fit: a real word beats a
-// truncated one whenever a real word fits.
-
-
-function resolveLabelForm(element, longText, shortText, fitsWithWidth) {
-  element.textContent = longText;
-  // Most languages have no distinct short form. Short-circuiting here is what keeps
-  // them from paying for the extra reflows the fits() closure would trigger.
-  if (longText === shortText) return measuredWidth(element);
-  const longWidth = measuredWidth(element);
-  if (fitsWithWidth(longWidth)) return longWidth;
-  element.textContent = shortText;
-  return measuredWidth(element);
 }
 
 // The average: the card's headline number, on the left of the main panel.
@@ -6663,6 +6490,78 @@ function resolveViewLayouts(context, root, viewModel, viewRenderers) {
   }
 }
 
+// The metric card: one large tappable card with a label, a name and a value.
+//
+// Used by the daily-range view (today's minimum and maximum) and by the
+// extreme-value view (the coldest and warmest room). Both get the identical shape
+// from the identical model, which is why the two views cannot drift apart visually.
+//
+// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
+// and is captured verbatim by the DOM characterization baselines.
+
+
+function renderMetricCard(model) {
+  // Only real rooms carry an index, so the action layer falls back to the card's
+  // default actions for a daily-range card instead of a nonexistent room.
+  const roomIndexAttr = model.roomIndex !== null ? ` data-room-index="${model.roomIndex}"` : "";
+
+  return `
+        <button
+          type="button"
+          class="rtc-extreme-card"
+          data-entity="${escapeHtml(model.entity)}"${roomIndexAttr}
+          style="--extreme-color:${model.color};--extreme-bg:${model.background};--extreme-border:${model.border};--extreme-line-shadow:${model.lineShadow};"
+          title="${escapeHtml(model.title)}"
+          aria-label="${escapeHtml(model.ariaLabel)}"
+        >
+          <span class="rtc-extreme-line"></span>
+          <span class="rtc-extreme-label">${escapeHtml(model.label)}</span>
+          <span class="rtc-extreme-name">${escapeHtml(model.nameText)}</span>
+          <span class="rtc-extreme-value"><span class="rtc-extreme-value-num">${escapeHtml(model.numText)}</span><span class="rtc-extreme-value-unit">${escapeHtml(model.unitText)}</span></span>
+        </button>
+      `;
+}
+
+// Field-for-field mirror of renderMetricCard(). The four custom properties are set
+// through style.setProperty() rather than by reassembling one style string, so an
+// update never re-parses a value as CSS.
+function patchMetricCard(element, model) {
+  element.setAttribute("data-entity", model.entity);
+  if (model.roomIndex !== null) element.setAttribute("data-room-index", String(model.roomIndex));
+  else element.removeAttribute("data-room-index");
+  element.style.setProperty("--extreme-color", model.color);
+  element.style.setProperty("--extreme-bg", model.background);
+  element.style.setProperty("--extreme-border", model.border);
+  element.style.setProperty("--extreme-line-shadow", model.lineShadow);
+  element.setAttribute("title", model.title);
+  element.setAttribute("aria-label", model.ariaLabel);
+  element.querySelector(".rtc-extreme-label").textContent = model.label;
+  element.querySelector(".rtc-extreme-name").textContent = model.nameText;
+  element.querySelector(".rtc-extreme-value-num").textContent = model.numText;
+  element.querySelector(".rtc-extreme-value-unit").textContent = model.unitText;
+}
+
+// The shared patch path for both two-card views. The pair is positionally fixed by
+// its render function, so index 0 and index 1 are stable slots — which is what lets
+// a focused card survive the room behind it changing. Falls back to a full
+// re-render only as a defensive guard if the DOM does not actually hold two cards;
+// these views only appear or disappear through a full rebuild, never mid-patch.
+function patchMetricCardPair(element, models, renderPairHtml) {
+  if (!element) return;
+  const cards = element.querySelectorAll(".rtc-extreme-card");
+  if (cards.length !== models.length) {
+    element.innerHTML = renderPairHtml();
+    return;
+  }
+  models.forEach((model, index) => patchMetricCard(cards[index], model));
+}
+
+function renderMetricCards(models) {
+  return `
+        ${models.map(renderMetricCard).join("\n        ")}
+      `;
+}
+
 // The daily-range view: two metric cards for today's minimum and maximum.
 //
 // NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
@@ -6806,6 +6705,54 @@ function patchScaleBar(containerEl, content) {
 
   const labelMaxEl = containerEl.querySelector(".rtc-scale-label-max");
   if (labelMaxEl) labelMaxEl.textContent = content.boundaryLabels.max;
+}
+
+// The two DOM reads that must not go through a global.
+//
+// A card can be rendered into a document that is not the ambient one — a second
+// dashboard realm, a test harness with its own jsdom instance. Reading
+// `window.getComputedStyle` would silently mix realms: the style resolved would
+// belong to a different document than the element measured. Both helpers below take
+// the element and derive its own realm from it.
+
+function computedStyleOf(element) {
+  return element.ownerDocument.defaultView.getComputedStyle(element);
+}
+
+// The element's rendered width in CSS pixels. Every layout decision in
+// render/layout/ is expressed in these, because a percentage cannot know how wide a
+// label's text is.
+function measuredWidth(element) {
+  return element.getBoundingClientRect().width;
+}
+
+// Long form or short form: decided at measure time, never in the translations.
+//
+// A collision-prone label is not permanently shortened for every language and every
+// card width. Instead both a canonical long form and a short fallback exist, and the
+// card picks between them here against the ACTUAL rendered width — the same way the
+// position resolvers measure real geometry rather than guessing from character
+// counts.
+//
+// The long form is always tried FIRST, and reverted to whenever there is room again.
+// This runs on every resolve pass — resize, font-ready, every data update — so
+// growing the card back out restores the long form on the very next pass rather than
+// staying shortened until a reload.
+//
+// The short form is a deliberate intermediate step BEFORE the CSS ellipsis fallback
+// the caller applies when even the short form does not fit: a real word beats a
+// truncated one whenever a real word fits.
+
+
+function resolveLabelForm(element, longText, shortText, fitsWithWidth) {
+  element.textContent = longText;
+  // Most languages have no distinct short form. Short-circuiting here is what keeps
+  // them from paying for the extra reflows the fits() closure would trigger.
+  if (longText === shortText) return measuredWidth(element);
+  const longWidth = measuredWidth(element);
+  if (fitsWithWidth(longWidth)) return longWidth;
+  element.textContent = shortText;
+  return measuredWidth(element);
 }
 
 // Positions a small group of labels inside a horizontal span without overlaps.
@@ -8589,6 +8536,59 @@ function createBrowserPlatform(getDocument) {
   };
 }
 
+// Auto-slide easing: one shared definition for CSS and JS (AP-08, audit 17).
+//
+// CSS and JS used to each hardcode "cubic-bezier(.45,0,.16,1)" separately (the
+// keyframe animation, the manual-settle transition, the swipe-settle
+// transition) while the accessibility flip calculation used a completely
+// unrelated number (the raw temporal midpoint, slideMs/2). A cubic-bezier
+// easing's TIME axis and its EASED/spatial-progress axis are different curves,
+// so "50% of the time" and "50% of the visual motion" land at different
+// moments. The accessible view must follow whichever view is spatially
+// dominant, not raw time, so the flip has to happen where the EASED progress
+// crosses 50% — which requires inverting the same curve CSS renders with.
+//
+// Keeping the curve, its CSS spelling and its inversion in one module is what
+// makes drifting apart impossible.
+
+const SLIDE_EASING = Object.freeze({ x1: 0.45, y1: 0, x2: 0.16, y2: 1 });
+
+function cubicBezierPoint(easing, u) {
+  // Standard cubic-bezier evaluation with implicit P0=(0,0)/P3=(1,1) (the
+  // two endpoints every CSS cubic-bezier() curve is anchored to).
+  const mu = 1 - u;
+  return {
+    x: 3 * mu * mu * u * easing.x1 + 3 * mu * u * u * easing.x2 + u * u * u,
+    y: 3 * mu * mu * u * easing.y1 + 3 * mu * u * u * easing.y2 + u * u * u,
+  };
+}
+
+function timeFractionForEasedProgress(easing, targetY) {
+  // Inverts a cubic-bezier curve: given the desired EASED/spatial progress
+  // (targetY), finds the TIME fraction at which the curve produces it.
+  // Bisection on the curve parameter u (Y(u) is monotonic for any valid CSS
+  // easing curve) rather than a closed-form cubic solve — general-purpose,
+  // numerically robust, and precise enough after 50 iterations that the
+  // result is exact to well beyond double precision's useful range.
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (cubicBezierPoint(easing, mid).y < targetY) lo = mid; else hi = mid;
+  }
+  return cubicBezierPoint(easing, (lo + hi) / 2).x;
+}
+
+// The single, shared CSS string — every place that renders the slide easing
+// (keyframe animation, manual settle transitions) uses this exact string, so
+// they can never drift out of sync with each other or with the flip fraction
+// below.
+const SLIDE_EASING_CSS = `cubic-bezier(${SLIDE_EASING.x1},${SLIDE_EASING.y1},${SLIDE_EASING.x2},${SLIDE_EASING.y2})`;
+
+// Where the slide's SPATIAL midpoint (eased progress = 0.5) falls on the TIME
+// axis — ~0.35375 for cubic-bezier(.45,0,.16,1) (vs. 0.5 for the old, wrong
+// temporal-midpoint assumption). Computed once at module load.
+const A11Y_FLIP_TIME_FRACTION = timeFractionForEasedProgress(SLIDE_EASING, 0.5);
+
 // The carousel's arithmetic, as pure functions.
 //
 // Every value below is derived from four numbers — how many views there are, how long
@@ -9113,13 +9113,26 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
 // coalesce onto, and a promise. And both need to be undone on disconnect, which is the
 // part that is easy to get wrong when it lives next to a render pipeline.
 
+// What has happened to the current document's fonts.ready promise. One tiny state
+// machine per SOURCE, because "have we measured yet" and "which promise was that" are
+// two different questions and answering them with one boolean loses the case that
+// matters: the promise settled while the card was out of the DOM.
+const FONTS = {
+  PENDING: "pending", // subscribed, still loading
+  DEFERRED: "deferred", // settled, but the card was disconnected — owed one measurement
+  MEASURED: "measured", // settled and measured; nothing further is owed
+  REJECTED: "rejected", // settled as a failure; never retried for this source
+};
+
 function createResizeRuntime({ platform, onMeasure }) {
   let observer = null;
   let frameHandle = null;
-  // The fonts.ready promise this runtime is currently subscribed to, or null. Keyed on
-  // the promise rather than on a boolean so an adopted card resubscribes to its new
-  // document exactly once (see measureOnceFontsReady()).
-  let fontsSubscribedTo = null;
+  // The fonts.ready promise this runtime is subscribed to, and what became of it. Keyed
+  // on the promise itself rather than on a flag, so a card adopted into another document
+  // subscribes to its NEW source exactly once and a settled promise from the document it
+  // left can never measure the card it no longer belongs to.
+  let fontsSource = null;
+  let fontsState = null;
 
   function cancelPendingFrame() {
     if (frameHandle !== null) {
@@ -9159,31 +9172,62 @@ function createResizeRuntime({ platform, onMeasure }) {
       }
     },
 
-    // Subscribes exactly once per FONT SOURCE, not once per rebuild and not once for
-    // all time.
+    // Measures once the web font has actually loaded — and exactly once per source.
     //
-    // Once per rebuild would be wrong: a fresh .then() on every rebuild that happens
-    // before the fonts land would each capture that call's own state, and a stale one
-    // could re-apply an old measurement after a newer render already ran.
+    // Three wrong answers this replaces, in the order they were wrong:
     //
-    // Once for all time would also be wrong: a card adopted into another document gets
-    // a DIFFERENT fonts.ready, whose loading state has nothing to do with the one that
-    // was subscribed to. So the subscription is keyed on the promise itself, and the
-    // callback re-checks that its source is still the current one — a promise from a
-    // document the card has since left must not trigger a measurement in the new one.
+    //   once per rebuild:  a fresh .then() on every rebuild before the fonts land would
+    //                      each capture that call's own state, and a stale one could
+    //                      re-apply an old measurement after a newer render;
+    //   once ever:         a card adopted into another document gets a DIFFERENT
+    //                      fonts.ready whose loading state has nothing to do with the
+    //                      one subscribed to;
+    //   once per promise:  correct about identity, but silently loses the measurement
+    //                      when the promise settles while the card is disconnected —
+    //                      nothing measures then, and the stored identity blocks any
+    //                      retry after the reconnect.
     //
-    // A no-op in the common case where fonts were already ready, and on a platform
-    // without the Fonts API at all.
+    // So the source carries a state, and a settled-while-disconnected source stays OWED
+    // one measurement until the card is back.
     measureOnceFontsReady(isStillConnected) {
       const ready = platform.fontsReady();
-      if (!ready || ready === fontsSubscribedTo) return;
-      fontsSubscribedTo = ready;
-      ready
-        .then(() => {
-          if (platform.fontsReady() === ready && isStillConnected()) onMeasure();
-        })
-        .catch(() => {});
+      if (!ready) return; // no Fonts API: a clean no-op, not an error
+
+      if (ready !== fontsSource) {
+        // A new realm's source supersedes whatever the old one was waiting for. The old
+        // promise may still settle; its handler checks identity and does nothing.
+        fontsSource = ready;
+        fontsState = FONTS.PENDING;
+        ready.then(
+          () => {
+            if (fontsSource !== ready) return; // superseded while loading
+            if (isStillConnected()) {
+              fontsState = FONTS.MEASURED;
+              onMeasure();
+              return;
+            }
+            // Settled while the card was out of the DOM. Measuring now would be work on
+            // a detached node; the debt is remembered instead.
+            fontsState = FONTS.DEFERRED;
+          },
+          () => {
+            if (fontsSource === ready) fontsState = FONTS.REJECTED;
+          }
+        );
+        return;
+      }
+
+      // Same source as before. The only thing left to do is settle an outstanding debt —
+      // which is what a reconnect looks like from here.
+      if (fontsState === FONTS.DEFERRED && isStillConnected()) {
+        fontsState = FONTS.MEASURED;
+        onMeasure();
+      }
     },
+
+    // For tests and diagnostics: which of the four states the current source is in, or
+    // null when there is no source. Reading it changes nothing.
+    fontsStateForCurrentSource: () => fontsState,
 
     hasPendingFrame: () => frameHandle !== null,
     isObserving: () => observer !== null,
@@ -9322,18 +9366,15 @@ function createInteractionRuntime({
   }
 
   return {
-    // ---- owned state, exposed as accessors ----------------------------------
+    // ---- owned state, exposed as read-only accessors ------------------------
+    // No setters, deliberately. A gesture begins with a pointer event and ends with
+    // one of the handlers below; there is no third way to be mid-swipe, and offering a
+    // setter would invite one that the card itself can never produce.
     get pointer() {
       return pointer;
     },
-    set pointer(value) {
-      pointer = value;
-    },
     get isDragging() {
       return dragging;
-    },
-    set isDragging(value) {
-      dragging = Boolean(value);
     },
     get suppressClickUntil() {
       return suppressClickUntil;
@@ -9458,6 +9499,48 @@ function createInteractionRuntime({
       resumeIfTrackIsManual(0);
     },
 
+    // The element has left the DOM.
+    //
+    // Unlike a cancel, there is nothing left to settle: the track the gesture was
+    // manipulating is about to be replaced or is already unreachable, so snapping it or
+    // scheduling a resume into it would be work on a node nobody will see — and the
+    // resume would fire into a detached card. The gesture is simply ENDED.
+    //
+    // This has to happen, and it has to happen here. Home Assistant removes and
+    // reinserts cards routinely, on the same element instance. Left alone, a pointer
+    // that outlived the removal makes isInteracting() permanently true: the carousel
+    // refuses to start on reconnect, and every hass update is deferred waiting for a
+    // pointerup from a node that no longer exists. The card freezes on stale data.
+    //
+    // The click-suppression deadline is reset for the same reason: it was armed for a
+    // click that will never be delivered, and leaving it would swallow the first real
+    // action after the card comes back.
+    //
+    // Idempotent by construction — there is no state left to clear on a second call.
+    disconnect() {
+      pointer = null;
+      dragging = false;
+      suppressClickUntil = 0;
+    },
+
+    // The markup the gesture is anchored to is about to be replaced.
+    //
+    // A pointerdown that has NOT yet been classified as a drag holds DOM-derived
+    // geometry — the rotator's width, the frozen track position, the entity element it
+    // started on — and every one of those is about to stop being true. A later
+    // pointermove or pointerup on the same gesture would compute a swipe from that
+    // stale geometry and land on the wrong view; the listeners survive the rebuild
+    // because they live on the shadow root itself.
+    //
+    // A CONFIRMED drag never reaches here — the render controller defers the whole
+    // rebuild while one is in flight — so there is nothing to settle, only to abandon.
+    // The existing "no pointer" guards in the move/up/cancel handlers then make the
+    // rest of the gesture a clean no-op.
+    abandonGestureForRebuild() {
+      pointer = null;
+      dragging = false;
+    },
+
     // A configuration change can arrive mid-swipe — live editing in the dashboard
     // editor. A stale pointer (its width and frozen position computed against the
     // about-to-change view count) must not carry over. A CONFIRMED drag is settled first,
@@ -9573,6 +9656,231 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
   };
 }
 
+// Who decides HOW the card is rendered, and what "already rendered" means.
+//
+// Three questions used to be answered by seven fields scattered across the custom
+// element next to the configuration, the hass object and the DOM handles:
+//
+//   is a render needed at all?          the data signature
+//   can it be a patch, or must the      the structure signature and the
+//   markup be rebuilt?                  structural-config signature
+//   what is currently on screen?        rendered / lastViewModel
+//
+// Nothing else owns those. The element supplies the inputs and performs the three
+// render paths; this module decides which one runs and when the decision is committed.
+//
+// COMMIT ON SUCCESS is the rule that makes the whole thing safe. The signatures are the
+// card's memory of what is on screen, so writing them before the render would mean a
+// throwing render leaves behind a memory of a render that never happened — and the very
+// next identical hass push would compare equal and be skipped, freezing the card on
+// stale content until some unrelated update happened to differ. Every commit below
+// therefore happens after the render path returns, never before.
+//
+// It holds no DOM, no clock, no configuration object and no view model of its own
+// making: seven ports in, one decision out.
+
+
+// Which path a render() call took. Returned rather than logged, so a test can assert
+// "this hass update was a patch, not a rebuild" — the property the partial-update
+// pipeline exists to provide — without reading private state or counting DOM writes.
+const RENDER_PATH = {
+  // A gesture is in flight; the update is remembered and replayed when it ends.
+  DEFERRED: "deferred",
+  // Nothing that can affect the card changed.
+  SKIPPED: "skipped",
+  // The markup itself had to change.
+  FULL: "full",
+  // The card is in its empty state and stayed there.
+  EMPTY: "empty",
+  // Same markup, new values.
+  CONTENT: "content",
+};
+
+function createRenderController({
+  viewRenderers,
+  computeViewModel,
+  isDragging,
+  isCurrentlyEmpty,
+  renderAll,
+  updateEmpty,
+  updateContent,
+}) {
+  // ---- owned state ----------------------------------------------------------
+  let dataSignature = "";
+  let structuralConfigSignature = null;
+  let structureSignature = null;
+  let rendered = false;
+  let renderPending = false;
+  let lastViewModel = null;
+  // A transient snapshot taken by setConfig() before the new configuration is installed,
+  // consumed by the one render that follows it. `undefined` means "no snapshot, compute
+  // it live"; `null` is a real snapshot meaning "no view was visible", so the two cannot
+  // be collapsed into one falsy check.
+  let preConfigVisualKey = undefined;
+
+  return {
+    // ---- the decision ---------------------------------------------------------
+    render({ dataSignature: nextDataSignature, structuralConfigSignature: nextStructuralConfig, allowSkip = true }) {
+      // A hass update arriving mid-swipe cannot be rendered without jumping the track.
+      // Remembering it is what stops it from being silently lost until some later,
+      // unrelated update happens to arrive.
+      if (isDragging()) {
+        renderPending = true;
+        return RENDER_PATH.DEFERRED;
+      }
+
+      // Deliberately before any model or view-model work: an unchanged signature means
+      // an unchanged card, and computing a view model only to throw it away would make
+      // every no-op hass push cost a full pipeline run.
+      if (allowSkip && nextDataSignature === dataSignature) return RENDER_PATH.SKIPPED;
+
+      const viewModel = computeViewModel();
+      const currentlyEmpty = isCurrentlyEmpty();
+      // What the MARKUP would look like, as one comparable value: the chip grid, the
+      // ordered view keys, the collapsed-vs-hint null-view state, and whatever each view
+      // declares about its own optional nodes. A change here cannot be expressed by
+      // patching, so it forces a rebuild — and because each view contributes its own
+      // part, a new view or a new optional element extends the signature without this
+      // module learning about it.
+      const nextStructure = cardStructureSignature(viewModel, viewRenderers);
+
+      const commit = () => {
+        dataSignature = nextDataSignature;
+        structuralConfigSignature = nextStructuralConfig;
+        structureSignature = nextStructure;
+        lastViewModel = viewModel;
+      };
+
+      const structureChanged = nextStructure !== structureSignature;
+      const structuralConfigChanged = nextStructuralConfig !== structuralConfigSignature;
+
+      if (!rendered || viewModel.empty !== currentlyEmpty || (!viewModel.empty && (structureChanged || structuralConfigChanged))) {
+        // isFirstRender is passed in rather than read back afterwards: the render path
+        // needs to know whether there is a previous view worth protecting, and it must
+        // learn that before `rendered` flips.
+        renderAll(viewModel, { isFirstRender: !rendered, preConfigVisualKey });
+        rendered = true;
+        commit();
+        return RENDER_PATH.FULL;
+      }
+
+      if (viewModel.empty) {
+        updateEmpty(viewModel);
+        commit();
+        return RENDER_PATH.EMPTY;
+      }
+
+      updateContent(viewModel);
+      commit();
+      return RENDER_PATH.CONTENT;
+    },
+
+    // ---- queries ---------------------------------------------------------------
+    // The view model currently on screen. The resize and fonts triggers re-measure
+    // against this rather than waiting for a hass update they have no reason to expect.
+    get lastViewModel() {
+      return lastViewModel;
+    },
+    get hasRendered() {
+      return rendered;
+    },
+    get isRenderPending() {
+      return renderPending;
+    },
+
+    // ---- commands --------------------------------------------------------------
+    // A deferred update is now due. Returns whether there actually was one, so the
+    // caller can decide whether a render is warranted at all, and clears it either way:
+    // a pending render is a one-shot debt, not a mode.
+    takePendingRender() {
+      const wasPending = renderPending;
+      renderPending = false;
+      return wasPending;
+    },
+
+    // The reason for deferring is gone and the state it referred to is stale — a config
+    // change replacing it, or the card leaving the document. Distinct from
+    // takePendingRender() because nothing is owed afterwards.
+    dropPendingRender() {
+      renderPending = false;
+    },
+
+    // A new configuration can change the output without changing a single entity, so
+    // the data signature stops being evidence of anything.
+    invalidateDataSignature() {
+      dataSignature = "";
+    },
+
+    // The view visible BEFORE a configuration change, read while the old configuration
+    // and view list are still intact. Computing it afterwards would reinterpret the
+    // still-running old animation with the new timing and land on the wrong view.
+    capturePreConfigVisualKey(key) {
+      preConfigVisualKey = key;
+    },
+    releasePreConfigVisualKey() {
+      preConfigVisualKey = undefined;
+    },
+  };
+}
+
+// The two comparable values that decide whether anything has to be rendered at all.
+//
+// Both are strings on purpose. The question "did anything change" is asked on every
+// hass push — several times a second on a busy dashboard — and answering it by walking
+// two object graphs would cost more than the render it is trying to avoid. A string
+// comparison costs nothing and is trivially correct as long as every input that can
+// change the output appears in it, which is what the two functions below are for.
+//
+// Pure: no clock, no DOM, no element. Everything arrives as an argument, so a signature
+// can be asserted by writing down a config and a states map.
+
+// Everything whose change requires the card to be re-evaluated at all.
+//
+// last_updated rather than last_changed is deliberate: an attribute-only update (a
+// thermostat's target temperature moving while its state stays "heat") leaves
+// last_changed untouched, and the card reads attributes.
+function entityDataSignature({ config, states, language, activeViewIndex }) {
+  const relevantEntities = [
+    config.entity,
+    config.range_entity,
+    config.trend_entity,
+    ...config.rooms.map((room) => room.entity),
+  ].filter(Boolean);
+
+  const relevantStates = relevantEntities
+    .map((entity) => {
+      const stateObj = states?.[entity];
+      return `${entity}:${stateObj?.state ?? ""}:${stateObj?.last_updated ?? ""}`;
+    })
+    .join("|");
+
+  return [
+    relevantStates,
+    `lang:${language}`,
+    `rotation:${config.rotation_seconds}`,
+    `slide:${config.slide_seconds}`,
+    `view:${activeViewIndex}`,
+  ].join("|");
+}
+
+// Everything that changes the MARKUP without changing the view list, and therefore
+// cannot be applied by patching.
+//
+//   hide_footer            the footer markup exists or it does not
+//   rotation_seconds       the @keyframes breakpoint percentages are baked into
+//   slide_seconds          <style> at full-render time and cannot be patched
+//   auto_slide             only the structural path starts or stops the animation, so
+//                          toggling this alone would otherwise leave it as it was
+//   views                  a views[i].options change (a band toggling) does not alter
+//                          the key list at all, and the patch path can only update
+//                          elements that already exist
+//
+// The last entry is what makes this generic: every current and future structural view
+// option is covered without naming it here.
+function structuralConfigSignature(config) {
+  return `${config.hide_footer}|${config.rotation_seconds}|${config.slide_seconds}|${config.auto_slide}|${JSON.stringify(config.views)}`;
+}
+
 // The custom element: Home Assistant's lifecycle, the render pipeline, and the
 // state transitions between them.
 //
@@ -9580,16 +9888,16 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
 // down:
 //
 //   config and hass          it owns these, because Home Assistant hands them to it
-//   render signatures        when a render is needed at all, and how much of one
-//   _renderPending           a render deferred because a gesture is in flight
+//   the shadow DOM           it is the only thing that may write markup
 //   warning deduplication    stateful, so it cannot live in a pure normalizer
 //   lifecycle orchestration  connect, disconnect, and what each one starts or stops
 //
-// The carousel owns the active index and both timers. The interaction runtime owns the
-// pointer, the drag flag and the click-suppression deadline. The resize runtime owns
-// the observer, the animation frame and the fonts subscription. The element holds
-// windows onto those — accessors, never copies — because a second copy of a fact is how
-// the two drift apart.
+// The render controller owns the three signatures, the deferred-render debt, whether
+// anything has been rendered at all and the view model on screen. The carousel owns the
+// active index and both timers. The interaction runtime owns the pointer, the drag flag
+// and the click-suppression deadline. The resize runtime owns the observer, the
+// animation frame and the fonts subscription. The element holds windows onto those —
+// accessors, never copies — because a second copy of a fact is how the two drift apart.
 //
 // Import direction is enforced by test/unit/architecture-imports.test.js:
 //
@@ -9678,7 +9986,7 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // change the rendered width without any entity changing.
       this._resize = createResizeRuntime({
         platform: this._platform,
-        onMeasure: () => this._resolveViewLayouts(this._lastViewModel),
+        onMeasure: () => this._resolveViewLayouts(this._renderController.lastViewModel),
       });
 
       // Hands a user action to Home Assistant. Gets neither hass nor this element:
@@ -9704,11 +10012,11 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
         // into the action runtime: that method is the seam existing tests substitute to
         // observe which action a gesture resolved to, and it holds no logic of its own.
         fireAction: (target, action) => this._fireHassAction(target, action),
-        // The render pipeline stays with the element: _renderPending is a render
-        // concern, not a gesture one.
+        // The gesture reports what it did; whether that warrants a render, and whether
+        // one was already owed, is the render controller's to answer.
         requestRender: ({ viewChanged }) => {
-          if (!viewChanged && !this._renderPending) return;
-          this._renderPending = false;
+          const wasPending = this._renderController.takePendingRender();
+          if (!viewChanged && !wasPending) return;
           this._render(false);
         },
       });
@@ -9719,26 +10027,25 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // view-state.js). Set alongside this._views in _renderAll(), and part
       // of the structure signature _render() compares.
       this._viewAreaCollapsed = false;
-      // AP-07: transient snapshot for the setConfig()-triggered old-timing
-      // fix — see setConfig()/_renderAll(). undefined outside the narrow
-      // window of one _render() cycle immediately following a setConfig()
-      // call; _renderAll() falls back to computing live whenever it's
-      // undefined (which is the normal, hass-driven-update case).
-      this._preConfigChangeVisualKey = undefined;
-      this._lastRenderSignature = "";
-      this._structuralConfigSignature = null;
-      // The last RENDERED markup structure (see cardStructureSignature()). Committed
-      // alongside the other two, only after a render path actually succeeded.
-      this._structureSignature = null;
+
+      // Decides whether a render is needed and how much of one: the three signatures,
+      // the deferred-render debt, whether anything has been rendered at all, and the
+      // view model currently on screen. The element supplies the inputs and performs
+      // the three paths; it no longer decides between them.
+      this._renderController = createRenderController({
+        viewRenderers: VIEW_RENDERERS,
+        computeViewModel: () => this._computeViewModel(),
+        isDragging: () => this._isDragging,
+        isCurrentlyEmpty: () => Boolean(this.shadowRoot.querySelector(".rtc-empty")),
+        renderAll: (viewModel, options) => this._renderAll(viewModel, options),
+        updateEmpty: (viewModel) => this._updateEmpty(viewModel),
+        updateContent: (viewModel) => this._updateContent(viewModel),
+      });
+
       this._eventsBound = false;
       // Returned by the platform when the visibility listener is attached; the only
       // thing that knows how to detach it again.
       this._unlistenVisibility = null;
-      this._rendered = false;
-      // Set when a hass update arrives while a swipe is in progress (see
-      // _render()); a pending update is applied once the drag ends (see
-      // _handlePointerUp()/_handlePointerCancel()) so it's never silently lost.
-      this._renderPending = false;
       // _language() memoization — see _language().
       this._languageCacheHass = undefined;
       this._languageCacheConfigLanguage = undefined;
@@ -9751,9 +10058,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       this._lastViewConfigWarningKey = null;
       // _warnMixedMetricKindsOnce() dedup (AP-02) — see there.
       this._lastMetricContextWarningKey = null;
-      // Most recent view model, kept so the resize observer below can re-resolve
-      // every mounted view's measured layout without needing a fresh hass update.
-      this._lastViewModel = null;
 
       // Bind handlers once so add/removeEventListener always reference the
       // same function.
@@ -9768,9 +10072,11 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     }
 
     // ==== Accessors over controller-owned state ====
-    // Read-write where the render path legitimately assigns (the resolved view list,
-    // the active index), read-only for the timer handles. None of them stores
-    // anything: there is exactly one owner, and these are the window onto it.
+    // Read-write only where the render path legitimately assigns — the resolved view
+    // list and the active index, both of which a structural rebuild recomputes.
+    // Everything else is read-only: a setter would either create a second copy of the
+    // same fact or, in the strict-mode bundle, throw. None of them stores anything;
+    // there is exactly one owner, and these are the window onto it.
     get _views() {
       return this._carousel.viewKeys;
     }
@@ -9787,35 +10093,8 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       this._carousel.activeIndex = index;
     }
 
-    get _resumeAutoTimer() {
-      return this._carousel.resumeTimerHandle;
-    }
-
-    // The interaction runtime's state, same rule: windows, never copies. _pointer and
-    // _isDragging are writable because existing tests drive a gesture by constructing
-    // the exact pointer shape a real pointerdown would produce.
-    get _pointer() {
-      return this._interaction.pointer;
-    }
-
-    set _pointer(value) {
-      this._interaction.pointer = value;
-    }
-
     get _isDragging() {
       return this._interaction.isDragging;
-    }
-
-    set _isDragging(value) {
-      this._interaction.isDragging = value;
-    }
-
-    get _suppressClickUntil() {
-      return this._interaction.suppressClickUntil;
-    }
-
-    get _a11ySyncTimer() {
-      return this._carousel.accessibilityTimerHandle;
     }
 
     static getStubConfig() {
@@ -9838,7 +10117,7 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // editor. The gesture itself is the interaction runtime's to abort; the pending
       // render is the element's.
       this._interaction.cancelForConfigChange();
-      this._renderPending = false;
+      this._renderController.dropPendingRender();
     }
 
     setConfig(config) {
@@ -9853,12 +10132,12 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // structuralConfigSignature in _render()) — landing in the wrong
       // segment and preserving the wrong view. _renderAll() prefers this
       // snapshot over recomputing live.
-      this._preConfigChangeVisualKey = this._views[this._currentVisualViewIndex()] ?? null;
+      this._renderController.capturePreConfigVisualKey(this._views[this._currentVisualViewIndex()] ?? null);
       // P2 fix (reviewer finding, post-AP-07): the cleanup below must run
       // even if _normalizeConfig()/_render() throws (Home Assistant's own
       // config-validation contract requires setConfig() to still propagate
       // that error, so this is finally, not catch) — otherwise a thrown
-      // config leaves this._preConfigChangeVisualKey stuck on a stale
+      // config leaves the controller's pre-config snapshot stuck on a stale
       // value, ready to leak into a later, unrelated hass-driven rebuild.
       try {
         this._config = this._normalizeConfig(config);
@@ -9867,7 +10146,7 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
         // preserves it across a structural change when the previously
         // active view key still exists, falling back to config.start_view
         // then the first active view otherwise (see _renderAll()).
-        this._lastRenderSignature = "";
+        this._renderController.invalidateDataSignature();
         // P1 fix (reviewer finding, post-AP-07): no trailing
         // _restartRotation() after this — it used to unconditionally
         // re-engage the synced auto-slide animation immediately,
@@ -9880,7 +10159,7 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
         // starts rotation when the card is first attached to the DOM.
         this._render(false);
       } finally {
-        this._preConfigChangeVisualKey = undefined;
+        this._renderController.releasePreConfigVisualKey();
       }
     }
 
@@ -9941,7 +10220,21 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     }
 
     disconnectedCallback() {
-      // Card is removed/rebuilt by Home Assistant; clean up timers and listeners.
+      // Card is removed or rebuilt by Home Assistant. Every runtime ends what it was
+      // doing; nothing schedules anything into a card that is no longer in the document.
+      //
+      // The gesture goes first, and deliberately so: it is the only one of the three
+      // whose state would otherwise BLOCK the reconnected card rather than merely leak.
+      // A pointer that survives the removal keeps isInteracting() true, which stops the
+      // carousel from starting and turns every hass update into a deferred render
+      // waiting on a pointerup that can never arrive.
+      //
+      // The deferred render itself is cleared here too. It was deferred because a
+      // gesture was in flight; that reason is gone, and the state it referred to is
+      // stale by the time the card comes back. The next hass update renders the current
+      // truth, which is what a reconnected card should show anyway.
+      this._interaction.disconnect();
+      this._renderController.dropPendingRender();
       this._carousel.destroy();
       this._unbindEvents();
       this._unbindResizeObserver();
@@ -9955,6 +10248,13 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // double-interpretation bug that led to removing the observer in 2.11.1 cannot
       // recur. Observes the card host, which survives every structural rebuild.
       this._resize.connect(this);
+      // A fonts.ready that settled while the card was out of the DOM still owes one
+      // measurement — nothing could be measured on a detached node. Asking again on
+      // reconnect is what collects that debt; it is a no-op in every other case.
+      const onScreen = this._renderController.lastViewModel;
+      if (onScreen && !onScreen.empty) {
+        this._resize.measureOnceFontsReady(() => this.isConnected);
+      }
     }
 
     _unbindResizeObserver() {
@@ -9996,75 +10296,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       return normalizeConfig(config, CONFIG_COLLABORATORS);
     }
 
-    // Delegations kept for the existing config-validation tests, which exercise
-    // these value-level rules through the element. They are migration
-    // scaffolding, not an API: config/primitives.js and config/actions.js are
-    // the real implementations and are now tested directly. Each one disappears
-    // once its element-level test moves to the module.
-    _parseConfigNumber(value) {
-      return parseConfigNumber(value);
-    }
-
-    _normalizeDecimalsOverride(value) {
-      return decimalsOverride(value);
-    }
-
-    _normalizePositiveInteger(value) {
-      return positiveInteger(value);
-    }
-
-    _normalizePositiveSeconds(value, fallback, min, max) {
-      return positiveSeconds(value, fallback, min, max);
-    }
-
-    _normalizeAction(value, fallback) {
-      return normalizeAction(value, fallback);
-    }
-
-    // ==== Classification: delegations, not a second implementation ====
-    // Every method below forwards to application/model/classification.js, which owns
-    // the policy resolution, the projection into the display unit, the entity/auto/
-    // profile/custom priority and the lazy numeric branch. What is added here is only
-    // the two things the module cannot know: which policy this card was configured
-    // with, and which entity's attributes to read. Existing element-level tests call
-    // these directly; the mathematics behind them exists exactly once.
-    _classificationPolicy() {
-      return classificationPolicyOf(this._config);
-    }
-
-    _resolveClassificationProfile(metricType, { lenient = false } = {}) {
-      return resolveCanonicalProfile(this._classificationPolicy(), metricType, { lenient });
-    }
-
-    _classificationProfileForDisplay(metricType, unitProfile) {
-      return resolveDisplayProfile(this._classificationPolicy(), metricType, unitProfile);
-    }
-
-    _getEntityClassification(entityId, { allowPartial = false } = {}) {
-      // Resolves the entity's attributes here, where hass lives; the validation
-      // itself is pure (see domain/classification/entity-attributes.js).
-      if (!entityId || !this._hass?.states?.[entityId]) return null;
-      return readEntityClassification(this._hass.states[entityId].attributes, { allowPartial });
-    }
-
-    _resolveValueClassification(value, entityId, metricType, unitProfile) {
-      return classifyValue(this._classificationPolicy(), metricType, unitProfile, value, this._attributesOf(entityId));
-    }
-
-    _attributesOf(entityId) {
-      return entityId ? this._hass?.states?.[entityId]?.attributes ?? null : null;
-    }
-
-    _temperatureIconForProfile(temp, unitProfile) {
-      return temperatureIconForProfile(temp, this._classificationProfileForDisplay('temperature', unitProfile));
-    }
-
-    _profileIconForValue(value, metricType, unitProfile) {
-      // A metric kind without icon tiers keeps its stable presentation icon, so
-      // adding another kind never forces a semantically dubious icon family.
-      return resolveProfileIcon(this._classificationPolicy(), metricType, unitProfile, value) || metricMetaFor(metricType).icon;
-    }
-
     // ==== Auto-slide, track and accessibility: delegations to the controller ====
     // Everything below forwards to this._carousel, which owns the active index, both
     // timers and every read of the wall clock. The methods stay on the element because
@@ -10079,24 +10310,8 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       this._carousel.stop();
     }
 
-    _restartRotation() {
-      this._carousel.restart();
-    }
-
-    _hasAutoSlide() {
-      return this._carousel.hasAutoSlide();
-    }
-
     _viewWidthPct() {
       return this._carousel.viewWidthPct();
-    }
-
-    _holdSequence() {
-      return this._carousel.holdSequence();
-    }
-
-    _slideTiming() {
-      return this._carousel.timing();
     }
 
     _trackAnimationCss() {
@@ -10105,28 +10320,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
 
     _slideKeyframes() {
       return this._carousel.slideKeyframes();
-    }
-
-    _timeFractionForEasedProgress(easing, targetY) {
-      // Thin delegate to the module-level pure function, for direct testability of the
-      // bezier inversion in isolation (see accessibility-carousel-timing.test.js).
-      return timeFractionForEasedProgress(easing, targetY);
-    }
-
-    _boolOption(defaultValue) {
-      return boolOption(defaultValue);
-    }
-
-    _resolveViewOptions(descriptor, providedOptions) {
-      return resolveViewOptions(descriptor, providedOptions);
-    }
-
-    _accessibleViewIndexAt(phaseMs, timing) {
-      return accessibleViewIndexAt(phaseMs, timing);
-    }
-
-    _msUntilNextAccessibilityFlip(phaseMs, timing) {
-      return msUntilNextAccessibilityFlip(phaseMs, timing);
     }
 
     _currentVisualViewIndex() {
@@ -10145,50 +10338,8 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       this._carousel.resumeWhenAligned(targetView, minDelayMs);
     }
 
-    _waitFromTimestampUntilViewHold(targetView, timestampMs, timing = this._slideTiming()) {
-      return waitFromTimestampUntilViewHold(targetView, timestampMs, timing);
-    }
-
-    _isPhaseInStableViewHold(targetView, phaseMs, timing = this._slideTiming()) {
-      return isPhaseInStableViewHold(targetView, phaseMs, timing);
-    }
-
-    _holdWindowsForView(targetView, timing = this._slideTiming()) {
-      return holdWindowsForView(targetView, timing);
-    }
-
-    _phaseForTimestamp(timestampMs, cycleMs) {
-      return phaseForTimestamp(timestampMs, cycleMs);
-    }
-
-    _maxTrackOffsetPct() {
-      return this._carousel.maxTrackOffsetPct();
-    }
-
     _updateTrackTransform(transition = true) {
       this._carousel.updateTrackTransform(transition);
-    }
-
-    _updateViewAccessibility() {
-      this._carousel.updateViewAccessibility();
-    }
-
-    _getTrackTranslatePct(track) {
-      return this._carousel.trackTranslatePct(track);
-    }
-
-    _parseNum(raw) {
-      // Shared numeric parser for _getNum()/_getAttrNum() — see
-      // parseNumericState() in core/numbers.js for the parsing rules.
-      return parseNumericState(raw);
-    }
-
-    _getNum(entityId) {
-      return readNumericState(this._hass?.states, entityId);
-    }
-
-    _getAttrNum(entityId, attrName) {
-      return readNumericAttribute(this._hass?.states, entityId, attrName);
     }
 
     _language() {
@@ -10232,18 +10383,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       return this._metricMetaFor(this._metricType());
     }
 
-    _scaleConfigFor(metricType, unitProfile) {
-      return scaleConfigFor(this._classificationProfileForDisplay(metricType, unitProfile));
-    }
-
-    _floorToStep(value, step) {
-      return floorToStep(value, step);
-    }
-
-    _ceilToStep(value, step) {
-      return ceilToStep(value, step);
-    }
-
     _fmt(value, digits) {
       // The digit count is resolved here, where the config override and the
       // metric's own default are known; the formatting itself is locale work.
@@ -10253,19 +10392,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
 
     _formatTime(isoString) {
       return formatTimeOfDay(this._language(), isoString);
-    }
-
-    _resolveUnitProfileKey(metricKind, rawUnit) {
-      // See resolveUnitProfileKey() in domain/metrics/resolution.js.
-      return resolveUnitProfileKey(metricKind, rawUnit);
-    }
-
-    _resolveAuxiliaryUnitProfile(entityId, metricKind, { rateSuffix = false } = {}) {
-      return resolveAuxiliaryUnitProfileKey(this._hass?.states, entityId, metricKind, { rateSuffix });
-    }
-
-    _buildEntityModel(entityId, sourceRole) {
-      return buildEntityModel(this._hass?.states, this._config, entityId, sourceRole);
     }
 
     _warnMixedMetricKindsOnce(diagnostic) {
@@ -10336,119 +10462,14 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     // real Celsius/Fahrenheit/Kelvin conversion; the other profiles use
     // identity conversion.
 
-    _getMetricDefinition(metricKind) {
-      return getMetricDefinition(metricKind);
-    }
-
-    _getUnitProfile(metricKind, profileKey) {
-      return getUnitProfile(metricKind, profileKey);
-    }
-
-    // Raw primitives: operate directly on profile/tier/band objects, with
-    // no registry lookup — this is what makes them reusable for a metric
-    // kind that isn't registered in METRIC_DEFINITIONS yet (see the
-    // registry's "Extension point" comment).
-    _convertUnitValue(value, quantityKind, fromProfile, toProfile) {
-      return convertUnitValue(value, quantityKind, fromProfile, toProfile);
-    }
-
-    _deriveThresholdsForProfileFromTiers(canonicalTiers, profile) {
-      return deriveThresholdsForProfile$1(canonicalTiers, profile);
-    }
-
-    _deriveBandForProfileFromBand(band, profile) {
-      return deriveBandForProfile$1(band, profile);
-    }
-
-    _convertMetricValue(value, options) {
-      return convertMetricValue(value, options);
-    }
-
-    _deriveThresholdsForProfile(metricKind, profileKey) {
-      return deriveThresholdsForProfile(metricKind, profileKey);
-    }
-
-    _deriveBandForProfile(metricKind, profileKey, bandName) {
-      return deriveBandForProfile(metricKind, profileKey, bandName);
-    }
-
     _fmtWithUnit(value, digits, withSpace = true) {
       // Combines the formatted number and its unit.
       const separator = withSpace ? " " : "";
       return `${this._fmt(value, digits)}${separator}${this._unit()}`;
     }
 
-    _esc(value) {
-      // HTML-escapes a value before it enters a template string (entity names, room labels).
-      return escapeHtml(value);
-    }
-
-    _pos(value, min, max) {
-      // Converts a value into a percentage position on the scale.
-      return percentInRange(value, min, max);
-    }
-
     _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
       return roomGridRows(count, columns, rows, autoMaxColumns);
-    }
-
-    _dynamicScale(coolestValue, warmestValue, metricType, unitProfile) {
-      // Keeps the registry guard of _resolveDynamicStep() in the loop by passing
-      // the dynamic steps only for a registered metric kind.
-      const dynamicDisplaySteps = METRIC_DEFINITIONS[metricType] ? unitProfile?.dynamicDisplaySteps : undefined;
-      return dynamicScale(coolestValue, warmestValue, this._scaleConfigFor(metricType, unitProfile), dynamicDisplaySteps);
-    }
-
-    _buildScaleModel({ metricType, unitProfile, comfortMin, comfortMax, optimalMin, optimalMax, low, high, markers }) {
-      return buildScaleAxis({
-        scaleConfig: this._scaleConfigFor(metricType, unitProfile),
-        displayUnitProfile: METRIC_DEFINITIONS[metricType] ? unitProfile : undefined,
-        comfort: { min: comfortMin, max: comfortMax },
-        optimal: { min: optimalMin, max: optimalMax },
-        low,
-        high,
-        markers,
-        formatBoundary: (value) => this._fmtWithUnit(value, 0, false),
-      });
-    }
-
-    _avgTone(value, entityId, metricType, unitProfile) {
-      return buildTone({
-        classification: this._resolveValueClassification(value, entityId, metricType, unitProfile),
-        icon: this._config.icon || this._profileIconForValue(value, metricType, unitProfile),
-        texts: this._texts(),
-      });
-    }
-
-    _classificationTableFor(metricType, unitProfile) {
-      return this._classificationProfileForDisplay(metricType, unitProfile);
-    }
-
-    _classifyNumericValue(value, metricType, unitProfile) {
-      return numericTone(classifyNumericTier(this._classificationPolicy(), metricType, unitProfile, value), this._texts());
-    }
-
-    _fallbackTone(value, metricType, unitProfile) {
-      const classification = this._classifyNumericValue(value, metricType, unitProfile);
-      return { ...classification, label: classification.level };
-    }
-
-    _isPhysicallyValid(value, metricType, unitProfile = null, { lenient = false } = {}) {
-      return isValuePhysicallyValid(this._classificationPolicy(), metricType, unitProfile, value, { lenient });
-    }
-
-    _fallbackTemperatureIcon(temp, unitProfile) {
-      return this._temperatureIconForProfile(temp, unitProfile);
-    }
-
-    _roomTone(value, entityId, metricType, unitProfile) {
-      return this._resolveValueClassification(value, entityId, metricType, unitProfile).color;
-    }
-
-    _rgba(color, alpha) {
-      // Semi-transparent variant of a tone/marker color — see rgba() in
-      // core/color.js for the accepted input shapes.
-      return rgba(color, alpha);
     }
 
     // ==== Data computation ====
@@ -10493,123 +10514,28 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     // ==== Rendering ====
     // Builds the card HTML into the shadow DOM; once built, only the
     // dynamic values are updated so the slide animation never jumps.
+    // Returns which path the render took (see RENDER_PATH), or null when there is
+    // nothing to render from yet. Returned rather than kept private because "this
+    // update was a patch, not a rebuild" is the property the partial-update pipeline
+    // exists to provide, and asserting it should not require reading private state.
     _render(allowSkip = true) {
-      if (!this._config || !this._hass) return;
-      // A hass update arriving mid-swipe can't be rendered without jumping
-      // the track; remember it and catch up once the drag ends (see
-      // _handlePointerUp()/_handlePointerCancel()) instead of silently
-      // losing it until some later, unrelated update happens to arrive.
-      if (this._isDragging) {
-        this._renderPending = true;
-        return;
-      }
-
-      const relevantEntities = [
-        this._config.entity,
-        this._config.range_entity,
-        this._config.trend_entity,
-        ...this._config.rooms.map((room) => room.entity),
-      ].filter(Boolean);
-      const relevantStates = relevantEntities
-        .map((entity) => {
-          const stateObj = this._hass.states?.[entity];
-          // last_updated (not last_changed) also catches attribute-only changes.
-          return `${entity}:${stateObj?.state ?? ""}:${stateObj?.last_updated ?? ""}`;
-        })
-        .join("|");
-      const signature = [
-        relevantStates,
-        `lang:${this._language()}`,
-        `rotation:${this._config.rotation_seconds}`,
-        `slide:${this._config.slide_seconds}`,
-        `view:${this._activeView}`,
-      ].join("|");
-      // The fast path, deliberately BEFORE any model or view-model work: an
-      // unchanged signature means an unchanged card, and computing a view model
-      // only to throw it away would make every no-op hass push cost a full
-      // pipeline run.
-      if (allowSkip && signature === this._lastRenderSignature) return;
-
-      const viewModel = this._computeViewModel();
-      const currentlyEmpty = Boolean(this.shadowRoot.querySelector(".rtc-empty"));
-      // What the MARKUP would look like, as one comparable value: the chip grid, the
-      // ordered view keys, the collapsed-vs-hint null-view state, and whatever each
-      // view declares about its own optional nodes (see cardStructureSignature()).
-      // A change here cannot be expressed by patching, so it forces a full rebuild.
-      //
-      // This replaced a hand-maintained list of booleans. That list was correct for
-      // everything on it and silently wrong for everything else: with show_rooms:false
-      // the chip grid is absent either way, so a second room becoming valid changed
-      // nothing on the list — while the scale view's footer and its two extrema
-      // markers genuinely had to appear. Composing the signature from the renderers
-      // themselves means a new view, or a new optional element in an existing view,
-      // extends its own signature and this method never learns about it.
-      const structureSignature = cardStructureSignature(viewModel, VIEW_RENDERERS);
-      const structureChanged = structureSignature !== this._structureSignature;
-
-      // hide_footer/rotation_seconds/slide_seconds don't show up in the
-      // views list, but a partial update can't add/remove the footer
-      // markup, and the auto-slide @keyframes percentage breakpoints
-      // (baked into <style> at full-render time, see _slideKeyframes())
-      // depend on rotation_seconds/slide_seconds too — so a config-only
-      // change to any of them (e.g. live-editing in the dashboard editor)
-      // also needs a full rebuild, not just the inline animation-duration
-      // update _applyAutoSlideStyles() already does.
-      //
-      // auto_slide (P1 review fix, post-AP-C1): _applyAutoSlideStyles()/
-      // _stopRotation()/_startRotation() are only ever invoked from
-      // _renderAll()'s structural path below — _updateContent() never
-      // touches the timer/CSS animation at all. Without auto_slide here, a
-      // live setConfig() that toggles ONLY auto_slide would leave the
-      // running/stopped animation exactly as it was until some other,
-      // unrelated structural change happened to force a rebuild.
-      //
-      // this._config.views (Teil 2, view-customizer Baukasten): the active
-      // VIEW KEYS list is already covered by viewsChanged above, but a
-      // views:[i].options change alone (e.g. show_comfort_band toggling)
-      // doesn't touch that list at all — the partial patch path can't
-      // add/remove the comfort/optimal band <div>s (patchScaleBar() only
-      // patches elements that already exist), so any options change must
-      // force a full rebuild too. Generic and future-proof: covers every
-      // current and future structural view option, not just the band
-      // toggles.
-      const structuralConfigSignature = `${this._config.hide_footer}|${this._config.rotation_seconds}|${this._config.slide_seconds}|${this._config.auto_slide}|${JSON.stringify(this._config.views)}`;
-      const structuralConfigChanged = structuralConfigSignature !== this._structuralConfigSignature;
-
-      // All three signatures are committed only after a render path actually
-      // succeeds (set hass()'s try/catch means a thrown _computeViewModel()/
-      // _renderAll()/_updateContent()/_updateEmpty() skips the assignment
-      // below entirely) — committing upfront would suppress a correct
-      // retry of the exact same, currently-failing update, since the next
-      // identical hass push would compute the same signature and be
-      // silently skipped as "unchanged".
-      const commit = () => {
-        this._lastRenderSignature = signature;
-        this._structuralConfigSignature = structuralConfigSignature;
-        this._structureSignature = structureSignature;
-      };
-
-      if (
-        !this._rendered ||
-        viewModel.empty !== currentlyEmpty ||
-        (!viewModel.empty && (structureChanged || structuralConfigChanged))
-      ) {
-        this._renderAll(viewModel);
-        commit();
-        return;
-      }
-
-      if (viewModel.empty) {
-        this._updateEmpty(viewModel);
-        commit();
-        return;
-      }
-
-      this._updateContent(viewModel);
-      commit();
+      if (!this._config || !this._hass) return null;
+      // Config and hass are the element's; everything derived from them is not. The two
+      // signatures are computed here because this is the only place both are in hand,
+      // and handed to the controller that decides what to do with them.
+      return this._renderController.render({
+        allowSkip,
+        dataSignature: entityDataSignature({
+          config: this._config,
+          states: this._hass.states,
+          language: this._language(),
+          activeViewIndex: this._activeView,
+        }),
+        structuralConfigSignature: structuralConfigSignature(this._config),
+      });
     }
 
-    _renderAll(viewModel) {
+    _renderAll(viewModel, { isFirstRender = !this._renderController.hasRendered, preConfigVisualKey = undefined } = {}) {
       // Full (re)build on first render, empty/normal-state changes, or a
       // view-composition change. _views/_activeView must be set before
       // _styles(), which derives track/view widths and keyframes from the
@@ -10625,30 +10551,14 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // synced animation and jump away from that view, defeating the whole
       // point of the phase-aware resume — see readme climate card.md,
       // "Auto-Slide und Bedienung".
-      // P1 fix (reviewer finding, post-AP-07): must be read before
-      // this._rendered is set true a few lines down (see there).
-      const isFirstRender = !this._rendered;
-      this._lastViewModel = viewModel;
+      // isFirstRender arrives as an argument: the controller flips its `rendered` flag
+      // only after this method returns, so "is there a previous view worth protecting"
+      // is decided once, by the owner of that fact, rather than read back mid-render.
 
-      // AP-07 (audit 14.2): an in-flight-but-not-yet-classified pointer
-      // gesture (this._pointer set, this._isDragging still false — the
-      // user has only just touched down, never crossed the swipe
-      // threshold) references DOM nodes/geometry (_pointer.width/
-      // startTranslate/entityTarget) that are about to be destroyed by the
-      // innerHTML replacement below. _render() already defers the whole
-      // rebuild via _renderPending while a CONFIRMED drag (_isDragging) is
-      // in progress, so by the time _renderAll() runs, _isDragging is
-      // always false — but a bare pointerdown has no such guard, and the
-      // pointer listeners live on the shadow root itself (survive the
-      // innerHTML replacement, see _bindEvents()). Left alone, a later
-      // pointermove/up on this same gesture would compute a swipe from
-      // stale geometry (wrong target view), and _applyAutoSlideStyles()
-      // below would bail out entirely (its own `|| this._pointer` guard),
-      // silently skipping the accessibility resync for this render. Nulling
-      // it here makes the gesture a safe no-op instead (the existing
-      // !this._pointer guards in _handlePointerMove()/_handlePointerUp()/
-      // _handlePointerCancel() already handle "no pointer" cleanly).
-      this._pointer = null;
+      // AP-07 (audit 14.2): the innerHTML replacement below destroys everything an
+      // unclassified in-flight gesture is anchored to. The runtime owns that decision
+      // and states the reasoning in full; the element only has to say when.
+      this._interaction.abandonGestureForRebuild();
 
       // AP-07 (audit 14.2, Bug C): dropping to <2 active views renders a
       // track-less solo/empty layout (no ".rtc-track" at all — see
@@ -10673,12 +10583,12 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // whichever view was actually on screen, not the stale
       // this._activeView. A live setConfig() change already captured this
       // BEFORE overwriting this._config (see there) — using the OLD timing
-      // definition, never the new one — and stashed it on
-      // this._preConfigChangeVisualKey; prefer that snapshot when present,
-      // otherwise (the ordinary hass-driven-update case, where this._config
-      // never changed) compute it live exactly as before.
-      const previousActiveKey = this._preConfigChangeVisualKey !== undefined
-        ? this._preConfigChangeVisualKey
+      // definition, never the new one — and the controller carries that snapshot in
+      // as preConfigVisualKey; prefer it when present, otherwise (the ordinary
+      // hass-driven-update case, where this._config never changed) compute it live.
+      // `undefined` means no snapshot; `null` is a real snapshot of "no view".
+      const previousActiveKey = preConfigVisualKey !== undefined
+        ? preConfigVisualKey
         : (this._views[this._currentVisualViewIndex()] ?? null);
       this._views = viewModel.empty ? [] : viewModel.views.keys;
       this._viewAreaCollapsed = viewModel.empty ? false : Boolean(viewModel.views.collapsed);
@@ -10699,7 +10609,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
         </ha-card>
       `;
       this._bindEvents();
-      this._rendered = true;
       if (!isFirstRender && !viewModel.empty) {
         // P1 fix (reviewer finding, post-AP-07): previousActiveKey above is
         // correctly preserved, but that alone is only a JS bookkeeping
@@ -10735,9 +10644,9 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // web font has loaded (the card inherits its font from the page and has no
       // @font-face of its own), and fallback-font metrics produce a slightly wrong
       // position that looks like an overlap until something else re-renders. The
-      // runtime subscribes exactly once per card instance and measures from
-      // this._lastViewModel at fire time, so a later render cannot be undone by an
-      // older one arriving late.
+      // runtime subscribes exactly once per card instance and measures from the
+      // controller's committed view model at fire time, so a later render cannot be
+      // undone by an older one arriving late.
       if (!viewModel.empty) this._resize.measureOnceFontsReady(() => this.isConnected);
     }
 
@@ -10751,7 +10660,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     _updateEmpty(viewModel) {
       // Updates the empty state without a full DOM rebuild.
       if (!this.shadowRoot) return;
-      this._lastViewModel = viewModel;
       patchEmptyCardBody(this.shadowRoot, viewModel);
     }
 
@@ -10760,7 +10668,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
       // and dynamic subsections change, so the slider animation never restarts.
       const root = this.shadowRoot;
       if (!root) return;
-      this._lastViewModel = viewModel;
       patchCardBody(this._renderContext(), root, viewModel, VIEW_RENDERERS);
     }
 
@@ -10771,46 +10678,6 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     // mistake indistinguishable from an intended change. Each of these forwards to the
     // rendering layer and holds no logic of its own; they are removed together with the
     // flat DTO in the element/test cleanup round.
-
-    _renderViewMarkup(key) {
-      const viewModel = this._computeViewModel();
-      if (!viewModel.views.byKey[key]) {
-        throw new Error(`${CARD_NAME}: view "${key}" is not active for this configuration`);
-      }
-      return VIEW_RENDERERS.find((view) => view.key === key).render(this._renderContext(), viewModel);
-    }
-
-    _renderScaleView() {
-      return this._renderViewMarkup("scale");
-    }
-
-    _renderRangeScaleView() {
-      return this._renderViewMarkup("range_scale");
-    }
-
-    _renderRangeCards() {
-      return renderMetricCards(this._computeViewModel().views.byKey.range.cards);
-    }
-
-    _renderExtremeCards() {
-      return renderMetricCards(this._computeViewModel().views.byKey.extremes.cards);
-    }
-
-    _scaleFooterText() {
-      return this._computeViewModel().views.byKey.scale.footerText;
-    }
-
-    _rangeScaleFooterText() {
-      return this._computeViewModel().views.byKey.range_scale.footerText;
-    }
-
-    _trendDisplayText(trend) {
-      return buildTrendText(trend, this._texts());
-    }
-
-    _resolveLabelForm(element, longText, shortText, fitsWithWidth) {
-      return resolveLabelForm(element, longText, shortText, fitsWithWidth);
-    }
 
     // ==== Event handling ====
     // Event listeners for click, keyboard, and touch/pointer interaction.
@@ -10848,7 +10715,7 @@ function createActionRuntime({ platform, getRooms, getCardActions, dispatch }) {
     }
 
     _handleVisibilityChange() {
-      if (this._platform.isDocumentHidden() || !this._rendered) return;
+      if (this._platform.isDocumentHidden() || !this._renderController.hasRendered) return;
       this._scheduleAccessibilitySync();
     }
 

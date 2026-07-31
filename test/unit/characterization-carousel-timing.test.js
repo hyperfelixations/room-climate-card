@@ -24,6 +24,12 @@ const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { st } = require("../helpers/characterization-scenarios.js");
 
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let carouselTiming, easingMath;
+
 const C = { device_class: "temperature", unit_of_measurement: "°C" };
 
 const HASS = {
@@ -48,7 +54,9 @@ let env;
 let console_;
 let el;
 
-test.before(() => {
+test.before(async () => {
+  carouselTiming = await import("../../src/controllers/runtime/carousel-timing.js");
+  easingMath = await import("../../src/core/easing.js");
   env = createFrozenEnvironment();
   console_ = recordConsole(env);
   el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, HASS);
@@ -71,15 +79,15 @@ function configure(viewCount, rotationSeconds, slideSeconds) {
 // behaviour of the function, not a sample of it.
 function flipPoints(timing) {
   const points = [];
-  let previous = el._accessibleViewIndexAt(0, timing);
+  let previous = carouselTiming.accessibleViewIndexAt(0, timing);
   for (let phase = 1; phase < timing.cycleMs; phase++) {
-    const current = el._accessibleViewIndexAt(phase, timing);
+    const current = carouselTiming.accessibleViewIndexAt(phase, timing);
     if (current !== previous) {
       points.push({ phaseMs: phase, from: previous, to: current });
       previous = current;
     }
   }
-  return { startsAt: el._accessibleViewIndexAt(0, timing), flips: points };
+  return { startsAt: carouselTiming.accessibleViewIndexAt(0, timing), flips: points };
 }
 
 test("slide timing, hold sequence, hold windows and track geometry are unchanged", () => {
@@ -87,16 +95,16 @@ test("slide timing, hold sequence, hold windows and track geometry are unchanged
   for (const { rotationSeconds, slideSeconds } of TIMING_MATRIX) {
     for (const viewCount of VIEW_COUNTS) {
       configure(viewCount, rotationSeconds, slideSeconds);
-      const timing = el._slideTiming();
+      const timing = el._carousel.timing();
       const key = `views=${viewCount} rotation=${rotationSeconds} slide=${slideSeconds}`;
       capture[key] = {
         timing,
-        holdSequence: el._holdSequence(),
+        holdSequence: el._carousel.holdSequence(),
         viewWidthPct: el._viewWidthPct(),
-        maxTrackOffsetPct: el._maxTrackOffsetPct(),
-        hasAutoSlide: el._hasAutoSlide(),
+        maxTrackOffsetPct: el._carousel.maxTrackOffsetPct(),
+        hasAutoSlide: el._carousel.hasAutoSlide(),
         trackAnimationCss: el._trackAnimationCss(),
-        holdWindows: Array.from({ length: viewCount }, (_, view) => el._holdWindowsForView(view, timing)),
+        holdWindows: Array.from({ length: viewCount }, (_, view) => carouselTiming.holdWindowsForView(view, timing)),
       };
     }
   }
@@ -108,7 +116,7 @@ test("the accessibility flip points across a full cycle are unchanged", () => {
   for (const { rotationSeconds, slideSeconds } of TIMING_MATRIX) {
     for (const viewCount of [2, 3, 4]) {
       configure(viewCount, rotationSeconds, slideSeconds);
-      const timing = el._slideTiming();
+      const timing = el._carousel.timing();
       capture[`views=${viewCount} rotation=${rotationSeconds} slide=${slideSeconds}`] = flipPoints(timing);
     }
   }
@@ -119,15 +127,15 @@ test("_msUntilNextAccessibilityFlip() agrees with _accessibleViewIndexAt() at ev
   for (const { rotationSeconds, slideSeconds } of TIMING_MATRIX) {
     for (const viewCount of [2, 3, 4]) {
       configure(viewCount, rotationSeconds, slideSeconds);
-      const timing = el._slideTiming();
+      const timing = el._carousel.timing();
       const step = Math.max(1, Math.floor(timing.cycleMs / 400));
       for (let phase = 0; phase < timing.cycleMs; phase += step) {
-        const until = el._msUntilNextAccessibilityFlip(phase, timing);
+        const until = carouselTiming.msUntilNextAccessibilityFlip(phase, timing);
         const label = `views=${viewCount} rotation=${rotationSeconds} slide=${slideSeconds} phase=${phase}`;
         assert.ok(until > 0, `${label}: the next flip must always lie strictly in the future`);
-        const now = el._accessibleViewIndexAt(phase, timing);
-        const justBefore = el._accessibleViewIndexAt((phase + until - 1) % timing.cycleMs, timing);
-        const atFlip = el._accessibleViewIndexAt((phase + until) % timing.cycleMs, timing);
+        const now = carouselTiming.accessibleViewIndexAt(phase, timing);
+        const justBefore = carouselTiming.accessibleViewIndexAt((phase + until - 1) % timing.cycleMs, timing);
+        const atFlip = carouselTiming.accessibleViewIndexAt((phase + until) % timing.cycleMs, timing);
         assert.equal(justBefore, now, `${label}: nothing may change before the announced flip`);
         assert.notEqual(atFlip, now, `${label}: the announced flip must actually change the view`);
       }
@@ -139,15 +147,15 @@ test("the resume window logic is self-consistent: the computed wait always lands
   for (const { rotationSeconds, slideSeconds } of TIMING_MATRIX) {
     for (const viewCount of [2, 3, 4]) {
       configure(viewCount, rotationSeconds, slideSeconds);
-      const timing = el._slideTiming();
+      const timing = el._carousel.timing();
       const step = Math.max(1, Math.floor(timing.cycleMs / 200));
       for (let view = 0; view < viewCount; view++) {
         for (let offset = 0; offset < timing.cycleMs; offset += step) {
           const timestamp = 1750000000000 + offset;
-          const wait = el._waitFromTimestampUntilViewHold(view, timestamp, timing);
-          const landingPhase = el._phaseForTimestamp(timestamp + wait, timing.cycleMs);
+          const wait = carouselTiming.waitFromTimestampUntilViewHold(view, timestamp, timing);
+          const landingPhase = carouselTiming.phaseForTimestamp(timestamp + wait, timing.cycleMs);
           assert.ok(
-            el._isPhaseInStableViewHold(view, landingPhase, timing),
+            carouselTiming.isPhaseInStableViewHold(view, landingPhase, timing),
             `views=${viewCount} view=${view} offset=${offset}: resuming after ${wait}ms must land in a stable hold`
           );
         }
@@ -161,13 +169,13 @@ test("reduced motion disables auto-slide regardless of view count and timing", (
   try {
     for (const viewCount of [2, 3, 4]) {
       configure(viewCount, 14, 1);
-      assert.equal(el._hasAutoSlide(), false, `views=${viewCount}`);
+      assert.equal(el._carousel.hasAutoSlide(), false, `views=${viewCount}`);
     }
   } finally {
     env.setReducedMotion(false);
   }
   configure(3, 14, 1);
-  assert.equal(el._hasAutoSlide(), true, "auto-slide returns once reduced motion is off again");
+  assert.equal(el._carousel.hasAutoSlide(), true, "auto-slide returns once reduced motion is off again");
 });
 
 test("the shared easing inversion constant is unchanged", () => {
@@ -176,8 +184,8 @@ test("the shared easing inversion constant is unchanged", () => {
     "carousel/easing.json",
     stableStringify({
       easing,
-      spatialMidpointTimeFraction: el._timeFractionForEasedProgress(easing, 0.5),
-      samples: [0.1, 0.25, 0.5, 0.75, 0.9].map((y) => ({ easedProgress: y, timeFraction: el._timeFractionForEasedProgress(easing, y) })),
+      spatialMidpointTimeFraction: easingMath.timeFractionForEasedProgress(easing, 0.5),
+      samples: [0.1, 0.25, 0.5, 0.75, 0.9].map((y) => ({ easedProgress: y, timeFraction: easingMath.timeFractionForEasedProgress(easing, y) })),
     })
   );
 });

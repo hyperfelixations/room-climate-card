@@ -5,10 +5,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 
@@ -29,7 +34,7 @@ test("PM2.5 accepts equivalent Home Assistant unit spellings at the UnitProfile 
       [entityId]: mkState(entityId, 3.5, pm25Attributes(unit)),
     }));
 
-    const model = el._buildEntityModel(entityId, "primary");
+    const model = internals.entityModel(el, entityId, "primary");
     assert.equal(model.metricKind, "pm25", `metric kind for ${JSON.stringify(unit)}`);
     assert.equal(model.unitProfile, "microgram_per_m3", `unit profile for ${JSON.stringify(unit)}`);
     assert.equal(model.validUnit, true, `unit validity for ${JSON.stringify(unit)}`);
@@ -89,7 +94,7 @@ test("PM2.5 normalization does not accept a physically different or unknown expl
     const el = env.createCard({ entity: entityId }, mkHass({
       [entityId]: mkState(entityId, 3.5, pm25Attributes(unit)),
     }));
-    const model = el._buildEntityModel(entityId, "primary");
+    const model = internals.entityModel(el, entityId, "primary");
     assert.equal(model.unitProfile, null);
     assert.equal(model.validUnit, false);
     assert.equal(computeLegacyData(el).empty, true);

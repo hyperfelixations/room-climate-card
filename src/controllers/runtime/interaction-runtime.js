@@ -69,18 +69,15 @@ export function createInteractionRuntime({
   }
 
   return {
-    // ---- owned state, exposed as accessors ----------------------------------
+    // ---- owned state, exposed as read-only accessors ------------------------
+    // No setters, deliberately. A gesture begins with a pointer event and ends with
+    // one of the handlers below; there is no third way to be mid-swipe, and offering a
+    // setter would invite one that the card itself can never produce.
     get pointer() {
       return pointer;
     },
-    set pointer(value) {
-      pointer = value;
-    },
     get isDragging() {
       return dragging;
-    },
-    set isDragging(value) {
-      dragging = Boolean(value);
     },
     get suppressClickUntil() {
       return suppressClickUntil;
@@ -203,6 +200,48 @@ export function createInteractionRuntime({
       }
       if (!wasRotator) return;
       resumeIfTrackIsManual(0);
+    },
+
+    // The element has left the DOM.
+    //
+    // Unlike a cancel, there is nothing left to settle: the track the gesture was
+    // manipulating is about to be replaced or is already unreachable, so snapping it or
+    // scheduling a resume into it would be work on a node nobody will see — and the
+    // resume would fire into a detached card. The gesture is simply ENDED.
+    //
+    // This has to happen, and it has to happen here. Home Assistant removes and
+    // reinserts cards routinely, on the same element instance. Left alone, a pointer
+    // that outlived the removal makes isInteracting() permanently true: the carousel
+    // refuses to start on reconnect, and every hass update is deferred waiting for a
+    // pointerup from a node that no longer exists. The card freezes on stale data.
+    //
+    // The click-suppression deadline is reset for the same reason: it was armed for a
+    // click that will never be delivered, and leaving it would swallow the first real
+    // action after the card comes back.
+    //
+    // Idempotent by construction — there is no state left to clear on a second call.
+    disconnect() {
+      pointer = null;
+      dragging = false;
+      suppressClickUntil = 0;
+    },
+
+    // The markup the gesture is anchored to is about to be replaced.
+    //
+    // A pointerdown that has NOT yet been classified as a drag holds DOM-derived
+    // geometry — the rotator's width, the frozen track position, the entity element it
+    // started on — and every one of those is about to stop being true. A later
+    // pointermove or pointerup on the same gesture would compute a swipe from that
+    // stale geometry and land on the wrong view; the listeners survive the rebuild
+    // because they live on the shadow root itself.
+    //
+    // A CONFIRMED drag never reaches here — the render controller defers the whole
+    // rebuild while one is in flight — so there is nothing to settle, only to abandon.
+    // The existing "no pointer" guards in the move/up/cancel handlers then make the
+    // rest of the gesture a clean no-op.
+    abandonGestureForRebuild() {
+      pointer = null;
+      dragging = false;
     },
 
     // A configuration change can arrive mid-swipe — live editing in the dashboard

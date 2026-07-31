@@ -16,9 +16,17 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let actions, text;
+
 let env;
 
-test.before(() => {
+test.before(async () => {
+  actions = await import("../../src/config/actions.js");
+  text = await import("../../src/core/text.js");
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -34,14 +42,14 @@ function countInjectedNodes(root) {
 
 test("_esc(): escapes all five HTML-significant characters", () => {
   const el = env.document.createElement("room-climate-card");
-  const escaped = el._esc(`& < > " '`);
+  const escaped = text.escapeHtml(`& < > " '`);
   assert.equal(escaped, "&amp; &lt; &gt; &quot; &#39;");
 });
 
 test("_esc(): null/undefined become an empty string, not the literal word", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._esc(null), "");
-  assert.equal(el._esc(undefined), "");
+  assert.equal(text.escapeHtml(null), "");
+  assert.equal(text.escapeHtml(undefined), "");
 });
 
 test("XSS payload in unit_of_measurement produces no extra DOM nodes", () => {
@@ -126,29 +134,29 @@ test("XSS payload in an icon config value produces no extra DOM nodes (icon is s
 test("_normalizeAction: all 7 allowlisted action types are accepted verbatim", () => {
   const el = env.document.createElement("room-climate-card");
   for (const action of ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"]) {
-    assert.deepEqual(normalize(el._normalizeAction({ action }, null)), { action });
+    assert.deepEqual(normalize(actions.normalizeAction({ action }, null)), { action });
   }
 });
 
 test("_normalizeAction: an unknown action type falls back to the fallback, not passed through raw", () => {
   const el = env.document.createElement("room-climate-card");
   const fallback = { action: "more-info" };
-  assert.deepEqual(normalize(el._normalizeAction({ action: "javascript:alert(1)" }, fallback)), fallback);
-  assert.deepEqual(normalize(el._normalizeAction({ action: "eval" }, fallback)), fallback);
+  assert.deepEqual(normalize(actions.normalizeAction({ action: "javascript:alert(1)" }, fallback)), fallback);
+  assert.deepEqual(normalize(actions.normalizeAction({ action: "eval" }, fallback)), fallback);
 });
 
 test("_normalizeAction: a non-object value falls back safely", () => {
   const el = env.document.createElement("room-climate-card");
   const fallback = { action: "more-info" };
-  assert.deepEqual(normalize(el._normalizeAction("more-info", fallback)), fallback, "a bare string is not a valid action object");
-  assert.deepEqual(normalize(el._normalizeAction(null, fallback)), fallback);
-  assert.deepEqual(normalize(el._normalizeAction([], fallback)), fallback, "an array is not a plain object");
+  assert.deepEqual(normalize(actions.normalizeAction("more-info", fallback)), fallback, "a bare string is not a valid action object");
+  assert.deepEqual(normalize(actions.normalizeAction(null, fallback)), fallback);
+  assert.deepEqual(normalize(actions.normalizeAction([], fallback)), fallback, "an array is not a plain object");
 });
 
 test("_normalizeAction: a per-room override with no fallback (null) inherits nothing, stays null", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._normalizeAction(undefined, null), null);
-  assert.equal(el._normalizeAction({ action: "bogus" }, null), null);
+  assert.equal(actions.normalizeAction(undefined, null), null);
+  assert.equal(actions.normalizeAction({ action: "bogus" }, null), null);
 });
 
 test("integration: config-level and per-room tap_action/hold_action are both wired through the allowlist", () => {

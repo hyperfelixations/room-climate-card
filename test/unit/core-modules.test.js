@@ -4,7 +4,7 @@
 // dependencies.
 //
 // Until Phase 2A these primitives could only be reached through the custom
-// element (el._parseNum(), el._rgba(), ...), which meant every assertion about
+// element (numbers.parseNumericState(), color.rgba(), ...), which meant every assertion about
 // them also dragged in jsdom, a shadow root and a full config/hass pair. They
 // are pure functions and are tested as such here: no DOM, no card instance,
 // no build artifact.
@@ -15,6 +15,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+
 let numbers;
 let text;
 let color;
@@ -22,9 +23,9 @@ let easing;
 let metadata;
 
 test.before(async () => {
+  color = await import("../../src/core/color.js");
   numbers = await import("../../src/core/numbers.js");
   text = await import("../../src/core/text.js");
-  color = await import("../../src/core/color.js");
   easing = await import("../../src/core/easing.js");
   metadata = await import("../../src/core/card-metadata.js");
 });

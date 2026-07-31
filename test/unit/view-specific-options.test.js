@@ -13,10 +13,22 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
+
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let numbers;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
+  numbers = await import("../../src/core/numbers.js");
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -127,7 +139,7 @@ test("optionsSchema: valid values for all 5 keys are honored, including footer:f
 test("scale.markers: 'extremes' (default) renders coldest/warmest markers alongside avg (regression)", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
   assert.equal(computeLegacyData(el).viewOptions.scale.markers, "extremes");
-  const html = el._renderScaleView(computeLegacyData(el));
+  const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
   assert.ok(html.includes("rtc-marker-cold"));
   assert.ok(html.includes("rtc-marker-warm"));
   assert.ok(html.includes("rtc-marker-avg"));
@@ -136,7 +148,7 @@ test("scale.markers: 'extremes' (default) renders coldest/warmest markers alongs
 
 test("scale.markers: 'average' omits coldest/warmest markers, avg marker stays", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { markers: "average" } }] }), twoRoomStates());
-  const html = el._renderScaleView(computeLegacyData(el));
+  const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
   assert.ok(!html.includes("rtc-marker-cold"));
   assert.ok(!html.includes("rtc-marker-warm"));
   assert.ok(html.includes("rtc-marker-avg"));
@@ -149,7 +161,7 @@ test("scale.markers: 'all' renders one small marker per valid configured room pl
     threeRoomStates()
   );
   const data = computeLegacyData(el);
-  const html = el._renderScaleView(data);
+  const html = internals.viewMarkup(el, "scale", data);
   assert.equal(data.scaleRoomMarkers.length, 3);
   assert.equal((html.match(/rtc-marker-room/g) || []).length, 3);
   assert.ok(!html.includes("rtc-marker-cold"), "all must not keep the separate extrema pair");
@@ -171,7 +183,7 @@ test("scale.markers: 'all' excludes unavailable rooms and keeps marker positions
   const data = computeLegacyData(el);
   assert.equal(data.scaleRoomMarkers.length, 2);
   for (const marker of data.scaleRoomMarkers) {
-    assert.equal(marker.position, el._pos(marker.value, data.scaleMin, data.scaleMax));
+    assert.equal(marker.position, numbers.percentInRange(marker.value, data.scaleMin, data.scaleMax));
   }
   env.cleanup(el);
 });
@@ -212,14 +224,14 @@ test("scale.markers does not affect coolest/warmest room selection, comfort coun
 
 test("scale.footer:false suppresses the comfort-count footer text, ANDed with the global hide_footer", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { footer: false } }] }), twoRoomStates());
-  const html = el._renderScaleView(computeLegacyData(el));
+  const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
   assert.ok(!html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
 
 test("scale.footer:true (default) keeps the footer, unrelated to markers", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
-  const html = el._renderScaleView(computeLegacyData(el));
+  const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
   assert.ok(html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
@@ -229,16 +241,16 @@ test("range_scale.footer: detailed (default) includes min/max timestamps, compac
   const elCompact = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: "compact" } }] }), rangeStates());
   const elFalse = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates());
 
-  const detailedHtml = elDetailed._renderRangeScaleView(computeLegacyData(elDetailed));
-  const compactHtml = elCompact._renderRangeScaleView(computeLegacyData(elCompact));
-  const falseHtml = elFalse._renderRangeScaleView(computeLegacyData(elFalse));
+  const detailedHtml = internals.viewMarkup(elDetailed, "range_scale", computeLegacyData(elDetailed));
+  const compactHtml = internals.viewMarkup(elCompact, "range_scale", computeLegacyData(elCompact));
+  const falseHtml = internals.viewMarkup(elFalse, "range_scale", computeLegacyData(elFalse));
 
   assert.ok(detailedHtml.includes("rtc-scale-footer"));
   assert.ok(compactHtml.includes("rtc-scale-footer"));
   assert.ok(!falseHtml.includes("rtc-scale-footer"));
 
-  const detailedText = elDetailed._rangeScaleFooterText(computeLegacyData(elDetailed), "detailed");
-  const compactText = elCompact._rangeScaleFooterText(computeLegacyData(elCompact), "compact");
+  const detailedText = internals.footerText(elDetailed, "range_scale", computeLegacyData(elDetailed), "detailed");
+  const compactText = internals.footerText(elCompact, "range_scale", computeLegacyData(elCompact), "compact");
   assert.notEqual(detailedText, compactText, "compact must be a genuinely different (shorter) string than detailed");
   assert.ok(!compactText.includes("(") , "compact must drop the timestamp parentheticals entirely");
 
@@ -260,7 +272,7 @@ test("range_scale.footer does not affect the comfort/optimal band geometry or la
 test("range.show_time:true (default) shows the min/max timestamp on the range cards (regression)", () => {
   const el = env.createCard(baseConfig({ range_entity: "sensor.range" }), rangeStates());
   const data = computeLegacyData(el);
-  const html = el._renderRangeCards(data);
+  const html = internals.metricCardsMarkup(el, "range", data);
   assert.ok(typeof data.rangeMinTime === "string" && data.rangeMinTime.length > 0, "sanity: fixture must actually produce a timestamp");
   assert.ok(html.includes(data.rangeMinTime), "min timestamp text must appear in the rendered card");
   env.cleanup(el);
@@ -269,7 +281,7 @@ test("range.show_time:true (default) shows the min/max timestamp on the range ca
 test("range.show_time:false omits the timestamp text from both range cards without touching the numeric value", () => {
   const el = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range", options: { show_time: false } }] }), rangeStates());
   const data = computeLegacyData(el);
-  const html = el._renderRangeCards(data);
+  const html = internals.metricCardsMarkup(el, "range", data);
   assert.ok(!html.includes('class="rtc-extreme-name">' + data.rangeMinTime), "min timestamp text must not appear");
   assert.ok(html.includes(String(Math.trunc(data.rangeMin))) || html.includes(el._fmt(data.rangeMin)), "the numeric value must still render");
   env.cleanup(el);
@@ -280,7 +292,7 @@ test("range.show_time:false omits the timestamp text from both range cards witho
 test("extremes.show_value:true (default) shows the numeric value on both extrema cards (regression)", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
   const data = computeLegacyData(el);
-  const html = el._renderExtremeCards(data);
+  const html = internals.metricCardsMarkup(el, "extremes", data);
   assert.ok(html.includes(el._fmt(data.coolest.value)));
   env.cleanup(el);
 });
@@ -288,7 +300,7 @@ test("extremes.show_value:true (default) shows the numeric value on both extrema
 test("extremes.show_value:false hides the numeric value but keeps the room name and label", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "extremes", options: { show_value: false } }] }), twoRoomStates());
   const data = computeLegacyData(el);
-  const html = el._renderExtremeCards(data);
+  const html = internals.metricCardsMarkup(el, "extremes", data);
   assert.ok(!html.includes(`>${el._fmt(data.coolest.value)}<`), "the numeric value text must not appear");
   assert.ok(html.includes(data.coolest.name), "the room name must still appear");
   env.cleanup(el);

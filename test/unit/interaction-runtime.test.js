@@ -455,3 +455,87 @@ test("the dispatched event comes from the platform, so it belongs to the card's 
   assert.ok(dispatched[0] instanceof jsdom.window.Event);
   assert.equal(dispatched[0].type, "hass-action");
 });
+
+// ------------------------------------------------------ the disconnect contract --
+//
+// Home Assistant removes and reinserts cards on the same element instance. Anything the
+// runtime was in the middle of therefore survives unless it is explicitly ended — and a
+// surviving gesture does not merely leak, it BLOCKS the reconnected card: isInteracting()
+// stays true, the carousel refuses to start, and every update is deferred waiting on a
+// pointerup that can never arrive.
+
+test("disconnect ends a confirmed drag without settling a track nobody will see", () => {
+  const carousel = fakeCarousel();
+  const { runtime } = makeRuntime({ carousel });
+  runtime.handlePointerDown(down());
+  runtime.handlePointerMove(move(-40));
+  assert.equal(runtime.isDragging, true);
+
+  const before = carousel.calls.length;
+  runtime.disconnect();
+
+  assert.equal(runtime.pointer, null);
+  assert.equal(runtime.isDragging, false);
+  assert.equal(runtime.isInteracting(), false, "the carousel must be free to start on reconnect");
+  assert.equal(carousel.calls.length, before, "no snap, no transition and above all no resume into a detached card");
+});
+
+test("disconnect ends an unconfirmed gesture too", () => {
+  // This is the subtler half: a bare pointerdown never becomes a drag, but it is enough
+  // to make isInteracting() true and keep the carousel from engaging.
+  const { runtime } = makeRuntime();
+  runtime.handlePointerDown(down());
+  assert.equal(runtime.isInteracting(), true);
+  runtime.disconnect();
+  assert.equal(runtime.pointer, null);
+  assert.equal(runtime.isInteracting(), false);
+});
+
+test("disconnect clears the click suppression, so the first action after a reconnect works", () => {
+  const platform = createFakePlatform();
+  const entity = { dataset: { entity: "sensor.x" } };
+  const { runtime, fired } = makeRuntime({ platform });
+  runtime.handlePointerDown(down({ __rotator: null, __entity: entity }));
+  runtime.handlePointerUp(up(0, 0, { __entity: entity }));
+  assert.ok(runtime.suppressClickUntil > platform.now(), "a completed tap arms the suppression");
+
+  runtime.disconnect();
+  assert.equal(runtime.suppressClickUntil, 0);
+  runtime.handleClick({ __entity: entity, preventDefault: noop, stopPropagation: noop });
+  assert.deepEqual(fired, ["tap", "tap"], "the first click of the new life is not swallowed");
+});
+
+test("disconnect is idempotent and a gesture started afterwards behaves normally", () => {
+  const carousel = fakeCarousel();
+  const { runtime } = makeRuntime({ carousel });
+  runtime.handlePointerDown(down());
+  runtime.handlePointerMove(move(-40));
+  runtime.disconnect();
+  runtime.disconnect();
+  runtime.disconnect();
+  assert.equal(runtime.pointer, null);
+  assert.equal(runtime.isDragging, false);
+
+  // A fresh gesture after the reconnect must work from a clean slate.
+  runtime.handlePointerDown(down({ pointerId: 7 }));
+  runtime.handlePointerMove(move(-40, 0, { pointerId: 7 }));
+  assert.equal(runtime.isDragging, true);
+  assert.ok(carousel.calls.includes("freeze"));
+});
+
+test("a pointer event from the previous life is ignored after a disconnect", () => {
+  // The listeners live on the shadow root and survive a rebuild, so a stray move or up
+  // from the aborted gesture can still arrive. With the pointer cleared they are no-ops.
+  const carousel = fakeCarousel();
+  const { runtime } = makeRuntime({ carousel });
+  runtime.handlePointerDown(down());
+  runtime.handlePointerMove(move(-40));
+  runtime.disconnect();
+
+  const before = carousel.calls.length;
+  runtime.handlePointerMove(move(-200));
+  runtime.handlePointerUp(up(-200));
+  runtime.handlePointerCancel({ pointerId: 1 });
+  assert.equal(carousel.calls.length, before, "no stale gesture may touch the new track");
+  assert.equal(runtime.pointer, null);
+});

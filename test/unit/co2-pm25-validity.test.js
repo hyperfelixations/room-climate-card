@@ -17,10 +17,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -29,31 +34,31 @@ test.after(() => {
 
 test("_isPhysicallyValid: co2 <= 0 is invalid, co2 > 0 is valid", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._isPhysicallyValid(0, "co2"), false);
-  assert.equal(el._isPhysicallyValid(-1, "co2"), false);
-  assert.equal(el._isPhysicallyValid(1, "co2"), true);
-  assert.equal(el._isPhysicallyValid(400, "co2"), true);
+  assert.equal(internals.isPhysicallyValid(el, 0, "co2"), false);
+  assert.equal(internals.isPhysicallyValid(el, -1, "co2"), false);
+  assert.equal(internals.isPhysicallyValid(el, 1, "co2"), true);
+  assert.equal(internals.isPhysicallyValid(el, 400, "co2"), true);
 });
 
 test("_isPhysicallyValid: pm25 < 0 is invalid, pm25 >= 0 is valid (0 is a legitimate reading)", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._isPhysicallyValid(-1, "pm25"), false);
-  assert.equal(el._isPhysicallyValid(0, "pm25"), true);
-  assert.equal(el._isPhysicallyValid(12, "pm25"), true);
+  assert.equal(internals.isPhysicallyValid(el, -1, "pm25"), false);
+  assert.equal(internals.isPhysicallyValid(el, 0, "pm25"), true);
+  assert.equal(internals.isPhysicallyValid(el, 12, "pm25"), true);
 });
 
 test("_isPhysicallyValid: temperature has no invalidWhen — always valid, including very negative readings", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._isPhysicallyValid(-40, "temperature"), true);
+  assert.equal(internals.isPhysicallyValid(el, -40, "temperature"), true);
 });
 
 test("_isPhysicallyValid: humidity outside [0,100] is invalid, inside is valid (DATA-02, v2.16.0 audit)", () => {
   const el = env.document.createElement("room-climate-card");
-  assert.equal(el._isPhysicallyValid(-1, "humidity"), false);
-  assert.equal(el._isPhysicallyValid(101, "humidity"), false);
-  assert.equal(el._isPhysicallyValid(0, "humidity"), true, "0% is a legitimate (if extreme) reading");
-  assert.equal(el._isPhysicallyValid(100, "humidity"), true, "100% is a legitimate (if extreme) reading");
-  assert.equal(el._isPhysicallyValid(45, "humidity"), true);
+  assert.equal(internals.isPhysicallyValid(el, -1, "humidity"), false);
+  assert.equal(internals.isPhysicallyValid(el, 101, "humidity"), false);
+  assert.equal(internals.isPhysicallyValid(el, 0, "humidity"), true, "0% is a legitimate (if extreme) reading");
+  assert.equal(internals.isPhysicallyValid(el, 100, "humidity"), true, "100% is a legitimate (if extreme) reading");
+  assert.equal(internals.isPhysicallyValid(el, 45, "humidity"), true);
 });
 
 test("a humidity room reading below 0% or above 100% is excluded from the room average, extrema, and comfort count", () => {

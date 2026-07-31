@@ -37,21 +37,21 @@ const hass = mkHass(baseStates);
 test("Case A (entity only): views = [scale], no rotator", () => {
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   assert.deepEqual(normalize(el._views), ["scale"]);
-  assert.deepEqual(normalize(el._holdSequence()), []);
+  assert.deepEqual(normalize(el._carousel.holdSequence()), []);
   env.cleanup(el);
 });
 
 test("Case B (entity + rooms): views = [scale, extremes]", () => {
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   assert.deepEqual(normalize(el._views), ["scale", "extremes"]);
-  assert.deepEqual(normalize(el._holdSequence()), [0, 1]);
+  assert.deepEqual(normalize(el._carousel.holdSequence()), [0, 1]);
   env.cleanup(el);
 });
 
 test("Case C (entity + range_entity, no rooms): views = [range, scale]", () => {
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
   assert.deepEqual(normalize(el._views), ["range", "scale"]);
-  assert.deepEqual(normalize(el._holdSequence()), [0, 1]);
+  assert.deepEqual(normalize(el._carousel.holdSequence()), [0, 1]);
   env.cleanup(el);
 });
 
@@ -61,7 +61,7 @@ test("Case D (entity + rooms + range_entity): views = [range, scale, extremes]",
     hass
   );
   assert.deepEqual(normalize(el._views), ["range", "scale", "extremes"]);
-  assert.deepEqual(normalize(el._holdSequence()), [0, 1, 2, 1]);
+  assert.deepEqual(normalize(el._carousel.holdSequence()), [0, 1, 2, 1]);
   env.cleanup(el);
 });
 
@@ -76,7 +76,7 @@ test("Case D + views: range_scale enabled: views = [range, range_scale, scale, e
     hass
   );
   assert.deepEqual(normalize(el._views), ["range", "range_scale", "scale", "extremes"]);
-  assert.deepEqual(normalize(el._holdSequence()), [0, 1, 2, 3, 2, 1], "old bug produced 2,3,2,0,2,1");
+  assert.deepEqual(normalize(el._carousel.holdSequence()), [0, 1, 2, 3, 2, 1], "old bug produced 2,3,2,0,2,1");
   env.cleanup(el);
 });
 

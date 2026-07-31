@@ -15,10 +15,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -147,7 +152,7 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
   assert.equal(a.avgColor, b.avgColor);
   assert.equal(a.coolestColor, b.coolestColor);
   assert.equal(a.warmestColor, b.warmestColor);
-  assert.equal(elBothVisible._scaleFooterText(a), elBothHidden._scaleFooterText(b));
+  assert.equal(internals.footerText(elBothVisible, "scale", a), internals.footerText(elBothHidden, "scale", b));
 
   env.cleanup(elBothVisible);
   env.cleanup(elBothHidden);
@@ -158,7 +163,7 @@ test("show_comfort_band/show_optimal_band do not affect comfort/optimal geometry
 for (const combo of COMBINATIONS) {
   test(`_renderScaleView(): bands and their labels match ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    const html = el._renderScaleView(computeLegacyData(el));
+    const html = internals.viewMarkup(el, "scale", computeLegacyData(el));
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-scale-comfort-label"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
@@ -181,7 +186,7 @@ for (const combo of COMBINATIONS) {
         "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
       })
     );
-    const html = el._renderRangeScaleView(computeLegacyData(el));
+    const html = internals.viewMarkup(el, "range_scale", computeLegacyData(el));
     assert.equal(html.includes('class="rtc-comfort-band"'), combo.show_comfort_band);
     assert.equal(html.includes('class="rtc-optimal-band"'), combo.show_optimal_band);
     assert.equal(html.includes('class="rtc-scale-label-center"'), combo.show_optimal_band);

@@ -17,6 +17,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../helpers/gestures.js");
 
 let env;
 
@@ -63,7 +64,7 @@ test("_updateViewAccessibility() follows this._activeView while the track is man
   // this._activeView instead of the wall-clock auto-slide phase.
   el._updateTrackTransform(true);
   el._activeView = 1;
-  el._updateViewAccessibility();
+  el._carousel.updateViewAccessibility();
   const views = Array.from(el.shadowRoot.querySelectorAll(".rtc-view"));
   assert.equal(views[0].getAttribute("aria-hidden"), "true");
   assert.equal(views[0].hasAttribute("inert"), true);
@@ -71,7 +72,7 @@ test("_updateViewAccessibility() follows this._activeView while the track is man
   assert.equal(views[1].hasAttribute("inert"), false);
 
   el._activeView = 0;
-  el._updateViewAccessibility();
+  el._carousel.updateViewAccessibility();
   const views2 = Array.from(el.shadowRoot.querySelectorAll(".rtc-view"));
   assert.equal(views2[0].hasAttribute("aria-hidden"), false);
   assert.equal(views2[1].getAttribute("aria-hidden"), "true");
@@ -82,21 +83,9 @@ test("a completed swipe (_handlePointerUp) updates accessibility to the new acti
   const el = twoViewCard();
   const startIndex = el._activeView;
   const targetIndex = 1 - startIndex;
-  const viewWidthPct = el._viewWidthPct();
-  el._pointer = {
-    id: 1,
-    x: 100,
-    y: 0,
-    time: Date.now() - 100,
-    rotator: true,
-    entityTarget: null,
-    startTranslate: -startIndex * viewWidthPct,
-    dragging: true,
-    width: 300,
-  };
-  // A large horizontal delta past the swipe threshold, in the direction that moves to targetIndex.
-  const dx = targetIndex > startIndex ? -200 : 200;
-  el._handlePointerUp({ pointerId: 1, clientX: 100 + dx, clientY: 0, preventDefault() {}, stopPropagation() {} });
+  beginConfirmedDrag(el, startIndex);
+  // A horizontal delta well past the 18% commit threshold, in the direction of targetIndex.
+  endDrag(el, targetIndex > startIndex ? -200 : 200);
 
   assert.equal(el._activeView, targetIndex);
   const views = Array.from(el.shadowRoot.querySelectorAll(".rtc-view"));
@@ -107,21 +96,9 @@ test("a completed swipe (_handlePointerUp) updates accessibility to the new acti
 
 test("pointercancel mid-drag also updates accessibility to the frozen position (UI-02 + A11Y-01 together)", () => {
   const el = twoViewCard();
-  const viewWidthPct = el._viewWidthPct();
-  el._activeView = 0;
-  el._isDragging = true;
-  el._pointer = {
-    id: 3,
-    startTranslate: -1 * viewWidthPct, // frozen at index 1
-    dragging: true,
-    rotator: true,
-    width: 300,
-    x: 0,
-    y: 0,
-    time: Date.now(),
-    entityTarget: null,
-  };
-  el._handlePointerCancel({ pointerId: 3 });
+  beginConfirmedDrag(el, 1, { pointerId: 3 }); // frozen at index 1
+  el._activeView = 0; // stale
+  cancelDrag(el, { pointerId: 3 });
   assert.equal(el._activeView, 1);
   const views = Array.from(el.shadowRoot.querySelectorAll(".rtc-view"));
   assert.equal(views[1].hasAttribute("aria-hidden"), false);
@@ -134,6 +111,6 @@ test("a single-view card (no rotator) uses .rtc-rotator-solo, not the .rtc-view 
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   assert.equal(el.shadowRoot.querySelectorAll(".rtc-view").length, 0);
   assert.ok(el.shadowRoot.querySelector(".rtc-rotator-solo"));
-  assert.doesNotThrow(() => el._updateViewAccessibility(), "must be a safe no-op with zero .rtc-view elements");
+  assert.doesNotThrow(() => el._carousel.updateViewAccessibility(), "must be a safe no-op with zero .rtc-view elements");
   env.cleanup(el);
 });

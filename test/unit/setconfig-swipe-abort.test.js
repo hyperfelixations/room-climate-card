@@ -27,6 +27,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../helpers/gestures.js");
 
 let env;
 
@@ -53,33 +54,17 @@ function threeViewCard() {
   return env.createCard(BASE_CONFIG, hass);
 }
 
-function beginConfirmedDrag(el, frozenViewIndex) {
-  const viewWidthPct = el._viewWidthPct();
-  el._isDragging = true;
-  el._pointer = {
-    id: 1,
-    x: 0,
-    y: 0,
-    time: Date.now(),
-    rotator: true,
-    entityTarget: null,
-    startTranslate: -frozenViewIndex * viewWidthPct,
-    dragging: true,
-    width: 300,
-  };
-}
-
 test("P1: setConfig() mid-drag resolves _activeView from the frozen drag position and clears the drag state", () => {
   const el = threeViewCard();
   assert.equal(el._views.length, 3, "range, scale, extremes");
-  el._activeView = 0; // stale/pre-drag value, must not leak through
   beginConfirmedDrag(el, 2);
+  el._activeView = 0; // stale/pre-drag value, must not leak through
 
   el.setConfig({ ...BASE_CONFIG, avg_label: "Custom" }); // non-structural change
 
   assert.equal(el._activeView, 2, "must resolve from the frozen drag position (2), not the stale pre-drag value (0)");
   assert.equal(el._isDragging, false);
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   env.cleanup(el);
 });
 
@@ -98,23 +83,23 @@ test("P1: setConfig() mid-drag snaps the track out of the frozen mid-drag transf
     `translate3d(${-(el._activeView) * viewWidthPct}%,0,0)`,
     "track must be snapped to the resolved view's exact position, not left at the arbitrary frozen transform"
   );
-  assert.ok(el._resumeAutoTimer !== null && el._resumeAutoTimer !== undefined, "a phase-aligned resume must be scheduled, matching a completed swipe");
+  assert.ok(el._carousel.resumeTimerHandle !== null && el._carousel.resumeTimerHandle !== undefined, "a phase-aligned resume must be scheduled, matching a completed swipe");
   env.cleanup(el);
 });
 
 test("P1: setConfig() with no active drag (the normal case) behaves exactly as before -- no resume timer side effect introduced", () => {
   const el = threeViewCard();
   assert.equal(el._isDragging, false);
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   // The resume timer is owned by the carousel controller, so it is cleared through the
-  // owner rather than by writing the field. el._resumeAutoTimer is a read-only window
+  // owner rather than by writing the field. el._carousel.resumeTimerHandle is a read-only window
   // onto that handle, which is exactly what keeps a second copy from existing.
   el._stopRotation();
-  assert.equal(el._resumeAutoTimer, null, "starting point: nothing pending");
+  assert.equal(el._carousel.resumeTimerHandle, null, "starting point: nothing pending");
 
   el.setConfig({ ...BASE_CONFIG, avg_label: "Custom" });
 
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
   env.cleanup(el);
 });
@@ -122,12 +107,12 @@ test("P1: setConfig() with no active drag (the normal case) behaves exactly as b
 test("P1: setConfig() during an UNCONFIRMED pointerdown (not yet dragging) does not attempt to settle anything, just clears state", () => {
   const el = threeViewCard();
   el._activeView = 1;
-  el._isDragging = false; // pointerdown happened, but the 10px/25deg drag threshold was never crossed
-  el._pointer = { id: 1, x: 0, y: 0, time: Date.now(), rotator: true, entityTarget: null, startTranslate: 0, dragging: false, width: 300 };
+  beginTouch(el); // pointerdown happened, but the 10px/25deg drag threshold was never crossed
+  assert.equal(el._isDragging, false);
 
   el.setConfig({ ...BASE_CONFIG, avg_label: "Custom" });
 
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
   env.cleanup(el);
 });
@@ -138,28 +123,16 @@ test("P1: an invalid (throwing) setConfig() mid-drag still settles the interacti
 
   assert.throws(() => el.setConfig({ entity: "" })); // invalid: empty required entity
 
-  assert.equal(el._pointer, null, "the old interaction state must not be left dangling just because the new config was rejected");
+  assert.equal(el._interaction.pointer, null, "the old interaction state must not be left dangling just because the new config was rejected");
   assert.equal(el._isDragging, false);
   env.cleanup(el);
 });
 
 test("P1: setConfig() mid-drag at each of the 3 possible frozen positions resolves the correct view index (regression parity with UI-02's _handlePointerCancel coverage)", () => {
   const el = threeViewCard();
-  const viewWidthPct = el._viewWidthPct();
   for (let targetIndex = 0; targetIndex <= 2; targetIndex++) {
+    beginConfirmedDrag(el, targetIndex, { pointerId: 7 });
     el._activeView = (targetIndex + 1) % 3; // deliberately stale/wrong
-    el._isDragging = true;
-    el._pointer = {
-      id: 7,
-      startTranslate: -targetIndex * viewWidthPct,
-      dragging: true,
-      rotator: true,
-      width: 300,
-      x: 0,
-      y: 0,
-      time: Date.now(),
-      entityTarget: null,
-    };
     el.setConfig({ ...BASE_CONFIG, avg_label: `pass-${targetIndex}` });
     assert.equal(el._activeView, targetIndex);
   }

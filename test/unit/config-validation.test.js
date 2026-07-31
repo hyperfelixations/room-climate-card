@@ -12,10 +12,18 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let numbers, primitives;
+
 let env;
 let el;
 
-test.before(() => {
+test.before(async () => {
+  numbers = await import("../../src/core/numbers.js");
+  primitives = await import("../../src/config/primitives.js");
   env = createTestEnvironment();
   el = env.document.createElement("room-climate-card"); // pure parser, no config/hass needed
 });
@@ -26,97 +34,97 @@ test.after(() => {
 // ---- _parseConfigNumber() direct tests ----
 
 test("_parseConfigNumber: booleans are rejected, not coerced to 0/1", () => {
-  assert.equal(el._parseConfigNumber(true), null);
-  assert.equal(el._parseConfigNumber(false), null);
+  assert.equal(numbers.parseConfigNumber(true), null);
+  assert.equal(numbers.parseConfigNumber(false), null);
 });
 
 test("_parseConfigNumber: arrays and plain objects are rejected", () => {
-  assert.equal(el._parseConfigNumber([]), null);
-  assert.equal(el._parseConfigNumber([5]), null);
-  assert.equal(el._parseConfigNumber({}), null);
-  assert.equal(el._parseConfigNumber({ value: 5 }), null);
+  assert.equal(numbers.parseConfigNumber([]), null);
+  assert.equal(numbers.parseConfigNumber([5]), null);
+  assert.equal(numbers.parseConfigNumber({}), null);
+  assert.equal(numbers.parseConfigNumber({ value: 5 }), null);
 });
 
 test("_parseConfigNumber: null/undefined are rejected", () => {
-  assert.equal(el._parseConfigNumber(null), null);
-  assert.equal(el._parseConfigNumber(undefined), null);
+  assert.equal(numbers.parseConfigNumber(null), null);
+  assert.equal(numbers.parseConfigNumber(undefined), null);
 });
 
 test("_parseConfigNumber: real numbers pass through, non-finite numbers are rejected", () => {
-  assert.equal(el._parseConfigNumber(5), 5);
-  assert.equal(el._parseConfigNumber(-2.5), -2.5);
-  assert.equal(el._parseConfigNumber(0), 0);
-  assert.equal(el._parseConfigNumber(NaN), null);
-  assert.equal(el._parseConfigNumber(Infinity), null);
-  assert.equal(el._parseConfigNumber(-Infinity), null);
+  assert.equal(numbers.parseConfigNumber(5), 5);
+  assert.equal(numbers.parseConfigNumber(-2.5), -2.5);
+  assert.equal(numbers.parseConfigNumber(0), 0);
+  assert.equal(numbers.parseConfigNumber(NaN), null);
+  assert.equal(numbers.parseConfigNumber(Infinity), null);
+  assert.equal(numbers.parseConfigNumber(-Infinity), null);
 });
 
 test("_parseConfigNumber: fully-numeric strings are accepted", () => {
-  assert.equal(el._parseConfigNumber("5"), 5);
-  assert.equal(el._parseConfigNumber("5.5"), 5.5);
-  assert.equal(el._parseConfigNumber("-3"), -3);
-  assert.equal(el._parseConfigNumber("+3"), 3);
-  assert.equal(el._parseConfigNumber(" 5 "), 5);
-  assert.equal(el._parseConfigNumber(".5"), 0.5);
+  assert.equal(numbers.parseConfigNumber("5"), 5);
+  assert.equal(numbers.parseConfigNumber("5.5"), 5.5);
+  assert.equal(numbers.parseConfigNumber("-3"), -3);
+  assert.equal(numbers.parseConfigNumber("+3"), 3);
+  assert.equal(numbers.parseConfigNumber(" 5 "), 5);
+  assert.equal(numbers.parseConfigNumber(".5"), 0.5);
 });
 
 test("_parseConfigNumber: non-numeric or partially-numeric strings are rejected", () => {
   for (const bad of ["5abc", "abc", "", "true", "1,5", "1e3", "NaN", "5 6"]) {
-    assert.equal(el._parseConfigNumber(bad), null, `"${bad}" must be rejected`);
+    assert.equal(numbers.parseConfigNumber(bad), null, `"${bad}" must be rejected`);
   }
 });
 
 // ---- _normalizeDecimalsOverride() ----
 
 test("_normalizeDecimalsOverride: booleans rejected (the CFG-01 bug case)", () => {
-  assert.equal(el._normalizeDecimalsOverride(true), null);
-  assert.equal(el._normalizeDecimalsOverride(false), null);
+  assert.equal(primitives.decimalsOverride(true), null);
+  assert.equal(primitives.decimalsOverride(false), null);
 });
 
 test("_normalizeDecimalsOverride: 0, 1, 2 are valid; out-of-range and non-integers are not", () => {
-  assert.equal(el._normalizeDecimalsOverride(0), 0);
-  assert.equal(el._normalizeDecimalsOverride(1), 1);
-  assert.equal(el._normalizeDecimalsOverride(2), 2);
-  assert.equal(el._normalizeDecimalsOverride(3), null);
-  assert.equal(el._normalizeDecimalsOverride(-1), null);
-  assert.equal(el._normalizeDecimalsOverride(1.5), null);
+  assert.equal(primitives.decimalsOverride(0), 0);
+  assert.equal(primitives.decimalsOverride(1), 1);
+  assert.equal(primitives.decimalsOverride(2), 2);
+  assert.equal(primitives.decimalsOverride(3), null);
+  assert.equal(primitives.decimalsOverride(-1), null);
+  assert.equal(primitives.decimalsOverride(1.5), null);
 });
 
 test("_normalizeDecimalsOverride: undefined/null/empty-string all mean 'use mode default'", () => {
-  assert.equal(el._normalizeDecimalsOverride(undefined), null);
-  assert.equal(el._normalizeDecimalsOverride(null), null);
-  assert.equal(el._normalizeDecimalsOverride(""), null);
+  assert.equal(primitives.decimalsOverride(undefined), null);
+  assert.equal(primitives.decimalsOverride(null), null);
+  assert.equal(primitives.decimalsOverride(""), null);
 });
 
 // ---- _normalizePositiveInteger() (room_columns/room_rows) ----
 
 test("_normalizePositiveInteger: booleans rejected", () => {
-  assert.equal(el._normalizePositiveInteger(true), null);
+  assert.equal(primitives.positiveInteger(true), null);
 });
 
 test("_normalizePositiveInteger: 1-20 valid, 0/negative/>20/non-integer invalid", () => {
-  assert.equal(el._normalizePositiveInteger(1), 1);
-  assert.equal(el._normalizePositiveInteger(20), 20);
-  assert.equal(el._normalizePositiveInteger(0), null);
-  assert.equal(el._normalizePositiveInteger(-5), null);
-  assert.equal(el._normalizePositiveInteger(21), null);
-  assert.equal(el._normalizePositiveInteger(3.5), null);
+  assert.equal(primitives.positiveInteger(1), 1);
+  assert.equal(primitives.positiveInteger(20), 20);
+  assert.equal(primitives.positiveInteger(0), null);
+  assert.equal(primitives.positiveInteger(-5), null);
+  assert.equal(primitives.positiveInteger(21), null);
+  assert.equal(primitives.positiveInteger(3.5), null);
 });
 
 // ---- _normalizePositiveSeconds() ----
 
 test("_normalizePositiveSeconds: within [min,max] is accepted, outside falls back to the default", () => {
-  assert.equal(el._normalizePositiveSeconds(30, 14, 1, 3600), 30);
-  assert.equal(el._normalizePositiveSeconds(1, 14, 1, 3600), 1);
-  assert.equal(el._normalizePositiveSeconds(3600, 14, 1, 3600), 3600);
-  assert.equal(el._normalizePositiveSeconds(0, 14, 1, 3600), 14, "below min falls back");
-  assert.equal(el._normalizePositiveSeconds(3601, 14, 1, 3600), 14, "above max falls back");
-  assert.equal(el._normalizePositiveSeconds(999999, 14, 1, 3600), 14, "an extreme value falls back, protecting the timer math");
+  assert.equal(primitives.positiveSeconds(30, 14, 1, 3600), 30);
+  assert.equal(primitives.positiveSeconds(1, 14, 1, 3600), 1);
+  assert.equal(primitives.positiveSeconds(3600, 14, 1, 3600), 3600);
+  assert.equal(primitives.positiveSeconds(0, 14, 1, 3600), 14, "below min falls back");
+  assert.equal(primitives.positiveSeconds(3601, 14, 1, 3600), 14, "above max falls back");
+  assert.equal(primitives.positiveSeconds(999999, 14, 1, 3600), 14, "an extreme value falls back, protecting the timer math");
 });
 
 test("_normalizePositiveSeconds: booleans/junk fall back to the default", () => {
-  assert.equal(el._normalizePositiveSeconds(true, 14, 1, 3600), 14);
-  assert.equal(el._normalizePositiveSeconds("abc", 14, 1, 3600), 14);
+  assert.equal(primitives.positiveSeconds(true, 14, 1, 3600), 14);
+  assert.equal(primitives.positiveSeconds("abc", 14, 1, 3600), 14);
 });
 
 // ---- Full setConfig() integration: confirms the parsers are actually wired up ----

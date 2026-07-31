@@ -102,7 +102,7 @@ test("a second swipe started while the first swipe's resume is still pending doe
 
   completeSwipe(el, { pointerId: 1 });
   assert.equal(el._activeView, 1, "the first swipe moved exactly one view");
-  assert.notEqual(el._resumeAutoTimer, null, "and armed the phase-aware resume this test needs");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "and armed the phase-aware resume this test needs");
 
   // The user swipes again before that resume fires. This is the exact sequence that
   // used to hit an assignment to a getter-only accessor and throw in strict mode.
@@ -114,10 +114,10 @@ test("a second swipe started while the first swipe's resume is still pending doe
     "confirming a horizontal drag must not throw"
   );
 
-  assert.equal(el._resumeAutoTimer, null, "the pending resume is cleared through its owner");
-  assert.equal(el._a11ySyncTimer, null, "and no accessibility timer is left running mid-drag");
+  assert.equal(el._carousel.resumeTimerHandle, null, "the pending resume is cleared through its owner");
+  assert.equal(el._carousel.accessibilityTimerHandle, null, "and no accessibility timer is left running mid-drag");
   assert.equal(el._isDragging, true, "the drag is live");
-  assert.equal(el._pointer.dragging, true);
+  assert.equal(el._interaction.pointer.dragging, true);
   env.cleanup(el);
 });
 
@@ -134,8 +134,8 @@ test("the second swipe completes normally: one view, exactly one new resume", ()
 
   assert.equal(el._activeView, afterFirst + 1, "exactly one further view, never two");
   assert.equal(el._isDragging, false);
-  assert.equal(el._pointer, null);
-  assert.notEqual(el._resumeAutoTimer, null, "exactly one new resume is scheduled");
+  assert.equal(el._interaction.pointer, null);
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "exactly one new resume is scheduled");
 
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.ok(track.classList.contains("rtc-manual"), "the track stays under manual control until the resume fires");
@@ -153,9 +153,9 @@ test("a pointercancel during the second swipe also cleans up completely", () => 
   el._handlePointerMove(pointerMoveEvent(2, -60));
   assert.doesNotThrow(() => el._handlePointerCancel({ pointerId: 2 }));
 
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
-  assert.notEqual(el._resumeAutoTimer, null, "cancelling still rejoins the synchronized animation eventually");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "cancelling still rejoins the synchronized animation eventually");
   env.cleanup(el);
 });
 
@@ -164,7 +164,7 @@ test("a swipe that never crosses the direction threshold leaves the pending resu
   // in the rotator must not disturb it.
   const el = threeViewCard();
   completeSwipe(el, { pointerId: 1 });
-  const pending = el._resumeAutoTimer;
+  const pending = el._carousel.resumeTimerHandle;
   assert.notEqual(pending, null);
 
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
@@ -172,19 +172,25 @@ test("a swipe that never crosses the direction threshold leaves the pending resu
   el._handlePointerDown(pointerDownEvent(el, 2));
   el._handlePointerMove(pointerMoveEvent(2, 4, 80));
   assert.equal(el._isDragging, false, "vertical movement is not a swipe");
-  assert.equal(el._resumeAutoTimer, pending, "and the pending resume is untouched");
+  assert.equal(el._carousel.resumeTimerHandle, pending, "and the pending resume is untouched");
   env.cleanup(el);
 });
 
 // ------------------------------------------------------- the ownership guard --
 
 test("the read-only controller windows cannot be assigned to", () => {
-  // The permanent guard. These two are the element's window onto state the carousel
-  // controller owns; assigning to them would either create a second copy or, as it did,
-  // throw in strict mode. Both are wrong, so the accessor has no setter and this test
-  // pins that.
+  // The permanent guard. These are the element's window onto state a controller owns;
+  // assigning to them would either create a second copy or, as it did, throw in strict
+  // mode. Both are wrong, so the accessors have no setter and this test pins that.
+  //
+  // _isDragging is on this list rather than the writable one below because a gesture can
+  // only begin with a pointer event: a test that assigned a hand-built drag state could
+  // describe a state the card is unable to reach (see test/helpers/gestures.js, which
+  // drives the real handlers instead). The in-flight pointer itself is not exposed here
+  // at all — nothing in production reads it, so it is asked of its owner.
   const el = threeViewCard();
-  for (const name of ["_resumeAutoTimer", "_a11ySyncTimer"]) {
+  assert.equal(Object.getOwnPropertyDescriptor(el, "_pointer"), undefined, "the element carries no window it does not itself use");
+  for (const name of ["_isDragging"]) {
     const descriptor = findAccessor(el, name);
     assert.ok(descriptor, `${name} must be an accessor, not a data field`);
     assert.equal(typeof descriptor.get, "function", `${name} must be readable`);

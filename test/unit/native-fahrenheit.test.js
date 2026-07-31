@@ -23,10 +23,22 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
+
+// The modules under test, imported directly. These used to be reached through
+// thin delegating methods on the custom element; the element no longer carries
+// them, and naming the real module is what makes each test say where its subject
+// actually lives.
+let access;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
+  access = await import("../../src/domain/metrics/access.js");
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -65,7 +77,7 @@ test("pure Fahrenheit card: audit 9.1 reproduction is fixed — 72°F with 70/74
   assert.equal(data.comfortMax, 75);
   assert.equal(data.optimalMin, 70);
   assert.equal(data.optimalMax, 73);
-  const tone = el._avgTone(data.avg, data.avgEntity, data.metricType, data.displayUnitProfile);
+  const tone = internals.averageTone(el, data.avg, data.avgEntity, data.metricType, data.displayUnitProfile);
   assert.notEqual(tone.label, "Very hot", "audit 9.1's exact bug must not reproduce");
   assert.equal(tone.label, "Optimal", "72°F (=22.2°C) is squarely in the optimal band");
   assert.equal(data.inComfort, 2, "both 70°F and 74°F rooms are within the 68-75°F comfort band");
@@ -162,7 +174,7 @@ test("Fahrenheit classification: all 10 generated boundaries classify exactly at
   // unitProfile — the caller (here, the test itself, standing in for
   // computeLegacyData()) explicitly resolves it once and passes it through.
   const profile = el._resolveMetricContext().displayUnitProfile;
-  const label = (value) => el._fallbackTone(value, "temperature", profile).label;
+  const label = (value) => internals.fallbackTone(el, value, "temperature", profile).label;
 
   assert.equal(label(82), "Very hot");
   assert.equal(label(81.99), "Hot");
@@ -195,8 +207,8 @@ test("Fahrenheit classification precision: the ROUNDED 70°F threshold governs, 
   // Fahrenheit boundary (70°F) instead, so 69.8°F must NOT be optimal.
   const el = fahrenheitCard(70);
   const profile = el._resolveMetricContext().displayUnitProfile;
-  assert.equal(el._fallbackTone(69.8, "temperature", profile).label, "Slightly cool");
-  assert.equal(el._fallbackTone(70, "temperature", profile).label, "Optimal");
+  assert.equal(internals.fallbackTone(el, 69.8, "temperature", profile).label, "Slightly cool");
+  assert.equal(internals.fallbackTone(el, 70, "temperature", profile).label, "Optimal");
   env.cleanup(el);
 });
 
@@ -259,7 +271,7 @@ test("_buildScaleModel(): identical input produces identical geometry for both t
   // object (metricType/unitProfile instead of an implicit
   // this._resolveMetricContext() call) and returns the FULL renderer-ready
   // model — displayStep/markerPositions/boundaryLabels, not just geometry.
-  const celsius = el._getUnitProfile("temperature", "celsius");
+  const celsius = access.getUnitProfile("temperature", "celsius");
   const options = {
     metricType: "temperature",
     unitProfile: celsius,
@@ -271,8 +283,8 @@ test("_buildScaleModel(): identical input produces identical geometry for both t
     high: 26,
     markers: { avg: 22 },
   };
-  const first = el._buildScaleModel(options);
-  const second = el._buildScaleModel({ ...options, markers: { ...options.markers } });
+  const first = internals.scaleModel(el, options);
+  const second = internals.scaleModel(el, { ...options, markers: { ...options.markers } });
   assert.deepEqual(normalize(first), normalize(second));
   assert.ok(first.scaleMin < first.scaleMax);
   assert.equal(first.displayStep, 1, "Celsius uses the fixed static step (1), not a dynamic Fahrenheit tier");
@@ -285,8 +297,8 @@ test("_buildScaleModel(): identical input produces identical geometry for both t
 test("_buildScaleModel(): markerPositions covers every key passed in markers, and only those keys", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  const celsius = el._getUnitProfile("temperature", "celsius");
-  const model = el._buildScaleModel({
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const model = internals.scaleModel(el, {
     metricType: "temperature",
     unitProfile: celsius,
     comfortMin: 20,
@@ -307,7 +319,7 @@ test("_buildScaleModel(): displayStep reflects the Fahrenheit dynamic-step rule 
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 130, { unit_of_measurement: "°F" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const fahrenheit = el._resolveMetricContext().displayUnitProfile;
-  const model = el._buildScaleModel({
+  const model = internals.scaleModel(el, {
     metricType: "temperature",
     unitProfile: fahrenheit,
     comfortMin: 68,

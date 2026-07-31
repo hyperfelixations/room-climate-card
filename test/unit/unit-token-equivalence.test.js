@@ -18,10 +18,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -72,7 +77,7 @@ for (const [metricKind, { deviceClass, profiles }] of Object.entries(CASES)) {
           [entityId]: mkState(entityId, 21, { device_class: deviceClass, unit_of_measurement: unit }),
         }));
 
-        const model = el._buildEntityModel(entityId, "primary");
+        const model = internals.entityModel(el, entityId, "primary");
         assert.equal(model.metricKind, metricKind, `metricKind for ${JSON.stringify(unit)}`);
         assert.equal(model.unitProfile, profileKey, `unitProfile for ${JSON.stringify(unit)}`);
         assert.equal(model.validUnit, true, `validUnit for ${JSON.stringify(unit)}`);
@@ -95,7 +100,7 @@ test("cross-check: a genuinely different unit for a given metric kind is still c
     const el = env.createCard({ entity: entityId }, mkHass({
       [entityId]: mkState(entityId, 21, { device_class: deviceClass, unit_of_measurement: unit }),
     }));
-    const model = el._buildEntityModel(entityId, "primary");
+    const model = internals.entityModel(el, entityId, "primary");
     assert.equal(model.unitProfile, null, `${deviceClass} + ${JSON.stringify(unit)} must not resolve to any profile`);
     assert.equal(model.validUnit, false, `${deviceClass} + ${JSON.stringify(unit)} must be flagged unusable`);
     env.cleanup(el);

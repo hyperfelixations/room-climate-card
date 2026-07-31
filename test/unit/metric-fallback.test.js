@@ -34,10 +34,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -361,7 +366,7 @@ test("review fix (P0, post-2.21.1): a primary with device_class:temperature but 
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
   assert.equal(context.sourceKind, "roomConsensus", "a missing unit must be treated exactly like an unresolvable one — the primary must not win primaryUsable");
-  const primaryModel = el._buildEntityModel("sensor.avg", "primary");
+  const primaryModel = internals.entityModel(el, "sensor.avg", "primary");
   assert.equal(primaryModel.validUnit, false);
   assert.equal(primaryModel.unitProfile, null, "no silent canonical assumption for a missing unit");
   assert.equal(primaryModel.metricKind, "temperature", "metricKind stays resolved via device_class even though the reading itself is unusable, so empty-state title/icon fallbacks remain sensible");

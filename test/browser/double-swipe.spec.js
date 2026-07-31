@@ -79,7 +79,7 @@ test("a second swipe while the first swipe's resume is still pending advances on
   expect(await card.evaluate((el) => el._activeView)).toBe(1);
   // The first swipe must genuinely have left a resume pending — otherwise this test
   // would pass without ever entering the branch it exists for.
-  expect(await card.evaluate((el) => el._resumeAutoTimer !== null)).toBe(true);
+  expect(await card.evaluate((el) => el._carousel.resumeTimerHandle !== null)).toBe(true);
 
   await swipe(page, box, -box.width * 0.3);
   await page.waitForTimeout(500);
@@ -87,8 +87,8 @@ test("a second swipe while the first swipe's resume is still pending advances on
   expect(errors, `unexpected page errors: ${errors.join(" | ")}`).toEqual([]);
   expect(await card.evaluate((el) => el._activeView)).toBe(2);
   expect(await card.evaluate((el) => el._isDragging)).toBe(false);
-  expect(await card.evaluate((el) => el._pointer)).toBeNull();
-  expect(await card.evaluate((el) => el._resumeAutoTimer !== null)).toBe(true);
+  expect(await card.evaluate((el) => el._interaction.pointer)).toBeNull();
+  expect(await card.evaluate((el) => el._carousel.resumeTimerHandle !== null)).toBe(true);
 });
 
 test("three swipes in a row keep moving exactly one view each, with no error and no stuck drag", async ({ page }) => {

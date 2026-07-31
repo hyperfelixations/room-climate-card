@@ -776,3 +776,168 @@ test("a disconnected card is not measured when its fonts finally land", async ()
   await Promise.resolve();
   assert.equal(measures, 0);
 });
+
+// ------------------------------------------- fonts-ready across a disconnect ----
+//
+// The web font finishing loading is the one measurement trigger that is neither a data
+// change nor a resize, and it fires exactly once per document. If that moment lands
+// while the card is out of the DOM, measuring is impossible — and remembering only "we
+// already subscribed to this promise" loses the measurement for good.
+
+function fontsRuntime({ noResizeObserver = false } = {}) {
+  const platform = createFakePlatform({ noResizeObserver });
+  let measures = 0;
+  let connected = true;
+  const resize = resizeRuntime.createResizeRuntime({ platform, onMeasure: () => (measures += 1) });
+  return {
+    platform,
+    resize,
+    measures: () => measures,
+    setConnected: (value) => (connected = value),
+    render: () => resize.measureOnceFontsReady(() => connected),
+  };
+}
+
+function deferredPromise() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+test("three renders before the same fonts promise settle into exactly one measurement", async () => {
+  const runtime = fontsRuntime();
+  const fonts = deferredPromise();
+  runtime.platform.setFontsReady(fonts.promise);
+  runtime.render();
+  runtime.render();
+  runtime.render();
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "pending");
+
+  fonts.resolve();
+  await fonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 1);
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "measured");
+});
+
+test("a promise that settles while disconnected defers the measurement, and the reconnect collects it", async () => {
+  const runtime = fontsRuntime();
+  const fonts = deferredPromise();
+  runtime.platform.setFontsReady(fonts.promise);
+  runtime.render();
+
+  runtime.setConnected(false);
+  fonts.resolve();
+  await fonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 0, "nothing may be measured on a detached node");
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "deferred", "but the debt is remembered");
+
+  runtime.setConnected(true);
+  runtime.render();
+  assert.equal(runtime.measures(), 1, "the reconnect collects exactly one deferred measurement");
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "measured");
+
+  // And only one: a second reconnect owes nothing.
+  runtime.render();
+  runtime.render();
+  assert.equal(runtime.measures(), 1);
+});
+
+test("a new realm's fonts source supersedes the old one, which then measures nothing", async () => {
+  const runtime = fontsRuntime();
+  const oldFonts = deferredPromise();
+  const newFonts = deferredPromise();
+
+  runtime.platform.setFontsReady(oldFonts.promise);
+  runtime.render();
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "pending");
+
+  // The card is adopted before the old document's fonts finish.
+  runtime.platform.setFontsReady(newFonts.promise);
+  runtime.render();
+
+  oldFonts.resolve();
+  await oldFonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 0, "the abandoned document must not measure the adopted card");
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "pending", "the new source is still loading");
+
+  newFonts.resolve();
+  await newFonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 1);
+});
+
+test("a superseded source that had already deferred does not measure after the swap", async () => {
+  const runtime = fontsRuntime();
+  const oldFonts = deferredPromise();
+  runtime.platform.setFontsReady(oldFonts.promise);
+  runtime.render();
+
+  runtime.setConnected(false);
+  oldFonts.resolve();
+  await oldFonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "deferred");
+
+  // Adopted into another document while the debt was outstanding: that debt belonged to
+  // a document the card has left, so it is dropped rather than paid in the new one.
+  const newFonts = deferredPromise();
+  runtime.platform.setFontsReady(newFonts.promise);
+  runtime.setConnected(true);
+  runtime.render();
+  assert.equal(runtime.measures(), 0);
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "pending");
+
+  newFonts.resolve();
+  await newFonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 1, "only the current realm's source measures");
+});
+
+test("a rejected fonts promise is recorded and never retried for that source", async () => {
+  const runtime = fontsRuntime();
+  const fonts = deferredPromise();
+  runtime.platform.setFontsReady(fonts.promise);
+  runtime.render();
+
+  fonts.reject(new Error("font loading failed"));
+  await fonts.promise.catch(() => {});
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 0);
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "rejected");
+
+  runtime.render();
+  runtime.render();
+  assert.equal(runtime.measures(), 0, "no endless resubscription to a promise that failed");
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), "rejected");
+});
+
+test("no Fonts API at all stays a clean no-op", () => {
+  const runtime = fontsRuntime();
+  runtime.platform.setFontsReady(null);
+  runtime.render();
+  runtime.render();
+  assert.equal(runtime.measures(), 0);
+  assert.equal(runtime.resize.fontsStateForCurrentSource(), null);
+});
+
+test("the fonts path works even without a ResizeObserver", async () => {
+  const runtime = fontsRuntime({ noResizeObserver: true });
+  const jsdom = new JSDOM("<!doctype html><html><body><div id='host'></div></body></html>");
+  runtime.resize.connect(jsdom.window.document.getElementById("host"));
+  assert.equal(runtime.resize.isObserving(), false, "unsupported, and that is fine");
+
+  const fonts = deferredPromise();
+  runtime.platform.setFontsReady(fonts.promise);
+  runtime.render();
+  fonts.resolve();
+  await fonts.promise;
+  await Promise.resolve();
+  assert.equal(runtime.measures(), 1, "the two triggers are independent");
+});

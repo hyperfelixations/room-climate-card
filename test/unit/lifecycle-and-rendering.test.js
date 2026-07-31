@@ -15,8 +15,12 @@ const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
 
 let env;
+// The render paths, imported from the source module so the test names the same
+// constants production does rather than re-spelling their string values.
+let RENDER_PATH;
 
-test.before(() => {
+test.before(async () => {
+  ({ RENDER_PATH } = await import("../../src/controllers/render/render-controller.js"));
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -24,12 +28,14 @@ test.after(() => {
 });
 
 test("ROB-01: a thrown _computeViewModel() does not commit the render signature, so an identical retry actually re-renders", () => {
-  const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hassA);
-  const sigAfterFirstRender = el._lastRenderSignature;
-  assert.ok(sigAfterFirstRender, "first render must commit a non-empty signature");
+  // A repeat of the identical hass push is skipped, which is what proves the first
+  // render committed. Asserted through the render path rather than by reading the
+  // signature string: the path is the property that actually matters.
+  assert.equal(el._render(), RENDER_PATH.SKIPPED, "an unchanged repeat must be skipped, so the first render committed");
 
-  const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature" }) });
+  const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }) });
   // The real production compute entry point, not the legacy-DTO adapter: _render()
   // calls _computeViewModel(), and a test that failed the adapter instead would stop
   // proving anything the moment the adapter is removed.
@@ -47,11 +53,11 @@ test("ROB-01: a thrown _computeViewModel() does not commit the render signature,
 
   assert.ok(threw, "the induced failure must actually have been reached");
   assert.equal(loggedErrors.length, 1, "set hass()'s try/catch must log exactly once, not crash");
-  assert.equal(el._lastRenderSignature, sigAfterFirstRender, "signature must NOT advance after a failed render");
-
   el._computeViewModel = original;
-  el.hass = hassB; // retry with the identical (already-failed) data
-  assert.notEqual(el._lastRenderSignature, sigAfterFirstRender, "the retry must actually re-render, not be skipped as 'unchanged'");
+  // The retry carries the exact data that just failed. Committing the signature before
+  // the render succeeded would make this identical push compare equal and be skipped,
+  // freezing the card on stale content.
+  assert.equal(el._render(), RENDER_PATH.CONTENT, "the retry must actually re-render, not be skipped as 'unchanged'");
   env.cleanup(el);
 });
 
@@ -73,18 +79,35 @@ test("DOM-01: the empty-state icon updates on a pure partial update (metric mode
   env.cleanup(el);
 });
 
-test("LIFE-01: setConfig() clears an in-progress pointer gesture (_pointer/_isDragging/_renderPending)", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
-  const el = env.createCard({ entity: "sensor.avg" }, hass);
-  el._pointer = { id: 1, x: 0, y: 0, time: Date.now(), rotator: true, startTranslate: 0, dragging: true, width: 100 };
-  el._isDragging = true;
-  el._renderPending = true;
+test("LIFE-01: setConfig() clears an in-progress pointer gesture and the render it deferred", () => {
+  const C = { device_class: "temperature", unit_of_measurement: "°C" };
+  const el = env.createCard(
+    { entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] },
+    mkHass({
+      "sensor.avg": mkState("sensor.avg", 22, C),
+      "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
+      "sensor.r1": mkState("sensor.r1", 21, C),
+      "sensor.r2": mkState("sensor.r2", 23, C),
+    })
+  );
+
+  // A real gesture, driven through the handlers, so this keeps its meaning without any
+  // writable test window into the interaction runtime.
+  const rotator = el.shadowRoot.querySelector(".rtc-rotator");
+  rotator.getBoundingClientRect = () => ({ width: 300 });
+  el._handlePointerDown({ pointerId: 1, button: 0, isPrimary: true, clientX: 0, clientY: 0, composedPath: () => [rotator] });
+  el._handlePointerMove({ pointerId: 1, clientX: -60, clientY: 0, preventDefault: () => {}, stopPropagation: () => {} });
+  assert.equal(el._isDragging, true, "the drag is live");
+
+  // A hass update arriving mid-drag is deferred rather than applied.
+  assert.equal(el._render(false), RENDER_PATH.DEFERRED);
+  assert.equal(el._renderController.isRenderPending, true);
 
   el.setConfig({ entity: "sensor.avg" });
 
-  assert.equal(el._pointer, null);
+  assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
-  assert.equal(el._renderPending, false);
+  assert.equal(el._renderController.isRenderPending, false, "the deferred render is dropped: its reason and its data are both gone");
   env.cleanup(el);
 });
 
@@ -203,9 +226,11 @@ test("a full render and a partial update each compute exactly one view model", (
   el._render(false);
   assert.equal(viewModelCalls, 1, "exactly one view model per render, not one per view");
 
-  // A structural rebuild.
-  el._rendered = false;
-  el._render(false);
+  // A structural rebuild: a second room appearing changes the markup itself.
+  el.hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+  });
   assert.equal(viewModelCalls, 2);
   assert.ok(el.shadowRoot.querySelector(".rtc-scale-view"), "and the card still rendered");
   env.cleanup(el);

@@ -11,10 +11,15 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { computeLegacyData } = require("../helpers/legacy-dto.js");
+const { loadCardInternals } = require("../helpers/card-internals.js");
+
+// The compositions the element used to expose only for tests (see the helper).
+let internals;
 
 let env;
 
-test.before(() => {
+test.before(async () => {
+  internals = await loadCardInternals();
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -231,14 +236,14 @@ test("trend rendering: all four metrics expose semantic direction, SVG indicator
     assert.equal(avg.querySelectorAll(".rtc-avg-trend-arrow svg").length, 1);
     assert.equal(avg.querySelector(".rtc-avg-trend-arrow").textContent.trim(), "");
     assert.equal(avg.querySelector(".rtc-avg-trend"), null);
-    assert.equal(el._trendDisplayText(data.trend), text);
+    assert.equal(internals.trendText(el, data.trend), text);
     env.cleanup(el);
   }
 });
 
 test("trend rendering: negative zero is normalized to an unsigned zero", () => {
   const el = trendCard("temperature", 0);
-  assert.equal(el._trendDisplayText({ value: -0, unit: "°C/h" }), "0.0 °C/h");
+  assert.equal(internals.trendText(el, { value: -0, unit: "°C/h" }), "0.0 °C/h");
   env.cleanup(el);
 });
 
@@ -265,7 +270,7 @@ test("scale footer: a valid configured trend is restored as the localized third 
   assert.match(footer.textContent, /comfort/i);
   assert.match(footer.textContent, /spread/i);
   assert.match(footer.textContent, /trend \+0\.2 °C\/h/i);
-  assert.equal(el._scaleFooterText(data).split("·").length, 3);
+  assert.equal(internals.footerText(el, "scale", data).split("·").length, 3);
   env.cleanup(el);
 });
 
