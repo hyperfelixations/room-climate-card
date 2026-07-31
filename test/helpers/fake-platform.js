@@ -4,8 +4,8 @@
 //
 // This is the whole point of the platform contract: the carousel is a wall-clock
 // animation, so every question worth asking about it ("which view is accessible 4.2
-// seconds into the cycle", "does a resume land in the right hold window") used to be
-// answerable only by waiting in a real browser. With an injected clock the answer is a
+// seconds into the cycle", "does a resume land in the right hold window") becomes
+// deterministic with an injected clock. The answer is a
 // number, and the assertion is exact.
 //
 // It lives in the test suite rather than next to the browser adapter on purpose: the

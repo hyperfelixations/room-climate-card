@@ -5,16 +5,15 @@
 // operations derived from them. Nothing else: not the custom element, not hass, not
 // the configuration, not a domain service, not controller state, and no timer or
 // clock. A renderer that could reach any of those could change what the card shows
-// after being asked to render one view model, which is exactly the shape this
-// refactoring exists to remove.
+// after being asked to render one view model, violating the rendering boundary.
 //
 // Escaping is NOT injected. There is exactly one escaping function in the card
 // (core/text.js), it is pure, and every render module imports it directly — routing
 // it through a context would suggest a call site could be handed a different one.
 //
 // The full platform contract (timers, the clock, events, ResizeObserver,
-// requestAnimationFrame) belongs to the controller layer and is defined in its own
-// round. This context covers only what DOM creation and layout measurement need.
+// requestAnimationFrame) belongs to the controller layer. This context covers only
+// what DOM creation and layout measurement need.
 
 export function createRenderContext(ownerDocument) {
   return {

@@ -9,7 +9,7 @@
 // read are the two the assertions cannot be phrased without (which view the model
 // believes is visible, and whether a timer is armed).
 //
-// It exists because the refactor moved almost everything: a suite of green unit tests
+// It ensures a suite of green unit tests
 // proves each part still works in isolation, and says nothing about whether the parts
 // are still wired to each other. This is that check.
 

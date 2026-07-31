@@ -1,10 +1,8 @@
 // The gesture controller: what the user's finger is doing, and what that means.
 //
-// It owns exactly three things and nothing else owns them: the in-flight pointer, the
-// confirmed-drag flag, and the moment until which a synthesized click is ignored. Those
-// three used to live on the custom element next to the configuration, the hass object
-// and the render pipeline, which is why "is a swipe in progress" had answers in four
-// places.
+// It exclusively owns the in-flight pointer, the confirmed-drag flag, and the deadline
+// until which a synthesized click is ignored. Keeping that state together gives every
+// caller one authoritative answer to "is a swipe in progress?".
 //
 // What it does NOT get: hass, the configuration object, the domain model, the view
 // model, a renderer, or the element. It receives a platform, the carousel controller,

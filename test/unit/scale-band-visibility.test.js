@@ -1,7 +1,6 @@
 "use strict";
 
-// View-customizer "Baukasten", first concrete option (user request, built
-// on top of view-options-resolver.test.js's generic mechanism): the
+// The generic view-options mechanism allows the
 // comfort-band/optimal-band background coloring inside the scale bar can
 // be toggled independently, per view (scale, range_scale), via
 // views:[i].options.show_comfort_band / show_optimal_band. Strictly
@@ -16,7 +15,7 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
 let env;
@@ -45,8 +44,8 @@ function baseConfig(extra) {
 // ==== optionsSchema whitelist + validation (regression + new) ====
 
 test("optionsSchema: show_comfort_band/show_optimal_band pass the whitelist for scale and range_scale, unrelated keys are still stripped and diagnosed", () => {
-  // _warnAboutViewConfigOnce() dedups identical repeated configs (P1 fix,
-  // post-2.22.1) -- the warn spy must be attached BEFORE the config
+  // _warnAboutViewConfigOnce() deduplicates identical repeated configs, so
+  // the warn spy must be attached before the config
   // carrying "bogus" is first applied, or the (correct) dedup would
   // silently suppress the very warning this test is checking for.
   const el = env.createCard(baseConfig(), twoRoomStates());
@@ -84,12 +83,10 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
 
 // ==== data.views.options resolution ====
 
-// AP-C3 added footer/markers (scale) and footer (range_scale) to these same
-// two schemas -- the assertions below include their defaults (footer:true/
+// The assertions below include footer and marker defaults (footer:true/
 // markers:"extremes" for scale, footer:"detailed" for range_scale) alongside the
 // band flags this file itself is about, since data.views.options.<view> is a
-// single fully-resolved object per the Baukasten's own design (see
-// resolveViewOptions() in room-climate-card.js).
+// single fully-resolved object returned by resolveViewOptions().
 
 test("data.views.options: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());

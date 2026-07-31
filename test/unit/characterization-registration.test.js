@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 0 characterization: custom-element and Home Assistant registration.
+// Characterization of custom-element and Home Assistant registration.
 //
 // The registration block is the card's entire integration surface with Home
 // Assistant: the element tag, the HA lifecycle contract, the card-picker
@@ -88,7 +88,7 @@ test("evaluating the card source twice in one realm neither throws nor duplicate
 
 test("no globals other than the two documented ones are created", () => {
   // A dependency-free card must not leak helper state onto window. Anything
-  // new appearing here after a refactoring would mean the IIFE boundary broke.
+  // new appearing here would mean the IIFE boundary broke.
   const own = Object.keys(env.window).filter((key) => /^(rtc|roomClimate|customCards)/i.test(key));
   assert.deepEqual(own.sort(), ["customCards", "roomClimateCardVersion"]);
 });

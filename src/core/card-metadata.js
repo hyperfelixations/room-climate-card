@@ -6,9 +6,8 @@
 // against the built bundle's window.roomClimateCardVersion, so the three can
 // never silently drift apart.
 //
-// Deliberately no changelog here (documented convention since 2.9.0): version
-// history and rationale live in the internal technical documentation, not in
-// the shipped file.
+// Deliberately no changelog here: user-facing version history belongs in the
+// public GitHub releases, not in the shipped file.
 
 export const CARD_TYPE = "room-climate-card";
 export const CARD_NAME = "Room Climate Card";

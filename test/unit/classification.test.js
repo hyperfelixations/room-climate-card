@@ -1,9 +1,8 @@
 "use strict";
 
-// Built-in classification-profile boundaries for all 4 modes (audit
-// checklist: "alle Schwellenwerte +/- kleinste Abweichung"), HEX_COLOR_PATTERN
-// validation (COLOR-01, v2.15.0 audit: only 3/4/6/8-digit hex accepted, 5/7
-// rejected), and _rgba()'s handling of 3/4/6/8-digit hex colors.
+// Built-in classification boundaries are checked immediately around every
+// threshold. HEX_COLOR_PATTERN accepts only 3/4/6/8-digit hex values, and
+// _rgba() must handle each accepted length.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,13 +10,10 @@ const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Import the owning module directly so each test names its actual subject.
 let color;
 
 let env;

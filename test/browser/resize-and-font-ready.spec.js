@@ -6,10 +6,10 @@
 // here). Covers: the 2.14.0 resize-bug root cause (label stays stale after
 // a pure container resize with no accompanying hass update) and the
 // 2.12.0 font-ready correction, both for the main scale AND the rangeScale
-// view (UI-03, v2.15.0 audit).
+// view.
 //
 // NO FIXED TIMEOUTS. These tests assert label positions to within a pixel, and an
-// earlier version waited a flat 300 ms for the re-measurement to happen. That is not a
+// A flat timeout is not a
 // contract, it is a guess about how busy the machine is, and it failed once under load.
 // Everything below waits on the mechanism instead — see settledLabels().
 

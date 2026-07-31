@@ -1,19 +1,11 @@
 "use strict";
 
-// AP-07 (audit sections 14.1, 14.2, 14.5): startview preservation and
-// dynamic view-availability changes. _renderAll()'s fallback cascade
+// Start-view preservation and dynamic view availability. _renderAll()'s fallback cascade
 // (previously visible key -> start_view -> first active view -> null
 // state), the timer self-cleanup in _scheduleAccessibilitySync()/
 // _resumeSynchronizedSlideWhenAligned(), and the mid-drag deferred-render
-// deferral were all already correct BEFORE this file existed -- but only
-// ever exercised via the setConfig()-triggered structural-change path.
-// 14.2 explicitly requires availability to change WITHOUT a config change
-// (a pure `hass` update) to behave the same way, and that path was
-// completely untested -- which is exactly where two real bugs lived,
-// invisible via setConfig()-driven tests alone (see the two "Bug"-labeled
-// tests below). Everything else in this file is new coverage for
-// already-correct behavior, added because it was previously only proven
-// for the setConfig() path.
+// deferral must behave identically for setConfig()-driven and hass-driven
+// structural changes. These tests cover both paths.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -55,11 +47,11 @@ function withMockedNow(fixedMs, fn) {
   }
 }
 
-// ---- Bug A (14.1): previousActiveKey must use the OLD timing definition,
+// ---- previousActiveKey must use the old timing definition,
 // never the new rotation_seconds/slide_seconds a live setConfig() is about
 // to install. ----
 
-test("AP-07 Bug A: a live rotation_seconds/slide_seconds change preserves the view visible under the OLD timing, not what the NEW timing would compute", () => {
+test("a live rotation_seconds/slide_seconds change preserves the view visible under the old timing", () => {
   // 3 views -> holdSequence positions = [0,1,2,1], length 4.
   // OLD (10s hold / 2s slide): segMs=12000, cycleMs=48000. At phaseMs=29000
   // (segment index 2, well inside its hold, before the flip point at
@@ -84,11 +76,11 @@ test("AP-07 Bug A: a live rotation_seconds/slide_seconds change preserves the vi
   });
 });
 
-// ---- Bug B (14.2): an in-flight-but-not-yet-classified pointer gesture
+// ---- An in-flight but not yet classified pointer gesture
 // (pointerdown happened, drag threshold never crossed) must not survive a
 // structural rebuild triggered by a pure hass update. ----
 
-test("AP-07 Bug B: a bare pointerdown (no drag yet) is invalidated by a hass-driven structural rebuild, and a later pointerup on it is a safe no-op", () => {
+test("a bare pointerdown is invalidated by a hass-driven structural rebuild", () => {
   const el = threeViewCard();
   el._handlePointerDown({ pointerId: 1, button: 0, clientX: 100, clientY: 50 });
   assert.ok(el._interaction.pointer, "sanity check: pointerdown must register");
@@ -113,7 +105,7 @@ test("AP-07 Bug B: a bare pointerdown (no drag yet) is invalidated by a hass-dri
   env.cleanup(el);
 });
 
-test("AP-07 Bug B: a bare pointerdown no longer blocks accessibility resync after a hass-driven structural rebuild", () => {
+test("a bare pointerdown does not block accessibility resync after a hass-driven structural rebuild", () => {
   const el = threeViewCard();
   el._handlePointerDown({ pointerId: 1, button: 0, clientX: 100, clientY: 50 });
 
@@ -132,10 +124,9 @@ test("AP-07 Bug B: a bare pointerdown no longer blocks accessibility resync afte
   env.cleanup(el);
 });
 
-// ---- Already-correct behavior (audit 14.5), now proven over the
-// previously-untested hass-driven (non-setConfig()) trigger path. ----
+// ---- Hass-driven availability changes ----
 
-test("AP-07: live availability change (available -> unavailable -> available, no setConfig()) preserves the still-existing view and causes no extra jump on reappearance", () => {
+test("a live availability cycle preserves a still-existing view without an extra jump", () => {
   const el = threeViewCard();
   assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"]);
   el._activeView = el._views.indexOf("scale");
@@ -168,7 +159,7 @@ test("AP-07: live availability change (available -> unavailable -> available, no
   env.cleanup(el);
 });
 
-test("AP-07: falls all the way to the first remaining active view when BOTH the previous key and start_view disappear via a live change", () => {
+test("a live change falls back to the first active view when the previous and start views disappear", () => {
   const el = threeViewCard({ start_view: "extremes" });
   el._activeView = el._views.indexOf("range");
   el._updateTrackTransform(false); // deterministic previousActiveKey, see the round-trip test above
@@ -184,7 +175,7 @@ test("AP-07: falls all the way to the first remaining active view when BOTH the 
   env.cleanup(el);
 });
 
-test("AP-07: start_view (still available) wins over the plain index-0 fallback when only the active view disappears via a live change", () => {
+test("an available start_view wins over index 0 when the active view disappears", () => {
   // Deliberately start_view:"extremes", NOT "scale" -- "scale" would be
   // index 0 of the post-change views list regardless of start_view, which
   // wouldn't distinguish "start_view was consulted" from "index-0 fallback
@@ -206,8 +197,7 @@ test("AP-07: start_view (still available) wins over the plain index-0 fallback w
   env.cleanup(el);
 });
 
-// ---- Bug C (14.2, found while writing the "already correct" coverage
-// below): dropping to <2 active views renders a track-less solo/empty
+// ---- Dropping to fewer than two active views renders a track-less solo/empty
 // layout (no ".rtc-track" element at all -- see the render template's
 // `data.views.length >= 2 ? <rotator+track> : ...`). _applyAutoSlideStyles()
 // bails out on its very first line when there's no track
@@ -218,7 +208,7 @@ test("AP-07: start_view (still available) wins over the plain index-0 fallback w
 // handle instead of being cleared immediately, violating "Timer nur ab
 // zwei aktiven Views" for the window until it fires. ----
 
-test("AP-07 Bug C: timer safety over a full live 2-views -> 1-view -> 2-views cycle", () => {
+test("timers remain safe over a live 2-view -> 1-view -> 2-view cycle", () => {
   const hassTwoViews = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -236,35 +226,24 @@ test("AP-07 Bug C: timer safety over a full live 2-views -> 1-view -> 2-views cy
   assert.equal(el._carousel.resumeTimerHandle, null, "no resume timer may linger with <2 active views");
   assert.equal(el._carousel.accessibilityTimerHandle, null, "no a11y sync timer may linger with <2 active views");
 
-  // Rooms come back -> 2 views again -> a resume must be SCHEDULED (not an
-  // immediate resync -- see the P1 fix below: a non-first-render rebuild
-  // always freezes visually first). _a11ySyncTimer itself only gets
+  // Rooms come back -> 2 views again -> schedule a resume instead of synchronizing
+  // immediately because a non-first rebuild freezes visually first. _a11ySyncTimer
+  // itself only gets
   // (re-)armed once that scheduled resume actually fires and hands off to
   // _applyAutoSlideStyles() -- checking that exact hand-off isn't this
-  // test's concern (see the P1 tests below), just that a resume was
-  // scheduled at all and no timer is simply abandoned.
+  // test's concern; only scheduling and absence of abandoned timers matter here.
   el.hass = hassTwoViews;
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
   assert.notEqual(el._carousel.resumeTimerHandle, null, "a phase-aware resume must be scheduled once >=2 views are active again");
   env.cleanup(el);
 });
 
-// ---- Reviewer finding (P1, post-AP-07): previousActiveKey/_activeView was
-// correctly PRESERVED (AP-07 fix) but that was only ever a JS bookkeeping
-// value -- _renderAll()'s non-pending-resume branch called
-// _applyAutoSlideStyles(), which re-engages the wall-clock-driven synced
-// CSS animation immediately, completely ignoring _activeView. The
-// preserved view could be shown for zero time before the ambient auto-slide
-// phase (computed fresh against whatever the CURRENT view count/timing is)
-// jumped to something else entirely. setConfig()'s trailing
-// _restartRotation() call made this worse by undoing even the one case
-// that WAS handled correctly (hadPendingResume). Fix: every non-first-render,
-// non-empty rebuild now freezes visually on the resolved _activeView first
-// (matching what only the hadPendingResume branch used to do), then
-// schedules a phase-aware resume -- exactly the AP-07 acceptance criterion
-// ("keine Sprünge") applied to the case that was actually missing it.
+// previousActiveKey/_activeView must be reflected in the rendered track, not only
+// preserved as JavaScript bookkeeping. Every non-first, non-empty rebuild freezes
+// visually on the resolved _activeView before scheduling a phase-aware resume; an
+// immediate synchronized animation could otherwise jump to the ambient phase.
 
-test("P1 fix: a non-first structural rebuild freezes visually on the resolved view instead of jumping to the ambient auto-slide phase", () => {
+test("a non-first structural rebuild freezes visually on the resolved view instead of jumping to the ambient auto-slide phase", () => {
   const el = threeViewCard();
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.equal(track.classList.contains("rtc-manual"), false, "sanity check: the very first render engages synced auto-slide directly, no freeze");
@@ -281,7 +260,7 @@ test("P1 fix: a non-first structural rebuild freezes visually on the resolved vi
   env.cleanup(el);
 });
 
-test("P1 fix: setConfig() no longer undoes the freeze via a trailing _restartRotation()", () => {
+test("setConfig() leaves a structural rebuild frozen until its phase-aware resume", () => {
   const el = threeViewCard();
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }] }); // rooms drop to 1 -> "extremes" gone, structural change, not first render
   const track = el.shadowRoot.querySelector(".rtc-track");
@@ -289,12 +268,12 @@ test("P1 fix: setConfig() no longer undoes the freeze via a trailing _restartRot
   env.cleanup(el);
 });
 
-// ---- Reviewer finding (P2, post-AP-07): the pre-config visual snapshot is
+// ---- The pre-config visual snapshot is
 // taken before this._render(false) runs and released AFTER it -- if _render()
 // (or anything it calls) throws and the release is not in a finally, the stash
 // survives and leaks into a later, unrelated hass-driven rebuild. ----
 
-test("P2 fix: the pre-config visual snapshot is released even if _render() throws mid-setConfig()", () => {
+test("the pre-config visual snapshot is released even if _render() throws mid-setConfig()", () => {
   const el = threeViewCard();
   const originalRender = el._render;
   el._render = () => {
@@ -318,7 +297,7 @@ test("P2 fix: the pre-config visual snapshot is released even if _render() throw
   env.cleanup(el);
 });
 
-test("AP-07: a hass update carrying a structural (view-availability) change that arrives mid-drag is deferred and correctly applied once the drag ends", () => {
+test("a hass-driven structural change arriving mid-drag is applied after the drag ends", () => {
   const el = threeViewCard();
   // A real gesture through the handlers, so the test keeps its meaning without a
   // writable window into the interaction runtime.

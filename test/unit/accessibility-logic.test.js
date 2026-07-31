@@ -1,6 +1,6 @@
 "use strict";
 
-// A11Y-01 (v2.16.0 audit fix): offscreen carousel views must not be
+// Offscreen carousel views must not be
 // tabbable or visible to assistive tech. All .rtc-view elements stay
 // permanently mounted (only the CSS transform moves them);
 // _updateViewAccessibility() keeps aria-hidden/inert in sync with
@@ -40,7 +40,7 @@ function twoViewCard() {
 test("initial render: the view _currentVisualViewIndex() reports has neither aria-hidden nor inert; the other has both", () => {
   // Not asserted against el._activeView directly: with auto-slide enabled
   // (the default for a 2-view card), the view actually shown right after
-  // render depends on wall-clock phase (A11Y-01/_accessibleViewIndexAt()),
+  // render depends on wall-clock phase (_accessibleViewIndexAt()),
   // not the JS-only _activeView — asserting against the same
   // _currentVisualViewIndex() source _updateViewAccessibility() itself
   // uses is what stays deterministic regardless of when the test runs.

@@ -1,14 +1,8 @@
 "use strict";
 
-// Reviewer fix P1 (post-2.27.0, AP-07 lifecycle follow-up): setConfig()
-// arriving mid-swipe used to abort a BESTÄTIGTER (confirmed, _isDragging)
-// drag by simply nulling _pointer/_isDragging, with nothing settling the
-// track afterwards -- _cancelInteractionForConfigChange()'s own comment
-// used to describe a _restartRotation() call at the end of setConfig()
-// that did this cleanup, but that call was removed in an earlier round
-// (the AP-08/P1 view-freeze fix) without the comment or the behavior being
-// updated. The track was left permanently frozen in "rtc-manual" at
-// whatever intermediate position the drag had reached, with no resume
+// setConfig() arriving mid-swipe must settle the confirmed drag before
+// rendering the new configuration. Otherwise the track could remain frozen
+// in "rtc-manual" at an intermediate position with no resume
 // timer ever scheduled -- a live-editing config change mid-swipe could
 // wedge the carousel indefinitely. These tests construct the exact
 // _pointer/_isDragging shape _handlePointerDown()/_handlePointerMove()
@@ -54,7 +48,7 @@ function threeViewCard() {
   return env.createCard(BASE_CONFIG, hass);
 }
 
-test("P1: setConfig() mid-drag resolves _activeView from the frozen drag position and clears the drag state", () => {
+test("setConfig mid-drag resolves the active view and clears drag state", () => {
   const el = threeViewCard();
   assert.equal(el._views.length, 3, "range, scale, extremes");
   beginConfirmedDrag(el, 2);
@@ -68,7 +62,7 @@ test("P1: setConfig() mid-drag resolves _activeView from the frozen drag positio
   env.cleanup(el);
 });
 
-test("P1: setConfig() mid-drag snaps the track out of the frozen mid-drag transform and schedules a resume timer", () => {
+test("setConfig mid-drag settles the transform and schedules a resume", () => {
   const el = threeViewCard();
   beginConfirmedDrag(el, 1);
   const track = el.shadowRoot.querySelector(".rtc-track");
@@ -87,7 +81,7 @@ test("P1: setConfig() mid-drag snaps the track out of the frozen mid-drag transf
   env.cleanup(el);
 });
 
-test("P1: setConfig() with no active drag (the normal case) behaves exactly as before -- no resume timer side effect introduced", () => {
+test("setConfig without an active drag does not schedule a resume", () => {
   const el = threeViewCard();
   assert.equal(el._isDragging, false);
   assert.equal(el._interaction.pointer, null);
@@ -104,7 +98,7 @@ test("P1: setConfig() with no active drag (the normal case) behaves exactly as b
   env.cleanup(el);
 });
 
-test("P1: setConfig() during an UNCONFIRMED pointerdown (not yet dragging) does not attempt to settle anything, just clears state", () => {
+test("setConfig during an unconfirmed pointerdown clears state without settling", () => {
   const el = threeViewCard();
   el._activeView = 1;
   beginTouch(el); // pointerdown happened, but the 10px/25deg drag threshold was never crossed
@@ -117,7 +111,7 @@ test("P1: setConfig() during an UNCONFIRMED pointerdown (not yet dragging) does 
   env.cleanup(el);
 });
 
-test("P1: an invalid (throwing) setConfig() mid-drag still settles the interaction state before propagating the error", () => {
+test("an invalid setConfig mid-drag settles interaction before propagating", () => {
   const el = threeViewCard();
   beginConfirmedDrag(el, 1);
 
@@ -128,7 +122,7 @@ test("P1: an invalid (throwing) setConfig() mid-drag still settles the interacti
   env.cleanup(el);
 });
 
-test("P1: setConfig() mid-drag at each of the 3 possible frozen positions resolves the correct view index (regression parity with UI-02's _handlePointerCancel coverage)", () => {
+test("setConfig mid-drag resolves each frozen track position to the correct view", () => {
   const el = threeViewCard();
   for (let targetIndex = 0; targetIndex <= 2; targetIndex++) {
     beginConfirmedDrag(el, targetIndex, { pointerId: 7 });

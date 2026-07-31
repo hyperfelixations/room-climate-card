@@ -73,9 +73,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
 
   // Custom card for Home Assistant room climate data (temperature, humidity,
-  // CO2, PM2.5). Public usage documentation lives in this repository's
-  // README. Private architecture and audit documentation is maintained
-  // separately from the public project.
+  // CO2, PM2.5). Usage and configuration are documented in this repository's
+  // README.
   //
   // One card-wide classification policy resolves complete HA attributes,
   // built-in profiles, or a validated custom YAML profile. A profile owns
@@ -181,7 +180,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           this._render(false);
         },
       });
-      // P1 fix (post-2.22.1): sibling to this._views, since the key list
+      // This state is separate from this._views because the key list
       // alone can't distinguish a deliberately empty/collapsed view area
       // from one that's requested-but-unavailable — both resolve to an
       // empty list (see views.collapsed in presentation/view-model/
@@ -217,7 +216,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._metricContextCacheValue = undefined;
       // _warnAboutViewConfigOnce() dedup — see there.
       this._lastViewConfigWarningKey = null;
-      // _warnMixedMetricKindsOnce() dedup (AP-02) — see there.
+      // _warnMixedMetricKindsOnce() deduplication state — see there.
       this._lastMetricContextWarningKey = null;
 
       // Bind handlers once so add/removeEventListener always reference the
@@ -284,7 +283,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     setConfig(config) {
       this._cancelInteractionForConfigChange();
-      // AP-07 (audit 14.1): the view visible "before" this call must be
+      // The view visible before this call must be
       // read via the OLD this._config/this._views (both still intact right
       // here) — _currentVisualViewIndex() internally reads this._config for
       // its wall-clock phase math, so computing it AFTER the overwrite two
@@ -295,7 +294,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // segment and preserving the wrong view. _renderAll() prefers this
       // snapshot over recomputing live.
       this._renderController.capturePreConfigVisualKey(this._views[this._currentVisualViewIndex()] ?? null);
-      // P2 fix (reviewer finding, post-AP-07): the cleanup below must run
+      // The cleanup below must run
       // even if _normalizeConfig()/_render() throws (Home Assistant's own
       // config-validation contract requires setConfig() to still propagate
       // that error, so this is finally, not catch) — otherwise a thrown
@@ -309,11 +308,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // active view key still exists, falling back to config.start_view
         // then the first active view otherwise (see _renderAll()).
         this._renderController.invalidateDataSignature();
-        // P1 fix (reviewer finding, post-AP-07): no trailing
-        // _restartRotation() after this — it used to unconditionally
-        // re-engage the synced auto-slide animation immediately,
-        // undoing the freeze _renderAll() now performs for every
-        // non-first-render structural change (see there). _render(false)
+        // Do not restart rotation after this render: doing so would re-engage
+        // the synchronized animation and undo the freeze _renderAll() performs
+        // for every non-first-render structural change. _render(false)
         // already handles rotation state completely on its own: via
         // _renderAll() when the change is structural, or not at all when
         // it's a purely cosmetic config edit that must not disturb an
@@ -339,11 +336,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // forward on this._config._viewsDiagnostics (see _normalizeConfig()),
       // into one flat list.
       //
-      // Review fix (P1, post-2.21.1): the dedup key is now updated on EVERY
+      // The dedup key is updated on every
       // call, including when the current diagnostics list is empty — only
       // the actual console.warn() calls are skipped for an empty list. The
-      // previous version returned early on an empty list WITHOUT touching
-      // _lastViewConfigWarningKey, so a sequence invalid -> valid -> the
+      // Returning early on an empty list without touching
+      // _lastViewConfigWarningKey would make a sequence invalid -> valid -> the
       // SAME invalid config again incorrectly stayed silent on the third
       // step (the key still held the first invalid config's value, so it
       // looked like a duplicate). Resetting the key on the valid step fixes
@@ -375,14 +372,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     connectedCallback() {
-      // Card is attached to the dashboard DOM; safe to bind events and start auto-slide.
-      //
-      // The order is not arbitrary. Events and the carousel come first because the
-      // catch-up render below can rebuild the entire shadow DOM, and a carousel engaged
-      // afterwards is engaged against the markup that will actually be on screen. The
-      // resize observer comes last for the same reason: it decides whether a fonts
-      // measurement is still owed by looking at the view model on screen, which the
-      // catch-up may have just replaced.
+      // Lifecycle order is events -> carousel -> deferred-render catch-up -> resize.
+      // Starting the carousel before catch-up restores runtime state needed by the
+      // render path; a catch-up rebuild then rebinds events and recalculates carousel
+      // styles against its new markup. Resize and fonts observation comes last because
+      // it must inspect the view model committed by that render.
       this._bindEvents();
       this._startRotation();
       this._catchUpDeferredRender();
@@ -439,9 +433,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // Re-measures the labels on a pure container resize (sidebar toggle, dashboard
       // column reflow, browser resize, device rotation). Safe to observe repeatedly
       // because the layout pass is idempotent — it always derives the position fresh
-      // from the view model and never reads back its own previous pixel output, so the
-      // double-interpretation bug that led to removing the observer in 2.11.1 cannot
-      // recur. Observes the card host, which survives every structural rebuild.
+      // from the view model and never reads back its own previous pixel output.
+      // Observing the card host remains valid across every structural rebuild.
       this._resize.connect(this);
       // A fonts.ready that settled while the card was out of the DOM still owes one
       // measurement — nothing could be measured on a detached node. Asking again on
@@ -457,14 +450,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     getCardSize() {
-      // Rough size hint for the legacy masonry view (config-based, not live
+      // Rough size hint for Home Assistant's masonry layout (config-based, not live
       // data, so it uses the configured room count as an upper-bound proxy
       // for "will show room chips" — a room without live data yet still
       // gets counted here, unlike the live-data-driven capacity cap in
       // roomGridRows()). Extra chip rows add to the
       // base size one-for-one.
       const roomCount = this._config?.rooms?.length ?? 0;
-      // AP-C2: show_rooms:false never renders the chip grid, so its rows
+      // show_rooms:false never renders the chip grid, so its rows
       // must not inflate the size hint either — same base size as too few
       // rooms to ever have shown chips at all.
       if (roomCount < 2 || this._config?.show_rooms === false) return 3;
@@ -484,14 +477,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Configuration ====
     _normalizeConfig(config) {
-      // Thin delegation: the whole normalization lives in config/, as pure
+      // The whole normalization lives in config/ as pure
       // functions without `this`. What stays here is only the wiring — the
       // registries the configuration layer is not allowed to import are passed
       // in from this composition root.
       return normalizeConfig(config, CONFIG_COLLABORATORS);
     }
 
-    // ==== Auto-slide, track and accessibility: delegations to the controller ====
+    // ==== Auto-slide, track and accessibility controller boundary ====
     // Everything below forwards to this._carousel, which owns the active index, both
     // timers and every read of the wall clock. They are named entry points the render
     // and lifecycle paths above call — a structural rebuild freezes the track and
@@ -631,7 +624,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     _unit() {
       // Card unit — see _resolveMetricContext() for how it's kept
       // consistent with _metricType(). Always a real unit string (never
-      // null), even when metricType itself is null (AP-02's
+      // null), even when metricType itself is null (the
       // "mixed_metric_kinds" configuration state) — _resolveMetricContext()
       // resolves canonicalUnit/unit via _metricMetaFor()'s own
       // temperature-default fallback in that case.
@@ -640,7 +633,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     _metricType() {
       // Card mode — see _resolveMetricContext() for how it's kept
-      // consistent with _unit(). Can be null when AP-02's
+      // consistent with _unit(). Can be null when
       // _resolveMetricContext() finds rooms reporting genuinely
       // incompatible metric kinds with no usable primary to arbitrate
       // ("mixed_metric_kinds") — this safety fallback keeps every existing
@@ -649,12 +642,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return this._resolveMetricContext().metricType || "temperature";
     }
 
-    // ==== MetricDefinition / UnitProfile / QuantityKind (AP-01) ====
-    // Thin, testable instance-method wrappers around the module-scope
+    // ==== MetricDefinition / UnitProfile / QuantityKind ====
+    // Testable instance-method wrappers around the module-scope
     // METRIC_DEFINITIONS registry and its pure helper functions above — the
     // same pattern this class already uses for other pure logic
     // (_isPhysicallyValid(), _floorToStep()/_ceilToStep()). _convertMetricValue()
-    // and _getUnitProfile() are called from _buildEntityModel() (AP-02, see
+    // and _getUnitProfile() are called from _buildEntityModel() (see
     // below _resolveMetricContext()) for every metric kind. Temperature has
     // real Celsius/Fahrenheit/Kelvin conversion; the other profiles use
     // identity conversion.
@@ -670,7 +663,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     // ==== Data computation ====
-    // The production entry point. Everything fachlich lives in application/model
+    // The production entry point. Domain logic lives in application/model
     // (numbers and semantic tokens) and presentation/view-model (titles, formatting,
     // geometry, colours); this method only supplies the inputs.
     _computeViewModel() {
@@ -746,26 +739,25 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // user is looking at the daily-range view). Naively calling
       // _applyAutoSlideStyles() below would immediately re-engage the
       // synced animation and jump away from that view, defeating the whole
-      // point of the phase-aware resume — see readme climate card.md,
-      // "Auto-Slide und Bedienung".
+      // point of the phase-aware resume: the card must remain on the manually
+      // selected view until the shared wall-clock phase reaches that view again.
       // isFirstRender arrives as an argument: the controller flips its `rendered` flag
       // only after this method returns, so "is there a previous view worth protecting"
       // is decided once, by the owner of that fact, rather than read back mid-render.
 
-      // AP-07 (audit 14.2): the innerHTML replacement below destroys everything an
+      // The innerHTML replacement below destroys everything an
       // unclassified in-flight gesture is anchored to. The runtime owns that decision
       // and states the reasoning in full; the element only has to say when.
       this._interaction.abandonGestureForRebuild();
 
-      // AP-07 (audit 14.2, Bug C): dropping to <2 active views renders a
+      // Dropping to fewer than two active views renders a
       // track-less solo/empty layout (no ".rtc-track" at all — see
       // renderCardBody()'s view-area branch). _applyAutoSlideStyles()
       // bails out on its very first line when there's no track, so it
       // never reaches _scheduleAccessibilitySync() — the only place that
-      // otherwise clears this._a11ySyncTimer. Without this, a timer armed
-      // while >=2 views were active would linger (harmless once it
-      // eventually fires and self-corrects, but violates "Timer nur ab
-      // zwei aktiven Views" until then). _stopRotation() clears both
+      // otherwise clears the accessibility timer. Without this, a timer armed
+      // while at least two views were active would linger until it fires.
+      // _stopRotation() clears both
       // timers unconditionally; the branches below re-arm exactly what's
       // actually warranted for the NEW view count — for every other
       // transition this is a harmless no-op, since
@@ -773,7 +765,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // already clear-before-set themselves.
       this._stopRotation();
 
-      // AP-07 (audit 14.1): _currentVisualViewIndex() (shared with
+      // _currentVisualViewIndex() (shared with
       // _updateViewAccessibility(), see there) is read against the
       // still-mounted PREVIOUS render's track/this._views, before either is
       // replaced below — so a structural change mid-auto-slide preserves
@@ -791,8 +783,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._viewAreaCollapsed = viewModel.empty ? false : Boolean(viewModel.views.collapsed);
       let nextIndex = this._views.indexOf(previousActiveKey);
       if (nextIndex === -1) nextIndex = this._views.indexOf(this._config?.start_view);
-      // AP-04: the "mandatory scale" fallback is gone along with mandatory
-      // itself — nextIndex === -1 ? 0 : nextIndex already IS "the first
+      // No view is mandatory: nextIndex === -1 ? 0 : nextIndex already means "the first
       // active view" (index 0 of this._views), which is exactly the
       // correct final fallback now that any view, including "scale", can
       // be absent.
@@ -807,20 +798,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       `;
       this._bindEvents();
       if (!isFirstRender && !viewModel.empty) {
-        // P1 fix (reviewer finding, post-AP-07): previousActiveKey above is
-        // correctly preserved, but that alone is only a JS bookkeeping
-        // value — _applyAutoSlideStyles() (the old unconditional else
-        // branch) re-engages the wall-clock-driven SYNCED animation
+        // previousActiveKey above is correctly preserved, but that alone is only a JS
+        // bookkeeping value. Applying auto-slide styles here would re-engage the synchronized animation
         // immediately, which ignores this._activeView entirely and can show
         // any view depending on the current phase. That silently defeated
-        // the whole point of preserving previousActiveKey/start_view/the
-        // first-active-view fallback for every EXCEPT the one case that
-        // happened to already have a resume timer pending. Every non-first,
+        // preserving previousActiveKey/start_view/the first-active-view fallback.
+        // Every non-first,
         // non-empty rebuild now freezes visually on the just-resolved
         // this._activeView first, then schedules the same phase-aware
-        // resume the manual-swipe path already used — "keine Sprünge"
-        // (audit 14.2) now actually holds for the DOM/CSS, not just for the
-        // this._activeView bookkeeping. The very first render is
+        // resume used by the manual-swipe path, so DOM/CSS and
+        // this._activeView stay aligned. The very first render is
         // deliberately excluded: there is no previous view to protect, so
         // going straight into synced auto-slide is correct there.
         this._updateTrackTransform(false);
@@ -914,7 +901,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return path.find((node) => node?.matches?.(selector)) || null;
     }
 
-    // ==== Interaction and actions: delegations to their controllers ====
+    // ==== Interaction and actions controller boundary ====
     // The listeners are bound to these methods, and a number of tests call them
     // directly with a synthetic event. Neither holds any logic or state of its own.
     _handleClick(event) {

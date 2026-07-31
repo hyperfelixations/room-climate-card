@@ -1,6 +1,6 @@
 "use strict";
 
-// CFG-01 (v2.15.0 audit): Number(true) === 1, so a naive Number(value)
+// Number(true) === 1, so a naive Number(value)
 // parser would silently accept booleans as valid numeric config (e.g.
 // `decimals: true` -> 1). _parseConfigNumber() must reject anything that
 // isn't a real number or a numeric-looking string, and rotation_seconds/
@@ -12,10 +12,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Import the owning modules directly so each test names its actual subject.
 let numbers, primitives;
 
 let env;
@@ -160,8 +157,8 @@ test("integration: valid overrides are honored end to end", () => {
   env.cleanup(card);
 });
 
-// ---- Reviewer fix P2 (post-2.27.0): duplicate rooms[].entity is rejected ----
-// _updateRoomGrid() (AP-09) keys its keyed DOM patching by room.entity; a
+// ---- Duplicate rooms[].entity is rejected ----
+// _updateRoomGrid() keys its DOM patching by room.entity; a
 // duplicate would silently make the Map overwrite one chip. Without any
 // uniqueness enforcement here, that invalid state was reachable from plain
 // YAML.

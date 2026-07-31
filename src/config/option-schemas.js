@@ -1,9 +1,7 @@
 // Building blocks for declaring a validated, defaulted configuration option.
 //
-// A schema descriptor used to be a bare presence marker (any truthy
-// placeholder), which meant an option key could be whitelisted but its VALUE
-// never checked. These factories upgrade that to a small {default, validate}
-// descriptor, so a raw YAML value can be both defaulted and type-checked.
+// A schema descriptor is a small {default, validate} contract, so a raw YAML
+// value is both defaulted and type-checked rather than merely whitelisted.
 //
 // Kept as factories rather than inlined at each call site so every option of
 // the same kind shares identical validation semantics for free. An option

@@ -6,11 +6,8 @@
 //      unknown.
 //
 // METRIC_TYPE_BY_UNIT is DERIVED from METRIC_DEFINITIONS rather than
-// hand-maintained. The two used to be separate tables and had drifted:
-// word/bare-letter aliases like "c"/"celsius"/"f"/"fahrenheit" were registered
-// in unitProfiles.units but missing from the index, so an entity with one of
-// those units and no device_class could not be recognized as temperature at
-// all. One registered unit string can only ever belong to one metric kind, so
+// hand-maintained, so profile aliases and the lookup index cannot drift apart.
+// One registered unit string can only ever belong to one metric kind, so
 // a plain last-write-wins merge is safe.
 
 import { METRIC_DEFINITIONS } from "./definitions.js";

@@ -1,10 +1,8 @@
 "use strict";
 
-// Security checklist from the v2.15.0 audit ("6. Sicherheit" + "10.2
-// Sicherheit"): manipulated unit_of_measurement, trend unit, value_level,
+// Manipulated unit_of_measurement, trend unit, value_level,
 // title, avg_label, room name/short, and entity id must never produce
-// extra DOM nodes or event handlers (DOM-XSS, SEC-01 in the v2.14.0 audit —
-// already fixed once; these tests guard the fix stays fixed). Also covers
+// extra DOM nodes or event handlers. Also covers
 // action-type allowlisting (_normalizeAction()).
 //
 // Because these tests run in a real jsdom DOM (not a string diff), an
@@ -16,10 +14,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports keep each escaping and rendering trust boundary explicit.
 let actions, text;
 
 let env;

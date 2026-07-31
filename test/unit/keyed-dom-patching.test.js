@@ -1,13 +1,9 @@
 "use strict";
 
-// AP-09 (audit section 18, A11Y-02): keyed DOM-patching for Average, Rooms,
-// Range and Extrema. Before this fix, _updateContent() fully replaced these
-// four sections via `.innerHTML =` on EVERY hass update, destroying and
-// recreating every focusable <button> even when only a number changed --
-// a focused element vanished and activeElement fell back to the shadow
-// root/host/body. Scale/RangeScale were already correct (query-selector
-// attribute patching via _updateScaleBarCommon(), no innerHTML) and stay
-// untouched here. Every test below asserts DOM node IDENTITY (`===`
+// Keyed DOM patching for Average, Rooms, Range and Extrema preserves node
+// identity across hass updates, avoiding focus loss when only a value changes.
+// Scale and RangeScale patch attributes through _updateScaleBarCommon() without
+// replacing their markup. Every test below asserts DOM node identity (`===`
 // reference equality), not just visible text, since that is the actual
 // claim under test -- a node that merely "looks the same" after being
 // destroyed and recreated would still have lost focus.

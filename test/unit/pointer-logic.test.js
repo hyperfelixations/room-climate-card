@@ -1,6 +1,6 @@
 "use strict";
 
-// UI-02 (v2.15.0 audit): _handlePointerCancel() must derive _activeView from
+// _handlePointerCancel() must derive _activeView from
 // the frozen drag position (pointer.startTranslate), not from a stale
 // this._activeView that was never updated during the drag itself — matching
 // _handlePointerUp()'s already-correct threshold-swipe path.
@@ -38,13 +38,13 @@ function threeViewCard() {
   );
 }
 
-test("UI-02: pointercancel derives _activeView from the frozen drag position, not the stale pre-swipe value", () => {
+test("pointercancel derives the active view from the frozen drag position", () => {
   const el = threeViewCard();
   assert.equal(el._views.length, 3, "range, scale, extremes");
   const viewWidthPct = el._viewWidthPct();
 
   // The visible swipe froze at index 2 ("extremes"); _activeView is then pushed back to
-  // 0 to reproduce exactly the bug scenario UI-02 describes — a stale index that was
+  // 0 to model a stale index that was
   // never updated during the drag itself.
   beginConfirmedDrag(el, 2);
   el._activeView = 0;
@@ -57,7 +57,7 @@ test("UI-02: pointercancel derives _activeView from the frozen drag position, no
   env.cleanup(el);
 });
 
-test("UI-02: pointercancel with a mismatched pointerId is ignored entirely", () => {
+test("pointercancel with a mismatched pointerId is ignored", () => {
   const el = threeViewCard();
   beginConfirmedDrag(el, 0);
   el._activeView = 1;
@@ -70,14 +70,14 @@ test("UI-02: pointercancel with a mismatched pointerId is ignored entirely", () 
   env.cleanup(el);
 });
 
-test("UI-02: pointercancel with no active pointer at all is a safe no-op", () => {
+test("pointercancel with no active pointer is a safe no-op", () => {
   const el = threeViewCard();
   assert.equal(el._interaction.pointer, null, "a freshly rendered card has no gesture in flight");
   assert.doesNotThrow(() => cancelDrag(el));
   env.cleanup(el);
 });
 
-test("UI-02: at each of the 3 possible frozen positions, pointercancel lands on the correct view index", () => {
+test("pointercancel resolves each frozen position to the correct view", () => {
   const el = threeViewCard();
   for (let targetIndex = 0; targetIndex <= 2; targetIndex++) {
     beginConfirmedDrag(el, targetIndex, { pointerId: 7 });

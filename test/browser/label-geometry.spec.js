@@ -1,15 +1,14 @@
 "use strict";
 
-// UI-01 (v2.15.0 audit) with REAL layout — jsdom (test/unit/) can only test
+// Real layout coverage complements jsdom tests, which can only test
 // the label-placement algorithm against mocked getBoundingClientRect()
 // widths; this exercises the actual browser text-measurement/CSS pipeline.
-// Audit checklist ("Label-Geometrie"): 11 languages x 4 modes x bar widths,
+// The matrix covers supported languages, all four modes and representative bar widths:
 // min=avg=max, close together, far apart, avg outside min/max, no overlap
 // or an explicitly-tested ellipsis fallback.
 //
-// Coverage note (honestly scoped, not the full 5x4x23-width audit matrix):
-// all 11 languages x all 4 modes at 5 representative widths (280/320/380/
-//420/500px) for both the main scale's optimal-label-vs-min/max case and
+// Coverage uses every supported language and mode at representative widths for both
+// the main scale's optimal-label-vs-min/max case and
 // the rangeScale 3-label solver, plus one deliberately narrow two-line
 // fallback case. A finer-grained width sweep would mostly be
 // redundant with the deterministic solver already covered exactly in
@@ -20,12 +19,8 @@ const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
 
 const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
-// Matches the audit's own stated range ("Balkenbreiten 280-500 px"). Widths
-// below ~270px push some mode/language combinations (verified: co2 in
-// en/de/nl) into the already-documented, pre-existing "extreme narrow bar +
-// long text" limitation of _resolveOptimalLabelPosition() (see "Skala",
-// "Bewusst nicht geloest" in the dev doc) — a known, accepted gap, not a
-// regression, and out of scope to fix in a test-only round.
+// Widths cover the supported 280-500 px range. Below that range, some long-label
+// combinations cannot fit without exceeding the solver's layout assumptions.
 const WIDTHS = [280, 320, 380, 420, 500];
 
 const MODE_FIXTURES = {
@@ -39,7 +34,7 @@ function noOverlap(rects) {
   // 1.5px tolerance: sub-pixel font-rendering/anti-aliasing variance
   // between otherwise-identical runs was observed to occasionally push a
   // boundingBox() reading a fraction of a pixel past its neighbor at the
-  // narrowest audited width (280px) — not a real, visually-perceptible
+  // narrowest tested width (280px) — not a real, visually perceptible
   // overlap, and not reproducible as a deterministic failure (it passed on
   // an immediate retry with byte-identical inputs every time it was seen).
   const sorted = [...rects].sort((a, b) => a.left - b.left);
@@ -167,7 +162,7 @@ test.describe("rangeScale: the 3-label solver never overlaps, across value confi
   }
 });
 
-test.describe("UI-01 regression (v2.16.0 audit): label reading order must match the displayed (rounded) numbers, not the raw anchor position", () => {
+test.describe("label reading order follows displayed values, not raw anchor positions", () => {
   // Reproduces the reported "Ø min max" bug: current sits at a raw pixel
   // position left of min (current=20.001 < min=20.049), but both ROUND to
   // the same displayed "20.0" at the default 1-decimal precision — sorting
@@ -213,14 +208,9 @@ test.describe("UI-01 regression (v2.16.0 audit): label reading order must match 
   }
 });
 
-test.describe("UI-01 follow-up (AP-06, audit section 15): grouped/thousands-separated numbers must sort correctly", () => {
-  // _resolveRangeScaleLabels() used to tie-break min/max sides via
-  // Number(getNumberFormat("en-US", digits).format(value)) — for a
-  // thousands-grouped number (e.g. co2 "1,200"), Number("1,200") is NaN,
-  // and NaN !== NaN is always true while NaN < NaN is always false, so the
-  // side assignment always fell through to "right" regardless of the
-  // actual value. co2 (decimals: 0) is the metric where every value >=1000
-  // triggers grouping, making this reproducible with realistic ppm values.
+test.describe("grouped and thousands-separated numbers sort correctly", () => {
+  // Side assignment must compare raw values: Number("1,200") is NaN, so parsing
+  // localized display text would misplace realistic four-digit CO2 readings.
   const CASES = {
     "min below 1000, current and max grouped (>=1000)": { min: 800, current: 1200, max: 1600 },
     "all three grouped and close together (realistic co2 spike)": { min: 1150, current: 1200, max: 1300 },
@@ -252,13 +242,12 @@ test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads 
   // entity refreshes. Reported via a user screenshot: Ø WOHNUNG 24,2°C,
   // Min 24,1°C, "Tagesspanne 0,0°C" -- current numerically above a day-max
   // that had not yet caught up. _resolveRangeScaleLabels() already handles
-  // this intentionally (see room-climate-card.js and "Tagesbereich-Balken-
-  // Ansicht" in the dev doc): min/max are assigned to whichever side of the
+  // this intentionally: min/max are assigned to whichever side of the
   // fixed current pivot they numerically belong on, so BOTH land on the
   // same side (packed in their own min-before-max order) instead of a
   // naive always-"min current max" text order that would misrepresent
   // which value is actually highest. This is a REGRESSION GUARD proving
-  // that behavior, not a bug fix -- see this round's Umsetzungsnotiz.
+  // that behavior.
   //
   // Values deliberately keep >=0.1 separation at 1-decimal precision (the
   // reported case's own 24,1/24,15 gap turned out to accidentally trigger
@@ -466,19 +455,11 @@ test("rangeScale mirrored edge regression: current === min lifts min only withou
 });
 
 test.describe("rangeScale: current label stays anchored to its own marker (fixed-pivot invariant)", () => {
-  // Regression coverage for the reported bug: a collision between current
-  // and a neighbor (typically min, when values are close together) used to
-  // let the shared forward-/backward-pass declutter algorithm drag the
-  // CURRENT label away from its own marker — visually detaching "jetzt"/
-  // "now" from the current-value marker and leaving it to read as though it
-  // belonged to a different marker (usually max). current must now be a
-  // fixed pivot: only min/max are ever allowed to move away from their own
-  // anchors to avoid a collision.
+  // Current is the fixed pivot: only min/max may move away from their anchors to
+  // resolve a collision, otherwise "now" would describe a different axis position.
   const CASES = {
     "no collision (far apart)": { min: 12, avg: 20, max: 29 },
-    // The exact reported scenario: current and min sit close enough
-    // together that the old shared 3-label declutter pass would drag
-    // current itself rightward to clear the collision.
+    // Current and min are close enough that only the historical label may move.
     "current close to min (close together)": { min: 20.8, avg: 21.0, max: 21.2 },
     "current essentially equal to min": { min: 21.0, avg: 21.02, max: 25.0 },
     "current essentially equal to max": { min: 15.0, avg: 24.98, max: 25.0 },

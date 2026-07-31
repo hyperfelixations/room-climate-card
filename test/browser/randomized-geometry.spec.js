@@ -1,11 +1,11 @@
 "use strict";
 
-// Permanent randomized BROWSER geometry test (v2.16.0 audit, section 10.3):
+// Deterministic randomized browser geometry test:
 // randomized widths/room counts/languages/modes/view configurations,
 // asserting real-layout geometry invariants (no overlapping labels beyond
 // the declared gap, no child wider than its container) — deliberately NOT
-// screenshot-based (the audit explicitly calls fixed-baseline screenshots
-// unsuitable for randomized inputs; only hand-picked, deliberately chosen
+// screenshot-based because fixed baselines are unsuitable for randomized
+// inputs; only hand-picked, deliberately chosen
 // cases belong in visual-golden.spec.js). Fixed seed for a reproducible CI
 // run, same 0xC1A6E default as the jsdom property test.
 
@@ -38,15 +38,9 @@ function genCase(rng) {
   return { mode, fx, width, roomCount, language, hasRange, rangeScale, disabledViews, viewOrder, darkMode, reducedMotion };
 }
 
-// AP-04: views: is fully authoritative once present, unlike the old
-// view_order (reordered but silently appended anything missing) and
-// disabled_views (hid a view without touching order/availability). This
-// helper re-derives the SAME observable behavior — natural registry order
-// unless viewOrder reorders it (still appending any type it doesn't
-// mention, exactly like the old view_order), disabledViews turning a type
-// off, and range_scale requiring the explicit rangeScale flag on top of
-// its own availability, just like the old range_scale_view — expressed as
-// one explicit, fully-listed views: array per case.
+// views: is fully authoritative once present. The generator's independent
+// ordering, disabling and range-scale choices are therefore converted into
+// one explicit, fully listed views array per case.
 function buildViewsList(c) {
   const naturalOrder = ["range", "range_scale", "scale", "extremes"];
   const requestedOrder = c.viewOrder || [];
@@ -107,10 +101,7 @@ test.describe("randomized geometry invariants across width/roomCount/language/mo
       // horizontally by .rtc-rotator's directional clip-path (see "Rendering und
       // Robustheit"/_viewWidthPct() in room-climate-card.js) —
       // .rtc-rotator itself must still not overflow. Anonymous/classless
-      // nodes, plus the *-value-unit spans (AP-09, audit 18: the unit
-      // suffix inside .rtc-avg-value/.rtc-room-value/.rtc-extreme-value —
-      // an anonymous text node before AP-09 gave it a stable class for
-      // keyed patching, same element either way) are skipped: an inline
+      // nodes and the *-value-unit spans are skipped: an inline
       // flex item's own bounding rect reflects its unclipped natural
       // content width even when a classed ancestor visually clips it via
       // overflow:hidden (.rtc-room-chip at narrow widths, see there) —

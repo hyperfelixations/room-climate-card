@@ -1,6 +1,6 @@
 "use strict";
 
-// UI-02 (v2.16.0 audit) with REAL layout: a long room name/short override
+// With real layout, a long room name or short override
 // must ellipsis-clip inside its chip instead of overflowing the chip
 // boundary — jsdom can't measure real text width, so this needs Chromium.
 // title/aria-label (already escaped/rendered regardless of visual clipping,

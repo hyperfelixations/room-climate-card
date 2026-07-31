@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 0 characterization: the rendered shadow-DOM markup, verbatim.
+// Characterization of rendered shadow-DOM markup, verbatim.
 //
 // The card builds its DOM from template strings and then patches it in place.
 // The browser layer (test/browser/visual-golden.spec.js) owns the VISUAL
@@ -19,7 +19,7 @@
 // markup through completely different code (setAttribute/textContent/
 // style.setProperty instead of template strings). Render path and patch path
 // must converge on the same DOM — that convergence is an explicit acceptance
-// criterion of the refactoring.
+// compatibility criterion.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

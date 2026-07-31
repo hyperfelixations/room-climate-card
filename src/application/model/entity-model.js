@@ -2,11 +2,9 @@
 //
 // Everything needed to decide whether an entity may determine the card's metric
 // kind or contribute to the average is resolved ONCE, here, from the same state
-// object. That atomicity is the whole point: metric kind, unit and value used to
-// be derived independently along three different paths, and the disagreements
-// between them were the shared root cause of a family of bugs (a humidity room
-// averaged into a temperature card, a "1013 hPa" primary reading displayed as
-// °C, an unavailable room out-voting an available one).
+// object. Atomicity prevents a humidity room from joining a temperature average,
+// a "1013 hPa" primary from displaying as °C, or an unavailable room from
+// participating in consensus.
 //
 // The unit rule is deliberately strict and symmetric: a unit is trusted only when
 // it is BOTH present AND resolves to a registered profile. A missing

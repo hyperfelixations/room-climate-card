@@ -1,12 +1,11 @@
 "use strict";
 
-// ROB-01 (v2.15.0 audit): _render()'s signature must be committed only
+// _render()'s signature must be committed only
 // AFTER a render actually succeeds, so a thrown exception doesn't leave a
 // "successful-looking" signature that suppresses a correct retry. LIFE-01:
 // setConfig() must cancel any in-progress pointer gesture atomically before
-// applying the new config. Also covers the DOM-01 empty-state icon update
-// and the general set hass() try/catch robustness (audit checklist:
-// "Renderfehler und anschliessender identischer Retry").
+// applying the new config. The suite also covers empty-state icon updates
+// and retrying an identical update after a render error.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -111,12 +110,10 @@ test("LIFE-01: setConfig() clears an in-progress pointer gesture and the render 
 });
 
 test("setConfig() preserves the active view across a structural rebuild when its key still exists, else falls back to start_view/the first active view", () => {
-  // P1.4: _renderAll() no longer unconditionally resets to "scale" on every
-  // structural change — it preserves whichever view key the user was
-  // actually looking at (via _currentVisualViewIndex(), see P0.1) if that
+  // _renderAll() preserves whichever view key the user was actually looking
+  // at via _currentVisualViewIndex() if that
   // key still exists in the new view list, only falling back to
-  // config.start_view then the first active view (AP-04: no more
-  // "mandatory scale" special case — see room-climate-card.js) once it
+  // config.start_view then the first active view once it
   // doesn't.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -235,7 +232,7 @@ test("a full render and a partial update each compute exactly one view model", (
   env.cleanup(el);
 });
 
-test("the legacy compatibility method still reproduces the flat shape on demand", () => {
+test("_computeViewModel returns the current structured view model", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();

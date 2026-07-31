@@ -534,8 +534,7 @@ test("the legacy adapter zeroes the range-scale positions when that view is off"
 // The daily-range scale is AVAILABLE whenever the range entity reports a usable
 // min/max pair, but it is off unless a views: list explicitly asks for it. Building its
 // axis, its three markers and its decluttered labels for a view nobody requested is
-// work with no observable result — and, before this round, work the pipeline did on
-// every single update of every card with a range entity.
+// work with no observable result, so the pipeline skips it unless requested.
 //
 // The axis therefore arrives as a thunk. These tests call buildViewContent() directly
 // with a counting thunk, which is the only way to prove a negative like this.

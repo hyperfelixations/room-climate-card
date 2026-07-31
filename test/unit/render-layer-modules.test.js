@@ -2,14 +2,13 @@
 
 // Direct unit tests for src/render/*, src/views/* and src/styles/*.
 //
-// The point of the rendering extraction is that markup and DOM patching became pure
-// functions of a view model. These tests take that literally: there is no custom
+// Markup and DOM patching are pure functions of a view model. These tests take that
+// literally: there is no custom
 // element anywhere in this file, no hass object, no configuration, and — for most of
 // it — no global document either. A view model is written by hand, a renderer is
 // called, and the resulting string or DOM is asserted.
 //
-// Two things that used to be untestable are tested here for the first time: that a
-// renderer works in a jsdom realm that is NOT the ambient one, and that the daily-range
+// The renderer must work in a jsdom realm that is not the ambient one, and the daily-range
 // scale's geometry is never computed for a view nobody asked for.
 
 process.env.TZ = "UTC";

@@ -1,16 +1,13 @@
 "use strict";
 
-// DATA-02 (v2.14.0 audit): physically implausible CO2 (<= 0) and PM2.5 (< 0)
+// Physically implausible CO2 (<= 0) and PM2.5 (< 0)
 // readings must be excluded from the whole data pipeline (average, extrema,
 // comfort counting, spread) via _isPhysicallyValid(), not just recolored
 // grey — a stuck/faulty sensor must not silently pull the room average or
-// pick a bogus "coolest room". Covers the audit checklist: "CO2 0/negativ
-// und PM2,5 negativ, getrennt fuer absolute Werte, Range-State und Trend".
+// pick a bogus "coolest room". Absolute values, range state and trend rates
+// intentionally have distinct validity rules.
 //
-// DATA-02 (v2.16.0 audit): humidity <0%/>100% is physically impossible but
-// previously had no invalidWhen at all (unlike co2/pm25) and was silently
-// classified/averaged/counted like any valid reading — the humidity profile
-// now rejects it the same way.
+// Humidity below 0% or above 100% is likewise excluded by its profile.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -18,7 +15,7 @@ const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
 let env;
@@ -51,7 +48,7 @@ test("_isPhysicallyValid: temperature has no invalidWhen — always valid, inclu
   assert.equal(internals.isPhysicallyValid(el, -40, "temperature"), true);
 });
 
-test("_isPhysicallyValid: humidity outside [0,100] is invalid, inside is valid (DATA-02, v2.16.0 audit)", () => {
+test("_isPhysicallyValid: humidity outside [0,100] is invalid", () => {
   const el = env.document.createElement("room-climate-card");
   assert.equal(internals.isPhysicallyValid(el, -1, "humidity"), false);
   assert.equal(internals.isPhysicallyValid(el, 101, "humidity"), false);
@@ -147,7 +144,7 @@ test("all CO2 room readings physically invalid + no valid primary entity -> empt
   env.cleanup(el);
 });
 
-// "Range-State und Trend" from the audit checklist: hasRange/hasRangeScale
+// Range state and trend validity: hasRange/hasRangeScale
 // axis and trendValue are exempt from _isPhysicallyValid() by design (they
 // are deltas/day-spans, not absolute concentration readings — see
 // the range model's own comment on min/max) — DATA-02's negative-range

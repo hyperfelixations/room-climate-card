@@ -1,6 +1,6 @@
 "use strict";
 
-// Direct unit tests for the pure services extracted in phase 2C:
+// Direct unit tests for pure domain services:
 // src/domain/classification/* (beyond the profile data) and src/domain/scale/*.
 //
 // These are the decisions that turn a number into a judgement — which profile

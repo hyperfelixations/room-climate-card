@@ -1,6 +1,6 @@
 "use strict";
 
-// A11Y-01 (v2.15.0 audit) with REAL keyboard focus — jsdom's unit-layer
+// Real keyboard focus coverage complements jsdom's unit-layer
 // tests (accessibility-logic.test.js) verify the aria-hidden/inert
 // attributes get set correctly, but jsdom does not implement `inert`'s
 // actual focus-blocking behavior. This confirms a real browser's Tab key

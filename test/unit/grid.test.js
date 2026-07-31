@@ -1,11 +1,10 @@
 "use strict";
 
-// Room-chip grid (_roomGridRows(count, columns, rows)), a pure function —
-// see GRID-01 (v2.14.0 audit) and the "Grid" checklist in the v2.15.0
-// audit: 0-20 rooms; auto-distribution for 8/9/13/14/15; only columns, only
+// Room-chip grid (_roomGridRows(count, columns, rows)), a pure function:
+// 0-20 rooms; auto-distribution for 8/9/13/14/15; only columns, only
 // rows, both; capacity smaller than room count; no empty rows; stable
 // column width in a shorter last row; capped chips still count toward
-// average/extrema/comfort/spread (DATA-01 from the v2.14.0 audit).
+// average/extrema/comfort/spread.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -123,7 +122,7 @@ test("autoMaxColumns=5 matches the CO2/PM2.5 documented cases", () => {
   ]);
 });
 
-// Teil C: an explicit room_columns/room_rows override must take priority
+// An explicit room_columns/room_rows override must take priority
 // over autoMaxColumns regardless of its value — the parameter is only
 // consulted in the fully-automatic branch (see _roomGridRows() comment).
 test("explicit room_columns/room_rows overrides are unaffected by autoMaxColumns", () => {
@@ -211,7 +210,7 @@ test("both fixed, rows requesting more than count*columns needs never produces e
   assert.equal(result.rowSizes.length, 1);
 });
 
-// DATA-01 (v2.14.0 audit): the grid cap is a display-only filter — capped-out
+// The grid cap is a display-only filter — capped-out
 // rooms must still count in average/extrema/comfort/spread/roomCount.
 test("DATA-01 integration: rooms hidden by room_columns/room_rows still count in average/extrema/comfort/spread", () => {
   const states = {

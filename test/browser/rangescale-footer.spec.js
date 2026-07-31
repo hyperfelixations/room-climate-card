@@ -1,8 +1,8 @@
 "use strict";
 
-// AP-06 (audit section 16): RangeScale's own localized daily footer. Text
-// content/data-selection correctness (span/min/max/timestamps, hide_footer,
-// all 11 languages) is already fully covered in test/unit/range-and-spread.test.js
+// RangeScale's localized daily footer. Text
+// content/data-selection correctness (span/min/max/timestamps and hide_footer)
+// is covered in test/unit/range-and-spread.test.js
 // via jsdom (no real layout needed for that). This file's job is the one
 // thing jsdom can't verify: with REAL text metrics, at a narrow card width,
 // the footer still fits without being clipped/overflowing its container —

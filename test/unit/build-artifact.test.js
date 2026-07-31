@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 1 smoke test for the distribution contract.
+// Smoke test for the distribution contract.
 //
 // Everything else in the suite tests what the card DOES. This file tests what
 // the shipped file IS, because that is what the build can silently break:

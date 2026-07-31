@@ -104,8 +104,8 @@ test("a second swipe started while the first swipe's resume is still pending doe
   assert.equal(el._activeView, 1, "the first swipe moved exactly one view");
   assert.notEqual(el._carousel.resumeTimerHandle, null, "and armed the phase-aware resume this test needs");
 
-  // The user swipes again before that resume fires. This is the exact sequence that
-  // used to hit an assignment to a getter-only accessor and throw in strict mode.
+  // A second swipe before resume must mutate controller-owned state through its public
+  // operations; assigning a getter-only compatibility accessor would throw in strict mode.
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
   rotator.getBoundingClientRect = () => ({ width: 300 });
   el._handlePointerDown(pointerDownEvent(el, 2));

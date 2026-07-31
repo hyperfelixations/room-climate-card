@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 0 characterization: the generated CSS, verbatim.
+// Characterization of generated CSS, verbatim.
 //
 // _styles() is 870 lines of CSS inside one template literal and is the single
 // largest unit in the file. Splitting it into per-concern modules is a pure

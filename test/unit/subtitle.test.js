@@ -1,11 +1,8 @@
 "use strict";
 
-// DATA-01 (v2.15.0 audit): the subtitle's "which room stands out most" logic
+// The subtitle's "which room stands out most" logic
 // must compare |value-avg| (distance to the average), not distance to the
-// comfort-band edge — the 2.15.0 regression compared to the edge instead,
-// picking the wrong room whenever the two distances disagree. Covers the
-// audit's exact counterexample plus the earlier (already-fixed) exact-tie
-// regression from a prior round.
+// comfort-band edge. Exact ties are covered separately.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,7 +18,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-test("audit counterexample: comfort 20-24, avg 23.9, coolest 19.8 (4.1 from avg), warmest 24.2 (0.3 from avg) -> names the coolest room", () => {
+test("comfort 20-24 with avg 23.9 names the room farthest from the average", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 23.9, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.cool": mkState("sensor.cool", 19.8, { device_class: "temperature", unit_of_measurement: "°C" }),

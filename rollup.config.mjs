@@ -12,10 +12,9 @@
 // Every plugin added here would be a new supply-chain dependency for a file
 // that thousands of dashboards execute.
 //
-// Rollup (rather than esbuild) because it preserves source comments in the
-// bundle. This codebase carries its architecture rationale, audit references
-// and invariants in comments, and dist/ is what auditors, HACS users and
-// `node --check` actually read; esbuild reprints from its AST and drops them.
+// Rollup preserves source comments in the bundle. Those comments document
+// public contracts and non-obvious invariants for anyone inspecting the HACS
+// artifact; AST reprinting tools may drop them.
 //
 // What the build does and does not guarantee:
 //   - Rollup parses and bundles ES modules. Import/export statements are
@@ -36,7 +35,8 @@ export default {
   output: {
     file: "dist/room-climate-card.js",
     format: "iife",
-    // Emits the "use strict" prologue that src/index.js used to write by hand.
+    // The IIFE needs an explicit strict-mode prologue; source-module strictness alone
+    // does not state that contract in the generated bundle.
     strict: true,
     // No source map: HACS downloads only .js files from dist/, so a .map would
     // never reach the browser and its sourceMappingURL would 404 on every
@@ -58,7 +58,7 @@ export default {
   // enabled it silently dropped `auto_slide` and `swipe` from DEFAULT_CONFIG,
   // because _normalizeConfig() happens to derive both from the user config
   // instead of reading the defaults back. Harmless there — but a build that
-  // removes data a reviewer can see in the source makes the artifact harder to
+  // removes data visible in the source makes the artifact harder to
   // reason about than it needs to be. The card's module-load side effects (the
   // translation key-parity self-check, the derived unit index, the easing
   // constant, the customElements.define()/window.customCards registration)

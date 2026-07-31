@@ -82,11 +82,8 @@ export const fr = {
   "scale.optimalLabel": (v) => `${v.range} optimal`,
   "scale.optimalLabelShort": (v) => `${v.range} optimal`,
 
-  // Review fix (post-2.27.0): "act." used to be the PRIMARY value here,
-  // permanently truncating "maintenant" for every card width. Restored
-  // to the full word; "act." now only serves as the *Short fallback
-  // the label-short-form resolver substitutes in when the long form
-  // genuinely doesn't fit (see _resolveRangeScaleLabels()).
+  // Keep the full label as the primary value; the layout resolver substitutes
+  // the short form only when the rendered width requires it.
   "rangeScale.currentLabel": "maintenant",
   "rangeScale.currentLabelShort": "act.",
   "rangeScale.minLabel": "min",

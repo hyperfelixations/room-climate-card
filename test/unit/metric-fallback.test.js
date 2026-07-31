@@ -1,28 +1,22 @@
 "use strict";
 
-// DATA-04 (v2.15.0 audit): if the primary average entity is missing/unknown
+// If the primary average entity is missing or unknown
 // (no device_class, no unit_of_measurement), _metricType() must fall back to
 // a configured room that DOES carry a recognizable device_class/unit instead
 // of defaulting straight to temperature — otherwise mode/unit/comfort bounds
 // would silently be wrong even though a valid room-fallback average is
 // computed.
 //
-// DATA-01 (v2.16.0 audit): metricType and unit must always come from the
+// metricType and unit must always come from the
 // SAME entity (_resolveMetricContext(), see room-climate-card.js) — a
-// primary entity with no device_class but a stray unit_of_measurement could
-// previously leave _unit() reading that stray unit even after _metricType()
-// fell back to a room's device_class, e.g. "50.0 hPa" with humidity comfort
-// bounds.
+// same accepted measurement context, preventing combinations such as a
+// humidity average labeled with hPa.
 //
-// AP-02 (v2.17.0 consolidated audit, sections 4.1-4.3/5-8): _resolveMetricContext()
-// was rebuilt around EntityModel/MeasurementContext (see room-climate-card.js).
-// The previous MAJORITY-VOTE heuristic across room device_classes has been
-// REMOVED entirely — a genuine disagreement between rooms' own metric kinds
+// _resolveMetricContext() uses EntityModel/MeasurementContext. A genuine
+// disagreement between rooms' own metric kinds
 // (with no usable primary to arbitrate) now produces a "mixed_metric_kinds"
 // diagnostic and an empty/error state, never a "winning" type chosen by
-// count. This directly fixes DATA-01..DATA-04 from the new audit, whose
-// shared root cause was exactly this kind of silent/independent resolution
-// (see the DATA-01..04 reproduction tests below). Physical validity
+// count. Physical validity
 // (_isPhysicallyValid()) and numeric availability (validNumeric) are now
 // checked BEFORE a primary or room may participate in metric-kind
 // resolution or averaging at all — an unavailable room or a physically
@@ -35,7 +29,7 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
 let env;
@@ -105,7 +99,7 @@ test("primary entity falls back via unit_of_measurement when device_class is abs
   env.cleanup(el);
 });
 
-test("Fahrenheit unit without device_class resolves to temperature (unit fallback table); internally canonicalized to Celsius (AP-02), displayed natively in °F (AP-03)", () => {
+test("Fahrenheit without device_class resolves to temperature, canonicalizes to Celsius, and displays in °F", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 72, { unit_of_measurement: "°F" }),
   });
@@ -117,14 +111,12 @@ test("Fahrenheit unit without device_class resolves to temperature (unit fallbac
     Math.abs(context.averageSource.canonicalValue - 200 / 9) < 1e-9,
     "72°F must canonicalize to (72-32)*5/9 ≈ 22.22°C internally, not pass through raw"
   );
-  // AP-03 (native Fahrenheit display, see test/unit/native-fahrenheit.test.js
+  // Native Fahrenheit display (see test/unit/native-fahrenheit.test.js
   // for the full suite): the view model projects the canonical value back
   // into the resolved display unit — °F here, since the usable primary
   // itself reports °F — so data.average.value reads 72 again, not the canonical
   // 22.22, and comfort bounds are the generated integer Fahrenheit ones
-  // (68-75), not Celsius (20-24). This is the correctness fix for audit
-  // 9.1: a raw 72 misclassified against a 20-24 "Celsius" comfort band no
-  // longer happens, because the comparison now happens entirely in °F.
+  // (68-75), not Celsius (20-24), so comparison happens entirely in °F.
   const data = el._computeViewModel();
   assert.equal(data.metric.kind, "temperature");
   assert.equal(el._unit(), "°F");
@@ -163,7 +155,7 @@ test("mixed room device_classes (one kind outnumbers the other): still no majori
     "sensor.t2": mkState("sensor.t2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.t3": mkState("sensor.t3", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
   });
-  // AP-02: 3 temperature rooms outnumbering 1 humidity room must NOT decide
+  // Three temperature rooms outnumbering one humidity room must not decide
   // a winner by count — averaging temperature and humidity together (or
   // silently dropping the humidity room without saying so) is exactly the
   // DATA-03 bug this policy removes.
@@ -196,7 +188,7 @@ test("consistent room device_classes: consistent:true, no disagreement flagged",
   env.cleanup(el);
 });
 
-test("v2.16.0 DATA-01: metricType and unit are read from the SAME entity, never mixed — primary entity with a stray unit falls back entirely to the room's unit once metricType falls back to that room", () => {
+test("metricType and unit resolve together when the primary carries a stray unit", () => {
   const hass = mkHass({
     // Primary entity has no device_class and a stray/irrelevant unit
     // (simulating a misconfigured or leftover entity) but no numeric value.
@@ -214,15 +206,11 @@ test("v2.16.0 DATA-01: metricType and unit are read from the SAME entity, never 
   env.cleanup(el);
 });
 
-// ==== AP-02: DATA-01..04 (v2.17.0 consolidated audit) reproduction cases ====
-// Each of these is the audit's own counterexample, verbatim. All four share
-// one root cause (three independently-resolving code paths in the old
-// _resolveMetricContext(); see application/model/measurement-context.js) and are
-// fixed together by the atomic MeasurementContext pipeline, not as four
-// isolated hotfixes — per the acceptance criterion, none of them may ever
-// again produce a value like "55 ppm" or "1013 °C".
+// ==== Measurement-context consistency cases ====
+// These cases share one invariant: metric kind, value and unit resolve
+// atomically and never produce combinations such as "55 ppm" or "1013 °C".
 
-test("DATA-01: a physically invalid primary (0 ppm CO2) must not be usable — falls back to the valid humidity rooms, never displays a humidity average with a co2/ppm label", () => {
+test("an invalid CO2 primary falls back to valid humidity rooms without mixing labels", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }), // 0 ppm: invalidWhen(value <= 0)
     "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
@@ -238,7 +226,7 @@ test("DATA-01: a physically invalid primary (0 ppm CO2) must not be usable — f
   env.cleanup(el);
 });
 
-test("DATA-02: unavailable rooms must not participate in metric-kind consensus — two unavailable temperature rooms cannot outvote one truly available humidity room", () => {
+test("unavailable rooms do not participate in metric-kind consensus", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.t1": mkState("sensor.t1", "unavailable", { device_class: "temperature" }),
@@ -257,7 +245,7 @@ test("DATA-02: unavailable rooms must not participate in metric-kind consensus �
   env.cleanup(el);
 });
 
-test("DATA-03: a temperature room and a humidity room must never be averaged together — no usable primary + disagreeing rooms yields a defined error state, not 36", () => {
+test("rooms of different metric kinds are never averaged together", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.t1": mkState("sensor.t1", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -278,7 +266,7 @@ test("DATA-03: a temperature room and a humidity room must never be averaged tog
   env.cleanup(el);
 });
 
-test("DATA-04: an unrecognized-unit primary (1013 hPa) must not be usable — falls back to the valid temperature rooms, never displays 1013 as a temperature", () => {
+test("an unrecognized-unit primary falls back without displaying hPa as temperature", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 1013, { unit_of_measurement: "hPa" }), // no device_class, "hpa" not in METRIC_TYPE_BY_UNIT
     "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -295,20 +283,13 @@ test("DATA-04: an unrecognized-unit primary (1013 hPa) must not be usable — fa
   env.cleanup(el);
 });
 
-// ==== Review fix (post-AP-01..03): device_class alone must not exempt an
-// entity from unit validation — the OLD `_buildEntityModel()` silently
-// treated ANY unresolvable unit as canonical once metricKind was already
-// resolved via device_class, letting exactly the DATA-04 bug back in
-// through a different door: `device_class: temperature` + a stray `hPa`
-// unit resolved metricKind="temperature" via device_class alone, and the
-// unit-resolution fallback (`_resolveUnitProfileKey(...) || canonicalProfileKey`)
-// then silently treated 1013 as already being in Celsius. Fixed by removing
-// the canonical fallback entirely: an entity whose device_class resolves a
+// ==== device_class does not exempt an entity from unit validation ====
+// An entity whose device_class resolves a
 // metric kind but whose unit does NOT match any of that kind's registered
 // UnitProfiles is now `validUnit: false` and excluded from
-// primaryUsable/room-consensus, exactly like a physically-invalid reading. ====
+// primaryUsable/room-consensus, exactly like a physically invalid reading.
 
-test("review fix: device_class:temperature + an unresolvable unit (hPa) must NOT be usable — never displays 1013 as a temperature", () => {
+test("device_class temperature with an unresolvable hPa unit is unusable", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 1013, { device_class: "temperature", unit_of_measurement: "hPa" }),
     "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -324,7 +305,7 @@ test("review fix: device_class:temperature + an unresolvable unit (hPa) must NOT
   env.cleanup(el);
 });
 
-test("review fix: a room with device_class:temperature but an unresolvable unit is excluded and diagnosed as unusable_unit, not silently dropped or averaged in", () => {
+test("a temperature room with an unresolvable unit is excluded and diagnosed", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -344,7 +325,7 @@ test("review fix: a room with device_class:temperature but an unresolvable unit 
   env.cleanup(el);
 });
 
-test("review fix: a usable primary with device_class:temperature and an unresolvable-unit room still excludes that room (validUnit gates participation even when metricKind matches)", () => {
+test("a usable temperature primary still excludes a same-kind room with an invalid unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.bad": mkState("sensor.bad", 1013, { device_class: "temperature", unit_of_measurement: "hPa" }),
@@ -360,7 +341,7 @@ test("review fix: a usable primary with device_class:temperature and an unresolv
   env.cleanup(el);
 });
 
-test("review fix (P0, post-2.21.1): a primary with device_class:temperature but a COMPLETELY MISSING unit_of_measurement is unusable — no more canonical fallback, falls back to room consensus", () => {
+test("a temperature primary without a unit is unusable and falls back to room consensus", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }), // no unit_of_measurement at all
     "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -378,7 +359,7 @@ test("review fix (P0, post-2.21.1): a primary with device_class:temperature but 
   env.cleanup(el);
 });
 
-test("review fix (P0, post-2.21.1): a room with device_class:temperature but a COMPLETELY MISSING unit is excluded and diagnosed as unusable_unit, even as the sole candidate", () => {
+test("a temperature room without a unit is excluded as unusable_unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.bad": mkState("sensor.bad", 21, { device_class: "temperature" }), // no unit_of_measurement
@@ -396,7 +377,7 @@ test("review fix (P0, post-2.21.1): a room with device_class:temperature but a C
   env.cleanup(el);
 });
 
-test("review fix (P0, post-2.21.1): when every configured entity lacks a unit, the empty state still shows a metric-kind-appropriate title/icon (metricKind resolution is independent of validUnit)", () => {
+test("an empty state retains metric-specific presentation when every entity lacks a unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 55, { device_class: "humidity" }), // no unit_of_measurement
   });
@@ -407,7 +388,7 @@ test("review fix (P0, post-2.21.1): when every configured entity lacks a unit, t
   env.cleanup(el);
 });
 
-test("AP-02: a usable primary excludes type-foreign rooms from averaging/extrema/comfort, diagnosed but not silently dropped", () => {
+test("a usable primary excludes and diagnoses type-foreign rooms", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -436,7 +417,7 @@ test("AP-02: a usable primary excludes type-foreign rooms from averaging/extrema
   env.cleanup(el);
 });
 
-test("AP-02: room-consensus averaging canonicalizes mixed units of the SAME metric kind before aggregating (no primary)", () => {
+test("room consensus canonicalizes mixed units of the same metric before aggregation", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -459,7 +440,7 @@ test("AP-02: room-consensus averaging canonicalizes mixed units of the SAME metr
   env.cleanup(el);
 });
 
-test("AP-02: the mixed_metric_kinds console.warn is deduplicated across hass updates but re-fires when the diagnosis actually changes", () => {
+test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () => {
   // Starts with a benign config (no rooms yet, so no mixed diagnosis is
   // possible at construction time) so the warn spy can be installed BEFORE
   // the mixed-kind state is ever resolved for the first time.

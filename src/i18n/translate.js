@@ -8,8 +8,8 @@
 import { DEFAULT_LANGUAGE } from "./locales.js";
 import { TRANSLATIONS } from "./registry.js";
 
-// Whether a base language code has a translation block of its own. Used to
-// reject a config override that would just fall back to English anyway.
+// A configured language override is valid only when that base code has its own
+// translation block; silently accepting an English fallback would hide a typo.
 export function isSupportedLanguage(code) {
   return Object.prototype.hasOwnProperty.call(TRANSLATIONS, code);
 }

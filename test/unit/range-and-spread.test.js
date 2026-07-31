@@ -1,11 +1,11 @@
 "use strict";
 
-// DATA-02/DATA-03 (v2.15.0 audit): a range/spread is physically Maximum -
+// A range or spread is physically maximum minus
 // Minimum and can never be negative; a negative range_entity state must not
 // activate the daily-range view, and a negative spread attribute must fall
 // back to the locally-computed value instead of being displayed. Also
-// covers rangeScale axis edge cases (Ø outside min/max, min=max, all three
-// equal) from the audit's "Views und Live-Konfiguration" checklist.
+// covers rangeScale axis edge cases (average outside min/max, min=max, all
+// three equal).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,7 +21,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// ---- DATA-02: negative range_entity state ----
+// ---- Negative range_entity state ----
 
 test("DATA-02: negative range_entity state does not activate hasRange", () => {
   const hass = mkHass({
@@ -60,11 +60,11 @@ test("DATA-02: a zero range_entity state is valid (min === max, a physically pos
   env.cleanup(el);
 });
 
-// ---- AP-06 (audit section 16.2): rangeState must be exposed in the
+// ---- rangeState is exposed in the
 // ViewModel, as the authoritative daily span — never recomputed from
 // rangeMax - rangeMin, and 0 is a valid value, not treated as missing.
 
-test("AP-06: data.range.state is exposed and equals the converted range_entity state, not rangeMax - rangeMin", () => {
+test("data.range.state equals the converted range_entity state", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     // State (5) deliberately differs from maximum-minimum (23-18=5 here
@@ -79,7 +79,7 @@ test("AP-06: data.range.state is exposed and equals the converted range_entity s
   env.cleanup(el);
 });
 
-test("AP-06: rangeState === 0 is valid and exposed as 0, not null/false", () => {
+test("rangeState zero is valid and exposed as zero", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 0, { unit_of_measurement: "°C", minimum: 20, maximum: 20 }),
@@ -91,7 +91,7 @@ test("AP-06: rangeState === 0 is valid and exposed as 0, not null/false", () => 
   env.cleanup(el);
 });
 
-test("AP-06: a range_entity with no unit at all exposes rangeState as null (rangeProfile unresolvable), consistent with hasRange:false", () => {
+test("a range_entity without a unit exposes null rangeState and hasRange false", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }),
@@ -103,7 +103,7 @@ test("AP-06: a range_entity with no unit at all exposes rangeState as null (rang
   env.cleanup(el);
 });
 
-// ---- DATA-03: negative spread attribute ----
+// ---- Negative spread attribute ----
 
 test("DATA-03: negative spread attribute is rejected, falls back to the locally-computed room spread", () => {
   const hass = mkHass({
@@ -141,8 +141,7 @@ test("DATA-03: a zero spread attribute is valid (all rooms report the same value
   env.cleanup(el);
 });
 
-// ---- rangeScale axis edge cases (DATA-04 from the v2.14.0 audit: axis
-// must include the avg marker, not just daily min/max) ----
+// ---- rangeScale axis includes the average marker, not just daily min/max ----
 
 function rangeScaleFixture(avg, rangeState, minimum, maximum) {
   const hass = mkHass({
@@ -199,7 +198,7 @@ test("rangeScale: missing minimum_zeitpunkt/maximum_zeitpunkt attributes leave t
   env.cleanup(el);
 });
 
-// ---- AP-06 (audit section 16): RangeScale's own localized daily footer —
+// ---- RangeScale's localized daily footer
 // must show span/min/max, never the room-comfort footer text, and must
 // work without any rooms configured at all.
 
@@ -212,7 +211,7 @@ function rangeScaleFooterFixture(config, states, lang) {
   return el;
 }
 
-test("AP-06: RangeScale footer without any rooms configured shows span/min/max, not the room-comfort footer", () => {
+test("RangeScale footer without rooms shows span/min/max", () => {
   const el = rangeScaleFooterFixture(
     {},
     {
@@ -237,7 +236,7 @@ test("AP-06: RangeScale footer without any rooms configured shows span/min/max, 
   env.cleanup(el);
 });
 
-test("AP-06: RangeScale footer falls back to '–' for a missing timestamp, without throwing", () => {
+test("RangeScale footer uses a dash for a missing timestamp", () => {
   const el = rangeScaleFooterFixture(
     {},
     {
@@ -252,7 +251,7 @@ test("AP-06: RangeScale footer falls back to '–' for a missing timestamp, with
   env.cleanup(el);
 });
 
-test("AP-06: hide_footer suppresses the RangeScale footer entirely", () => {
+test("hide_footer suppresses the RangeScale footer", () => {
   const el = rangeScaleFooterFixture(
     { hide_footer: true },
     {
@@ -265,7 +264,7 @@ test("AP-06: hide_footer suppresses the RangeScale footer entirely", () => {
   env.cleanup(el);
 });
 
-test("AP-06: RangeScale footer text differs by language (localized, not hardcoded English)", () => {
+test("RangeScale footer text is localized", () => {
   const states = {
     "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
@@ -294,8 +293,7 @@ test("I18N-02: RangeScale footer renders without throwing in all 11 supported la
   }
 });
 
-// ---- DATA-03 (v2.16.0 audit): main scale must include avg, same as the
-// rangeScale axis already does (DATA-04, v2.15.0) — a weighted/independent
+// ---- The main scale must include the average. A weighted or independent
 // average source falling outside [coolest, warmest] must not clamp the avg
 // marker to the scale edge. ----
 
@@ -337,16 +335,16 @@ test("DATA-03: main scale unaffected when avg already sits inside [coolest, warm
   env.cleanup(el);
 });
 
-// ---- Review fix (post-AP-01..03, P0): range_entity/trend_entity must be
+// ---- range_entity and trend_entity are
 // typed and unit-converted, not read raw. range_entity's own state is a
 // DELTA (today's spread), min/max attributes are ABSOLUTE readings,
-// trend_entity's state is a RATE (same conversion factor as delta, audit
-// 9.5) — each projected through the range/trend entity's OWN
+// trend_entity's state is a rate with the same conversion factor as delta.
+// Each is projected through the range/trend entity's own
 // unit_of_measurement into the card's canonical unit, then into the
 // resolved display unit (_resolveAuxiliaryUnitProfile()), exactly like the
 // pre-existing spread-attribute conversion a few tests above. ----
 
-test("review fix: range_entity reporting in a DIFFERENT unit than the display unit is converted, not passed through raw", () => {
+test("range_entity in a different unit is converted to the display unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     // range_entity's OWN unit is Fahrenheit while the card displays Celsius.
@@ -361,7 +359,7 @@ test("review fix: range_entity reporting in a DIFFERENT unit than the display un
   env.cleanup(el);
 });
 
-test("review fix: range_entity's own state is converted as a DELTA (not an absolute) — a negative-after-conversion delta still disables hasRange, proving the delta path (not a skipped/absolute one) actually runs", () => {
+test("range_entity state converts as a delta and a negative result disables hasRange", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     // -18°F as a DELTA converts to -10°C (deltaToCanonical has no +32/-32
@@ -377,7 +375,7 @@ test("review fix: range_entity's own state is converted as a DELTA (not an absol
   env.cleanup(el);
 });
 
-test("review fix: range_entity with an explicit but UNRESOLVABLE unit is diagnosed as unusable, never silently treated as canonical", () => {
+test("range_entity with an unresolvable unit is diagnosed as unusable", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "hPa", minimum: 18, maximum: 23 }),
@@ -390,15 +388,11 @@ test("review fix: range_entity with an explicit but UNRESOLVABLE unit is diagnos
   env.cleanup(el);
 });
 
-test("review fix (P0, post-2.21.1): range_entity with NO unit_of_measurement at all is unusable — no more canonical fallback, hasRange stays false", () => {
-  // Inverted by the P0 review fix: a COMPLETELY MISSING unit on range_entity
-  // is now treated exactly like an unresolvable one (see
+test("range_entity without unit_of_measurement is unusable and hasRange stays false", () => {
+  // A missing unit on range_entity is treated exactly like an unresolvable one (see
   // _resolveAuxiliaryUnitProfile()'s missing-unit branch, and the identical
   // Primary/Räume contract at _buildEntityModel()) — never silently assumed
-  // canonical. This test used to assert the opposite (a no-op Celsius
-  // fallback); the reviewer explicitly and repeatedly rejected that
-  // asymmetry, so the assertion is now inverted to match the corrected
-  // contract.
+  // canonical.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }), // no unit_of_measurement
@@ -411,7 +405,7 @@ test("review fix (P0, post-2.21.1): range_entity with NO unit_of_measurement at 
   env.cleanup(el);
 });
 
-test("review fix: trend_entity reporting a different unit is converted as a RATE (same factor as a delta, no absolute offset)", () => {
+test("trend_entity in a different unit converts as a rate without an absolute offset", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.trend": mkState("sensor.trend", 1.8, { unit_of_measurement: "°F" }), // +1.8°F/h == +1°C/h
@@ -423,7 +417,7 @@ test("review fix: trend_entity reporting a different unit is converted as a RATE
   env.cleanup(el);
 });
 
-test("review fix: trend_entity using the conventional '<unit>/h' suffix (e.g. HA's own derivative/statistics helpers) still resolves, not just the bare absolute unit", () => {
+test("trend_entity using a conventional per-hour suffix resolves", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
     "sensor.trend": mkState("sensor.trend", -15, { unit_of_measurement: "ppm/h" }),
@@ -435,7 +429,7 @@ test("review fix: trend_entity using the conventional '<unit>/h' suffix (e.g. HA
   env.cleanup(el);
 });
 
-test("review fix: trend_entity with an unresolvable unit is unusable (trendValue null), never shown as a raw mismatched number", () => {
+test("trend_entity with an unresolvable unit is unusable", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.trend": mkState("sensor.trend", 3, { unit_of_measurement: "hPa" }),

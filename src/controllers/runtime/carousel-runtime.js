@@ -2,9 +2,8 @@
 // cleaned up afterwards.
 //
 // It owns three pieces of state and nothing else owns them: the active view index, the
-// resume timer, and the accessibility-sync timer. Before this module existed those
-// three lived on the custom element next to the configuration, the hass object and the
-// render pipeline, which is why "who resets this timer" had no answer.
+// resume timer, and the accessibility-sync timer. Keeping them together gives every
+// timer one explicit reset owner.
 //
 // What it is NOT allowed to know is deliberate and complete: no hass, no configuration
 // object, no domain model, no renderer, no view model. It receives four things —

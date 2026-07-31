@@ -1,12 +1,12 @@
-// Regenerates the Phase 0 characterization baselines under test/baseline/.
+// Regenerates the characterization baselines under test/baseline/.
 //
 // Cross-platform wrapper: the baselines are produced by the normal unit-test
 // run with UPDATE_CHARACTERIZATION=1, and `VAR=value cmd` is not portable to
 // the cmd.exe shell npm uses on Windows.
 //
 // Regenerating is an explicit, reviewable act. The resulting diff under
-// test/baseline/ IS the behaviour change — during a pure refactoring it must
-// be empty, and a non-empty diff has to be justified in the commit message.
+// test/baseline/ IS the observable behaviour change; a non-empty diff requires
+// explicit review and justification.
 
 import { spawnSync } from "node:child_process";
 

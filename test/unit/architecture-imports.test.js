@@ -2,7 +2,7 @@
 
 // Enforces the layering contract of the source split.
 //
-// The refactoring's whole value depends on dependencies pointing one way. A
+// The architecture depends on imports pointing one way. A
 // single "just this once" upward import — a domain module reaching into the
 // renderer, a model module reading `document` through a view helper — is
 // invisible in a passing test suite and cheap to add, but it is what turns a
@@ -95,7 +95,7 @@ const RENDER_LAYER_NAMES = ["render/primitives", "render/layout", "styles", "vie
 //
 // The point is not tidiness: a model module that reaches for a global is a
 // module that cannot be unit-tested without a browser, cannot be reasoned about
-// deterministically, and quietly reintroduces the coupling this refactoring
+// deterministically, and quietly reintroduces forbidden coupling
 // exists to remove. Everything environmental has to arrive as an argument.
 const FORBIDDEN_APPLICATION_GLOBALS = [
   // Realm
@@ -576,8 +576,8 @@ test("the card shell cannot reach the view registry, and no view reaches a contr
 });
 
 test("the legacy DTO adapter is gone from the shipped source entirely", () => {
-  // It was scaffolding with a planned end, and this is that end. The flat object the
-  // pre-refactoring card produced is no longer computed anywhere in src/: production
+  // The flat object from the former rendering contract is not computed in src/:
+  // production
   // renders from the CardViewModel, and the 32 committed DTO baselines are served by a
   // frozen test-only helper (test/helpers/legacy-dto.js) that nothing here can reach.
   for (const file of files) {
@@ -596,11 +596,9 @@ test("the legacy DTO adapter is gone from the shipped source entirely", () => {
 
 // The only tests allowed to reach the frozen adapter, and why each one is.
 //
-// The flat DTO is a Phase 0 recording of a card that no longer exists. A test that
-// reads it is testing what the card USED to expose, through a shape production has not
-// produced since Phase 2H — which is a fine thing for a historical oracle to do and a
-// misleading thing for a behavioural test to do. Every current test was moved onto the
-// CardViewModel, the module under test, or the rendered DOM; these three remain.
+// The flat DTO records a retired public shape that production no longer produces.
+// Access is valid only for its historical oracle; behavioural tests must assert the
+// CardViewModel, the owning module, or rendered DOM instead.
 const LEGACY_DTO_ALLOWLIST = new Map([
   [
     "characterization-model.test.js",
@@ -903,7 +901,7 @@ test("the custom element lives in its own layer and is reachable", () => {
   const elementFiles = files.filter((file) => classify(file).name === "element");
   assert.ok(elementFiles.includes(ELEMENT), "the element must live in element/");
   // Reachability is already checked globally, but naming it here means a future
-  // refactor cannot quietly orphan the element and still pass.
+  // source changes cannot quietly orphan the element while tests still pass.
   const rootImports = graph.get(ENTRY).specifiers.map((specifier) => resolveSpecifier(ENTRY, specifier));
   assert.ok(rootImports.includes(ELEMENT), "the composition root must import the element");
 });

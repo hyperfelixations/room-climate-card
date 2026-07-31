@@ -1,23 +1,20 @@
 "use strict";
 
-// Phase 0 of the source-split/build refactoring: characterization ("golden
-// master") harness. Its single purpose is to pin the CURRENT observable
-// behaviour of room-climate-card.js as committed baseline files, so every
-// later refactoring step can be proven structurally equivalent rather than
-// merely "still passing the behavioural tests".
+// Characterization ("golden master") harness. Its purpose is to pin the current
+// observable behaviour of room-climate-card.js as committed baseline files.
 //
 // The existing unit suite asserts INTENDED behaviour (a human wrote down what
 // should happen). These baselines assert ACTUAL behaviour verbatim — every
 // number, every whitespace character of the rendered markup, every byte of
 // the emitted CSS. That is deliberately over-specified: during a pure
-// refactoring an unintended change is exactly what must fail, even when it
+// an unintended change is exactly what must fail, even when it
 // would look harmless to a behavioural assertion.
 //
 // Visual/layout contracts are NOT duplicated here — test/browser/
 // visual-golden.spec.js already owns them with real Chromium screenshots,
 // and jsdom has no layout engine at all (getBoundingClientRect() is always
 // zero). This harness covers the contracts that demonstrably had no
-// verbatim coverage before: the flat Phase 0 DTO, the shadow-DOM markup,
+// verbatim coverage for the frozen flat DTO, the shadow-DOM markup,
 // the generated CSS, the custom-element/HACS registration, the exact
 // diagnostic strings, and the wall-clock carousel timing.
 //

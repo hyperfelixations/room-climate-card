@@ -5,9 +5,8 @@
 //
 // This is where the card decides what a number MEANS: which entity is allowed to
 // determine the metric kind, which rooms may be averaged, whether a reading is a
-// measurement at all, and what the resulting sentence should say. Every one of
-// those decisions used to be reachable only through the custom element; here they
-// are tested as the pure functions they now are.
+// measurement at all, and what the resulting sentence should say. Tests exercise
+// those decisions at their pure-function owners.
 
 process.env.TZ = "UTC";
 
@@ -630,7 +629,7 @@ test("a grid cap limits nothing but the chip count", () => {
 });
 
 test("the domain model carries no rendering geometry at all", () => {
-  // The boundary the Phase 2F review drew: an axis, a band rectangle, a marker
+  // The layer boundary: an axis, a band rectangle, a marker
   // percentage and a pixel nudge are all statements about a RENDERED bar, not about
   // the measurement. Only the axis POLICY belongs here.
   const states = {

@@ -6,7 +6,7 @@
 // directly with a synthetic pointer shape; this drives the actual DOM event
 // listeners end to end, including the >=10px horizontal-swipe detection in
 // _handlePointerMove() and the width*0.18 swipe threshold in
-// _handlePointerUp(). Covers the audit's "Carousel und Lifecycle" checklist:
+// _handlePointerUp(). Covers the carousel and lifecycle contracts:
 // threshold swipe both directions, pointercancel/pointerleave, an HA update
 // arriving mid-drag.
 
@@ -56,7 +56,7 @@ test("a rightward swipe past the threshold moves to the next view", async ({ pag
   // the "leftward" test's own pattern. Reading the live this._activeView
   // instead (the previous approach) raced against the wall-clock,
   // CSS-driven auto-slide phase: with 3 views (range/scale/extremes) now
-  // correctly active (see the P0 review fix's sensor.range unit_of_measurement
+  // correctly active (sensor.range needs its own unit_of_measurement
   // requirement, threeViewStates()), the auto-slide could tick an extra
   // step during the ~600ms interaction window, occasionally landing on an
   // endIndex the startIndex-relative assertion didn't anticipate.

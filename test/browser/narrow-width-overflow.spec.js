@@ -1,34 +1,10 @@
 "use strict";
 
-// AP-10 (audit section 19, "responsive und visuelle Robustheit"): closes
-// three CSS gaps confirmed by direct source reading, none of which any
-// existing browser spec covers (label-geometry.spec.js only checks label
-// OVERLAP/position, room-chip-overflow.spec.js never queries
-// .rtc-room-value or .rtc-extreme-label, randomized-geometry.spec.js
-// deliberately excludes *-value-unit$ classes and anything inside
-// .rtc-track from its generic overflow check, and no spec anywhere uses
-// width 360 or 460):
-//   1. .rtc-range-scale-view was missing from the 360px/380px height:74px
-//      lists that .rtc-scale-view/.rtc-extremes-view/.rtc-range-view
-//      already had -- a ~4px layout inconsistency when range_scale is the
-//      active carousel slide at a narrow width.
-//   2. .rtc-extreme-label's base-rule ellipsis (overflow:hidden;
-//      text-overflow:ellipsis) was overridden back to overflow:visible at
-//      the 460px/600px breakpoints -- removed exactly where it mattered most.
-//   3. .rtc-room-value had no ellipsis protection anywhere (only
-//      white-space:nowrap); a long CO2/PM2.5 value or long localized unit
-//      hit the ancestor .rtc-room-chip's overflow:hidden and got a hard,
-//      potentially mid-character clip instead of a graceful ellipsis.
-//      ORIGINALLY fixed via a new .rtc-room-value-num rule (the number span
-//      only), but that rule turned out to be over-broad: it also silently
-//      truncated completely normal, non-extreme values (e.g. 7 temperature
-//      chips at a typical phone width), a real regression caught via a
-//      screenshot. It was REVERTED in the room-value-legibility round: room
-//      values are now non-truncatable information, and "not enough space"
-//      is solved by metric-specific auto-max-columns (more rows) instead of
-//      ellipsis -- see the ".rtc-room-value-num never ellipsizes realistic
-//      values" describe block below and room-value-legibility.spec.js for
-//      the full matrix.
+// Narrow-width coverage spans three distinct containment contracts: all carousel
+// views share the responsive height, extreme labels retain their ellipsis policy,
+// and realistic room values remain fully legible. Room values are non-truncatable
+// information, so metric-specific auto-max-columns must create additional rows when
+// horizontal space is insufficient.
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
@@ -40,13 +16,13 @@ const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 // harness (no real Home Assistant frontend loaded), so it defaults to
 // display:inline -- CSS Containment has no effect on inline boxes, so every
 // @container rtc-card (...) rule in room-climate-card.js's styles (which
-// this file specifically needs to exercise, see AP-10's 360px/460px
+// this file specifically exercises at 360px and the 460px
 // breakpoint fixes) would silently never match, regardless of the card's
 // actual rendered width. Registering a minimal stand-in (mirroring just
 // real HA's ha-card display:block) makes those breakpoints testable.
 // Scoped to this file via addInitScript rather than editing the shared
 // harness.html, since that would also change every OTHER spec's layout and
-// invalidate their golden screenshots -- out of scope for this round.
+// invalidate their golden screenshots.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!customElements.get("ha-card")) {
@@ -66,7 +42,7 @@ async function setWidth(page, cardId, width) {
   await page.waitForTimeout(120);
 }
 
-// Fails only for the three classes this round's CSS fixes actually cover --
+// Checks only the three classes whose containment contracts this file covers:
 // deliberately narrower than randomized-geometry.spec.js's generic sweep so
 // this file's intent (and any future failure) stays unambiguous. Excludes
 // .rtc-track-nested nodes, same as randomized-geometry.spec.js: non-active
@@ -120,7 +96,7 @@ const ROOMS = [
   { entity: "sensor.r2", name: "Schlafzimmer" },
 ];
 
-test.describe("AP-10: .rtc-range-scale-view is included in the shared narrow-width height rules", () => {
+test.describe(".rtc-range-scale-view follows shared narrow-width height rules", () => {
   test("solo range_scale view at 360px matches .rtc-scale-view's 74px narrow height (no longer 70px)", async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.avg", ...RANGE_SCALE_EXTRA, ...soloViewConfig("range_scale") }, baseStates());
@@ -151,7 +127,7 @@ test.describe("AP-10: .rtc-range-scale-view is included in the shared narrow-wid
   // queries, so @supports not (container-type: inline-size) is permanently
   // false there -- that fallback block is provably inert in every browser
   // this test suite can run in, and no test here can genuinely exercise it
-  // (forcing the viewport narrow, as an earlier version of this test did,
+  // (forcing the viewport narrow
   // only re-triggers the SAME @container rule and would pass even if the
   // fallback block's own .rtc-range-scale-view line were missing -- a false
   // sense of coverage). Its CSS is a straight, mechanical mirror of the
@@ -160,7 +136,7 @@ test.describe("AP-10: .rtc-range-scale-view is included in the shared narrow-wid
   // dedicated browser test.
 });
 
-test.describe("AP-10: .rtc-extreme-label keeps its ellipsis at narrow widths instead of overflowing", () => {
+test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
   for (const width of [460, 600]) {
     test(`computed overflow/text-overflow stay hidden/ellipsis at ${width}px (regression for the removed override)`, async ({ page }) => {
       await gotoHarness(page);
@@ -269,7 +245,7 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
   }
 });
 
-test.describe("AP-10: every view, solo and in the carousel, across widths -- no unintended overflow of the three fixed classes", () => {
+test.describe("every view avoids unintended overflow across widths", () => {
   const viewTypes = ["scale", "range_scale", "extremes", "range"];
 
   for (const width of WIDTHS) {

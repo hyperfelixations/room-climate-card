@@ -10,13 +10,10 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owning module of each classification contract explicit.
 let access;
 
 let env;
@@ -580,11 +577,8 @@ test("a built-in profile cannot be applied to the wrong metric kind", () => {
   );
 });
 
-// P1 review fix (post-2.30.0): a profile scoped to the PRIMARY's own kind
-// (here temperature's "outdoor") used to throw as soon as ANY configured
-// room had a different metric kind, because _buildEntityModel() probed
-// that room's own kind against the same card-wide profile before AP-02's
-// kind filter ever got a chance to exclude it. The card-wide profile must
+// A profile scoped to the primary's kind must not be validated against a
+// configured room of another metric kind. The card-wide profile must
 // only ever be enforced against the resolved kind and its same-kind
 // participants -- a foreign-kind room is simply irrelevant to it.
 test("a foreign-kind room does not break profile resolution for the primary's own kind (auto + profile shorthand)", () => {
@@ -629,7 +623,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
   env.cleanup(card);
 });
 
-// P2 review fix (post-2.30.0): _classificationProfileForDisplay() rounds
+// _classificationProfileForDisplay() rounds
 // each projected boundary independently (Math.round for Fahrenheit) with
 // no check afterward that the rounded result still forms a coherent,
 // non-degenerate profile. A custom profile authored in Celsius with a

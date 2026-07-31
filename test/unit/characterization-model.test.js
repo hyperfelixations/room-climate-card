@@ -1,13 +1,13 @@
 "use strict";
 
-// Phase 0 characterization: the computeLegacyData() DTO, verbatim.
+// Characterization of the frozen computeLegacyData() DTO, verbatim.
 //
 // computeLegacyData()'s return value is the single contract between the card's
 // data layer and every renderer/patcher, and the existing unit suite asserts
 // against it from 177 call sites. Before the source split it had no
 // whole-object baseline at all — individual fields were asserted, the SHAPE
 // never was. These baselines pin every key and every value for the full
-// scenario catalog, so a refactoring that silently adds, drops, reorders or
+// scenario catalog, so a change that silently adds, drops, reorders or
 // re-rounds a field fails immediately.
 //
 // See test/helpers/characterization.js for the harness and the determinism

@@ -1,14 +1,14 @@
 "use strict";
 
 // Small, dependency-free seeded PRNG (mulberry32) for the permanent
-// randomized/property tests (v2.16.0 audit, section 10) — deliberately not
+// randomized/property tests — deliberately not
 // a `fast-check` dependency, consistent with this project's minimal-tooling
 // philosophy (only jsdom + @playwright/test as devDependencies). Fully
 // deterministic for a given seed, so a CI run is exactly reproducible; the
 // default seed used across the standard test run is 0xC1A6E (see
 // randomized-extremes.property.test.js), with ROOM_CLIMATE_CARD_FUZZ_SEEDS
-// available for ad-hoc additional-seed runs (see package.json's test:fuzz
-// script and "Entwicklungsumgebung und Tooling" in readme climate card.md).
+// available for ad-hoc additional-seed runs through the package.json
+// `test:fuzz` script.
 
 function mulberry32(seed) {
   let a = seed >>> 0;

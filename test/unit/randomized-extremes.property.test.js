@@ -1,6 +1,6 @@
 "use strict";
 
-// Permanent randomized/property tests (v2.16.0 audit, section 10): generates
+// Deterministic randomized/property tests generate
 // many pseudo-random, deliberately extreme configurations and checks a
 // broad set of invariants that must hold no matter what — fixed-seed
 // (0xC1A6E) for a deterministic, reproducible CI run; ROOM_CLIMATE_CARD_FUZZ_SEEDS
@@ -14,8 +14,7 @@
 // default decimals) against the SAME failing predicate, reporting the
 // smallest variant that still reproduces it — an intentionally simpler
 // approximation of "minimized counterexample" than a real shrinking
-// library, appropriate for this project's minimal-tooling philosophy (see
-// "Entwicklungsumgebung und Tooling" in readme climate card.md).
+// library, appropriate for this project's minimal-tooling philosophy.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -38,7 +37,7 @@ const DEVICE_CLASS_BY_METRIC = { temperature: "temperature", humidity: "humidity
 const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 
 // Deliberately extreme value pools per metric, including physically invalid
-// ones (negative humidity/co2, negative pm25) so DATA-02's invalidWhen
+// ones (negative humidity/co2, negative pm25) so invalidWhen
 // filtering gets exercised, not just "normal" random numbers.
 function extremeValuePool(metricType, rng) {
   const pools = {
@@ -97,9 +96,7 @@ function genConfig(rng, roomCount) {
     entity: primaryMissing ? "sensor.does_not_exist" : "sensor.avg",
     rooms,
     language,
-    // AP-04: unlike the old range_scale_view:true flag (which only ADDED
-    // range_scale on top of the other views' own default availability),
-    // views: is fully authoritative once present — so range/scale/extremes
+    // views: is fully authoritative once present, so range/scale/extremes
     // must be listed too (as "auto", their own condition()-based
     // availability still decides) to keep this randomized property test's
     // coverage equivalent to before.

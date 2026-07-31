@@ -1,15 +1,11 @@
 "use strict";
 
-// The compositions the custom element used to expose only for these tests.
+// Test-only compositions for pure functions that also require live card state.
 //
 // Each one below combines a pure module function with something only a live card has:
 // the hass states map, the classification policy derived from the configuration, or the
-// text/formatting bundle. Production never called any of them — it composes the same
-// functions inside presentation/view-model — so they were pure test surface sitting on
-// the element, where they were indistinguishable from real behaviour and kept the
-// element from being reducible to its actual job.
-//
-// They live here instead. The card is the first argument rather than `this`, which
+// text/formatting bundle. Production composes the same functions inside
+// presentation/view-model. The card is the first argument rather than `this`, which
 // makes the dependency on card state explicit at every call site, and each helper names
 // the real module it is exercising.
 //
@@ -45,8 +41,7 @@ async function loadCardInternals() {
 
   // The two compositions everything else here is built from. The card derives its
   // classification policy from the configuration and its display profile from that
-  // policy; both used to be element methods, and neither has a production caller left
-  // now that the view model composes them itself.
+  // policy; the view model owns both production compositions.
   const policyOf = (el) => m.classification.classificationPolicyOf(el._config);
   const displayProfileOf = (el, metricType, unitProfile) =>
     m.classification.resolveDisplayProfile(policyOf(el), metricType, unitProfile);

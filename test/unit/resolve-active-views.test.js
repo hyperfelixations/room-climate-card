@@ -1,10 +1,9 @@
 "use strict";
 
-// AP-04 (views:-Schema, audit sections 11, 12, 14.3-14.5): resolveActiveViews()
+// resolveActiveViews()
 // layers config.views (string/object requests, enabled:true|false|"auto")
 // on top of VIEW_REGISTRY's condition()/defaultEnabled()-based availability,
-// replacing the legacy range_scale_view/view_order/disabled_views/
-// default_view/mandatory fields entirely. It's a plain module-scope function
+// is authoritative for view requests and availability. It is a plain module-scope function
 // (not a method — see room-climate-card.js), not exposed on window by design
 // (the card stays a dependency-free browser IIFE with no exports for HACS),
 // so it's exercised the same way a real user would ever observe it: through
@@ -89,7 +88,7 @@ test("views: 'scale' can be omitted entirely — the former 'mandatory' protecti
   env.cleanup(el);
 });
 
-test("views: range_scale with enabled:true actually shows when available, replacing the legacy range_scale_view:true flag", () => {
+test("views: range_scale with enabled:true shows when available", () => {
   const el = env.createCard(
     {
       entity: "sensor.avg",
@@ -196,7 +195,7 @@ test("setConfig() warns exactly once for a bad views: config, and does not repea
   env.cleanup(el);
 });
 
-test("review fix (P1): the warning dedup key resets on a valid intermediate config, so an identical invalid config re-warns the third time (invalid -> valid -> same invalid)", () => {
+test("the warning dedup key resets on a valid intermediate config", () => {
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, fourViewHass());
   const warnings = [];
   const originalWarn = el.ownerDocument.defaultView.console.warn;
@@ -236,14 +235,14 @@ test("start_view: a valid start_view is stored on config and used by _renderAll(
   env.cleanup(el);
 });
 
-// ==== Review fix (P1, post-2.21.1): AP-04 validation completeness — a
+// ==== View configuration validation: a
 // non-array views:, invalid list entries, and invalid enabled: values must
 // be diagnosed (not silently defaulted with no trace), and options must be
 // filtered through a registry whitelist rather than passed through
-// unchecked (audit 14.4). See room-climate-card.js's _normalizeViewsConfig()/
+// unchecked. See room-climate-card.js's _normalizeViewsConfig()/
 // _normalizeViewRequest()/_normalizeViewOptions(). ====
 
-test("review fix (P1): a non-array views: value is diagnosed and the card falls back to the default (one-auto-entry-per-registry-key) resolution", () => {
+test("a non-array views value is diagnosed and falls back to registry defaults", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: "not-an-array" },
     fourViewHass()
@@ -258,7 +257,7 @@ test("review fix (P1): a non-array views: value is diagnosed and the card falls 
   env.cleanup(el);
 });
 
-test("review fix (P1): every unparseable views: list entry (wrong type, empty object, non-string type) is individually diagnosed and skipped, valid entries still resolve", () => {
+test("unparseable views entries are diagnosed and skipped while valid entries resolve", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [42, null, {}, { type: 123 }, "extremes"] },
     fourViewHass()
@@ -271,7 +270,7 @@ test("review fix (P1): every unparseable views: list entry (wrong type, empty ob
   env.cleanup(el);
 });
 
-test("review fix (P1): an invalid enabled: value is diagnosed but non-destructively falls back to 'auto' rather than dropping the whole entry", () => {
+test("an invalid enabled value is diagnosed and falls back to auto", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", enabled: "yes" }] },
     fourViewHass()
@@ -287,7 +286,7 @@ test("review fix (P1): an invalid enabled: value is diagnosed but non-destructiv
   env.cleanup(el);
 });
 
-test("review fix (P1): options: is filtered through the view's registry optionsSchema whitelist — currently empty for every view, so any options object normalizes to {}", () => {
+test("options are filtered through each view's optionsSchema", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { bogus: true, another: 1 } }] },
     fourViewHass()
@@ -296,14 +295,13 @@ test("review fix (P1): options: is filtered through the view's registry optionsS
   env.cleanup(el);
 });
 
-// ==== P1 fix (post-2.22.1, audit 14.4 follow-up): _normalizeViewOptions()
-// used to strip unknown options keys AND normalize any non-object options
-// value silently, with no diagnostic — unlike every other malformed views:
+// ==== _normalizeViewOptions() diagnoses unknown keys and non-object values
+// while preserving non-destructive fallback semantics for malformed views
 // field in this file. Both are now diagnosed through the same
 // _viewsDiagnostics pipeline, non-destructively (the entry itself, and its
 // filtered options, are kept exactly as before). ====
 
-test("P1 fix: an options: value with an unknown key is diagnosed once, and the unknown key is still stripped", () => {
+test("an unknown options key is diagnosed once and stripped", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { bogus: true } }] },
     fourViewHass()
@@ -316,7 +314,7 @@ test("P1 fix: an options: value with an unknown key is diagnosed once, and the u
   env.cleanup(el);
 });
 
-test("P1 fix: a non-object options: value is diagnosed, and still non-destructively normalizes to {}", () => {
+test("a non-object options value is diagnosed and normalizes to an empty object", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: "not-an-object" }] },
     fourViewHass()
@@ -329,7 +327,7 @@ test("P1 fix: a non-object options: value is diagnosed, and still non-destructiv
   env.cleanup(el);
 });
 
-test("P1 fix: an omitted options: field is NOT diagnosed — 'not provided' is the normal case, consistent with views: itself being omitted", () => {
+test("an omitted options field is not diagnosed", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale" }] },
     fourViewHass()
@@ -339,7 +337,7 @@ test("P1 fix: an omitted options: field is NOT diagnosed — 'not provided' is t
   env.cleanup(el);
 });
 
-// ==== AP-05 (audit sections 13, 14.1): generic 0/1/N-view rendering. The
+// ==== Generic 0/1/N-view rendering. The
 // view descriptor (VIEW_REGISTRY via resolveActiveViews()) is the sole
 // render-dispatch source — no hardcoded Scale-solo path — and each of the
 // four views must work standalone. Covers: solo-render DOM assertions per
@@ -372,7 +370,7 @@ const SOLO_CASES = {
 };
 
 for (const [type, { extraConfig, viewClass }] of Object.entries(SOLO_CASES)) {
-  test(`AP-05 solo-render: views:[${type}] renders exactly the ${viewClass} markup, never implicit Scale`, () => {
+  test(`solo views:[${type}] renders exactly the ${viewClass} markup`, () => {
     const el = env.createCard(
       { entity: "sensor.avg", ...extraConfig, views: [{ type, enabled: true }] },
       soloViewHass()
@@ -391,7 +389,7 @@ for (const [type, { extraConfig, viewClass }] of Object.entries(SOLO_CASES)) {
   });
 }
 
-test("AP-05: 0 active views (deliberately empty config) has neither a .rtc-track carousel nor auto-slide timers", () => {
+test("zero active views has neither a carousel track nor auto-slide timers", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-track"), null);
   assert.equal(el._carousel.hasAutoSlide(), false);
@@ -400,7 +398,7 @@ test("AP-05: 0 active views (deliberately empty config) has neither a .rtc-track
   env.cleanup(el);
 });
 
-test("AP-05: 1 active view has neither a .rtc-track carousel nor auto-slide timers", () => {
+test("one active view has neither a carousel track nor auto-slide timers", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [{ type: "scale", enabled: true }] }, soloViewHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-track"), null);
   assert.equal(el._carousel.hasAutoSlide(), false);
@@ -409,7 +407,7 @@ test("AP-05: 1 active view has neither a .rtc-track carousel nor auto-slide time
   env.cleanup(el);
 });
 
-test("AP-05 null-view policy: a deliberately empty views: config collapses the view area entirely (no .rtc-no-views markup)", () => {
+test("an empty views config collapses the view area without hint markup", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
   const data = el._computeViewModel();
   assert.equal(data.views.collapsed, true);
@@ -420,7 +418,7 @@ test("AP-05 null-view policy: a deliberately empty views: config collapses the v
   env.cleanup(el);
 });
 
-test("AP-05 null-view policy: every view entry explicitly disabled ALSO collapses (same 'deliberately empty' policy as an empty array)", () => {
+test("explicitly disabling every view collapses the view area", () => {
   const el = env.createCard(
     {
       entity: "sensor.avg",
@@ -434,7 +432,7 @@ test("AP-05 null-view policy: every view entry explicitly disabled ALSO collapse
   env.cleanup(el);
 });
 
-test("AP-05 null-view policy: a view requested but systemically unavailable shows the localized hint, not a collapse", () => {
+test("a requested unavailable view shows a localized hint instead of collapsing", () => {
   // range_scale requested with enabled:true, but no range_entity configured at all -> unavailable.
   const el = env.createCard({ entity: "sensor.avg", views: [{ type: "range_scale", enabled: true }] }, soloViewHass());
   const data = el._computeViewModel();
@@ -445,7 +443,7 @@ test("AP-05 null-view policy: a view requested but systemically unavailable show
   env.cleanup(el);
 });
 
-test("P1 fix: setConfig() from a collapsed (deliberately empty) views: to a requested-but-unavailable views: must actually swap in the .rtc-no-views hint", () => {
+test("setConfig from collapsed views to an unavailable request shows the hint", () => {
   // Both states resolve data.views.keys to [] — before the fix, _render()'s
   // viewsChanged check only compared data.views.keys against this._views (both
   // [] in both cases), so this transition never triggered _renderAll() and
@@ -459,7 +457,7 @@ test("P1 fix: setConfig() from a collapsed (deliberately empty) views: to a requ
   env.cleanup(el);
 });
 
-test("P1 fix: setConfig() from a requested-but-unavailable views: back to a collapsed (deliberately empty) views: must actually remove the .rtc-no-views hint", () => {
+test("setConfig from an unavailable request to collapsed views removes the hint", () => {
   const el = env.createCard({ entity: "sensor.avg", views: [{ type: "range_scale", enabled: true }] }, soloViewHass());
   assert.ok(el.shadowRoot.querySelector(".rtc-no-views"));
 
@@ -468,7 +466,7 @@ test("P1 fix: setConfig() from a requested-but-unavailable views: back to a coll
   env.cleanup(el);
 });
 
-test("AP-05: start_view is honored on the very FIRST render, not just after a later setConfig() structural change", () => {
+test("start_view is honored on the first render", () => {
   const el = env.createCard(
     { entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], start_view: "extremes" },
     soloViewHass()
@@ -477,7 +475,7 @@ test("AP-05: start_view is honored on the very FIRST render, not just after a la
   env.cleanup(el);
 });
 
-test("AP-05 acceptance: views: [extremes] renders the actual Extremes view (DOM-verified), never implicitly Scale", () => {
+test("views: [extremes] renders the Extremes view without an implicit Scale", () => {
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "extremes", enabled: true }] },
     soloViewHass()

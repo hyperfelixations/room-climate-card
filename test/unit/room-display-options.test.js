@@ -1,6 +1,6 @@
 "use strict";
 
-// AP-C2 (audit 23.1): room_sort, room_label, show_rooms. room_sort is
+// room_sort, room_label and show_rooms are presentation options. room_sort is
 // purely a presentation decision -- it only reorders the rendered chips
 // (data.rooms.visible), never data.allRooms (extrema/comfort-count/spread stay
 // value-sorted regardless). room_label is a static 3-way choice between
@@ -14,7 +14,7 @@ const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
 let env;

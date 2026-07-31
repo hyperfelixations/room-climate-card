@@ -1,19 +1,15 @@
 "use strict";
 
-// View-customizer "Baukasten" foundation: a generic per-view options
-// resolver built on top of the existing VIEW_REGISTRY optionsSchema
-// whitelist (AP-04, audit 14.4). This file tests the GENERIC mechanism in
+// Generic per-view options resolve through each VIEW_REGISTRY optionsSchema
+// whitelist. This file tests the generic mechanism in
 // isolation, independent of any specific option (show_comfort_band/
-// show_optimal_band, added on top of this in the same round, are tested
+// show_optimal_band are tested
 // separately in scale-band-visibility.test.js) -- exactly the property a
 // "toolkit" needs proven on its own: any future optionsSchema key on any
 // view flows through this same resolver with zero changes to it.
 //
 // resolveViewOptions()/boolOption() are module-level pure functions (no
-// `this`, like resolveActiveViews()) and aren't exported from the IIFE for
-// direct require(); viewState.resolveViewOptions()/optionSchemas.boolOption() are thin
-// instance-method delegates added purely for testability, the same
-// established pattern as _timeFractionForEasedProgress() (AP-08).
+// `this`, like resolveActiveViews()). Tests import their owning modules directly.
 //
 // normalize() rehomes plain objects/arrays returned across the vm.runInContext()
 // realm boundary into this realm's Object.prototype before deepEqual (see
@@ -25,10 +21,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owner of each option-resolution contract explicit.
 let optionSchemas, viewState;
 
 let env, el;

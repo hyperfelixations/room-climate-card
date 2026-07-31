@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 0 characterization: error and warning behaviour, verbatim.
+// Characterization of error and warning behaviour, verbatim.
 //
 // The card has two deliberately different failure modes, and the boundary
 // between them is a product decision, not an implementation detail:
@@ -12,7 +12,7 @@
 //              stray option key, incompatible sensor set) — the card degrades
 //              instead of breaking, and says so exactly once.
 //
-// A refactoring must move neither the boundary nor the wording: the messages
+// Changes must move neither the boundary nor the wording: the messages
 // are the only diagnostic channel users have, they are quoted in the public
 // README's troubleshooting section, and the once-per-change deduplication is
 // what keeps a permanently misconfigured dashboard from flooding the console.

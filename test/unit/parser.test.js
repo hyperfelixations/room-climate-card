@@ -1,9 +1,8 @@
 "use strict";
 
-// _parseNum() strict numeric parsing (ROB-01 in the v2.15.0 audit: the old
-// parseFloat()-based parser silently accepted a numeric *prefix* out of
-// junk like "25 °C" or "12abc"). Covers the "Parser und Fachlogik" audit
-// checklist matrix: unknown/unavailable/none/null/empty, "12abc", "25 °C",
+// _parseNum() uses strict numeric parsing so junk such as "25 °C" or "12abc"
+// cannot be accepted through a numeric prefix. The matrix covers
+// unknown/unavailable/none/null/empty, "12abc", "25 °C",
 // "1,5", ".5", "1e3", "1.", whitespace.
 //
 // _parseNum() is only reachable indirectly (through _getNum()/_getAttrNum(),

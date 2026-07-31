@@ -1,6 +1,6 @@
 "use strict";
 
-// AP-09 (audit section 18, A11Y-02): real-Chromium confirmation that
+// Real Chromium confirms that
 // keyed DOM-patching actually preserves keyboard focus, not just node
 // object identity in jsdom (test/unit/keyed-dom-patching.test.js covers the
 // full Pflichtmatrix there) — a genuine browser's focus/activeElement

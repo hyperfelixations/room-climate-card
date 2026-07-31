@@ -1,19 +1,7 @@
 "use strict";
 
-// AP-03 (v2.17.0 consolidated audit, section 9 "DATA-05 - Native
-// Temperatur-UnitProfiles und Fahrenheit", 9.6 "SCALE-01"): before this
-// round, a Fahrenheit-reporting entity was only RECOGNIZED as
-// metricType==="temperature" (via METRIC_TYPE_BY_UNIT) but then treated
-// exactly like Celsius everywhere else — classification, comfort/optimal
-// bands, icons, and the dynamic scale all stayed Celsius numbers compared
-// against a raw, unconverted Fahrenheit value (audit reproduction, section
-// 9.1: 72 °F classified as "Very hot" against a 20-24 "Celsius" comfort
-// band). AP-01 built the conversion machinery (METRIC_DEFINITIONS,
-// UnitProfiles, _deriveThresholdsForProfile()/_deriveBandForProfile(),
-// deterministic integer Fahrenheit boundaries); AP-02 made the measurement
-// pipeline atomic and canonicalizes correctly, but deliberately kept
-// display Celsius-only. AP-03 completes native display: _resolveMetricContext()
-// now resolves a real displayUnitProfile (section 9.4), and the view model
+// Fahrenheit values canonicalize for domain calculations and project back to
+// a resolved displayUnitProfile. The view model
 // converts every displayed number into that unit before classification,
 // comfort/optimal/scale, and icon decisions are made — never a raw
 // Fahrenheit number compared against Celsius bounds again.
@@ -24,13 +12,10 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Import the owning module directly so each test names its actual subject.
 let access;
 
 let env;
@@ -46,7 +31,7 @@ test.after(() => {
 
 // ==== Pure single-unit cards (section 9.7: "reine C-, F- und K-Karte") ====
 
-test("pure Celsius card: unaffected regression anchor — identical to pre-AP-03 behavior", () => {
+test("pure Celsius card remains the identity-conversion control", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
@@ -61,7 +46,7 @@ test("pure Celsius card: unaffected regression anchor — identical to pre-AP-03
   env.cleanup(el);
 });
 
-test("pure Fahrenheit card: audit 9.1 reproduction is fixed — 72°F with 70/74°F rooms classifies natively, never 'Very hot'", () => {
+test("pure Fahrenheit card classifies 72°F with 70/74°F rooms natively", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 72, { unit_of_measurement: "°F" }),
     "sensor.r1": mkState("sensor.r1", 70, { unit_of_measurement: "°F" }),
@@ -169,7 +154,7 @@ function fahrenheitCard(primaryValue) {
 
 test("Fahrenheit classification: all 10 generated boundaries classify exactly at/just-below the documented integer threshold", () => {
   const el = fahrenheitCard(70); // context only needs A usable °F primary to resolve the profile; the boundary values themselves are tested directly
-  // Teil C (review fix 3): _fallbackTone() no longer self-resolves its own
+  // _fallbackTone() receives its resolved profile explicitly rather than
   // unitProfile — the caller (here, the test itself, standing in for
   // buildCardViewModel()) explicitly resolves it once and passes it through.
   const profile = el._resolveMetricContext().displayUnitProfile;
@@ -201,8 +186,8 @@ test("Fahrenheit classification: all 10 generated boundaries classify exactly at
 test("Fahrenheit classification precision: the ROUNDED 70°F threshold governs, not the exact canonical 21°C boundary", () => {
   // 69.8°F converts to EXACTLY 21°C (the exact canonical optimal-min) — a
   // classifier that (incorrectly) tested the exact canonical value against
-  // the exact Celsius boundary would call this "Optimal". The audit's
-  // binding product rule (9.3) mandates testing against the ROUNDED
+  // the exact Celsius boundary would call this "Optimal". The product
+  // contract requires testing against the rounded
   // Fahrenheit boundary (70°F) instead, so 69.8°F must NOT be optimal.
   const el = fahrenheitCard(70);
   const profile = el._resolveMetricContext().displayUnitProfile;
@@ -266,7 +251,7 @@ test("spread attribute (a delta) must round-trip without the Fahrenheit absolute
 test("_buildScaleModel(): identical input produces identical geometry for both the main scale and rangeScale call sites", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  // Teil C (review fix 3): _buildScaleModel() takes an explicit options
+  // _buildScaleModel() takes an explicit options
   // object (metricType/unitProfile instead of an implicit
   // this._resolveMetricContext() call) and returns the FULL renderer-ready
   // model — displayStep/markerPositions/boundaryLabels, not just geometry.
@@ -314,7 +299,7 @@ test("_buildScaleModel(): markerPositions covers every key passed in markers, an
   env.cleanup(el);
 });
 
-test("_buildScaleModel(): displayStep reflects the Fahrenheit dynamic-step rule (audit 9.6), driven by the passed unitProfile, not an implicit context", () => {
+test("_buildScaleModel(): displayStep follows the Fahrenheit dynamic-step rule from the passed profile", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 130, { unit_of_measurement: "°F" }) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const fahrenheit = el._resolveMetricContext().displayUnitProfile;
@@ -333,18 +318,15 @@ test("_buildScaleModel(): displayStep reflects the Fahrenheit dynamic-step rule 
   env.cleanup(el);
 });
 
-// ==== Review fix (post-AP-01..03, P0): the former "KNOWN GAP" — range_entity
-// is now typed/converted like every other measurement (section 9.7's
-// deferred RANGE-01 gap is closed). A range_entity requires an EXPLICIT
-// unit_of_measurement of its own, exactly like Primary/Räume (P0 review fix,
-// post-2.21.1, at _resolveAuxiliaryUnitProfile() — a missing unit is
+// ==== range_entity is typed and converted like every other measurement ====
+// A range_entity requires an explicit unit_of_measurement of its own; a missing unit is
 // unusable, never assumed canonical; see metric-fallback.test.js and
 // range-and-spread.test.js for the dedicated missing/unresolvable-unit
 // exclusion cases). With an explicit °C unit, 18/23 Celsius correctly become
 // 64.4/73.4 Fahrenheit once projected into the card's resolved °F display,
 // instead of the old raw 18/23 passthrough. ====
 
-test("review fix (closes the former KNOWN GAP): range_entity min/max ARE converted to the resolved display unit", () => {
+test("range_entity min/max are converted to the resolved display unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 72, { unit_of_measurement: "°F" }),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
@@ -357,7 +339,7 @@ test("review fix (closes the former KNOWN GAP): range_entity min/max ARE convert
   env.cleanup(el);
 });
 
-test("review fix (closes the former KNOWN GAP), rangeScale geometry: converted range_entity values produce a physically meaningful, single-unit axis", () => {
+test("converted range_entity values produce a physically meaningful single-unit axis", () => {
   // _buildScaleModel() is fed avg (display-unit, °F) alongside the NOW
   // ALSO display-unit-converted rangeMin/rangeMax — both genuinely in the
   // same physical unit, unlike the pre-fix mixed-unit axis this test used
@@ -382,7 +364,7 @@ test("review fix (closes the former KNOWN GAP), rangeScale geometry: converted r
   env.cleanup(el);
 });
 
-// ==== Review fix: METRIC_TYPE_BY_UNIT is now derived atomically from
+// ==== METRIC_TYPE_BY_UNIT is derived atomically from
 // METRIC_DEFINITIONS.unitProfiles[*].units instead of a separately
 // hand-maintained table — the two tables had drifted: the word/bare-letter
 // aliases ("c", "celsius", "f", "fahrenheit") were registered in the
@@ -391,7 +373,7 @@ test("review fix (closes the former KNOWN GAP), rangeScale geometry: converted r
 // METRIC_TYPE_BY_UNIT, so an entity with no device_class and one of these
 // unit strings alone could not even be recognized as temperature at all. ====
 
-test("review fix: 'c'/'celsius'/'f'/'fahrenheit' unit aliases (previously missing from METRIC_TYPE_BY_UNIT) are now recognized via unit alone, no device_class needed", () => {
+test("temperature word and letter aliases resolve through METRIC_TYPE_BY_UNIT without device_class", () => {
   for (const [unit, expectedProfileKey] of [["c", "celsius"], ["celsius", "celsius"], ["f", "fahrenheit"], ["fahrenheit", "fahrenheit"]]) {
     const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { unit_of_measurement: unit }) });
     const el = env.createCard({ entity: "sensor.avg" }, hass);

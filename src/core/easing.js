@@ -1,9 +1,6 @@
-// Auto-slide easing: one shared definition for CSS and JS (AP-08, audit 17).
+// Auto-slide easing is shared by CSS motion and JavaScript accessibility timing.
 //
-// CSS and JS used to each hardcode "cubic-bezier(.45,0,.16,1)" separately (the
-// keyframe animation, the manual-settle transition, the swipe-settle
-// transition) while the accessibility flip calculation used a completely
-// unrelated number (the raw temporal midpoint, slideMs/2). A cubic-bezier
+// A cubic-bezier
 // easing's TIME axis and its EASED/spatial-progress axis are different curves,
 // so "50% of the time" and "50% of the visual motion" land at different
 // moments. The accessible view must follow whichever view is spatially
@@ -47,6 +44,5 @@ export function timeFractionForEasedProgress(easing, targetY) {
 export const SLIDE_EASING_CSS = `cubic-bezier(${SLIDE_EASING.x1},${SLIDE_EASING.y1},${SLIDE_EASING.x2},${SLIDE_EASING.y2})`;
 
 // Where the slide's SPATIAL midpoint (eased progress = 0.5) falls on the TIME
-// axis — ~0.35375 for cubic-bezier(.45,0,.16,1) (vs. 0.5 for the old, wrong
-// temporal-midpoint assumption). Computed once at module load.
+// axis — ~0.35375 for cubic-bezier(.45,0,.16,1). Computed once at module load.
 export const A11Y_FLIP_TIME_FRACTION = timeFractionForEasedProgress(SLIDE_EASING, 0.5);

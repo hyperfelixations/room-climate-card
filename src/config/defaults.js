@@ -13,6 +13,6 @@ export const DEFAULT_CONFIG = {
   hold_seconds: 0.5,
   tap_action: { action: "more-info" },
   hold_action: { action: "more-info" },
-  auto_slide: true, // AP-C1: automatic rotation between views
-  swipe: true, // AP-C1: manual horizontal drag gesture, independent of auto_slide
+  auto_slide: true,
+  swipe: true, // Manual swiping remains independent of automatic rotation.
 };

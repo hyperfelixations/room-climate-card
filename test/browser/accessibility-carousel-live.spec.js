@@ -1,10 +1,10 @@
 "use strict";
 
-// A11Y-01 (v2.16.0 audit fix) with a REAL CSS animation clock — the jsdom
+// A real CSS animation clock complements the jsdom
 // unit layer (accessibility-carousel-timing.test.js) verifies
 // accessibleViewIndexAt()'s math against hand-built timing objects, but
 // only Chromium can confirm the fix against an ACTUAL running
-// @keyframes rtc-track-slide animation: this reproduces the auditor's
+// @keyframes rtc-track-slide animation to reproduce the browser timing
 // reported 2->3->1 scenario (visible index cycling via the CSS animation
 // while aria-hidden/inert stayed frozen on whichever view was active at
 // the last discrete JS transition) and asserts the two now agree
@@ -12,7 +12,7 @@
 //
 // ── THREE CLOCKS ────────────────────────────────────────────────────────
 // This file compares quantities that do not share a clock, and sampling
-// them naively is what made an earlier version of it flaky. Measured, not
+// comparing them naively is flaky. Measured, not
 // assumed (full parallel suite, ~270 samples per run):
 //
 //   the model     reads Date.now(). Its phase tracks the running CSS

@@ -3,9 +3,7 @@
 // escapeHtml() is the card's only HTML-escaping function. Every interpolation
 // of entity names, room labels, units, titles, tooltips and ARIA text into a
 // template string goes through it; keeping exactly one implementation is what
-// makes that reviewable. (A tagged template that escapes automatically is a
-// deliberate later step, in its own security-focused round — it changes how
-// call sites are written, which is not part of a structural refactoring.)
+// makes the markup trust boundary reviewable.
 
 // Hoisted so the replace() callback doesn't allocate a fresh object per
 // matched character.

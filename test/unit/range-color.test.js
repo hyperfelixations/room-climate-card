@@ -1,6 +1,6 @@
 "use strict";
 
-// CORR-01 (v2.15.0 audit): the daily minimum/maximum cards must be colored
+// Daily minimum/maximum cards must be colored
 // from their own numeric value, never from the range_entity's own current
 // value_color/value_level attributes (which describe its *current* reading,
 // not the historical min/max being displayed) — otherwise both cards could

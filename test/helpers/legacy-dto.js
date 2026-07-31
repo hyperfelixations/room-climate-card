@@ -1,16 +1,13 @@
 "use strict";
 
-// FROZEN. The flat `data` object the card produced before the rendering layer consumed
-// the CardViewModel directly.
+// FROZEN. This test-only adapter projects the current CardViewModel into the flat DTO
+// captured by the three allowlisted characterization suites.
 //
-// This file used to live in src/presentation/view-model/ and was shipped in the bundle.
-// It is not any more: no production module reads the flat shape, and an architecture
-// test proves nothing under src/ can reach it. It survives here for exactly one reason —
-// the 32 committed DTO baselines in test/baseline/model/ are a Phase 0 oracle recorded
-// against the ORIGINAL monolithic card, and re-recording them would throw away the only
-// independent evidence that the whole pipeline still computes what it always computed.
+// No production module may read this shape. Re-recording the committed DTO baselines
+// would discard their independent evidence that the current pipeline preserves the
+// observable contract.
 //
-// It is therefore frozen in both senses:
+// It is frozen in both senses:
 //
 //   - nothing may be added to it. An extra field would be an untested contract, and the
 //     baselines would have to be re-recorded to accept it — which is precisely the thing
@@ -18,8 +15,6 @@
 //   - it is test-only. It is not importable from src/, not reachable from the
 //     composition root, and not present in dist/room-climate-card.js.
 //
-// When the baselines are eventually retired, this file goes with them.
-
 // The three marker positions of the daily-range axis default to 0 when that view is
 // not active, because the flat shape exposes them unconditionally.
 const NO_RANGE_SCALE_POSITION = 0;
@@ -102,9 +97,7 @@ function toLegacyData(viewModel) {
   };
 }
 
-// Builds the flat object from a rendered card, through the same view model production
-// renders from. The card no longer has a _computeData() of its own; this is what the
-// element-level tests written against the flat shape call instead.
+// Builds the frozen flat oracle from the same current view model that production renders.
 function computeLegacyData(element) {
   return toLegacyData(element._computeViewModel());
 }

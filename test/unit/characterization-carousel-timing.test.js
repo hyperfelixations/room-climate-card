@@ -1,6 +1,6 @@
 "use strict";
 
-// Phase 0 characterization: the wall-clock carousel timing, verbatim.
+// Characterization of wall-clock carousel timing, verbatim.
 //
 // The auto-slide is driven by a CSS keyframe animation whose phase is derived
 // from Date.now(), so that several card instances on one dashboard stay in
@@ -9,11 +9,10 @@
 // swiped card may rejoin the shared phase — is pure arithmetic over the same
 // timing object.
 //
-// That arithmetic is the part of the card most likely to be silently altered
-// by an extraction into a controller module (an off-by-one segment, a lost
-// modulo, the eased-vs-temporal midpoint confusion that AP-08 already had to
-// fix once). The existing accessibility-carousel-timing.test.js asserts the
-// INTENDED rules; these baselines additionally pin the actual numbers, and
+// Off-by-one segments, a lost modulo, or confusion between eased spatial and
+// temporal midpoints can silently desynchronize these consumers. The focused
+// accessibility tests assert the intended rules; these baselines additionally
+// pin the actual numbers, and
 // the invariant tests below cross-check the two independent implementations
 // of "when does the accessible view change" against each other.
 //
@@ -24,10 +23,7 @@ const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { st } = require("../helpers/characterization-scenarios.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owning module of each timing contract explicit.
 let carouselTiming, easingMath;
 
 const C = { device_class: "temperature", unit_of_measurement: "°C" };

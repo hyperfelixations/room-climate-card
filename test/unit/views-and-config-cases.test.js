@@ -1,9 +1,7 @@
 "use strict";
 
-// Configuration cases A/B/C/D (+ rangeScale) from "Ansichten und
-// Konfigurationsfaelle" in the dev doc, and the generic data.views.keys vs
-// this._views comparison formula from _render() (ARCH-01, audit section
-// 9.5: "View-Struktur generisch vergleichen").
+// Representative minimal, rooms, range and full configurations exercise the
+// generic data.views.keys versus this._views comparison in _render().
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -64,7 +62,7 @@ test("Case D (entity + rooms + range_entity): views = [range, scale, extremes]",
   env.cleanup(el);
 });
 
-test("Case D + views: range_scale enabled: views = [range, range_scale, scale, extremes], the exact audit counterexample config", () => {
+test("full config with range_scale resolves range, range_scale, scale, extremes", () => {
   const el = env.createCard(
     {
       entity: "sensor.avg",
@@ -105,12 +103,10 @@ test("hasRoomsView requires >= 2 valid room values, not just >= 2 configured roo
   env.cleanup(el);
 });
 
-// ARCH-01, audit section 9.5: _render()'s generic views-array comparison —
-// replaces the old hasRange/hasRangeScale boolean-flag comparison, so it
+// _render() compares the complete views array, so it
 // must catch length changes AND pure reordering at equal length. The
-// comparison itself lives inline in _render(), not as a standalone method
-// (see "Rendering und Robustheit" in the dev doc); replicated here from the
-// exact source expression to test the algorithm in isolation.
+// comparison itself lives inline in _render(), so this helper mirrors the source
+// expression to test the algorithm in isolation.
 function viewsChanged(currentViews, dataViews, dataEmpty) {
   return dataEmpty ? false : currentViews.length !== dataViews.length || dataViews.some((key, i) => key !== currentViews[i]);
 }

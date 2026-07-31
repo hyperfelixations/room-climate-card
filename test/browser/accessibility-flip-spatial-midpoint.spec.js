@@ -1,6 +1,6 @@
 "use strict";
 
-// AP-08 (Audit 17/27.2): the accessible view (aria-hidden/inert) must match
+// The accessible view (aria-hidden/inert) must match
 // the SPATIALLY dominant view throughout a slide transition, not the
 // temporal midpoint. cubic-bezier(.45,0,.16,1) (SLIDE_EASING in
 // room-climate-card.js) reaches 50% eased/spatial progress at ~35.375% of
@@ -94,7 +94,7 @@ test.describe("A11Y-01 spatial midpoint: accessible view follows the real render
 
   // Segment 0 (position 0 -> 1) spans phaseMs [1000, 1800). Spatial flip at
   // 1283ms (1000 + 800*0.35375, see A11Y_FLIP_TIME_FRACTION in
-  // room-climate-card.js). The old (pre-AP-08) code flipped at the
+  // room-climate-card.js). A temporal-midpoint flip would occur at the
   // temporal midpoint, 1400ms (1000 + 800/2), instead — the middle sample
   // point (1340ms, i.e. 42.5% into the slide) deliberately sits between
   // the two flip points: the real, spatially-driven transform is already

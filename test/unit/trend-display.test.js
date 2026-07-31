@@ -12,7 +12,7 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
 let env;

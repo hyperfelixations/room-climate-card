@@ -1,8 +1,7 @@
 "use strict";
 
-// AP-C3 (audit 23.2): five new view-specific options built on the existing
-// optionsSchema/resolveViewOptions() Baukasten (Teil 2 of an earlier
-// round) -- scale.footer, scale.markers, range_scale.footer, range.
+// View-specific options use the shared optionsSchema/resolveViewOptions()
+// contract: scale.footer, scale.markers, range_scale.footer, range.
 // show_time, extremes.show_value. Same pattern as
 // scale-band-visibility.test.js: schema whitelist/validation, resolved
 // data.views.options, rendered HTML presence/absence, and an explicit
@@ -14,13 +13,10 @@ const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owner of each view-option contract explicit.
 let numbers;
 
 let env;

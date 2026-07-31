@@ -1,6 +1,6 @@
 import { CLASSIFICATION_PROFILE_REGISTRY } from "../classification/registry.js";
 
-// MetricDefinition / UnitProfile / QuantityKind registry (AP-01).
+// MetricDefinition / UnitProfile / QuantityKind registry.
 //
 // One entry per measurement kind. Each owns its canonical unit, the key of
 // the UnitProfile that IS that canonical unit, references to the canonical
@@ -10,8 +10,7 @@ import { CLASSIFICATION_PROFILE_REGISTRY } from "../classification/registry.js";
 // (METRIC_META.unitFallback), not the other way round: the canonical unit is
 // a measurement fact, and there must be exactly one place that states it.
 
-// AP-01 began this generic, extensible foundation for measurement kinds.
-// It is now live for all four supported metrics: temperature provides
+// All four supported metrics use the same registry contract: temperature provides
 // Celsius/Fahrenheit/Kelvin profiles, while humidity/co2/pm25 each use an
 // identity UnitProfile so unit validation and conversion follow the same
 // atomic path everywhere. _resolveMetricContext() canonicalizes values;
@@ -39,8 +38,8 @@ export const METRIC_DEFINITIONS = {
   temperature: {
     metricKind: "temperature",
     canonicalUnit: "°C",
-    // Which unitProfiles key IS the canonical unit — lets AP-02's
-    // measurement pipeline look this up generically instead of
+    // Which unitProfiles key IS the canonical unit — lets the measurement
+    // pipeline look this up generically instead of
     // hard-coding the string "celsius" at every call site.
     canonicalProfileKey: "celsius",
     canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.tiers,
@@ -69,18 +68,16 @@ export const METRIC_DEFINITIONS = {
         deltaToCanonical: (v) => (v * 5) / 9,
         deltaFromCanonical: (v) => (v * 9) / 5,
         baseDisplayStep: 2,
-        // Product rule (audit 9.3): Fahrenheit classification/comfort/
+        // Fahrenheit classification/comfort/
         // optimal/base-scale boundaries are always whole numbers, so a
         // displayed boundary and the boundary actually used for
         // classification never disagree.
         thresholdRounding: (v) => Math.round(v),
-        // AP-03 (audit 9.6): the dynamic scale's rounding step depends on
+        // The dynamic scale's rounding step depends on
         // how wide the actually-displayed span is — a narrow span rounds
         // to a fine 2°F step, a wide one to a coarse 10°F step, so the
         // axis never ends up with an absurdly fine or coarse grid.
-        // Celsius/Kelvin omit this field entirely and keep the fixed
-        // baseDisplayStep (1) — "Für Celsius und Kelvin bleibt der
-        // Basisschritt 1" (audit 9.6).
+        // Celsius/Kelvin omit this field and keep a fixed baseDisplayStep of 1.
         dynamicDisplaySteps: [
           { maxSpan: 20, step: 2 },
           { maxSpan: 40, step: 5 },
@@ -101,22 +98,9 @@ export const METRIC_DEFINITIONS = {
       },
     },
   },
-  // Review fix (post-AP-01..03): humidity/co2/pm25 each get a trivial,
-  // single-entry "identity" UnitProfile instead of having no
-  // MetricDefinition at all. Reason: _buildEntityModel() previously had no
-  // way to tell "this reading's unit doesn't even match its own kind" for
-  // these three modes (no registry to check against), only for
-  // temperature — so a stray unit on e.g. a co2 entity was NEVER caught.
-  // Giving every kind exactly one MetricDefinition entry (celsius-style
-  // "one profile, canonicalProfileKey points to it") lets
-  // _buildEntityModel()/_resolveUnitProfileKey() apply the exact same
-  // atomic "resolve metric kind and UnitProfile from the SAME registry, no
-  // canonical fallback for an unresolvable unit" policy uniformly to all
-  // four kinds. Since each has only one profile whose key always equals
-  // canonicalProfileKey, every existing "does the resolved profile differ
-  // from canonical?" short-circuit (_scaleConfigFor(), etc.) still always
-  // takes the "no" branch for these three — zero behavior change to
-  // classification/scale/display, purely additive validation.
+  // Humidity, CO2 and PM2.5 use single-entry identity UnitProfiles so every
+  // metric atomically resolves and validates its unit through the same registry.
+  // An unresolvable unit never falls back to the canonical profile.
   humidity: {
     metricKind: "humidity",
     canonicalUnit: "%",
@@ -180,7 +164,7 @@ export const METRIC_DEFINITIONS = {
       },
     },
   },
-  // Extension point (audit section 10.1): a future kind is added here as
+  // A future metric kind is added here as
   // its own key, e.g.:
   //   absolute_humidity: {
   //     metricKind: "absolute_humidity",
@@ -189,8 +173,6 @@ export const METRIC_DEFINITIONS = {
   //     canonicalComfortBand: {...}, canonicalOptimalBand: {...}, canonicalBaseScaleBand: {...},
   //     unitProfiles: { gram_per_m3: {...}, milligram_per_m3: {...} },
   //   }
-  // The conversion/derivation functions below never branch on a specific
-  // metricKind — see metric-definitions.test.js's "extension point" case,
-  // which exercises them against a synthetic profile that is never
-  // registered here at all.
+  // Conversion and derivation never branch on a specific metricKind; tests
+  // exercise them with a synthetic, unregistered profile.
 };

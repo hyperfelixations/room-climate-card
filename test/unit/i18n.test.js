@@ -1,7 +1,6 @@
 "use strict";
 
-// I18N-01 (v2.15.0 audit): manual `language` config override, plus the
-// "Translation-Key-Paritaet aller Sprachen" audit checklist item — every
+// Manual `language` config override and translation-key parity: every
 // TRANSLATIONS language block must carry exactly the same key set as the
 // "en" reference block. TRANSLATIONS itself is scoped inside the file's own
 // IIFE closure (not exported), so key parity is verified the same way a
@@ -24,13 +23,10 @@ const { createTestEnvironment, CARD_SOURCE_PATH } = require("../helpers/load-car
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../helpers/card-internals.js");
 
-// The compositions the element used to expose only for tests (see the helper).
+// Load cross-module compositions through the dedicated test helper.
 let internals;
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Import the owning module directly so each test names its actual subject.
 let access;
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");

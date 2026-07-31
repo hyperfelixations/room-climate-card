@@ -153,9 +153,8 @@ test("disconnect while a resume timer is pending clears both, and reconnect re-a
 //                    displaying a value Home Assistant superseded before the removal,
 //                    for as long as it takes some unrelated update to arrive.
 //
-// The tests below assert the VISIBLE value after a reconnect, with no further hass
-// assignment and no `_render()` call, because those two are exactly what an earlier
-// version of this file used to paper over the gap with.
+// The tests below assert the visible value after reconnect with no further hass
+// assignment or explicit `_render()` call; reconnect itself must settle the debt.
 
 test("a hass update deferred by a drag becomes visible on reconnect, with no further update", () => {
   const el = threeViewCard();
@@ -279,7 +278,7 @@ test("a card that fell into the empty state mid-drag shows the empty state on re
   env.cleanup(el);
 });
 
-test("a setConfig during the disconnect drops the debt, because it renders on its own", () => {
+test("a successful setConfig during the disconnect settles the debt by rendering", () => {
   const el = threeViewCard();
   el._handlePointerDown(pointerDown(el));
   el._handlePointerMove(pointerMove(1, -60));
@@ -427,8 +426,8 @@ test("the render pipeline is not left waiting on a pending flag after a reconnec
 
   el.remove();
   env.document.body.appendChild(el);
-  // Whatever the disconnect decided to do with the deferred render, the card must not
-  // still believe one is queued behind a gesture that no longer exists.
+  // Reconnect must settle the deferred render and end the gesture, leaving no update
+  // queued behind an interaction that no longer exists.
   assert.equal(el._interaction.isInteracting(), false);
   el._render(false);
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);

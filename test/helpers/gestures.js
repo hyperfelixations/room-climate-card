@@ -2,9 +2,8 @@
 
 // Drives real gestures through the element's own pointer handlers.
 //
-// These tests used to assign a hand-built pointer object straight onto the element,
-// which worked only because the element exposed a writable window onto the interaction
-// runtime's private state. That window is gone: the runtime owns the gesture, and the
+// These helpers drive handlers instead of assigning the interaction runtime's private
+// state. The runtime owns the gesture, and the
 // only way in is the same one a browser uses. The helpers below are that way in.
 //
 // The upside is not only encapsulation. A hand-built pointer could describe a gesture

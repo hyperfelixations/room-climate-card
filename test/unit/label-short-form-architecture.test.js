@@ -1,10 +1,6 @@
 "use strict";
 
-// Long-/short-form label architecture (post-2.27.0 review): the language
-// patch developer permanently shortened Polish scale.optimalLabel ("opt.")
-// to fix a real 320px overlap, and an earlier round had already done the
-// same to French rangeScale.currentLabel ("act."). The user does not want
-// content permanently shortened -- instead every collision-prone label gets
+// Long-/short-form label architecture: every collision-prone label gets
 // a canonical long form plus a short fallback in TRANSLATIONS, and the card
 // itself picks between them at measure time (see _resolveLabelForm(),
 // _resolveOptimalLabelPosition(), _resolveRangeScaleLabels() in
@@ -20,10 +16,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owner of each label-selection contract explicit.
 let labelForm;
 
 let env;
@@ -83,7 +76,7 @@ test("_resolveLabelForm: reverts a previously-shortened element back to the long
   labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
   assert.equal(node.textContent, "act.");
   // A later resolve pass (e.g. the card grew wider) must not be stuck on
-  // the short form just because a previous pass left it there -- every
+// the short form just because an earlier pass left it there -- every
   // call re-derives fresh from the long form, exactly like
   // _resolveOptimalLabelPosition()'s own idempotency requirement.
   labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);

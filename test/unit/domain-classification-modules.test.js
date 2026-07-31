@@ -3,8 +3,8 @@
 // Direct unit tests for src/domain/classification/*.
 //
 // The profile values are product decisions: which reading counts as optimal,
-// where "too humid" begins, what a fridge may drift to. Phase 2B moved them
-// into one file per profile, so these tests pin the DATA — thresholds,
+// where "too humid" begins and what a fridge may drift to. These tests pin
+// each profile's data — thresholds,
 // ordering, zones, bands, validity rules and icon tiers — and sweep every tier
 // boundary from just below, exactly on, and just above.
 //

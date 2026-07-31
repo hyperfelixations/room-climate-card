@@ -2,13 +2,11 @@
 
 // Direct tests for the interaction and action controllers.
 //
-// The gestures used to be reachable only through the custom element, which meant every
-// question about a threshold ("is a 9-pixel drag a swipe?") needed a rendered card, a
-// hass object and a configuration. Here the maths is a pure function of numbers and the
-// runtime takes a fake carousel, so a failure names the rule rather than the setup.
+// Gesture maths is a pure function of numbers and the runtime takes a fake carousel,
+// so a failure names the threshold rule rather than rendered-card setup.
 //
 // The thresholds asserted below are the card's feel. They are pinned deliberately: they
-// must survive every future refactoring unchanged.
+// must remain stable across implementation changes.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

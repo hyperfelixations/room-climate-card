@@ -3,7 +3,7 @@
 // Direct unit tests for src/core/* — the layer with no project-internal
 // dependencies.
 //
-// Until Phase 2A these primitives could only be reached through the custom
+// These primitives are tested through their owning modules rather than the custom
 // element (numbers.parseNumericState(), color.rgba(), ...), which meant every assertion about
 // them also dragged in jsdom, a shadow root and a full config/hass pair. They
 // are pure functions and are tested as such here: no DOM, no card instance,
@@ -218,7 +218,7 @@ test("timeFractionForEasedProgress() inverts the curve monotonically", () => {
   }
 });
 
-test("the spatial midpoint is far earlier than the temporal midpoint (the AP-08 fix)", () => {
+test("the spatial midpoint is far earlier than the temporal midpoint", () => {
   // The whole point of inverting the curve: at 50% of the visual motion only
   // ~35.4% of the slide's time has passed. Using 0.5 here was the original
   // accessibility bug.

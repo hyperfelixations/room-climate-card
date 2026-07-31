@@ -1,34 +1,19 @@
 "use strict";
 
-// Regression fix for a real screenshot bug: AP-10's .rtc-room-value-num
-// ellipsis rule was over-broad and silently truncated completely normal
-// room values (7 temperature/humidity chips at a typical phone width, e.g.
-// "24,7 °C" rendering as "2...°C"). See the updated describe block in
-// narrow-width-overflow.spec.js and this round's Umsetzungsnotiz in
-// "readme climate card.md" for the full writeup.
+// Room values must remain legible at common phone widths; ellipsis must not
+// truncate normal values such as "24,7 °C" to "2...°C". Related narrow-width
+// containment is covered by narrow-width-overflow.spec.js.
 //
-// The fix has two parts, both exercised here:
-//   A. .rtc-room-value-num's ellipsis rule was reverted entirely -- room
-//      values (number+unit) are non-truncatable information in automatic
-//      mode. "Not enough space" is solved by an extra row (Part B), not by
-//      shrinking text.
-//   B. Automatic (no room_columns/room_rows override) max chips per row is
-//      now metric-specific: 7 for temperature/humidity, 5 for CO2/PM2.5
-//      (see METRIC_META.autoRoomColumns / _autoRoomColumnsFor() /
-//      _roomGridRows()'s autoMaxColumns parameter). Exceeding the limit
-//      still distributes evenly across the required rows.
-//   D. An explicitly two-Unicode-uppercase-letter room short code (WZ, WC,
-//      AZ, SZ, FL, BA, KÜ, ...) is now guaranteed to render fully -- see
-//      .rtc-room-short[data-short-guaranteed] and TWO_UPPER_LETTER_RE.
-//      Longer labels (e.g. "WOHNZ") keep the normal ellipsis fallback.
-//   E. Average/main values were never affected -- covered here purely as a
-//      regression guard.
+// Room numbers and units are non-truncatable in automatic layout. Automatic
+// rows allow at most 7 temperature/humidity chips or 5 CO2/PM2.5 chips before
+// distributing chips evenly across additional rows. Explicit two-uppercase-
+// letter short codes remain fully visible; longer labels retain ellipsis.
+// Average values are covered separately as a regression guard.
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
 
-// The widths mandated by the task spec: common phone viewports plus the
-// 460px container-query breakpoint.
+// Common phone viewports plus the 460px container-query breakpoint.
 const WIDTHS = [360, 375, 390, 393, 412, 460];
 // German locale matches the reported regression (comma decimals, "."
 // thousands grouping, e.g. "24,7 °C" / "2.000 ppm") -- the exact values in
@@ -330,7 +315,7 @@ test("room short codes: a room with no configured short (long derived name) is N
   await assertEllipsized(shortEl, 360, "derived long room label");
 });
 
-// ==== Average/main value regression (Teil E) ====
+// ==== Average/main value regression ====
 
 test("average value never ellipsizes at any of the mandated widths (regression guard, unrelated to this fix)", async ({ page }) => {
   await gotoHarness(page);

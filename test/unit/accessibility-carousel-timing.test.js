@@ -1,14 +1,11 @@
 "use strict";
 
-// AP-08 (audit section 17, A11Y-01 follow-up): the previous version of this
-// file asserted the accessibility flip happens exactly at the slide's
-// TEMPORAL midpoint (holdMs + slideMs/2) -- that assumption was itself the
-// bug the audit found: the visual transition uses
-// cubic-bezier(.45,0,.16,1), under which the SPATIAL/eased progress reaches
+// The visual transition uses cubic-bezier(.45,0,.16,1), under which the
+// SPATIAL/eased progress reaches
 // 50% at only ~35.375% of the slide's time (at 50% time, spatial progress
 // is already ~78.6%). The accessible view must follow whichever view is
 // spatially/visually dominant, not the raw clock -- so this file (and the
-// production flip calculation it tests) is rewritten around the EASED
+// production flip calculation it tests) therefore uses the EASED
 // midpoint, computed by numerically inverting the same easing curve CSS
 // uses (_timeFractionForEasedProgress()/SLIDE_EASING, see room-climate-card.js).
 //
@@ -21,10 +18,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Import the owning modules directly so each test names its actual subject.
 let carouselTiming, easingMath;
 
 let env;
@@ -40,7 +34,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// ---- Bezier-Inversion (audit 17.2, mandatory matrix item 1) ----
+// ---- Bezier inversion ----
 
 test("_timeFractionForEasedProgress: SLIDE_EASING (cubic-bezier(.45,0,.16,1)) inverts to ~0.35375 at Y=0.5", () => {
   const easing = { x1: 0.45, y1: 0, x2: 0.16, y2: 1 };
@@ -76,11 +70,8 @@ function easedProgressForTimeFraction(easing, t) {
 const SLIDE_EASING = { x1: 0.45, y1: 0, x2: 0.16, y2: 1 };
 const timing2 = { positions: [0, 1], holdMs: 1000, slideMs: 800, segMs: 1800, cycleMs: 3600 };
 
-// ---- Samples at 0/5/10/.../100% of a slide transition (audit 17.2,
-// mandatory matrix item 2): before the SPATIAL midpoint the outgoing view
-// must stay accessible, from the spatial midpoint on the incoming view
-// must be accessible -- independent of the old (wrong) temporal-midpoint
-// assumption. ----
+// Samples across a slide transition enforce the spatial rule: the outgoing view
+// remains accessible before the eased midpoint, then the incoming view takes over.
 
 test("_accessibleViewIndexAt: samples across a full slide transition match the independently-computed spatial/eased progress at every 5% step", () => {
   for (let pct = 0; pct <= 100; pct += 5) {
@@ -123,8 +114,8 @@ test("_msUntilNextAccessibilityFlip: complements _accessibleViewIndexAt() -- wai
   }
 });
 
-// ---- Forward, backward, and wrap segments (audit 17.2, mandatory matrix
-// item 3): a 3-view ping-pong cycle (positions=[0,1,2,1]) exercises all
+// ---- Forward, backward, and wrap segments: a 3-view ping-pong cycle
+// (positions=[0,1,2,1]) exercises all
 // three segment kinds -- 0->1 and 1->2 are forward, 2->1 is the backward/
 // interior segment, 1->0 (closing the cycle) is the wrap segment. ----
 
@@ -155,7 +146,7 @@ test("_accessibleViewIndexAt: 3-view ping-pong -- wrap segment back to positions
   assert.equal(carouselTiming.accessibleViewIndexAt(7199, timing3), 0, "one ms before the cycle itself wraps");
 });
 
-// ---- N = 2 to 10 (audit 17.2, mandatory matrix item 4) ----
+// ---- N = 2 to 10 ----
 
 function pingPongPositions(n) {
   // Mirrors _holdSequence()'s formula (room-climate-card.js) independently,
@@ -200,8 +191,7 @@ test("_currentVisualViewIndex(): a bare element with no track falls back to this
   assert.equal(bare._currentVisualViewIndex(), 0);
 });
 
-// ---- prefers-reduced-motion produces no timer (audit 17.2, mandatory
-// matrix item 5) -- previously untested at the unit level anywhere in this
+// ---- prefers-reduced-motion produces no timer; this
 // suite (only covered, more loosely, by a browser test). ----
 
 test("prefers-reduced-motion: a freshly rendered >=2-view card arms no _a11ySyncTimer", () => {

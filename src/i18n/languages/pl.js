@@ -79,16 +79,9 @@ export const pl = {
 
   "scale.comfortLabel": (v) => `${v.range} komfort`,
   "scale.comfortLabelShort": (v) => `${v.range} komfort`,
-  // Review fix (post-2.27.0): "opt." used to be the PRIMARY value here
-  // (a permanent truncation added to fix a real 320px Chromium overlap
-  // on the "optimal" band label). Restored to the full adjective,
-  // consistent with the "${range} <descriptor>" pattern every other
-  // language uses (e.g. de "Optimal", ru "оптимум") and with the
-  // existing level.optimal ("Optymalnie") translation; "opt." now only
-  // serves as the *Short fallback the label-short-form resolver
-  // substitutes in when the long form genuinely doesn't fit (see
-  // _resolveOptimalLabelPosition()) -- the exact narrow-width case this
-  // abbreviation was originally introduced for.
+  // Keep the full adjective as the primary value, consistent with the
+  // "${range} <descriptor>" pattern. The layout resolver substitutes the
+  // short form only when the rendered width requires it.
   "scale.optimalLabel": (v) => `${v.range} optymalny`,
   "scale.optimalLabelShort": (v) => `${v.range} opt.`,
 

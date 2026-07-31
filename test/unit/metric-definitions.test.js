@@ -1,11 +1,9 @@
 "use strict";
 
-// AP-01 (v2.17.0 consolidated audit, sections 4, 9.2-9.5, 10): a generic
-// MetricDefinition/UnitProfile/QuantityKind registry — the foundation for
+// The generic MetricDefinition/UnitProfile/QuantityKind registry supports
 // native Fahrenheit/Kelvin support and future metric kinds (e.g. absolute
 // humidity).
 //
-// The registry was purely additive when it was introduced. It is not any more:
 // METRIC_DEFINITIONS, its unit profiles and its derived thresholds are what the
 // measurement context, the domain model and both scale views run on. These tests
 // therefore import domain/metrics/access.js, domain/units/conversion.js and
@@ -18,17 +16,14 @@
 // are wired directly to the indoor temperature profile's tiers (not a second,
 // separately-maintained Celsius copy that could drift), and that the
 // generated Fahrenheit thresholds are integers deterministically derived
-// from that single source (audit 9.3): 16/18/19/20/21/23/24/25/26/28 °C ->
+// from that single source: 16/18/19/20/21/23/24/25/26/28 °C ->
 // 61/64/66/68/70/73/75/77/79/82 °F exactly.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 
-// The modules under test, imported directly. These used to be reached through
-// thin delegating methods on the custom element; the element no longer carries
-// them, and naming the real module is what makes each test say where its subject
-// actually lives.
+// Direct imports make the owner of each unit and metric contract explicit.
 let access, conversion;
 
 let env;
@@ -158,7 +153,7 @@ test("levelKey/color are carried through unchanged for every generated Fahrenhei
   }
 });
 
-// ---- Fahrenheit comfort/optimal/base-scale bands (audit 9.3's verbindliche Bereiche) ----
+// ---- Fahrenheit comfort, optimal and base-scale bands ----
 
 test("Fahrenheit base scale is exactly 66-77 °F", () => {
   const band = access.deriveBandForProfile("temperature", "fahrenheit", "baseScale");

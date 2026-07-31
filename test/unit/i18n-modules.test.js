@@ -3,8 +3,7 @@
 // Direct unit tests for src/i18n/* — the translation subsystem, tested
 // without a card instance.
 //
-// Before Phase 2A none of this was reachable except through the element:
-// TRANSLATIONS lived inside the file's IIFE with no exports, so key parity
+// These contracts are tested through their owning modules; key parity
 // could only be observed by spying on console.warn during script load (see
 // i18n.test.js, which keeps doing exactly that as an end-to-end check of the
 // built artifact). These tests assert the same contracts against the modules

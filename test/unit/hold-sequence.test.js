@@ -1,11 +1,9 @@
 "use strict";
 
-// ARCH-01 (v2.15.0 audit, section "ARCH-01"): _holdSequence() must be a
+// _holdSequence() must be a
 // pure linear ping-pong over the view count — 0,1,...,N-1,N-2,...,1 — with
 // every transition (including the cycle wrap back to 0) moving exactly one
-// position. The pre-2.16.0 anchor/slot formula produced non-adjacent jumps
-// (documented counterexample: 4 views -> 2,3,2,0,2,1, the 2->0 step skips
-// index 1). Covers audit checklist item "pingPongIndices(N) fuer N=0..10".
+// position, including the cycle wrap back to 0.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

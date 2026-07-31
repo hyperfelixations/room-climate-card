@@ -1,7 +1,6 @@
 // Who decides HOW the card is rendered, and what "already rendered" means.
 //
-// Three questions used to be answered by seven fields scattered across the custom
-// element next to the configuration, the hass object and the DOM handles:
+// Three render questions form one transaction here:
 //
 //   is a render needed at all?          the data signature
 //   can it be a patch, or must the      the structure signature and the
@@ -140,12 +139,9 @@ export function createRenderController({
     get hasRendered() {
       return rendered;
     },
-    // Whether an update has been received but not yet shown. Only ever set by a
-    // deferral and only ever cleared by a render that completed, so there is no way to
-    // forget an update by hand — which is exactly how one used to be lost across a
-    // disconnect, where the debt was dropped because the GESTURE that caused it was
-    // gone. The gesture and the data are two different obligations: the first must not
-    // survive a disconnect, the second must.
+    // Whether an update has been received but not yet shown. Only a deferral sets this
+    // flag and only a completed render clears it. Gesture state must not survive a
+    // disconnect, but the independent obligation to render newer data must.
     get isRenderPending() {
       return renderPending;
     },

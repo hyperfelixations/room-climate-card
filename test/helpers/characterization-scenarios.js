@@ -1,10 +1,10 @@
 "use strict";
 
-// The scenario catalog behind the Phase 0 characterization baselines (see
+// The scenario catalog behind the characterization baselines (see
 // characterization.js for the harness and the rationale).
 //
 // Every entry is a fully deterministic {config, states, language} triple. The
-// catalog deliberately spans the axes that the later source split touches, so
+// catalog deliberately spans the card's major input and presentation axes, so
 // a regression in any one of them shows up as a baseline diff:
 //
 //   configuration cases   A (minimal) / B (rooms) / C (range) / D (full)

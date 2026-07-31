@@ -1,9 +1,7 @@
 // Prints a single digest over the whole characterization baseline set.
 //
-// During a refactoring the baselines must not move. The test suite already
-// enforces that per file; this gives one number to quote in a review, compare
-// against an earlier run, or hand to an independent checker — without having
-// to trust file timestamps, which prove nothing about content.
+// The test suite enforces each baseline separately; this provides one content
+// digest for comparing complete baseline sets without relying on timestamps.
 //
 // Recipe: files sorted by relative path, then for each file
 //   <relative path> NUL <file bytes> NUL
@@ -14,11 +12,8 @@
 //
 //   posix   forward slashes — the binding, platform-independent value from here
 //           on.
-//   native  this platform's separator — kept only so an anchor taken with it
-//           stays reproducible. On Windows that is what the 2026-07-29
-//           independent review recorded
-//           (9c56d557422e30176a7c8ee2c2150247b10579ce2ab00488df18c2c89fd3cdf2);
-//           on other platforms it is identical to posix.
+//   native  this platform's separator, retained for platform-local comparisons;
+//           on POSIX platforms it is identical to posix.
 
 import crypto from "node:crypto";
 import fs from "node:fs";

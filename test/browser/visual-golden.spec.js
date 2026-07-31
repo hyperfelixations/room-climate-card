@@ -1,8 +1,8 @@
 "use strict";
 
-// Visual golden tests (v2.15.0 audit checklist: "Visuelle Golden Tests" —
-// desktop/mobile widths, light/dark, all 4 modes, empty state, 1-4 views,
-// 11 languages, RangeScale collisions). Uses Playwright's built-in
+// Visual golden tests cover desktop/mobile widths, light/dark, all four modes,
+// empty state, 1-4 views, supported languages and RangeScale collisions.
+// Uses Playwright's built-in
 // toHaveScreenshot(), which on the FIRST run writes baseline PNGs into
 // test/browser/visual-golden.spec.js-snapshots/ (committed alongside the
 // test as the reference) and on every subsequent run pixel-diffs against
@@ -154,7 +154,7 @@ test.describe("visual golden: 1/2/3/4 views", () => {
     await shot(page, cardId, "views-3.png");
   });
 
-  test("4 views (avg + range + rangeScale + rooms) — the ARCH-01 audit counterexample configuration", async ({ page }) => {
+  test("4 views (avg + range + rangeScale + rooms)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
       "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -222,14 +222,13 @@ test("visual golden: German (longer strings than English)", async ({ page }) => 
   await shot(page, cardId, "german.png");
 });
 
-test.describe("visual golden: long-/short-form label architecture (post-2.27.0 review)", () => {
+test.describe("visual golden: long-/short-form label architecture", () => {
   // Polish scale.optimalLabel and French rangeScale.currentLabel were
   // permanently abbreviated to fix a real 320px overlap; both are now the
   // full word by default, with the abbreviation only substituted at
   // measure time when it genuinely doesn't fit (see _resolveLabelForm() in
   // room-climate-card.js). These pin the actual rendered pixels at exactly
-  // the width the original overlap was reported at, so the fix (and the
-  // architecture generally) can't silently regress.
+  // a narrow width so the layout contract cannot silently regress.
   test("Polish scale.optimalLabel at 320px (co2, the mode with a left-anchored optimal band)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
@@ -241,7 +240,7 @@ test.describe("visual golden: long-/short-form label architecture (post-2.27.0 r
     const card = page.locator(`#${cardId}`);
     await page.evaluate((id) => { document.getElementById(id).style.width = "320px"; }, cardId);
     await page.waitForTimeout(200);
-    // Functional assertion first (Rule 6): either the full "optymalny" or
+    // Functional assertion first: either the full "optymalny" or
     // its "opt." fallback is legitimately on screen, never neither/garbled.
     const text = await card.locator(".rtc-card").innerText();
     expect(text).toMatch(/optymalny|opt\./);
@@ -272,7 +271,7 @@ test.describe("visual golden: long-/short-form label architecture (post-2.27.0 r
   });
 });
 
-test.describe("visual golden: native Fahrenheit (AP-03, audit 9.7 'Golden-Screenshots für Fahrenheit bei normaler und schmaler Breite')", () => {
+test.describe("visual golden: native Fahrenheit at normal and narrow widths", () => {
   async function fahrenheitCard(page) {
     await gotoHarness(page);
     const states = {
@@ -283,10 +282,8 @@ test.describe("visual golden: native Fahrenheit (AP-03, audit 9.7 'Golden-Screen
     return createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
   }
 
-  // Rule 6: functional/textual assertions must pass BEFORE the golden
-  // snapshot is generated/committed — this proves the audit 9.1
-  // reproduction is actually fixed in the real rendered DOM (not just in
-  // the CardViewModel it renders from), not merely that pixels didn't change.
+  // Functional assertions precede the snapshot so it validates real DOM
+  // semantics as well as pixel stability.
   async function assertNativeFahrenheit(page, cardId) {
     const text = await page.locator(`#${cardId} .rtc-card`).innerText();
     expect(text).toContain("72");
@@ -406,10 +403,9 @@ test("visual golden: PM2.5 rangeScale keeps the lifted min label fully painted",
   await shot(page, cardId, "rangescale-pm25-min-upper.png", 393);
 });
 
-test.describe("visual golden: AP-05 null-view policy (collapse vs. localized hint)", () => {
-  // Rule 6: functional/DOM assertions must pass BEFORE the golden snapshot
-  // is generated/committed — see resolve-active-views.test.js's "AP-05
-  // null-view policy" tests for the same two cases at the DOM-assertion
+test.describe("visual golden: null-view policy (collapse vs. localized hint)", () => {
+  // Functional/DOM assertions precede the snapshot; resolve-active-views.test.js
+  // covers the same two cases at the DOM-assertion
   // level; this only re-proves it visually.
   test("deliberately empty views: collapses the view area — no hint markup, no empty space artifact", async ({ page }) => {
     await gotoHarness(page);
@@ -509,7 +505,7 @@ test.describe("visual golden: view-customizer band visibility (Teil 2, show_comf
   });
 });
 
-test.describe("visual golden: AP-C3 view-specific options (scale.markers, range_scale.footer, range.show_time, extremes.show_value)", () => {
+test.describe("visual golden: view-specific options", () => {
   function apc3Fixture() {
     return {
       "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
