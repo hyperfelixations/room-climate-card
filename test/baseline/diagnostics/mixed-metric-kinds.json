@@ -1,3 +1,3 @@
 [
-  "Room Climate Card: rooms report incompatible metric kinds (temperature, humidity) and no usable primary entity is configured to arbitrate — no average is computed (see the empty-state hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity."
+  "Room Climate Card: rooms report incompatible metric kinds (temperature, humidity) and no usable primary entity is configured to arbitrate — no average is computed (see the no-data hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity."
 ]

@@ -1,48 +1,64 @@
-// The atomic MeasurementContext: metric kind, average source and display unit,
-// decided together from the same EntityModels.
+// The atomic MeasurementContext: metric kind, current headline source,
+// per-entity availability and display unit, decided from one set of EntityModels.
 //
-// The arbitration rules, in order:
-//
-//   0. CONFIGURATION FIRST. A card that names exactly one entity, and whose one entity
-//      is a room, has a headline that IS that sensor — not an average of anything. That
-//      is decided from the configuration alone (see source-topology.js), so a sensor
-//      dropping out changes the value the card can show and never what the card is.
-//   1. A USABLE primary (numeric + physically valid + resolvable unit + resolvable
-//      kind) alone determines the metric kind and is the average source. Rooms of
-//      the same kind participate; rooms of a different kind, or with an unusable
-//      unit, are excluded AND diagnosed — never silently dropped, never averaged
-//      in with an assumed unit.
-//   2. No usable primary -> only rooms that are themselves fully valid are
-//      candidates, so an unavailable room can never out-vote an available one.
-//      - No candidates: no average source. The metric kind still falls back
-//        sensibly (the primary's own kind if it has one, else temperature) purely
-//        so the empty state can show the right title and icon.
-//      - All candidates share one kind: room consensus, averaging their CANONICAL
-//        values so compatible units mix correctly.
-//      - Candidates span several kinds: NO majority vote. Kind and average source
-//        are null and the state is diagnosed as mixed_metric_kinds. That is a
-//        defined configuration state, not an arbitrary winner picked by count.
-//
-// Diagnostics are returned as data, in a stable order. This function does not log:
-// deduplicating a warning needs state, and state belongs to the caller.
-//
-// There is no cache in here either. The element memoizes by hass/config identity,
-// where those identities are actually observable.
+// Source topology is configuration-owned. Availability may change the value that
+// can be shown (including the established primary-to-room-consensus fallback),
+// but it never changes whether the configured card is primary-only, single-room,
+// primary-with-rooms or room-consensus.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
-import { buildEntityModel } from "./entity-model.js";
+import { AVAILABILITY, buildEntityModel } from "./entity-model.js";
 import { SOURCE_TOPOLOGY, resolveSourceTopology } from "./source-topology.js";
 
-// Used only for the title/icon fallback when nothing at all resolves.
+// Numeric consumers use this only after the no-data branch has returned. Display
+// identity is deliberately allowed to remain null so the shell can use the
+// untranslated product name when no configured source reveals a metric kind.
 const FALLBACK_METRIC_KIND = "temperature";
 
+function isUsable(model) {
+  return model.availability === AVAILABILITY.USABLE;
+}
+
+function identityMetricKind(primary, rooms) {
+  return primary.metricKind || rooms.find((room) => room.metricKind)?.metricKind || null;
+}
+
+// EntityModel owns intrinsic availability. MeasurementContext adds the one
+// card-wide fact EntityModel cannot know: whether a recognized entity kind is
+// compatible with the selected card kind.
+function withContextAvailability(model, metricKind, mixed) {
+  if (!model.entityId) return model;
+  if (
+    mixed &&
+    model.metricKind &&
+    [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  if (
+    metricKind &&
+    model.metricKind &&
+    model.metricKind !== metricKind &&
+    [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  // A sentinel or malformed value without enough metadata to identify its
+  // measurement kind cannot become a typed room placeholder.
+  if (
+    model.metricKind === null &&
+    [AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  return model;
+}
+
 export function resolveMeasurementContext(states, config) {
-  const primary = buildEntityModel(states, config, config?.entity, "primary");
-  const rooms = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
-  const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
-  // WHICH KIND OF CARD this is, decided from the configuration alone. Availability
-  // decides what value can be shown, never what the card is.
+  const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
+  const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
   const topology = resolveSourceTopology(config);
+  const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
   let metricKind;
   let averageSource;
@@ -55,67 +71,69 @@ export function resolveMeasurementContext(states, config) {
   let displayUnitProfileKey;
 
   if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
-    // The whole card refers to exactly one entity, and that entity is a room. The
-    // headline is not an average of anything — it IS that sensor — so it gets its own
-    // source kind rather than being smuggled through as a one-element consensus. Both
-    // spellings of this card reach here: "one room, no entity" and "entity that is the
-    // one configured room".
-    const room = rooms[0];
-    const roomUsable = room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null;
-    // The room's own kind names the card even when the room currently reports nothing,
-    // so an unavailable humidity sensor still titles the card "Humidity".
-    metricKind = room.metricKind || FALLBACK_METRIC_KIND;
+    const room = roomModels[0];
+    metricKind = room.metricKind || null;
     excludedRoomIds = [];
     diagnostics = [];
     consistent = true;
-    participatingRooms = roomUsable ? [room] : [];
-    averageSource = roomUsable
+    participatingRooms = isUsable(room) ? [room] : [];
+    averageSource = isUsable(room)
       ? { kind: "roomDirect", entityId: room.entityId, canonicalValue: room.canonicalValue, unitProfile: room.unitProfile }
       : null;
-    sourceEntity = roomUsable ? room.entityId : null;
-    sourceKind = roomUsable ? "roomDirect" : "default";
-    displayUnitProfileKey = roomUsable ? room.unitProfile : null;
-  } else if (primaryUsable) {
-    metricKind = primary.metricKind;
+    sourceEntity = room.entityId;
+    sourceKind = "roomDirect";
+    displayUnitProfileKey = isUsable(room) ? room.unitProfile : null;
+  } else if (isUsable(primaryModel)) {
+    metricKind = primaryModel.metricKind;
     participatingRooms = [];
     excludedRoomIds = [];
     diagnostics = [];
-    for (const room of rooms) {
-      if (!room.validNumeric || room.metricKind === null) continue;
+    for (const room of roomModels) {
+      if (room.metricKind === null) continue;
       if (room.metricKind !== metricKind) {
         excludedRoomIds.push(room.entityId);
         diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
         continue;
       }
-      if (!room.validUnit) {
+      if (room.availability === AVAILABILITY.INCOMPATIBLE_UNIT) {
         excludedRoomIds.push(room.entityId);
         diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
         continue;
       }
-      if (room.validPhysical) participatingRooms.push(room);
+      if (isUsable(room)) participatingRooms.push(room);
     }
-    averageSource = { kind: "primary", entityId: primary.entityId, canonicalValue: primary.canonicalValue, unitProfile: primary.unitProfile };
+    averageSource = {
+      kind: "primary",
+      entityId: primaryModel.entityId,
+      canonicalValue: primaryModel.canonicalValue,
+      unitProfile: primaryModel.unitProfile,
+    };
     consistent = true;
-    sourceEntity = primary.entityId;
+    sourceEntity = primaryModel.entityId;
     sourceKind = "primary";
-    displayUnitProfileKey = primary.unitProfile;
+    displayUnitProfileKey = primaryModel.unitProfile;
   } else {
-    const candidates = rooms.filter((room) => room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null);
-    // Rooms that are otherwise fine but whose own unit resolves to nothing are
-    // diagnosed in this branch too, so they never disappear from the candidate
-    // pool without a trace regardless of which sub-branch is reached.
-    const unusableUnitRooms = rooms.filter((room) => room.validNumeric && room.validPhysical && !room.validUnit && room.metricKind !== null);
+    const candidates = roomModels.filter(isUsable);
+    const unusableUnitRooms = roomModels.filter((room) => room.availability === AVAILABILITY.INCOMPATIBLE_UNIT);
     const unusableUnitIds = unusableUnitRooms.map((room) => room.entityId);
-    const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind }));
+    const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({
+      code: "unusable_unit",
+      entityId: room.entityId,
+      metricKind: room.metricKind,
+    }));
     participatingRooms = [];
     excludedRoomIds = unusableUnitIds;
+
     if (candidates.length === 0) {
-      metricKind = primary.metricKind || FALLBACK_METRIC_KIND;
+      metricKind = resolvedIdentityMetricKind;
       averageSource = null;
       diagnostics = unusableUnitDiagnostics;
-      consistent = true;
-      sourceEntity = primary.metricKind ? primary.entityId : null;
-      sourceKind = primary.metricKind ? "primary" : "default";
+      const knownKinds = new Set(roomModels.map((room) => room.metricKind).filter(Boolean));
+      if (primaryModel.metricKind) knownKinds.add(primaryModel.metricKind);
+      if (knownKinds.size > 1) diagnostics.unshift({ code: "mixed_metric_kinds", metricKinds: [...knownKinds] });
+      consistent = knownKinds.size <= 1;
+      sourceEntity = config?.entity || null;
+      sourceKind = config?.entity ? "primary" : "roomConsensus";
       displayUnitProfileKey = null;
     } else {
       const kinds = new Set(candidates.map((room) => room.metricKind));
@@ -134,11 +152,6 @@ export function resolveMeasurementContext(states, config) {
         consistent = true;
         sourceEntity = candidates[0].entityId;
         sourceKind = "roomConsensus";
-        // A room-consensus average has no single "the" display unit unless every
-        // participating room agrees on one. A °F room mixed among °C rooms still
-        // averages correctly (each canonicalValue already is canonical), but
-        // display falls back to canonical rather than arbitrarily preferring one
-        // disagreeing room's unit.
         displayUnitProfileKey = candidates.every((room) => room.unitProfile === candidates[0].unitProfile)
           ? candidates[0].unitProfile
           : null;
@@ -152,34 +165,44 @@ export function resolveMeasurementContext(states, config) {
     }
   }
 
+  const mixed = consistent === false;
+  // Compatibility follows the kind that actually won arbitration. A typed but
+  // unusable primary must not make the compatible rooms supplying its fallback
+  // look foreign merely because it identifies a different kind.
+  const compatibilityMetricKind = metricKind || resolvedIdentityMetricKind;
+  const primary = withContextAvailability(primaryModel, compatibilityMetricKind, mixed);
+  const rooms = roomModels.map((room) => withContextAvailability(room, compatibilityMetricKind, mixed));
+  const roomById = new Map(rooms.map((room) => [room.entityId, room]));
+  participatingRooms = participatingRooms.map((room) => roomById.get(room.entityId) || room);
+
   const definition = METRIC_DEFINITIONS[metricKind];
-  // With no resolvable kind (the mixed state) there is no definition to ask, so
-  // the fallback kind's canonical unit stands in — enough for the empty state's
-  // title and icon, never used for a measurement.
-  const canonicalUnit = definition ? definition.canonicalUnit : METRIC_DEFINITIONS[FALLBACK_METRIC_KIND].canonicalUnit;
+  const canonicalUnit = definition ? definition.canonicalUnit : null;
   const displayUnitProfile = definition
     ? definition.unitProfiles[displayUnitProfileKey || definition.canonicalProfileKey]
     : null;
 
   return {
     metricKind,
+    identityMetricKind: resolvedIdentityMetricKind,
     canonicalUnit,
-    unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit,
+    unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit || "",
     displayUnitProfile,
     averageSource,
     participatingRooms,
     excludedRoomIds,
     consistent,
     diagnostics,
-    // Aliases kept because existing consumers and tests read these names.
+    primary,
+    rooms,
+    // Aliases retained for established consumers and diagnostics.
     metricType: metricKind,
     sourceEntity,
     sourceKind,
   };
 }
 
-// The metric kind every consumer can safely assume, with the documented
-// temperature default for the mixed-kind state.
+// The metric kind numeric consumers can safely assume. No-data presentation reads
+// context.metricKind directly so the product-name fallback remains possible.
 export function effectiveMetricKind(context) {
   return context.metricType || FALLBACK_METRIC_KIND;
 }

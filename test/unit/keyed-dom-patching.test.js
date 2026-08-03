@@ -187,9 +187,9 @@ test("Rooms: making the FOCUSED room unavailable falls back focus to the average
 });
 
 test("Rooms: focus fallback lands on .rtc-root when no interactive average button exists", () => {
-  // entity: is mandatory config, but an invalid/unavailable primary state
-  // makes avgSource fall back to "calculated" (from rooms) -> avgEntity ""
-  // -> the disabled (non-interactive) average shape, same real-world case.
+  // This configuration includes a primary, but its unavailable state makes
+  // avgSource fall back to "calculated" (from rooms) -> avgEntity "" -> the
+  // disabled (non-interactive) average shape, the same real-world case.
   const el = env.createCard(
     fourAreaConfig(),
     fourAreaStates({ "sensor.avg": mkState("sensor.avg", "unavailable", {}) })

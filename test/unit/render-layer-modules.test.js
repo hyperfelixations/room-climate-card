@@ -23,7 +23,6 @@ let roomGrid;
 let metricCardPrimitive;
 let markerPrimitive;
 let scaleBarPrimitive;
-let emptyState;
 let focus;
 let dom;
 let labelForm;
@@ -45,7 +44,6 @@ test.before(async () => {
   metricCardPrimitive = await import("../../src/render/primitives/metric-card.js");
   markerPrimitive = await import("../../src/render/primitives/marker.js");
   scaleBarPrimitive = await import("../../src/render/primitives/scale-bar.js");
-  emptyState = await import("../../src/render/primitives/empty-state.js");
   focus = await import("../../src/render/primitives/focus.js");
   dom = await import("../../src/render/primitives/dom.js");
   labelForm = await import("../../src/render/layout/label-form.js");
@@ -214,12 +212,29 @@ function viewModel(overrides = {}) {
   };
 }
 
-function emptyViewModel() {
+function emptyViewModel(overrides = {}) {
+  const base = viewModel();
   return {
+    ...base,
     empty: true,
-    metric: { kind: "co2" },
+    metric: { kind: "co2", unit: "", displayUnitProfile: null },
     title: "CO₂",
-    emptyState: { icon: "mdi:molecule-co2", title: "CO₂", subtitle: "No data yet. Configure a room entity." },
+    subtitle: "No data yet.",
+    noData: { hintKind: "value-unavailable" },
+    header: { icon: "mdi:molecule-co2", title: "CO₂", subtitle: "No data yet.", statusLabel: "No data" },
+    average: {
+      ...base.average,
+      value: null,
+      valueText: "--",
+      unitText: "",
+      entity: "",
+      trendDirection: null,
+      unavailable: true,
+    },
+    rooms: { ...base.rooms, visible: [], rowSizes: [], count: 0, comparable: false, showChips: false, chips: [], chipRows: [] },
+    views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
+    carousel: { hint: "", noActiveViewsHint: "" },
+    ...overrides,
   };
 }
 
@@ -519,20 +534,6 @@ test("a chip's shortGuaranteed flag is actively removed once it no longer applie
   assert.equal(element.querySelector(".rtc-room-short").hasAttribute("data-short-guaranteed"), false);
 });
 
-test("the empty state renders its icon, title and hint, and patches all three", () => {
-  const realm = makeRealm();
-  realm.root.innerHTML = emptyState.renderEmptyState(emptyViewModel());
-  assert.equal(realm.root.querySelector(".rtc-empty-icon ha-icon").getAttribute("icon"), "mdi:molecule-co2");
-  assert.equal(realm.root.querySelector(".rtc-empty-title").textContent, "CO₂");
-
-  emptyState.patchEmptyState(realm.root, {
-    emptyState: { icon: "mdi:thermometer-off", title: "Temperature", subtitle: "Still nothing." },
-  });
-  assert.equal(realm.root.querySelector(".rtc-empty-icon ha-icon").getAttribute("icon"), "mdi:thermometer-off");
-  assert.equal(realm.root.querySelector(".rtc-empty-title").textContent, "Temperature");
-  assert.equal(realm.root.querySelector(".rtc-empty-subtitle").textContent, "Still nothing.");
-});
-
 test("the focus fallback prefers the interactive average and falls back to the card root", () => {
   const realm = makeRealm();
   realm.root.innerHTML = '<div class="rtc-root" tabindex="-1"><button class="rtc-avg-button"></button></div>';
@@ -773,11 +774,14 @@ test("zero views collapse the view area entirely, or show a hint — never both"
   assert.match(unavailable, /No views available/);
 });
 
-test("the shell renders the empty state instead of a frame when the model is empty", () => {
+test("the shell renders no data through the normal card frame", () => {
   const realm = makeRealm();
   const html = cardShell.renderCardBody(realm.context, emptyViewModel(), syntheticRegistry([]));
-  assert.match(html, /rtc-empty/);
-  assert.ok(!html.includes("rtc-root"), "no header, no average, no view area");
+  assert.match(html, /class="rtc-root" data-state="no-data"/);
+  assert.match(html, /rtc-header/);
+  assert.match(html, /rtc-average/);
+  assert.match(html, />--</);
+  assert.ok(!html.includes("rtc-no-views"));
 });
 
 test("the shell's chip grid follows showChips only", () => {
@@ -831,13 +835,23 @@ test("the shell resolves the layout of every view that declares one, and skips t
 test("the structure signature composes the shell's parts with each view's own", () => {
   const model = viewModel();
   const signature = cardShell.cardStructureSignature(model, registry.VIEW_RENDERERS);
-  assert.match(signature, /^chips:1|views:scale|collapsed:0|/);
+  assert.match(signature, /^state:data\|chips:1\|avgLabel:1\|views:scale\|collapsed:0\|/);
   assert.match(signature, /scale:/, "the active view contributes its own part");
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
 });
 
-test("an empty card has exactly one structure", () => {
-  assert.equal(cardShell.cardStructureSignature(emptyViewModel(), registry.VIEW_RENDERERS), "empty");
+test("no-data structures distinguish the headline shape and hint kind", () => {
+  const base = emptyViewModel();
+  const reference = cardShell.cardStructureSignature(base, registry.VIEW_RENDERERS);
+  assert.match(reference, /^state:no-data\|/);
+  assert.notEqual(
+    cardShell.cardStructureSignature(emptyViewModel({ average: { ...base.average, entity: "sensor.avg" } }), registry.VIEW_RENDERERS),
+    reference
+  );
+  assert.notEqual(
+    cardShell.cardStructureSignature(emptyViewModel({ noData: { hintKind: "entity-missing" } }), registry.VIEW_RENDERERS),
+    reference
+  );
 });
 
 test("every optional node of the scale view changes the signature", () => {

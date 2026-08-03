@@ -57,6 +57,14 @@ export const en = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculated from room values`,
   "value.ariaOpen": "Open average",
+  "status.noData": "No data",
+  "availability.entityMissing": (v) => `Entity ${v.entity} not found.`,
+  "availability.entitiesMissing": (v) => `${v.count} configured room ${v.count === 1 ? "entity was" : "entities were"} not found: ${v.entities}.`,
+  "availability.valueUnavailable": "The value is currently unavailable.",
+  "availability.noUsableRooms": "No configured room value is currently usable.",
+  "availability.incompatible": "Configured sources use incompatible measurement types or units.",
+  "availability.roomNoData": (v) => `${v.name}: no data. Open details.`,
+  "availability.valueNoData": (v) => `${v.label}: no data`,
 
   "subtitle.aboveComfort": (v) => `Avg. ${v.diff} above comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Avg. ${v.diff} above comfort.`,
@@ -103,8 +111,4 @@ export const en = {
 
   "views.none": "No view available.",
 
-  "empty.title": "No data available.",
-  "empty.hintNoRooms": "The configured average entity is not reporting a number.",
-  "empty.hintMissingRooms": (v) => `${v.count} configured ${v.count === 1 ? "entity is" : "entities are"} missing or not reporting a number.`,
-  "empty.hintNoRoomData": "No configured room entity is reporting a number.",
 };

@@ -130,6 +130,11 @@ export function normalizeConfig(config, collaborators) {
     //   auto    chips unless they would only repeat the headline (see
     //           chipsWouldDuplicateHeadline() in application/model/source-topology.js)
     show_rooms: normalizeShowRooms(userConfig.show_rooms),
+    // Optional room sources that exist but temporarily have no usable value are
+    // visible as neutral placeholders by default. Missing or incompatible
+    // entities are never promoted to placeholders. The headline remains visible
+    // in no-data mode regardless of this room-only visibility preference.
+    unavailable_values: normalizeEnum(userConfig.unavailable_values, ["show", "hide"], DEFAULT_CONFIG.unavailable_values),
     // views: is the single public view-composition surface. null is the "not
     // configured at all" sentinel, which resolves to one auto entry per
     // registered view; a present-but-possibly-empty array is authoritative even

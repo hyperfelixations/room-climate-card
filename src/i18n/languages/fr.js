@@ -61,6 +61,14 @@ export const fr = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculé à partir des valeurs des pièces`,
   "value.ariaOpen": "Ouvrir la moyenne",
+  "status.noData": "Aucune donnée",
+  "availability.entityMissing": (v) => `Entité ${v.entity} introuvable.`,
+  "availability.entitiesMissing": (v) => `${v.count} ${v.count === 1 ? "entité de pièce configurée est introuvable" : "entités de pièce configurées sont introuvables"} : ${v.entities}.`,
+  "availability.valueUnavailable": "La valeur est actuellement indisponible.",
+  "availability.noUsableRooms": "Aucune valeur de pièce configurée n'est actuellement exploitable.",
+  "availability.incompatible": "Les sources configurées utilisent des types de mesure ou des unités incompatibles.",
+  "availability.roomNoData": (v) => `${v.name} : aucune donnée. Ouvrir les détails.`,
+  "availability.valueNoData": (v) => `${v.label} : aucune donnée`,
 
   "subtitle.aboveComfort": (v) => `Moy. ${v.diff} au-dessus du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Moy. ${v.diff} au-dessus du confort.`,
@@ -109,8 +117,4 @@ export const fr = {
 
   "views.none": "Aucune vue disponible.",
 
-  "empty.title": "Aucune donnée disponible.",
-  "empty.hintNoRooms": "L'entité de moyenne configurée ne renvoie aucun nombre.",
-  "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entité configurée est manquante ou ne renvoie" : "entités configurées sont manquantes ou ne renvoient"} aucun nombre.`,
-  "empty.hintNoRoomData": "Aucune entité de pièce configurée ne renvoie de nombre.",
 };

@@ -619,6 +619,7 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.swipe, true);
   assert.equal(result.hide_footer, false);
   assert.equal(result.show_rooms, "auto");
+  assert.equal(result.unavailable_values, "show");
   assert.equal(result.language, "auto");
   assert.equal(result.views, null);
   assert.deepEqual(result._viewsDiagnostics, []);
@@ -668,6 +669,14 @@ test("show_rooms maps the three public states and defaults everything else to au
   assert.equal(n(false), "never");
   assert.equal(n("always"), "auto", "internal sentinels are not public YAML values");
   assert.equal(n("invalid"), "auto");
+});
+
+test("unavailable_values accepts show or hide and silently defaults invalid values", () => {
+  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", unavailable_values: value }, COLLABORATORS).unavailable_values;
+  assert.equal(n("show"), "show");
+  assert.equal(n("hide"), "hide");
+  assert.equal(n("invalid"), "show");
+  assert.equal(n(true), "show");
 });
 
 test("normalizeConfig() carries view diagnostics on the returned config", () => {

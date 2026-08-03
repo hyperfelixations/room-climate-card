@@ -135,13 +135,14 @@ test("the whole card works through its public surface alone", async ({ page }) =
     "both a tap and a hold must have been dispatched"
   ).toEqual(expect.arrayContaining(["tap", "hold"]));
 
-  // ---- the empty state, and back out of it --------------------------------
+  // ---- the no-data shell, and back out of it -------------------------------
   await updateHass(page, cardId, states(22, { unavailable: true }));
-  await expect(card.locator(".rtc-empty")).toBeVisible();
-  await expect(card.locator(".rtc-root")).toHaveCount(0);
+  await expect(card.locator('.rtc-root[data-state="no-data"]')).toBeVisible();
+  await expect(card.locator(".rtc-avg-value-num")).toHaveText("--");
+  await expect(card.locator(".rtc-no-views")).toHaveCount(0);
 
   await updateHass(page, cardId, states(24));
-  await expect(card.locator(".rtc-empty")).toHaveCount(0);
+  await expect(card.locator('.rtc-root[data-state="data"]')).toBeVisible();
   await expect(card.locator(".rtc-avg-value-num")).toContainText("24");
 
   expect(errors, `unexpected page errors: ${errors.join(" | ")}`).toEqual([]);

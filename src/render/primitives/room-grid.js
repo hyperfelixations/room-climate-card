@@ -18,7 +18,7 @@ export function renderRoomChip(chip) {
   return `
         <button
           type="button"
-          class="rtc-room-chip"
+          class="rtc-room-chip${chip.unavailable ? " rtc-room-unavailable" : ""}"
           data-entity="${escapeHtml(chip.entity)}"
           data-room-index="${chip.index}"
           style="${style}"
@@ -46,6 +46,7 @@ export function patchRoomChip(element, chip) {
   element.style.setProperty("--room-border", chip.border);
   element.setAttribute("title", chip.title);
   element.setAttribute("aria-label", chip.ariaLabel);
+  element.classList.toggle("rtc-room-unavailable", Boolean(chip.unavailable));
   const shortEl = element.querySelector(".rtc-room-short");
   shortEl.textContent = chip.displayLabel;
   // toggleAttribute rather than a conditional setAttribute: chip nodes are reused

@@ -264,17 +264,17 @@ test("a structural update deferred by a drag rebuilds correctly on reconnect", (
   env.cleanup(el);
 });
 
-test("a card that fell into the empty state mid-drag shows the empty state on reconnect", () => {
+test("a card that fell into the no-data state mid-drag shows the no-data state on reconnect", () => {
   const el = threeViewCard();
   el._handlePointerDown(pointerDown(el));
   el._handlePointerMove(pointerMove(1, -60));
 
   el.hass = mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", C) });
-  assert.equal(el.shadowRoot.querySelector(".rtc-empty"), null, "still deferred");
+  assert.equal(el.shadowRoot.querySelector(".rtc-root").dataset.state, "data", "still deferred");
 
   el.remove();
   env.document.body.appendChild(el);
-  assert.ok(el.shadowRoot.querySelector(".rtc-empty"), "crossing into the empty state survives the disconnect too");
+  assert.equal(el.shadowRoot.querySelector(".rtc-root").dataset.state, "no-data", "crossing into no data survives the disconnect too");
   env.cleanup(el);
 });
 

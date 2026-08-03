@@ -16,7 +16,7 @@
 
 const CARD_TYPE = "room-climate-card";
 const CARD_NAME = "Room Climate Card";
-const CARD_VERSION = "2.37.0";
+const CARD_VERSION = "2.38.0";
 
 // Language codes and their Intl locales.
 //
@@ -198,6 +198,14 @@ const en = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculated from room values`,
   "value.ariaOpen": "Open average",
+  "status.noData": "No data",
+  "availability.entityMissing": (v) => `Entity ${v.entity} not found.`,
+  "availability.entitiesMissing": (v) => `${v.count} configured room ${v.count === 1 ? "entity was" : "entities were"} not found: ${v.entities}.`,
+  "availability.valueUnavailable": "The value is currently unavailable.",
+  "availability.noUsableRooms": "No configured room value is currently usable.",
+  "availability.incompatible": "Configured sources use incompatible measurement types or units.",
+  "availability.roomNoData": (v) => `${v.name}: no data. Open details.`,
+  "availability.valueNoData": (v) => `${v.label}: no data`,
 
   "subtitle.aboveComfort": (v) => `Avg. ${v.diff} above comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Avg. ${v.diff} above comfort.`,
@@ -244,10 +252,6 @@ const en = {
 
   "views.none": "No view available.",
 
-  "empty.title": "No data available.",
-  "empty.hintNoRooms": "The configured average entity is not reporting a number.",
-  "empty.hintMissingRooms": (v) => `${v.count} configured ${v.count === 1 ? "entity is" : "entities are"} missing or not reporting a number.`,
-  "empty.hintNoRoomData": "No configured room entity is reporting a number.",
 };
 
 // German UI strings.
@@ -309,6 +313,14 @@ const de = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aus Raumwerten berechnet`,
   "value.ariaOpen": "Durchschnitt öffnen",
+  "status.noData": "Keine Daten",
+  "availability.entityMissing": (v) => `Entität ${v.entity} nicht gefunden.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurierte Raum-Entität${v.count === 1 ? " wurde" : "en wurden"} nicht gefunden: ${v.entities}.`,
+  "availability.valueUnavailable": "Der Wert ist derzeit nicht verfügbar.",
+  "availability.noUsableRooms": "Derzeit ist kein konfigurierter Raumwert nutzbar.",
+  "availability.incompatible": "Konfigurierte Quellen verwenden inkompatible Messarten oder Einheiten.",
+  "availability.roomNoData": (v) => `${v.name}: keine Daten. Details öffnen.`,
+  "availability.valueNoData": (v) => `${v.label}: keine Daten`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} über Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} über Komfort.`,
@@ -355,10 +367,6 @@ const de = {
 
   "views.none": "Keine Ansicht verfügbar.",
 
-  "empty.title": "Keine Daten verfügbar.",
-  "empty.hintNoRooms": "Die konfigurierte Durchschnitts-Entität liefert keine Zahl.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurierte Entität${v.count === 1 ? "" : "en"} fehlen oder liefern keine Zahl.`,
-  "empty.hintNoRoomData": "Keine konfigurierte Raum-Entität liefert eine Zahl.",
 };
 
 // Dutch UI strings.
@@ -423,6 +431,14 @@ const nl = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · berekend uit kamerwaarden`,
   "value.ariaOpen": "Gemiddelde openen",
+  "status.noData": "Geen gegevens",
+  "availability.entityMissing": (v) => `Entiteit ${v.entity} niet gevonden.`,
+  "availability.entitiesMissing": (v) => `${v.count} geconfigureerde ruimte-entiteit${v.count === 1 ? " is" : "en zijn"} niet gevonden: ${v.entities}.`,
+  "availability.valueUnavailable": "De waarde is momenteel niet beschikbaar.",
+  "availability.noUsableRooms": "Geen geconfigureerde ruimtewaarde is momenteel bruikbaar.",
+  "availability.incompatible": "Geconfigureerde bronnen gebruiken incompatibele meettypen of eenheden.",
+  "availability.roomNoData": (v) => `${v.name}: geen gegevens. Details openen.`,
+  "availability.valueNoData": (v) => `${v.label}: geen gegevens`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} boven comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} boven comfort.`,
@@ -469,10 +485,6 @@ const nl = {
 
   "views.none": "Geen weergave beschikbaar.",
 
-  "empty.title": "Geen gegevens beschikbaar.",
-  "empty.hintNoRooms": "De geconfigureerde gemiddelde-entiteit levert geen getal.",
-  "empty.hintMissingRooms": (v) => `${v.count} geconfigureerde ${v.count === 1 ? "entiteit ontbreekt of levert" : "entiteiten ontbreken of leveren"} geen getal.`,
-  "empty.hintNoRoomData": "Geen geconfigureerde kamer-entiteit levert een getal.",
 };
 
 // French UI strings.
@@ -538,6 +550,14 @@ const fr = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculé à partir des valeurs des pièces`,
   "value.ariaOpen": "Ouvrir la moyenne",
+  "status.noData": "Aucune donnée",
+  "availability.entityMissing": (v) => `Entité ${v.entity} introuvable.`,
+  "availability.entitiesMissing": (v) => `${v.count} ${v.count === 1 ? "entité de pièce configurée est introuvable" : "entités de pièce configurées sont introuvables"} : ${v.entities}.`,
+  "availability.valueUnavailable": "La valeur est actuellement indisponible.",
+  "availability.noUsableRooms": "Aucune valeur de pièce configurée n'est actuellement exploitable.",
+  "availability.incompatible": "Les sources configurées utilisent des types de mesure ou des unités incompatibles.",
+  "availability.roomNoData": (v) => `${v.name} : aucune donnée. Ouvrir les détails.`,
+  "availability.valueNoData": (v) => `${v.label} : aucune donnée`,
 
   "subtitle.aboveComfort": (v) => `Moy. ${v.diff} au-dessus du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Moy. ${v.diff} au-dessus du confort.`,
@@ -586,10 +606,6 @@ const fr = {
 
   "views.none": "Aucune vue disponible.",
 
-  "empty.title": "Aucune donnée disponible.",
-  "empty.hintNoRooms": "L'entité de moyenne configurée ne renvoie aucun nombre.",
-  "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entité configurée est manquante ou ne renvoie" : "entités configurées sont manquantes ou ne renvoient"} aucun nombre.`,
-  "empty.hintNoRoomData": "Aucune entité de pièce configurée ne renvoie de nombre.",
 };
 
 // Italian UI strings.
@@ -655,6 +671,14 @@ const it = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calcolato dai valori delle stanze`,
   "value.ariaOpen": "Apri la media",
+  "status.noData": "Nessun dato",
+  "availability.entityMissing": (v) => `Entità ${v.entity} non trovata.`,
+  "availability.entitiesMissing": (v) => `${v.count} ${v.count === 1 ? "entità stanza configurata non è stata trovata" : "entità stanza configurate non sono state trovate"}: ${v.entities}.`,
+  "availability.valueUnavailable": "Il valore non è attualmente disponibile.",
+  "availability.noUsableRooms": "Nessun valore stanza configurato è attualmente utilizzabile.",
+  "availability.incompatible": "Le sorgenti configurate usano tipi di misura o unità incompatibili.",
+  "availability.roomNoData": (v) => `${v.name}: nessun dato. Apri i dettagli.`,
+  "availability.valueNoData": (v) => `${v.label}: nessun dato`,
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} sopra il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} sopra il comfort.`,
@@ -701,10 +725,6 @@ const it = {
 
   "views.none": "Nessuna vista disponibile.",
 
-  "empty.title": "Nessun dato disponibile.",
-  "empty.hintNoRooms": "L'entità della media configurata non restituisce un numero.",
-  "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entità configurata risulta mancante o non restituisce" : "entità configurate risultano mancanti o non restituiscono"} un numero.`,
-  "empty.hintNoRoomData": "Nessuna entità stanza configurata restituisce un numero.",
 };
 
 // Spanish UI strings.
@@ -769,6 +789,14 @@ const es = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculada a partir de los valores de las habitaciones`,
   "value.ariaOpen": "Abrir la media",
+  "status.noData": "Sin datos",
+  "availability.entityMissing": (v) => `No se encontró la entidad ${v.entity}.`,
+  "availability.entitiesMissing": (v) => `No se ${v.count === 1 ? "encontró" : "encontraron"} ${v.count} ${v.count === 1 ? "entidad de habitación configurada" : "entidades de habitación configuradas"}: ${v.entities}.`,
+  "availability.valueUnavailable": "El valor no está disponible en este momento.",
+  "availability.noUsableRooms": "Ningún valor de habitación configurado se puede usar en este momento.",
+  "availability.incompatible": "Las fuentes configuradas usan tipos de medida o unidades incompatibles.",
+  "availability.roomNoData": (v) => `${v.name}: sin datos. Abrir detalles.`,
+  "availability.valueNoData": (v) => `${v.label}: sin datos`,
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} por encima del confort · ${v.count}/${v.total} ${v.total === 1 ? "habitación" : "habitaciones"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} por encima del confort.`,
@@ -815,10 +843,6 @@ const es = {
 
   "views.none": "No hay ninguna vista disponible.",
 
-  "empty.title": "No hay datos disponibles.",
-  "empty.hintNoRooms": "La entidad de media configurada no devuelve un número.",
-  "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entidad configurada no está disponible o no devuelve" : "entidades configuradas no están disponibles o no devuelven"} un número.`,
-  "empty.hintNoRoomData": "Ninguna entidad de habitación configurada devuelve un número.",
 };
 
 // Russian UI strings.
@@ -883,6 +907,14 @@ const ru = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · рассчитано по значениям комнат`,
   "value.ariaOpen": "Открыть среднее значение",
+  "status.noData": "Нет данных",
+  "availability.entityMissing": (v) => `Сущность ${v.entity} не найдена.`,
+  "availability.entitiesMissing": (v) => `Не найдены настроенные сущности комнат (${v.count}): ${v.entities}.`,
+  "availability.valueUnavailable": "Значение сейчас недоступно.",
+  "availability.noUsableRooms": "Сейчас нет доступных значений настроенных комнат.",
+  "availability.incompatible": "Настроенные источники используют несовместимые типы измерений или единицы.",
+  "availability.roomNoData": (v) => `${v.name}: нет данных. Открыть подробности.`,
+  "availability.valueNoData": (v) => `${v.label}: нет данных`,
 
   "subtitle.aboveComfort": (v) => `Среднее на ${v.diff} выше комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Среднее на ${v.diff} выше комфортного диапазона.`,
@@ -929,15 +961,6 @@ const ru = {
 
   "views.none": "Нет доступных представлений.",
 
-  "empty.title": "Нет доступных данных.",
-  "empty.hintNoRooms": "Настроенная сущность среднего значения не передаёт числовое значение.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("ru", v.count);
-    if (category === "one") return `${v.count} настроенная сущность отсутствует или не передаёт числовое значение.`;
-    if (category === "few") return `${v.count} настроенные сущности отсутствуют или не передают числовое значение.`;
-    return `${v.count} настроенных сущностей отсутствуют или не передают числовое значение.`;
-  },
-  "empty.hintNoRoomData": "Ни одна настроенная сущность комнаты не передаёт числовое значение.",
 };
 
 // Polish UI strings.
@@ -1002,6 +1025,14 @@ const pl = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · obliczona na podstawie wartości z pomieszczeń`,
   "value.ariaOpen": "Otwórz wartość średnią",
+  "status.noData": "Brak danych",
+  "availability.entityMissing": (v) => `Nie znaleziono encji ${v.entity}.`,
+  "availability.entitiesMissing": (v) => `Nie znaleziono skonfigurowanych encji pomieszczeń (${v.count}): ${v.entities}.`,
+  "availability.valueUnavailable": "Wartość jest obecnie niedostępna.",
+  "availability.noUsableRooms": "Żadna skonfigurowana wartość pomieszczenia nie jest obecnie użyteczna.",
+  "availability.incompatible": "Skonfigurowane źródła używają niezgodnych typów pomiaru lub jednostek.",
+  "availability.roomNoData": (v) => `${v.name}: brak danych. Otwórz szczegóły.`,
+  "availability.valueNoData": (v) => `${v.label}: brak danych`,
 
   "subtitle.aboveComfort": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu.`,
@@ -1051,15 +1082,6 @@ const pl = {
 
   "views.none": "Brak dostępnego widoku.",
 
-  "empty.title": "Brak dostępnych danych.",
-  "empty.hintNoRooms": "Skonfigurowana encja wartości średniej nie zwraca liczby.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("pl", v.count);
-    if (category === "one") return `${v.count} skonfigurowana encja jest niedostępna lub nie zwraca liczby.`;
-    if (category === "few") return `${v.count} skonfigurowane encje są niedostępne lub nie zwracają liczby.`;
-    return `${v.count} skonfigurowanych encji jest niedostępnych lub nie zwraca liczby.`;
-  },
-  "empty.hintNoRoomData": "Żadna skonfigurowana encja pomieszczenia nie zwraca liczby.",
 };
 
 // Korean UI strings.
@@ -1121,6 +1143,14 @@ const ko = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 방별 값으로 계산`,
   "value.ariaOpen": "평균값 열기",
+  "status.noData": "데이터 없음",
+  "availability.entityMissing": (v) => `엔티티 ${v.entity}을(를) 찾을 수 없습니다.`,
+  "availability.entitiesMissing": (v) => `구성된 방 엔티티 ${v.count}개를 찾을 수 없습니다: ${v.entities}.`,
+  "availability.valueUnavailable": "현재 값을 사용할 수 없습니다.",
+  "availability.noUsableRooms": "현재 사용할 수 있는 구성된 방 값이 없습니다.",
+  "availability.incompatible": "구성된 소스의 측정 유형 또는 단위가 호환되지 않습니다.",
+  "availability.roomNoData": (v) => `${v.name}: 데이터 없음. 세부 정보 열기.`,
+  "availability.valueNoData": (v) => `${v.label}: 데이터 없음`,
 
   "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,
@@ -1167,10 +1197,6 @@ const ko = {
 
   "views.none": "사용 가능한 보기가 없습니다.",
 
-  "empty.title": "사용 가능한 데이터가 없습니다.",
-  "empty.hintNoRooms": "설정된 평균 엔터티가 숫자 값을 보고하지 않습니다.",
-  "empty.hintMissingRooms": (v) => `설정된 엔터티 ${v.count}개가 없거나 숫자 값을 보고하지 않습니다.`,
-  "empty.hintNoRoomData": "설정된 방 엔터티 중 숫자 값을 보고하는 항목이 없습니다.",
 };
 
 // Japanese UI strings.
@@ -1232,6 +1258,14 @@ const ja = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 各部屋の値から算出`,
   "value.ariaOpen": "平均値を開く",
+  "status.noData": "データなし",
+  "availability.entityMissing": (v) => `エンティティ ${v.entity} が見つかりません。`,
+  "availability.entitiesMissing": (v) => `設定された部屋エンティティが ${v.count} 件見つかりません: ${v.entities}。`,
+  "availability.valueUnavailable": "現在、値を利用できません。",
+  "availability.noUsableRooms": "現在利用できる設定済みの部屋値がありません。",
+  "availability.incompatible": "設定されたソースの測定種類または単位に互換性がありません。",
+  "availability.roomNoData": (v) => `${v.name}: データなし。詳細を開く。`,
+  "availability.valueNoData": (v) => `${v.label}: データなし`,
 
   "subtitle.aboveComfort": (v) => `平均は快適範囲を ${v.diff} 上回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 上回っています。`,
@@ -1278,10 +1312,6 @@ const ja = {
 
   "views.none": "利用可能な表示がありません。",
 
-  "empty.title": "利用可能なデータがありません。",
-  "empty.hintNoRooms": "設定された平均エンティティが数値を返していません。",
-  "empty.hintMissingRooms": (v) => `設定されたエンティティ${v.count}件が見つからないか、数値を返していません。`,
-  "empty.hintNoRoomData": "設定された部屋エンティティのいずれも数値を返していません。",
 };
 
 // Chinese UI strings.
@@ -1343,6 +1373,14 @@ const zh = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 根据各房间数值计算`,
   "value.ariaOpen": "打开平均值",
+  "status.noData": "无数据",
+  "availability.entityMissing": (v) => `未找到实体 ${v.entity}。`,
+  "availability.entitiesMissing": (v) => `未找到 ${v.count} 个已配置的房间实体：${v.entities}。`,
+  "availability.valueUnavailable": "当前无法使用该值。",
+  "availability.noUsableRooms": "当前没有可用的已配置房间值。",
+  "availability.incompatible": "已配置的来源使用了不兼容的测量类型或单位。",
+  "availability.roomNoData": (v) => `${v.name}：无数据。打开详情。`,
+  "availability.valueNoData": (v) => `${v.label}：无数据`,
 
   "subtitle.aboveComfort": (v) => `平均值高于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均值高于舒适范围 ${v.diff}。`,
@@ -1389,10 +1427,6 @@ const zh = {
 
   "views.none": "暂无可用视图。",
 
-  "empty.title": "暂无可用数据。",
-  "empty.hintNoRooms": "配置的平均值实体未返回数值。",
-  "empty.hintMissingRooms": (v) => `${v.count}个已配置实体缺失或未返回数值。`,
-  "empty.hintNoRoomData": "配置的房间实体均未返回数值。",
 };
 
 // Norwegian Bokmål UI strings.
@@ -1462,6 +1496,14 @@ const nb = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beregnet ut fra romverdier`,
   "value.ariaOpen": "Åpne gjennomsnitt",
+  "status.noData": "Ingen data",
+  "availability.entityMissing": (v) => `Entiteten ${v.entity} ble ikke funnet.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurerte rom-entitet${v.count === 1 ? " ble" : "er ble"} ikke funnet: ${v.entities}.`,
+  "availability.valueUnavailable": "Verdien er ikke tilgjengelig akkurat nå.",
+  "availability.noUsableRooms": "Ingen konfigurerte romverdier kan brukes akkurat nå.",
+  "availability.incompatible": "Konfigurerte kilder bruker inkompatible måletyper eller enheter.",
+  "availability.roomNoData": (v) => `${v.name}: ingen data. Åpne detaljer.`,
+  "availability.valueNoData": (v) => `${v.label}: ingen data`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,
@@ -1508,10 +1550,6 @@ const nb = {
 
   "views.none": "Ingen visning tilgjengelig.",
 
-  "empty.title": "Ingen data tilgjengelig.",
-  "empty.hintNoRooms": "Den konfigurerte gjennomsnittsenheten rapporterer ikke et tall.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurert${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? "" : "er"} mangler eller rapporterer ikke et tall.`,
-  "empty.hintNoRoomData": "Ingen konfigurert rom-enhet rapporterer et tall.",
 };
 
 // Swedish UI strings.
@@ -1581,6 +1619,14 @@ const sv = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beräknat utifrån rumsvärden`,
   "value.ariaOpen": "Öppna medelvärde",
+  "status.noData": "Inga data",
+  "availability.entityMissing": (v) => `Entiteten ${v.entity} hittades inte.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurerade rumsentitet${v.count === 1 ? " hittades" : "er hittades"} inte: ${v.entities}.`,
+  "availability.valueUnavailable": "Värdet är inte tillgängligt just nu.",
+  "availability.noUsableRooms": "Inget konfigurerat rumsvärde kan användas just nu.",
+  "availability.incompatible": "Konfigurerade källor använder inkompatibla mätningstyper eller enheter.",
+  "availability.roomNoData": (v) => `${v.name}: inga data. Öppna detaljer.`,
+  "availability.valueNoData": (v) => `${v.label}: inga data`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,
@@ -1627,10 +1673,6 @@ const sv = {
 
   "views.none": "Ingen vy tillgänglig.",
 
-  "empty.title": "Inga data tillgängliga.",
-  "empty.hintNoRooms": "Den konfigurerade medelvärdesenheten rapporterar inget tal.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurerad${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? " saknas" : "er saknas"} eller rapporterar inget tal.`,
-  "empty.hintNoRoomData": "Ingen konfigurerad rumsenhet rapporterar ett tal.",
 };
 
 // Latvian UI strings.
@@ -1697,6 +1739,14 @@ const lv = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aprēķināts no telpu vērtībām`,
   "value.ariaOpen": "Atvērt vidējo vērtību",
+  "status.noData": "Nav datu",
+  "availability.entityMissing": (v) => `Entītija ${v.entity} nav atrasta.`,
+  "availability.entitiesMissing": (v) => `Nav atrastas ${v.count} konfigurētās telpu entītijas: ${v.entities}.`,
+  "availability.valueUnavailable": "Vērtība pašlaik nav pieejama.",
+  "availability.noUsableRooms": "Pašlaik nav izmantojama neviena konfigurētā telpas vērtība.",
+  "availability.incompatible": "Konfigurētie avoti izmanto nesaderīgus mērījumu veidus vai mērvienības.",
+  "availability.roomNoData": (v) => `${v.name}: nav datu. Atvērt informāciju.`,
+  "availability.valueNoData": (v) => `${v.label}: nav datu`,
 
   // Latvian cardinal numbers have a three-way CLDR plural split (zero:
   // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:
@@ -1751,15 +1801,6 @@ const lv = {
 
   "views.none": "Nav pieejams neviens skats.",
 
-  "empty.title": "Dati nav pieejami.",
-  "empty.hintNoRooms": "Konfigurētā vidējās vērtības entītija nesniedz skaitli.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("lv", v.count);
-    if (category === "one") return `${v.count} konfigurēta entītija trūkst vai nesniedz skaitli.`;
-    if (category === "zero") return `${v.count} konfigurētu entītiju trūkst vai nesniedz skaitli.`;
-    return `${v.count} konfigurētas entītijas trūkst vai nesniedz skaitli.`;
-  },
-  "empty.hintNoRoomData": "Neviena konfigurētā telpas entītija nesniedz skaitli.",
 };
 
 // The translation registry: one entry per supported language.
@@ -1841,6 +1882,7 @@ const DEFAULT_CONFIG = {
   hold_action: { action: "more-info" },
   auto_slide: true,
   swipe: true, // Manual swiping remains independent of automatic rotation.
+  unavailable_values: "show", // Preserve visible source identity during temporary outages.
 };
 
 // Numeric primitives: reading numbers out of untrusted input, and the small
@@ -1858,7 +1900,15 @@ const DEFAULT_CONFIG = {
 //                        coerce.
 
 // Home Assistant state values that never represent a usable measurement.
-const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
+const UNAVAILABLE_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
+
+// Whether a raw Home Assistant state explicitly says "there is currently no
+// measurement". Kept separate from parseNumericState() so EntityModel can
+// distinguish an HA availability sentinel from arbitrary malformed text.
+function isUnavailableState(raw) {
+  if (raw === undefined || raw === null) return true;
+  return UNAVAILABLE_STATES.has(String(raw).trim().toLowerCase());
+}
 
 // Shared numeric parser for entity states and attributes: accepts comma
 // decimals, treats HA's non-numeric states as invalid, and handles attributes
@@ -1871,7 +1921,7 @@ const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "u
 function parseNumericState(raw) {
   if (raw === undefined || raw === null) return null;
   const rawString = String(raw).trim().toLowerCase();
-  if (INVALID_STATES.has(rawString)) return null;
+  if (UNAVAILABLE_STATES.has(rawString)) return null;
   const normalized = rawString.replace(",", ".");
   if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?$/.test(normalized)) return null;
   const value = Number(normalized);
@@ -1938,7 +1988,8 @@ function pathError(path, message) {
 // is a product decision rather than an implementation detail:
 //
 //   throw    a structurally invalid value the card cannot work around — a
-//            missing required or malformed entity id, a malformed classification block.
+//            a missing required room entity, a malformed supplied entity id, or a
+//            malformed classification block.
 //   fall back  a malformed OPTIONAL value — a typo in `decimals` or
 //            `room_columns` degrades to the built-in default instead of taking
 //            the whole dashboard card down with it.
@@ -2718,6 +2769,11 @@ function normalizeConfig(config, collaborators) {
     //   auto    chips unless they would only repeat the headline (see
     //           chipsWouldDuplicateHeadline() in application/model/source-topology.js)
     show_rooms: normalizeShowRooms(userConfig.show_rooms),
+    // Optional room sources that exist but temporarily have no usable value are
+    // visible as neutral placeholders by default. Missing or incompatible
+    // entities are never promoted to placeholders. The headline remains visible
+    // in no-data mode regardless of this room-only visibility preference.
+    unavailable_values: normalizeEnum(userConfig.unavailable_values, ["show", "hide"], DEFAULT_CONFIG.unavailable_values),
     // views: is the single public view-composition surface. null is the "not
     // configured at all" sentinel, which resolves to one auto entry per
     // registered view; a present-but-possibly-empty array is authoritative even
@@ -3853,11 +3909,23 @@ function resolveProfileIcon(policy, metricKind, unitProfile, value) {
 // it is BOTH present AND resolves to a registered profile. A missing
 // unit_of_measurement is NOT assumed to be the canonical unit — missing and
 // unknown both yield unitProfile:null, exclude the measurement, and get
-// diagnosed. metricKind itself is still resolved in that case, so the empty state
+// diagnosed. metricKind itself is still resolved in that case, so the no-data state
 // can show the right title and icon.
 //
 // `states` is Home Assistant's own states object, read but never written.
 
+
+// One exhaustive vocabulary for a configured entity's current availability.
+// Consumers compare these values; they never repeat the raw-state/unit/kind
+// checks that decide them.
+const AVAILABILITY = Object.freeze({
+  USABLE: "usable",
+  MISSING: "missing",
+  UNAVAILABLE: "unavailable",
+  INVALID_VALUE: "invalid_value",
+  INCOMPATIBLE_UNIT: "incompatible_unit",
+  INCOMPATIBLE_KIND: "incompatible_kind",
+});
 
 function hasEntity(states, entityId) {
   return Boolean(entityId && states?.[entityId]);
@@ -3960,6 +4028,15 @@ function buildEntityModel(states, config, entityId, sourceRole) {
   // kind filter do its job instead of throwing during a probe.
   const validPhysical = validNumeric && (!validUnit || isValuePhysicallyValid(policy, metricKind, null, canonicalValue, { lenient: true }));
 
+  let availability;
+  if (!stateObject) availability = AVAILABILITY.MISSING;
+  else if (isUnavailableState(stateObject.state)) availability = AVAILABILITY.UNAVAILABLE;
+  else if (!validNumeric) availability = AVAILABILITY.INVALID_VALUE;
+  else if (metricKind === null) availability = AVAILABILITY.INCOMPATIBLE_KIND;
+  else if (!validUnit) availability = AVAILABILITY.INCOMPATIBLE_UNIT;
+  else if (!validPhysical) availability = AVAILABILITY.INVALID_VALUE;
+  else availability = AVAILABILITY.USABLE;
+
   return {
     entityId,
     sourceRole,
@@ -3974,6 +4051,7 @@ function buildEntityModel(states, config, entityId, sourceRole) {
     validNumeric,
     validPhysical,
     validUnit,
+    availability,
     errors: [],
   };
 }
@@ -4043,48 +4121,64 @@ function chipsWouldDuplicateHeadline(topology) {
   return topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM;
 }
 
-// The atomic MeasurementContext: metric kind, average source and display unit,
-// decided together from the same EntityModels.
+// The atomic MeasurementContext: metric kind, current headline source,
+// per-entity availability and display unit, decided from one set of EntityModels.
 //
-// The arbitration rules, in order:
-//
-//   0. CONFIGURATION FIRST. A card that names exactly one entity, and whose one entity
-//      is a room, has a headline that IS that sensor — not an average of anything. That
-//      is decided from the configuration alone (see source-topology.js), so a sensor
-//      dropping out changes the value the card can show and never what the card is.
-//   1. A USABLE primary (numeric + physically valid + resolvable unit + resolvable
-//      kind) alone determines the metric kind and is the average source. Rooms of
-//      the same kind participate; rooms of a different kind, or with an unusable
-//      unit, are excluded AND diagnosed — never silently dropped, never averaged
-//      in with an assumed unit.
-//   2. No usable primary -> only rooms that are themselves fully valid are
-//      candidates, so an unavailable room can never out-vote an available one.
-//      - No candidates: no average source. The metric kind still falls back
-//        sensibly (the primary's own kind if it has one, else temperature) purely
-//        so the empty state can show the right title and icon.
-//      - All candidates share one kind: room consensus, averaging their CANONICAL
-//        values so compatible units mix correctly.
-//      - Candidates span several kinds: NO majority vote. Kind and average source
-//        are null and the state is diagnosed as mixed_metric_kinds. That is a
-//        defined configuration state, not an arbitrary winner picked by count.
-//
-// Diagnostics are returned as data, in a stable order. This function does not log:
-// deduplicating a warning needs state, and state belongs to the caller.
-//
-// There is no cache in here either. The element memoizes by hass/config identity,
-// where those identities are actually observable.
+// Source topology is configuration-owned. Availability may change the value that
+// can be shown (including the established primary-to-room-consensus fallback),
+// but it never changes whether the configured card is primary-only, single-room,
+// primary-with-rooms or room-consensus.
 
 
-// Used only for the title/icon fallback when nothing at all resolves.
+// Numeric consumers use this only after the no-data branch has returned. Display
+// identity is deliberately allowed to remain null so the shell can use the
+// untranslated product name when no configured source reveals a metric kind.
 const FALLBACK_METRIC_KIND = "temperature";
 
+function isUsable(model) {
+  return model.availability === AVAILABILITY.USABLE;
+}
+
+function identityMetricKind(primary, rooms) {
+  return primary.metricKind || rooms.find((room) => room.metricKind)?.metricKind || null;
+}
+
+// EntityModel owns intrinsic availability. MeasurementContext adds the one
+// card-wide fact EntityModel cannot know: whether a recognized entity kind is
+// compatible with the selected card kind.
+function withContextAvailability(model, metricKind, mixed) {
+  if (!model.entityId) return model;
+  if (
+    mixed &&
+    model.metricKind &&
+    [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  if (
+    metricKind &&
+    model.metricKind &&
+    model.metricKind !== metricKind &&
+    [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  // A sentinel or malformed value without enough metadata to identify its
+  // measurement kind cannot become a typed room placeholder.
+  if (
+    model.metricKind === null &&
+    [AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
+  ) {
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+  }
+  return model;
+}
+
 function resolveMeasurementContext(states, config) {
-  const primary = buildEntityModel(states, config, config?.entity, "primary");
-  const rooms = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
-  const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
-  // WHICH KIND OF CARD this is, decided from the configuration alone. Availability
-  // decides what value can be shown, never what the card is.
+  const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
+  const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
   const topology = resolveSourceTopology(config);
+  const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
   let metricKind;
   let averageSource;
@@ -4097,67 +4191,69 @@ function resolveMeasurementContext(states, config) {
   let displayUnitProfileKey;
 
   if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
-    // The whole card refers to exactly one entity, and that entity is a room. The
-    // headline is not an average of anything — it IS that sensor — so it gets its own
-    // source kind rather than being smuggled through as a one-element consensus. Both
-    // spellings of this card reach here: "one room, no entity" and "entity that is the
-    // one configured room".
-    const room = rooms[0];
-    const roomUsable = room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null;
-    // The room's own kind names the card even when the room currently reports nothing,
-    // so an unavailable humidity sensor still titles the card "Humidity".
-    metricKind = room.metricKind || FALLBACK_METRIC_KIND;
+    const room = roomModels[0];
+    metricKind = room.metricKind || null;
     excludedRoomIds = [];
     diagnostics = [];
     consistent = true;
-    participatingRooms = roomUsable ? [room] : [];
-    averageSource = roomUsable
+    participatingRooms = isUsable(room) ? [room] : [];
+    averageSource = isUsable(room)
       ? { kind: "roomDirect", entityId: room.entityId, canonicalValue: room.canonicalValue, unitProfile: room.unitProfile }
       : null;
-    sourceEntity = roomUsable ? room.entityId : null;
-    sourceKind = roomUsable ? "roomDirect" : "default";
-    displayUnitProfileKey = roomUsable ? room.unitProfile : null;
-  } else if (primaryUsable) {
-    metricKind = primary.metricKind;
+    sourceEntity = room.entityId;
+    sourceKind = "roomDirect";
+    displayUnitProfileKey = isUsable(room) ? room.unitProfile : null;
+  } else if (isUsable(primaryModel)) {
+    metricKind = primaryModel.metricKind;
     participatingRooms = [];
     excludedRoomIds = [];
     diagnostics = [];
-    for (const room of rooms) {
-      if (!room.validNumeric || room.metricKind === null) continue;
+    for (const room of roomModels) {
+      if (room.metricKind === null) continue;
       if (room.metricKind !== metricKind) {
         excludedRoomIds.push(room.entityId);
         diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
         continue;
       }
-      if (!room.validUnit) {
+      if (room.availability === AVAILABILITY.INCOMPATIBLE_UNIT) {
         excludedRoomIds.push(room.entityId);
         diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
         continue;
       }
-      if (room.validPhysical) participatingRooms.push(room);
+      if (isUsable(room)) participatingRooms.push(room);
     }
-    averageSource = { kind: "primary", entityId: primary.entityId, canonicalValue: primary.canonicalValue, unitProfile: primary.unitProfile };
+    averageSource = {
+      kind: "primary",
+      entityId: primaryModel.entityId,
+      canonicalValue: primaryModel.canonicalValue,
+      unitProfile: primaryModel.unitProfile,
+    };
     consistent = true;
-    sourceEntity = primary.entityId;
+    sourceEntity = primaryModel.entityId;
     sourceKind = "primary";
-    displayUnitProfileKey = primary.unitProfile;
+    displayUnitProfileKey = primaryModel.unitProfile;
   } else {
-    const candidates = rooms.filter((room) => room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null);
-    // Rooms that are otherwise fine but whose own unit resolves to nothing are
-    // diagnosed in this branch too, so they never disappear from the candidate
-    // pool without a trace regardless of which sub-branch is reached.
-    const unusableUnitRooms = rooms.filter((room) => room.validNumeric && room.validPhysical && !room.validUnit && room.metricKind !== null);
+    const candidates = roomModels.filter(isUsable);
+    const unusableUnitRooms = roomModels.filter((room) => room.availability === AVAILABILITY.INCOMPATIBLE_UNIT);
     const unusableUnitIds = unusableUnitRooms.map((room) => room.entityId);
-    const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind }));
+    const unusableUnitDiagnostics = unusableUnitRooms.map((room) => ({
+      code: "unusable_unit",
+      entityId: room.entityId,
+      metricKind: room.metricKind,
+    }));
     participatingRooms = [];
     excludedRoomIds = unusableUnitIds;
+
     if (candidates.length === 0) {
-      metricKind = primary.metricKind || FALLBACK_METRIC_KIND;
+      metricKind = resolvedIdentityMetricKind;
       averageSource = null;
       diagnostics = unusableUnitDiagnostics;
-      consistent = true;
-      sourceEntity = primary.metricKind ? primary.entityId : null;
-      sourceKind = primary.metricKind ? "primary" : "default";
+      const knownKinds = new Set(roomModels.map((room) => room.metricKind).filter(Boolean));
+      if (primaryModel.metricKind) knownKinds.add(primaryModel.metricKind);
+      if (knownKinds.size > 1) diagnostics.unshift({ code: "mixed_metric_kinds", metricKinds: [...knownKinds] });
+      consistent = knownKinds.size <= 1;
+      sourceEntity = config?.entity || null;
+      sourceKind = config?.entity ? "primary" : "roomConsensus";
       displayUnitProfileKey = null;
     } else {
       const kinds = new Set(candidates.map((room) => room.metricKind));
@@ -4176,11 +4272,6 @@ function resolveMeasurementContext(states, config) {
         consistent = true;
         sourceEntity = candidates[0].entityId;
         sourceKind = "roomConsensus";
-        // A room-consensus average has no single "the" display unit unless every
-        // participating room agrees on one. A °F room mixed among °C rooms still
-        // averages correctly (each canonicalValue already is canonical), but
-        // display falls back to canonical rather than arbitrarily preferring one
-        // disagreeing room's unit.
         displayUnitProfileKey = candidates.every((room) => room.unitProfile === candidates[0].unitProfile)
           ? candidates[0].unitProfile
           : null;
@@ -4194,34 +4285,44 @@ function resolveMeasurementContext(states, config) {
     }
   }
 
+  const mixed = consistent === false;
+  // Compatibility follows the kind that actually won arbitration. A typed but
+  // unusable primary must not make the compatible rooms supplying its fallback
+  // look foreign merely because it identifies a different kind.
+  const compatibilityMetricKind = metricKind || resolvedIdentityMetricKind;
+  const primary = withContextAvailability(primaryModel, compatibilityMetricKind, mixed);
+  const rooms = roomModels.map((room) => withContextAvailability(room, compatibilityMetricKind, mixed));
+  const roomById = new Map(rooms.map((room) => [room.entityId, room]));
+  participatingRooms = participatingRooms.map((room) => roomById.get(room.entityId) || room);
+
   const definition = METRIC_DEFINITIONS[metricKind];
-  // With no resolvable kind (the mixed state) there is no definition to ask, so
-  // the fallback kind's canonical unit stands in — enough for the empty state's
-  // title and icon, never used for a measurement.
-  const canonicalUnit = definition ? definition.canonicalUnit : METRIC_DEFINITIONS[FALLBACK_METRIC_KIND].canonicalUnit;
+  const canonicalUnit = definition ? definition.canonicalUnit : null;
   const displayUnitProfile = definition
     ? definition.unitProfiles[displayUnitProfileKey || definition.canonicalProfileKey]
     : null;
 
   return {
     metricKind,
+    identityMetricKind: resolvedIdentityMetricKind,
     canonicalUnit,
-    unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit,
+    unit: displayUnitProfile ? displayUnitProfile.displayUnit : canonicalUnit || "",
     displayUnitProfile,
     averageSource,
     participatingRooms,
     excludedRoomIds,
     consistent,
     diagnostics,
-    // Aliases kept because existing consumers and tests read these names.
+    primary,
+    rooms,
+    // Aliases retained for established consumers and diagnostics.
     metricType: metricKind,
     sourceEntity,
     sourceKind,
   };
 }
 
-// The metric kind every consumer can safely assume, with the documented
-// temperature default for the mixed-kind state.
+// The metric kind numeric consumers can safely assume. No-data presentation reads
+// context.metricKind directly so the product-name fallback remains possible.
 function effectiveMetricKind(context) {
   return context.metricType || FALLBACK_METRIC_KIND;
 }
@@ -4543,23 +4644,56 @@ function buildCardDomainModel({ states, config, context, language }) {
   // Recomputed rather than threaded through, because it is a pure function of the
   // config and having one owner beats having one carrier.
   const topology = resolveSourceTopology(config);
-  const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
-  const comfort = scaleConfig.comfort;
-  const optimal = scaleConfig.optimal;
+  const sourceAvailability = {
+    primary: {
+      entity: context.primary.entityId,
+      status: context.primary.availability,
+      metricKind: context.primary.metricKind,
+    },
+    rooms: context.rooms.map((room, index) => ({
+      index,
+      entity: room.entityId,
+      status: room.availability,
+      metricKind: room.metricKind,
+    })),
+  };
+  const missingRooms = sourceAvailability.rooms.filter((room) => room.status === AVAILABILITY.MISSING).length;
 
   // No usable average source at all: either nothing resolvable anywhere, or rooms
   // reporting genuinely incompatible metric kinds with no usable primary to
   // arbitrate. Exposed as a configuration state so a future release can surface it
-  // more specifically; today it renders as the empty state, never as a
+  // more specifically; today it renders as the no-data state, never as a
   // cross-metric-kind average.
   if (context.averageSource === null) {
     return {
       empty: true,
-      metric: { kind: metricKind },
-      missingRooms: (config.rooms || []).filter((room) => !hasEntity(states, room.entity)).length,
+      // Unlike effectiveMetricKind(), this may be null. No-data presentation uses
+      // that fact to show the product name instead of inventing a temperature card.
+      metric: { kind: context.identityMetricKind },
+      context: {
+        diagnostics: context.diagnostics,
+        consistent: context.consistent,
+        excludedRoomIds: context.excludedRoomIds,
+        sourceKind: context.sourceKind,
+        sourceEntity: context.sourceEntity,
+        availability: sourceAvailability,
+      },
+      rooms: {
+        declared: [],
+        byValue: [],
+        count: 0,
+        comparable: false,
+        missing: missingRooms,
+        availability: sourceAvailability.rooms,
+      },
+      missingRooms,
       configurationState: context.diagnostics[0]?.code ?? null,
     };
   }
+
+  const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
+  const comfort = scaleConfig.comfort;
+  const optimal = scaleConfig.optimal;
 
   // From here on every number is projected into the resolved display unit exactly
   // once. Comfort, classification and scale decisions must be made against the
@@ -4644,8 +4778,6 @@ function buildCardDomainModel({ states, config, context, language }) {
     averageEntity ? states?.[averageEntity]?.attributes ?? null : null
   );
 
-  const missingRooms = (config.rooms || []).length - roomsByValue.length;
-
   return {
     empty: false,
     metric: {
@@ -4660,6 +4792,7 @@ function buildCardDomainModel({ states, config, context, language }) {
       excludedRoomIds: context.excludedRoomIds,
       sourceKind: context.sourceKind,
       sourceEntity: context.sourceEntity,
+      availability: sourceAvailability,
     },
     average: {
       value: average,
@@ -4673,6 +4806,7 @@ function buildCardDomainModel({ states, config, context, language }) {
       count: roomsByValue.length,
       comparable: roomsComparable,
       missing: missingRooms,
+      availability: sourceAvailability.rooms,
     },
     roomColors,
     extremes: roomsComparable
@@ -4809,6 +4943,11 @@ function extremeRoomLabel(role, metricKind, texts) {
 // matched character.
 const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
+// The one textual representation of a configured value that currently has no
+// usable measurement. Renderers consume the ViewModel and never spell this
+// sentinel independently.
+const UNAVAILABLE_TEXT = "--";
+
 // HTML-escapes a value before it enters a template string.
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ESC_MAP[char]);
@@ -4838,6 +4977,7 @@ function isTwoUpperLetterLabel(text) {
 const CHIP_MARK_ALPHA = 0.18;
 const CHIP_OUT_BG_ALPHA = 0.10;
 const CHIP_OUT_BORDER_ALPHA = 0.36;
+const UNAVAILABLE_COLOR = "#7F8792";
 
 // room_label picks which of the configured short/name pair a chip shows. "auto"
 // and "short" both resolve to the short code; "name" shows the full name and
@@ -4929,9 +5069,19 @@ function roomGridRows(count, columns, rows, autoMaxColumns = 7) {
 // confusing. Declaration order keeps it stable and predictable.
 function buildRoomLayout({ declaredRooms, config, metricKind, language }) {
   const grid = roomGridRows(declaredRooms.length, config.room_columns, config.room_rows, autoRoomColumnsFor(metricKind));
-  const capped = grid.capacity < declaredRooms.length ? declaredRooms.slice(0, grid.capacity) : declaredRooms;
+  // A placeholder is display-only and always follows every usable room. The cap
+  // still selects usable rooms in declaration order before sorting them, preserving
+  // the stable visible set the existing grid contract promises.
+  const usable = declaredRooms.filter((room) => !room.placeholder);
+  const placeholders = declaredRooms.filter((room) => room.placeholder).sort((a, b) => a.index - b.index);
+  const selectedUsable = usable.slice(0, grid.capacity);
+  const remaining = Math.max(0, grid.capacity - selectedUsable.length);
+  const visible = [
+    ...resolveRoomDisplayOrder(selectedUsable, config.room_sort, language),
+    ...placeholders.slice(0, remaining),
+  ];
   return {
-    visible: resolveRoomDisplayOrder(capped, config.room_sort, language),
+    visible,
     rowSizes: grid.rowSizes,
   };
 }
@@ -4944,6 +5094,27 @@ function buildRoomLayout({ declaredRooms, config, metricKind, language }) {
 // The mark is a direction glyph, not a translation: it means the same thing in
 // every language.
 function buildRoomChipModel({ room, color, comfort, unit, texts }) {
+  if (room.placeholder) {
+    const title = texts.t("availability.roomNoData", { name: room.name });
+    return {
+      room,
+      entity: room.entity,
+      index: room.index,
+      displayLabel: room.displayLabel,
+      shortGuaranteed: room.shortGuaranteed,
+      unavailable: true,
+      color: UNAVAILABLE_COLOR,
+      mark: "–",
+      out: false,
+      markBackground: rgba(UNAVAILABLE_COLOR, CHIP_MARK_ALPHA),
+      background: "var(--rtc-chip-bg)",
+      border: "var(--rtc-hairline)",
+      valueText: UNAVAILABLE_TEXT,
+      unitText: "",
+      title,
+      ariaLabel: title,
+    };
+  }
   const out = room.value < comfort.min || room.value > comfort.max;
   return {
     room,
@@ -5830,6 +6001,49 @@ function buildViewContent({ shared, viewState }) {
 // locator: it cannot reach the card, the DOM or the configuration.
 
 
+const NO_DATA_COLOR = "#7F8792";
+const PLACEHOLDER_STATUSES = new Set([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE]);
+
+function buildNeutralTone(icon, texts) {
+  return {
+    label: texts.t("status.noData"),
+    color: NO_DATA_COLOR,
+    score: null,
+    zone: "neutral",
+    source: "availability",
+    profileId: null,
+    icon,
+    soft: rgba(NO_DATA_COLOR, 0.20),
+  };
+}
+
+// Joins calculation rooms with display-only placeholders by YAML index. Missing
+// and incompatible sources never enter this list, and placeholders carry no
+// numeric value, classification or colour that a calculation could accidentally
+// consume.
+function buildDisplayRooms(domainModel, config) {
+  const usableByIndex = new Map((domainModel.rooms?.declared || []).map((room) => [room.index, room]));
+  const availabilityByIndex = new Map((domainModel.rooms?.availability || []).map((room) => [room.index, room]));
+  const displayed = [];
+  for (const [index, configured] of (config.rooms || []).entries()) {
+    const usable = usableByIndex.get(index);
+    if (usable) {
+      displayed.push(usable);
+      continue;
+    }
+    const availability = availabilityByIndex.get(index);
+    if (config.unavailable_values !== "show" || !PLACEHOLDER_STATUSES.has(availability?.status)) continue;
+    displayed.push({
+      ...configured,
+      index,
+      value: null,
+      placeholder: true,
+      availability: availability.status,
+    });
+  }
+  return displayed;
+}
+
 function buildSubtitleText(subtitle, texts, metricKind) {
   const meta = metricMetaFor(metricKind);
   let text;
@@ -5948,26 +6162,140 @@ function buildAverage({ domainModel, config, topology, texts, tone, position, tr
   };
 }
 
-// The empty state is its own small model: a title, one hint sentence and an icon.
-// The wording distinguishes "no rooms are configured" from "configured rooms report
-// nothing", because those need different fixes.
-function buildEmptyViewModel({ domainModel, config, texts, title, metricKind }) {
-  const hint = (config.rooms || []).length === 0
-    ? texts.t("empty.hintNoRooms")
-    : domainModel.missingRooms
-      ? texts.t("empty.hintMissingRooms", { count: domainModel.missingRooms })
-      : texts.t("empty.hintNoRoomData");
+function noDataHeadlineSource(domainModel, config, topology) {
+  const availability = domainModel.context.availability;
+  if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
+    return { ...availability.rooms[topology.roomIndex], source: "room", roomIndex: topology.roomIndex };
+  }
+  if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY || topology.kind === SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS) {
+    return { ...availability.primary, source: "sensor", roomIndex: null };
+  }
+  return { entity: null, status: null, source: "calculated", roomIndex: null };
+}
+
+function buildNoDataSubtitle({ domainModel, headline, texts }) {
+  const missingRooms = domainModel.context.availability.rooms.filter(
+    (room) => room.status === AVAILABILITY.MISSING && room.entity !== headline.entity
+  );
+  const incompatible = [
+    domainModel.context.availability.primary,
+    ...domainModel.context.availability.rooms,
+  ].some((source) => [AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(source.status));
+
+  const missingRoomText = () => texts.t("availability.entitiesMissing", {
+    count: missingRooms.length,
+    entities: missingRooms.map((room) => room.entity).join(", "),
+  });
+  // A missing configured room is independently actionable information. Keep it
+  // visible even when the headline has its own outage or incompatibility reason.
+  const appendMissingRooms = (result) => missingRooms.length === 0
+    ? result
+    : {
+        kind: `${result.kind}+rooms-missing`,
+        text: `${result.text} ${missingRoomText()}`,
+      };
+
+  if (headline.status === AVAILABILITY.MISSING) {
+    return appendMissingRooms({
+      kind: "entity-missing",
+      text: texts.t("availability.entityMissing", { entity: headline.entity }),
+    });
+  }
+  if ([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(headline.status)) {
+    return appendMissingRooms({ kind: "value-unavailable", text: texts.t("availability.valueUnavailable") });
+  }
+  if ([AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(headline.status)) {
+    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
+  }
+  if (domainModel.configurationState === "mixed_metric_kinds" || incompatible) {
+    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
+  }
+  if (missingRooms.length > 0) {
+    return {
+      kind: "rooms-missing",
+      text: missingRoomText(),
+    };
+  }
+  if (domainModel.context.availability.rooms.length > 0) {
+    return { kind: "rooms-unavailable", text: texts.t("availability.noUsableRooms") };
+  }
+  return { kind: "source-unavailable", text: texts.t("availability.valueUnavailable") };
+}
+
+// No data is a normal card shell, not a separate error component. It uses the
+// same header, headline and keyed room-grid contracts as the data state, with a
+// deliberately collapsed view area and neutral presentation values.
+function buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta }) {
+  const headline = noDataHeadlineSource(domainModel, config, topology);
+  const label = resolveHeadlineLabel({ config, topology, roomIndex: headline.roomIndex, texts });
+  const hasLabel = label !== "";
+  const headlineExists = headline.entity && headline.status !== AVAILABILITY.MISSING;
+  const statusLabel = texts.t("status.noData");
+  const tooltip = hasLabel
+    ? texts.t("availability.valueNoData", { label })
+    : statusLabel;
+  const ariaOpen = headline.roomIndex !== null
+    ? texts.t("room.ariaOpen", { name: config.rooms[headline.roomIndex].name })
+    : texts.t("value.ariaOpen");
+  const icon = config.icon || meta?.emptyIcon || "mdi:home-thermometer-outline";
+  const tone = buildNeutralTone(icon, texts);
+  const noData = buildNoDataSubtitle({ domainModel, headline, texts });
+
+  const displayRooms = buildDisplayRooms(domainModel, config);
+  const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
+  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, metricKind, language: texts.language });
+  const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
+  const showChips =
+    config.show_rooms !== "never" &&
+    chips.length >= 1 &&
+    (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology));
+
   return {
     empty: true,
-    metric: { kind: metricKind },
+    metric: { kind: metricKind, unit: "", displayUnitProfile: null },
     title,
+    subtitle: noData.text,
     missingRooms: domainModel.missingRooms,
     configurationState: domainModel.configurationState,
-    emptyState: {
-      icon: metricMetaFor(metricKind).emptyIcon,
-      title,
-      subtitle: `${texts.t("empty.title")} ${hint}`,
+    noData: { hintKind: noData.kind },
+    tone,
+    toneStyle: toneStyleDeclaration(tone),
+    header: { icon, title, subtitle: noData.text, statusLabel },
+    average: {
+      value: null,
+      valueText: UNAVAILABLE_TEXT,
+      unitText: "",
+      label,
+      hasLabel,
+      entity: headlineExists ? headline.entity : "",
+      source: headline.source,
+      roomIndex: headline.roomIndex,
+      color: NO_DATA_COLOR,
+      position: null,
+      tooltip,
+      ariaLabel: headlineExists ? `${ariaOpen}. ${statusLabel}` : tooltip,
+      trendDirection: null,
+      unavailable: true,
     },
+    rooms: {
+      visible: layout.visible,
+      rowSizes: layout.rowSizes,
+      count: domainModel.rooms.count,
+      comparable: false,
+      showChips,
+      chips,
+      chipRows: buildRoomChipRows(chips, layout.rowSizes),
+    },
+    extremes: null,
+    roomMarkers: [],
+    comfort: null,
+    spread: null,
+    range: null,
+    trend: { model: null, text: "" },
+    scale: null,
+    rangeScale: null,
+    views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
+    carousel: { hint: "", noActiveViewsHint: "" },
   };
 }
 
@@ -5977,11 +6305,11 @@ function buildCardViewModel({ domainModel, config, texts }) {
   // the same single answer.
   const topology = resolveSourceTopology(config);
   const metricKind = domainModel.metric.kind;
-  const meta = metricMetaFor(metricKind);
-  const title = config.title || texts.t(meta.titleKey);
+  const meta = metricKind ? metricMetaFor(metricKind) : null;
+  const title = config.title || (meta ? texts.t(meta.titleKey) : CARD_NAME);
 
   if (domainModel.empty) {
-    return buildEmptyViewModel({ domainModel, config, texts, title, metricKind });
+    return buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta });
   }
 
   const unit = domainModel.metric.unit;
@@ -5999,7 +6327,8 @@ function buildCardViewModel({ domainModel, config, texts }) {
   // Decorated once, in declaration order, then reused for both the visible chip list
   // and the extremes — so a room object is the same object wherever it appears.
   const decoratedByIndex = new Map();
-  const decoratedDeclared = domainModel.rooms.declared.map((room) => {
+  const displayRooms = buildDisplayRooms(domainModel, config);
+  const decoratedDeclared = displayRooms.map((room) => {
     const decorated = decorateRoomForDisplay(room, config.room_label);
     decoratedByIndex.set(room.index, decorated);
     return decorated;
@@ -6185,7 +6514,7 @@ function buildCardViewModel({ domainModel, config, texts }) {
       // data sources whether or not they are drawn.
       showChips:
         config.show_rooms !== "never" &&
-        rooms.count >= 1 &&
+        chips.length >= 1 &&
         (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),
@@ -6317,13 +6646,14 @@ function renderAverage(viewModel) {
   const average = viewModel.average;
   const trendClass = average.trendDirection ? " rtc-has-trend" : "";
   const labelClass = average.hasLabel ? "" : " rtc-no-label";
+  const unavailableClass = average.unavailable ? " rtc-unavailable" : "";
   const trendDirection = average.trendDirection ? ` data-trend-direction="${escapeHtml(average.trendDirection)}"` : "";
   const content = contentHtml(average);
 
   if (!average.entity) {
     return `
           <div
-            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}"
+            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}${unavailableClass}"
             ${trendDirection}
             title="${escapeHtml(average.tooltip)}"
             aria-label="${escapeHtml(average.ariaLabel)}"
@@ -6340,7 +6670,7 @@ function renderAverage(viewModel) {
   return `
         <button
           type="button"
-          class="rtc-avg-button${trendClass}${labelClass}"
+          class="rtc-avg-button${trendClass}${labelClass}${unavailableClass}"
           ${trendDirection}
           data-entity="${escapeHtml(average.entity)}"${roomIndex}
           aria-label="${escapeHtml(average.ariaLabel)}"
@@ -6379,6 +6709,7 @@ function patchAverage(element, viewModel) {
   const hasTrend = Boolean(average.trendDirection);
   element.classList.toggle("rtc-has-trend", hasTrend);
   element.classList.toggle("rtc-no-label", !average.hasLabel);
+  element.classList.toggle("rtc-unavailable", Boolean(average.unavailable));
   if (hasTrend) {
     element.setAttribute("data-trend-direction", average.trendDirection);
   } else {
@@ -6411,43 +6742,6 @@ function updateAverage(context, root, averageEl, viewModel) {
   if (focusedWithin) applyFocusFallback(root);
 }
 
-// The empty state: what the card shows when neither the primary entity nor any room
-// reports a usable number.
-//
-// It is a real state, not an error screen — the icon still reflects the metric kind,
-// so a card that is temporarily without data still looks like the card it is.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
-
-
-function renderEmptyState(viewModel) {
-  const empty = viewModel.emptyState;
-  return `
-        <div class="rtc-empty">
-          <div class="rtc-empty-icon"><ha-icon icon="${escapeHtml(empty.icon)}"></ha-icon></div>
-          <div class="rtc-empty-copy">
-            <div class="rtc-empty-title">${escapeHtml(empty.title)}</div>
-            <div class="rtc-empty-subtitle">${escapeHtml(empty.subtitle)}</div>
-          </div>
-        </div>
-      `;
-}
-
-// An empty-to-empty update still has to follow the metric kind: a configured entity
-// swapped for a different mode while both stay unavailable would otherwise keep the
-// previous mode's icon.
-function patchEmptyState(root, viewModel) {
-  if (!root) return;
-  const empty = viewModel.emptyState;
-  const titleEl = root.querySelector(".rtc-empty-title");
-  if (titleEl) titleEl.textContent = empty.title;
-  const subtitleEl = root.querySelector(".rtc-empty-subtitle");
-  if (subtitleEl) subtitleEl.textContent = empty.subtitle;
-  const iconEl = root.querySelector(".rtc-empty-icon ha-icon");
-  if (iconEl) iconEl.setAttribute("icon", empty.icon);
-}
-
 // The room chips, and the grid they sit in.
 //
 // Each row is its own CSS grid with its own column count, because a single native
@@ -6466,7 +6760,7 @@ function renderRoomChip(chip) {
   return `
         <button
           type="button"
-          class="rtc-room-chip"
+          class="rtc-room-chip${chip.unavailable ? " rtc-room-unavailable" : ""}"
           data-entity="${escapeHtml(chip.entity)}"
           data-room-index="${chip.index}"
           style="${style}"
@@ -6494,6 +6788,7 @@ function patchRoomChip(element, chip) {
   element.style.setProperty("--room-border", chip.border);
   element.setAttribute("title", chip.title);
   element.setAttribute("aria-label", chip.ariaLabel);
+  element.classList.toggle("rtc-room-unavailable", Boolean(chip.unavailable));
   const shortEl = element.querySelector(".rtc-room-short");
   shortEl.textContent = chip.displayLabel;
   // toggleAttribute rather than a conditional setAttribute: chip nodes are reused
@@ -6630,8 +6925,8 @@ function renderViewArea(context, viewModel, viewRenderers) {
 //
 // A view without a structureSignature() is declaring that it reconciles everything.
 function cardStructureSignature(viewModel, viewRenderers) {
-  if (viewModel.empty) return "empty";
   const parts = [
+    `state:${viewModel.empty ? "no-data" : "data"}`,
     `chips:${viewModel.rooms.showChips ? 1 : 0}`,
     // The headline's caption is a NODE that is either there or not (see
     // renderAverage()). A patch can change its text; it cannot create or delete it, so
@@ -6640,6 +6935,13 @@ function cardStructureSignature(viewModel, viewRenderers) {
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];
+  if (viewModel.empty) {
+    // These are the no-data structures a text patch cannot create or remove.
+    // The keyed grid still reconciles individual chips while it remains present.
+    parts.push(`avgButton:${viewModel.average.entity ? 1 : 0}`);
+    parts.push(`hint:${viewModel.noData.hintKind}`);
+    return parts.join("|");
+  }
   for (const view of viewRenderers) {
     const content = viewModel.views.byKey[view.key];
     if (!content || typeof view.structureSignature !== "function") continue;
@@ -6649,8 +6951,6 @@ function cardStructureSignature(viewModel, viewRenderers) {
 }
 
 function renderCardBody(context, viewModel, viewRenderers) {
-  if (viewModel.empty) return renderEmptyState(viewModel);
-
   const roomGrid = viewModel.rooms.showChips
     ? `
           <div class="rtc-room-grid">
@@ -6663,7 +6963,7 @@ function renderCardBody(context, viewModel, viewRenderers) {
   // last-resort focus fallback target when a focused element disappears and no average
   // button exists to fall back to instead.
   return `
-        <div class="rtc-root" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
+        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
           <div class="rtc-top-line"></div>
 
           <div class="rtc-header">
@@ -6693,13 +6993,14 @@ function renderCardBody(context, viewModel, viewRenderers) {
 // The partial update: only text, colours, markers and the dynamic subsections change,
 // so the slide animation never restarts. Each view patches its own subsection; a view
 // that is not currently mounted is a no-op through its own container guard.
-function patchCardBody(context, root, viewModel, viewRenderers) {
+function patchShell(context, root, viewModel) {
   if (!root) return;
 
   const contentRoot = root.querySelector(".rtc-root");
   if (contentRoot) {
     contentRoot.setAttribute("style", viewModel.toneStyle);
-    contentRoot.setAttribute("data-metric", viewModel.metric.kind);
+    contentRoot.setAttribute("data-state", viewModel.empty ? "no-data" : "data");
+    contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
   }
 
   const iconEl = root.querySelector(".rtc-icon-badge ha-icon");
@@ -6716,12 +7017,16 @@ function patchCardBody(context, root, viewModel, viewRenderers) {
 
   updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);
+}
+
+function patchCardBody(context, root, viewModel, viewRenderers) {
+  patchShell(context, root, viewModel);
 
   for (const view of viewRenderers) view.patch(context, root, viewModel);
 }
 
-function patchEmptyCardBody(root, viewModel) {
-  patchEmptyState(root, viewModel);
+function patchEmptyCardBody(context, root, viewModel) {
+  patchShell(context, root, viewModel);
 }
 
 // Re-resolves every mounted view's own measured layout. The single entry point for
@@ -8378,55 +8683,21 @@ const ROOMS_CSS = `        .rtc-room-grid {
 
 // PART OF THE SHIPPED STYLESHEET.
 //
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
+// Availability is a display state of the normal card shell. It deliberately
+// changes neither the configured source identity nor any calculation colour.
 
-// The empty state.
-
-const EMPTY_CSS = `        .rtc-empty {
-          padding: 16px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
+const AVAILABILITY_CSS = `        .rtc-root[data-state="no-data"] .rtc-main-panel {
+          grid-template-columns: minmax(94px, 106px);
         }
 
-        .rtc-empty-icon {
-          width: 38px;
-          height: 38px;
-          flex: 0 0 auto;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--rtc-panel);
-          border: 1px solid var(--rtc-hairline);
+        .rtc-root[data-state="no-data"] .rtc-avg-value,
+        .rtc-avg-button.rtc-unavailable .rtc-avg-value {
+          color: var(--rtc-muted);
         }
 
-        .rtc-empty-icon ha-icon {
-          width: 22px;
-          height: 22px;
-          color: var(--secondary-text-color);
-        }
-
-        .rtc-empty-copy {
-          min-width: 0;
-        }
-
-        .rtc-empty-title {
-          font-size: 21px;
-          font-weight: 900;
-          color: var(--primary-text-color);
-          line-height: 1.05;
-        }
-
-        .rtc-empty-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
-          color: var(--secondary-text-color);
-          line-height: 1.3;
+        .rtc-room-chip.rtc-room-unavailable .rtc-room-value,
+        .rtc-room-chip.rtc-room-unavailable .rtc-room-mark {
+          color: var(--rtc-muted);
         }
 
 `;
@@ -8636,7 +8907,7 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
     SCALE_BAR_CSS,
     CARDS_CSS,
     ROOMS_CSS,
-    EMPTY_CSS,
+    AVAILABILITY_CSS,
     RESPONSIVE_CSS,
     MOTION_CSS,
   ].join("");
@@ -9926,7 +10197,7 @@ const RENDER_PATH = {
   SKIPPED: "skipped",
   // The markup itself had to change.
   FULL: "full",
-  // The card is in its empty state and stayed there.
+  // The card is in its no-data state and stayed there.
   EMPTY: "empty",
   // Same markup, new values.
   CONTENT: "content",
@@ -10003,7 +10274,7 @@ function createRenderController({
       const structureChanged = nextStructure !== structureSignature;
       const structuralConfigChanged = nextStructuralConfig !== structuralConfigSignature;
 
-      if (!rendered || viewModel.empty !== currentlyEmpty || (!viewModel.empty && (structureChanged || structuralConfigChanged))) {
+      if (!rendered || viewModel.empty !== currentlyEmpty || structureChanged || structuralConfigChanged) {
         // isFirstRender is passed in rather than read back afterwards: the render path
         // needs to know whether there is a previous view worth protecting, and it must
         // learn that before `rendered` flips.
@@ -10275,7 +10546,7 @@ function structuralConfigSignature(config) {
         viewRenderers: VIEW_RENDERERS,
         computeViewModel: () => this._computeViewModel(),
         isDragging: () => this._isDragging,
-        isCurrentlyEmpty: () => Boolean(this.shadowRoot.querySelector(".rtc-empty")),
+        isCurrentlyEmpty: () => this.shadowRoot.querySelector(".rtc-root")?.getAttribute("data-state") === "no-data",
         renderAll: (viewModel, options) => this._renderAll(viewModel, options),
         updateEmpty: (viewModel) => this._updateEmpty(viewModel),
         updateContent: (viewModel) => this._updateContent(viewModel),
@@ -10690,7 +10961,7 @@ function structuralConfigSignature(config) {
       if (key === this._lastMetricContextWarningKey) return;
       this._lastMetricContextWarningKey = key;
       console.warn(
-        `${CARD_NAME}: rooms report incompatible metric kinds (${diagnostic.metricKinds.join(", ")}) and no usable primary entity is configured to arbitrate — no average is computed (see the empty-state hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity.`
+        `${CARD_NAME}: rooms report incompatible metric kinds (${diagnostic.metricKinds.join(", ")}) and no usable primary entity is configured to arbitrate — no average is computed (see the no-data hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity.`
       );
     }
 
@@ -10838,6 +11109,13 @@ function structuralConfigSignature(config) {
       // only after this method returns, so "is there a previous view worth protecting"
       // is decided once, by the owner of that fact, rather than read back mid-render.
 
+      // Preserve a focused source across the structural replacement where possible.
+      // Attribute equality is checked in JS rather than interpolated into a selector,
+      // so even a hostile entity id remains plain data.
+      const focusedBefore = this.shadowRoot?.activeElement ?? null;
+      const focusedEntity = focusedBefore?.getAttribute?.("data-entity") ?? null;
+      const hadCardFocus = Boolean(focusedBefore);
+
       // The innerHTML replacement below destroys everything an
       // unclassified in-flight gesture is anchored to. The runtime owns that decision
       // and states the reasoning in full; the element only has to say when.
@@ -10872,8 +11150,8 @@ function structuralConfigSignature(config) {
       const previousActiveKey = preConfigVisualKey !== undefined
         ? preConfigVisualKey
         : (this._views[this._currentVisualViewIndex()] ?? null);
-      this._views = viewModel.empty ? [] : viewModel.views.keys;
-      this._viewAreaCollapsed = viewModel.empty ? false : Boolean(viewModel.views.collapsed);
+      this._views = viewModel.views.keys;
+      this._viewAreaCollapsed = Boolean(viewModel.views.collapsed);
       let nextIndex = this._views.indexOf(previousActiveKey);
       if (nextIndex === -1) nextIndex = this._views.indexOf(this._config?.start_view);
       // No view is mandatory: nextIndex === -1 ? 0 : nextIndex already means "the first
@@ -10889,6 +11167,15 @@ function structuralConfigSignature(config) {
           ${renderCardBody(context, viewModel, VIEW_RENDERERS)}
         </ha-card>
       `;
+      if (hadCardFocus) {
+        const matchingSource = focusedEntity
+          ? Array.from(this.shadowRoot.querySelectorAll("[data-entity]")).find(
+              (node) => node.getAttribute("data-entity") === focusedEntity
+            )
+          : null;
+        if (matchingSource) matchingSource.focus();
+        else applyFocusFallback(this.shadowRoot);
+      }
       this._bindEvents();
       if (!isFirstRender && !viewModel.empty) {
         // previousActiveKey above is correctly preserved, but that alone is only a JS
@@ -10935,9 +11222,9 @@ function structuralConfigSignature(config) {
     }
 
     _updateEmpty(viewModel) {
-      // Updates the empty state without a full DOM rebuild.
+      // Updates the normal no-data shell without a full DOM rebuild.
       if (!this.shadowRoot) return;
-      patchEmptyCardBody(this.shadowRoot, viewModel);
+      patchEmptyCardBody(this._renderContext(), this.shadowRoot, viewModel);
     }
 
     _updateContent(viewModel) {

@@ -46,6 +46,7 @@ function cfg(overrides = {}) {
     room_columns: null,
     room_rows: null,
     show_rooms: "auto",
+    unavailable_values: "show",
     views: null,
     ...overrides,
   };
@@ -503,34 +504,68 @@ test("range timestamps are formatted here, from the raw values", () => {
   assert.equal(result.range.maxTime, null);
 });
 
-test("the empty view model carries the five data fields plus its own render model", () => {
+function noDataDomain({ kind = "temperature", primaryStatus = "missing", rooms = [], configurationState = null } = {}) {
+  return {
+    empty: true,
+    metric: { kind },
+    missingRooms: rooms.filter((room) => room.status === "missing").length,
+    configurationState,
+    context: {
+      diagnostics: [],
+      consistent: configurationState !== "mixed_metric_kinds",
+      excludedRoomIds: [],
+      sourceKind: "primary",
+      sourceEntity: "sensor.avg",
+      availability: {
+        primary: { entity: "sensor.avg", status: primaryStatus, metricKind: kind },
+        rooms,
+      },
+    },
+    rooms: { declared: [], byValue: [], count: 0, comparable: false, missing: 0, availability: rooms },
+  };
+}
+
+test("the no-data view model carries the normal shell contract", () => {
   const result = cardViewModel.buildCardViewModel({
-    domainModel: { empty: true, metric: { kind: "co2" }, missingRooms: 2, configurationState: "mixed_metric_kinds" },
-    config: cfg({ rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }),
+    domainModel: noDataDomain({
+      kind: "co2",
+      primaryStatus: "incompatible_kind",
+      rooms: [
+        { index: 0, entity: "sensor.r1", status: "incompatible_kind", metricKind: "temperature" },
+        { index: 1, entity: "sensor.r2", status: "incompatible_kind", metricKind: "humidity" },
+      ],
+      configurationState: "mixed_metric_kinds",
+    }),
+    config: cfg({ rooms: [
+      { entity: "sensor.r1", name: "One", short: "ON" },
+      { entity: "sensor.r2", name: "Two", short: "TW" },
+    ] }),
     texts: stubTexts(),
   });
-  assert.deepEqual(Object.keys(result).sort(), ["configurationState", "empty", "emptyState", "metric", "missingRooms", "title"]);
+  assert.equal(result.empty, true);
   assert.equal(result.title, "title.co2");
-  // The empty state is renderer-ready too: an icon, a title and one finished hint
-  // sentence, with nothing left for the renderer to translate.
-  assert.deepEqual(result.emptyState, {
-    icon: "mdi:molecule-co2",
-    title: "title.co2",
-    subtitle: 'empty.title empty.hintMissingRooms({"count":2})',
-  });
+  assert.equal(result.header.icon, "mdi:molecule-co2");
+  assert.equal(result.header.statusLabel, "status.noData");
+  assert.equal(result.average.valueText, "--");
+  assert.equal(result.views.collapsed, true);
+  assert.deepEqual(result.views.keys, []);
+  assert.equal(result.carousel.noActiveViewsHint, "", "views.none is not part of no-data presentation");
 });
 
-test("the empty hint distinguishes no rooms configured from rooms reporting nothing", () => {
-  const build = (config, missingRooms) =>
+test("the no-data hint distinguishes missing, unavailable and incompatible sources", () => {
+  const build = (domainModel, config) =>
     cardViewModel.buildCardViewModel({
-      domainModel: { empty: true, metric: { kind: "temperature" }, missingRooms, configurationState: null },
+      domainModel,
       config,
       texts: stubTexts(),
-    }).emptyState.subtitle;
+    }).header.subtitle;
 
-  assert.match(build(cfg({ rooms: [] }), 0), /empty\.hintNoRooms/);
-  assert.match(build(cfg({ rooms: [{ entity: "sensor.r1" }] }), 1), /empty\.hintMissingRooms/);
-  assert.match(build(cfg({ rooms: [{ entity: "sensor.r1" }] }), 0), /empty\.hintNoRoomData/);
+  assert.match(build(noDataDomain({ primaryStatus: "missing" }), cfg()), /availability\.entityMissing/);
+  assert.match(build(noDataDomain({ primaryStatus: "unavailable" }), cfg()), /availability\.valueUnavailable/);
+  assert.match(
+    build(noDataDomain({ primaryStatus: "incompatible_unit" }), cfg()),
+    /availability\.incompatible/
+  );
 });
 
 // ---------------------------------------------------------- legacy adapter --

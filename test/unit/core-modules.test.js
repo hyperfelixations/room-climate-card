@@ -61,6 +61,16 @@ test("parseNumericState() rejects every non-measurement, including numeric-looki
   assert.equal(parseNumericState({}), null);
 });
 
+test("isUnavailableState() distinguishes HA absence sentinels from malformed values", () => {
+  const { isUnavailableState } = numbers;
+  for (const unavailable of [undefined, null, "", " unknown ", "UNAVAILABLE", "none", "null", "undefined"]) {
+    assert.equal(isUnavailableState(unavailable), true, JSON.stringify(unavailable));
+  }
+  for (const invalid of ["not-a-number", "NaN", "25 °C", {}, 21]) {
+    assert.equal(isUnavailableState(invalid), false, JSON.stringify(invalid));
+  }
+});
+
 test("parseConfigNumber() refuses the type coercions Number() would allow", () => {
   const { parseConfigNumber } = numbers;
   assert.equal(parseConfigNumber(3), 3);
@@ -118,6 +128,10 @@ test("escapeHtml() neutralizes every character that could break out of markup", 
   assert.equal(escapeHtml(undefined), "");
   assert.equal(escapeHtml(21.5), "21.5");
   assert.equal(escapeHtml("a&b&c"), "a&amp;b&amp;c", "every occurrence, not just the first");
+});
+
+test("UNAVAILABLE_TEXT is the single presentation sentinel for absent measurements", () => {
+  assert.equal(text.UNAVAILABLE_TEXT, "--");
 });
 
 test("isTwoUpperLetterLabel() accepts exactly two Unicode uppercase letters", () => {

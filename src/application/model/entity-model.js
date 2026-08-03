@@ -10,17 +10,29 @@
 // it is BOTH present AND resolves to a registered profile. A missing
 // unit_of_measurement is NOT assumed to be the canonical unit — missing and
 // unknown both yield unitProfile:null, exclude the measurement, and get
-// diagnosed. metricKind itself is still resolved in that case, so the empty state
+// diagnosed. metricKind itself is still resolved in that case, so the no-data state
 // can show the right title and icon.
 //
 // `states` is Home Assistant's own states object, read but never written.
 
-import { parseNumericState } from "../../core/numbers.js";
+import { isUnavailableState, parseNumericState } from "../../core/numbers.js";
 import { normalizeUnitToken } from "../../domain/units/unit-token.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { convertMetricValue } from "../../domain/metrics/access.js";
 import { METRIC_TYPE_BY_DEVICE_CLASS, METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../../domain/metrics/resolution.js";
 import { classificationPolicyOf, isValuePhysicallyValid } from "./classification.js";
+
+// One exhaustive vocabulary for a configured entity's current availability.
+// Consumers compare these values; they never repeat the raw-state/unit/kind
+// checks that decide them.
+export const AVAILABILITY = Object.freeze({
+  USABLE: "usable",
+  MISSING: "missing",
+  UNAVAILABLE: "unavailable",
+  INVALID_VALUE: "invalid_value",
+  INCOMPATIBLE_UNIT: "incompatible_unit",
+  INCOMPATIBLE_KIND: "incompatible_kind",
+});
 
 export function hasEntity(states, entityId) {
   return Boolean(entityId && states?.[entityId]);
@@ -127,6 +139,15 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
   // kind filter do its job instead of throwing during a probe.
   const validPhysical = validNumeric && (!validUnit || isValuePhysicallyValid(policy, metricKind, null, canonicalValue, { lenient: true }));
 
+  let availability;
+  if (!stateObject) availability = AVAILABILITY.MISSING;
+  else if (isUnavailableState(stateObject.state)) availability = AVAILABILITY.UNAVAILABLE;
+  else if (!validNumeric) availability = AVAILABILITY.INVALID_VALUE;
+  else if (metricKind === null) availability = AVAILABILITY.INCOMPATIBLE_KIND;
+  else if (!validUnit) availability = AVAILABILITY.INCOMPATIBLE_UNIT;
+  else if (!validPhysical) availability = AVAILABILITY.INVALID_VALUE;
+  else availability = AVAILABILITY.USABLE;
+
   return {
     entityId,
     sourceRole,
@@ -141,6 +162,7 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
     validNumeric,
     validPhysical,
     validUnit,
+    availability,
     errors: [],
   };
 }

@@ -65,6 +65,14 @@ export const nb = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beregnet ut fra romverdier`,
   "value.ariaOpen": "Åpne gjennomsnitt",
+  "status.noData": "Ingen data",
+  "availability.entityMissing": (v) => `Entiteten ${v.entity} ble ikke funnet.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurerte rom-entitet${v.count === 1 ? " ble" : "er ble"} ikke funnet: ${v.entities}.`,
+  "availability.valueUnavailable": "Verdien er ikke tilgjengelig akkurat nå.",
+  "availability.noUsableRooms": "Ingen konfigurerte romverdier kan brukes akkurat nå.",
+  "availability.incompatible": "Konfigurerte kilder bruker inkompatible måletyper eller enheter.",
+  "availability.roomNoData": (v) => `${v.name}: ingen data. Åpne detaljer.`,
+  "availability.valueNoData": (v) => `${v.label}: ingen data`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,
@@ -111,8 +119,4 @@ export const nb = {
 
   "views.none": "Ingen visning tilgjengelig.",
 
-  "empty.title": "Ingen data tilgjengelig.",
-  "empty.hintNoRooms": "Den konfigurerte gjennomsnittsenheten rapporterer ikke et tall.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurert${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? "" : "er"} mangler eller rapporterer ikke et tall.`,
-  "empty.hintNoRoomData": "Ingen konfigurert rom-enhet rapporterer et tall.",
 };

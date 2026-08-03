@@ -9,6 +9,11 @@
 // matched character.
 const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
+// The one textual representation of a configured value that currently has no
+// usable measurement. Renderers consume the ViewModel and never spell this
+// sentinel independently.
+export const UNAVAILABLE_TEXT = "--";
+
 // HTML-escapes a value before it enters a template string.
 export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ESC_MAP[char]);

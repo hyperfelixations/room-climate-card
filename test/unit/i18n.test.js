@@ -114,18 +114,18 @@ test("I18N-02: regional HA locales resolve to the supported base language", () =
 
 test("I18N-02: every new language has native representative card text instead of English fallback", () => {
   const expected = {
-    es: { title: "Temperatura", avg: "Media del hogar", empty: "No hay datos disponibles." },
-    ru: { title: "Температура", avg: "Среднее по дому", empty: "Нет доступных данных." },
-    pl: { title: "Temperatura", avg: "Średnia dla domu", empty: "Brak dostępnych danych." },
-    ko: { title: "온도", avg: "집 전체 평균", empty: "사용 가능한 데이터가 없습니다." },
-    ja: { title: "温度", avg: "住宅平均", empty: "利用可能なデータがありません。" },
-    zh: { title: "温度", avg: "全屋平均", empty: "暂无可用数据。" },
+    es: { title: "Temperatura", avg: "Media del hogar", noData: "Sin datos" },
+    ru: { title: "Температура", avg: "Среднее по дому", noData: "Нет данных" },
+    pl: { title: "Temperatura", avg: "Średnia dla domu", noData: "Brak danych" },
+    ko: { title: "온도", avg: "집 전체 평균", noData: "데이터 없음" },
+    ja: { title: "温度", avg: "住宅平均", noData: "データなし" },
+    zh: { title: "温度", avg: "全屋平均", noData: "无数据" },
   };
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
     assert.equal(el._t("title.temperature"), text.title, `lang=${lang}: title`);
     assert.equal(el._t("value.homeAverage"), text.avg, `lang=${lang}: average label`);
-    assert.equal(el._t("empty.title"), text.empty, `lang=${lang}: empty title`);
+    assert.equal(el._t("status.noData"), text.noData, `lang=${lang}: no-data status`);
     env.cleanup(el);
   }
 });
@@ -152,13 +152,14 @@ test("I18N-02: every function-valued translation executes with the full runtime 
     "rangeScale.footer",
     "card.ariaOpen",
     "room.ariaOpen",
-    "empty.hintMissingRooms",
+    "availability.entitiesMissing",
   ];
   const vars = {
     label: "Test label",
     value: "22.0 °C",
     diff: "2.0 °C",
     count: 2,
+    entities: "sensor.one, sensor.two",
     total: 4,
     adjective: "test adjective",
     name: "Test room",
@@ -231,7 +232,7 @@ test("I18N-02: JS-derived classification is localized, while HA-provided value_l
   }
 });
 
-test("I18N-02: Russian room/entity grammar follows one/few/many plural categories", () => {
+test("I18N-02: Russian room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "ru" }, hassDe);
   const roomExpected = new Map([
     [1, " 1 комната без данных."],
@@ -254,13 +255,10 @@ test("I18N-02: Russian room/entity grammar follows one/few/many plural categorie
     /в 22 комнатах из 25 комнат прохладно\.$/,
     "few/many categories must remain grammatically correct in the comfort sentence"
   );
-  assert.match(el._t("empty.hintMissingRooms", { count: 1 }), /^1 настроенная сущность отсутствует/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 2 }), /^2 настроенные сущности отсутствуют/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 5 }), /^5 настроенных сущностей отсутствуют/);
   env.cleanup(el);
 });
 
-test("I18N-02: Polish room/entity grammar follows one/few/many plural categories", () => {
+test("I18N-02: Polish room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "pl" }, hassDe);
   const roomExpected = new Map([
     [1, " 1 pokój bez danych."],
@@ -273,9 +271,6 @@ test("I18N-02: Polish room/entity grammar follows one/few/many plural categories
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
   }
-  assert.match(el._t("empty.hintMissingRooms", { count: 1 }), /^1 skonfigurowana encja jest niedostępna/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 2 }), /^2 skonfigurowane encje są niedostępne/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 5 }), /^5 skonfigurowanych encji jest niedostępnych/);
   env.cleanup(el);
 });
 
@@ -293,11 +288,11 @@ test("I18N-02: Korean, Japanese, and Chinese count phrases do not invent grammat
   }
 });
 
-test("I18N-02: Latvian room/entity grammar follows the zero/one/other plural categories", () => {
+test("I18N-02: Latvian room grammar follows the zero/one/other plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "lv" }, hassDe);
-  // zero: n%10=0 or n%100 in 11..19 (genitive plural "telpu"/"entītiju");
-  // one: n%10=1 and n%100!=11 (nominative singular "telpa"/"entītija");
-  // other: everything else (nominative plural "telpas"/"entītijas").
+  // zero: n%10=0 or n%100 in 11..19 (genitive plural "telpu");
+  // one: n%10=1 and n%100!=11 (nominative singular "telpa");
+  // other: everything else (nominative plural "telpas").
   const roomExpected = new Map([
     [0, " 0 telpu bez datiem."],
     [1, " 1 telpa bez datiem."],
@@ -309,9 +304,6 @@ test("I18N-02: Latvian room/entity grammar follows the zero/one/other plural cat
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
   }
-  assert.match(el._t("empty.hintMissingRooms", { count: 1 }), /^1 konfigurēta entītija trūkst/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 2 }), /^2 konfigurētas entītijas trūkst/);
-  assert.match(el._t("empty.hintMissingRooms", { count: 11 }), /^11 konfigurētu entītiju trūkst/);
   // The "count/total rooms" comfort sentence depends on v.total's OWN
   // category, same as the existing Russian test above — v.total >= 2 does
   // NOT collapse this to a single safe form for a zero/one/other language

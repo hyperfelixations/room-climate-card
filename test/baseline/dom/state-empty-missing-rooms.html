@@ -1,13 +1,51 @@
 
-        <style>[[css sha256:3b3aed261a77abe5c5d3ee71db4d722673ad4ad108a3c119467aad7a9ef2f28e]]</style></style>
+        <style>[[css sha256:f9bdb410a64b8c0dbe8a96b912c11fec9b399f7ebe502102399a99df6198f386]]</style></style>
         <ha-card class="rtc-card">
           
-        <div class="rtc-empty">
-          <div class="rtc-empty-icon"><ha-icon icon="mdi:thermometer-off"></ha-icon></div>
-          <div class="rtc-empty-copy">
-            <div class="rtc-empty-title">Temperature</div>
-            <div class="rtc-empty-subtitle">No data available. 1 configured entity is missing or not reporting a number.</div>
+        <div class="rtc-root" data-state="no-data" data-metric="temperature" style="--tone-color:#7F8792;--tone-soft:rgba(127,135,146,0.2);--tone-border:rgba(127,135,146,0.38);--tone-band:rgba(127,135,146,0.2);" tabindex="-1">
+          <div class="rtc-top-line"></div>
+
+          <div class="rtc-header">
+            <div class="rtc-icon-badge" aria-hidden="true">
+              <ha-icon icon="mdi:thermometer-off"></ha-icon>
+            </div>
+
+            <div class="rtc-title-block">
+              <div class="rtc-title">Temperature</div>
+              <div class="rtc-subtitle">The value is currently unavailable. 1 configured room entity was not found: sensor.missing.</div>
+            </div>
+
+            <div class="rtc-status-pill">No data</div>
           </div>
+
+          <div class="rtc-main-panel">
+            <div class="rtc-average">
+        <button type="button" class="rtc-avg-button rtc-unavailable" data-entity="sensor.avg" aria-label="Open average. No data" title="Home avg.: no data">
+          
+        <span class="rtc-avg-label">Home avg.</span>
+        <span class="rtc-avg-value">
+          <span class="rtc-avg-value-num">--</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true" hidden=""><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit"></span></span></span>
+        </span>
+      
+        </button>
+      </div>
+
+            
+          </div>
+
+          
+          <div class="rtc-room-grid">
+            <div class="rtc-room-row" style="grid-template-columns:repeat(1, minmax(0, 1fr));">
+        <button type="button" class="rtc-room-chip rtc-room-unavailable" data-entity="sensor.r1" data-room-index="0" style="--room-color:#7F8792;--room-mark-bg:rgba(127,135,146,0.18);--room-bg:var(--rtc-chip-bg);--room-border:var(--rtc-hairline);" title="Room A: no data. Open details." aria-label="Room A: no data. Open details.">
+          <span class="rtc-room-top">
+            <span class="rtc-room-short" data-short-guaranteed="true">RA</span>
+            <span class="rtc-room-mark">–</span>
+          </span>
+          <span class="rtc-room-value"><span class="rtc-room-value-num">--</span><span class="rtc-room-value-unit"></span></span>
+        </button>
+      </div>
+          </div>
+        
         </div>
       
         </ha-card>

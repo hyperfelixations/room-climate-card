@@ -20,7 +20,7 @@ test.before(async () => {
   optionSchemas = await import("../../src/config/option-schemas.js");
 });
 
-test("the card defaults are unchanged", () => {
+test("the card defaults match the public contract", () => {
   assert.deepEqual(defaults.DEFAULT_CONFIG, {
     rotation_seconds: 14,
     slide_seconds: 1,
@@ -29,6 +29,7 @@ test("the card defaults are unchanged", () => {
     hold_action: { action: "more-info" },
     auto_slide: true,
     swipe: true,
+    unavailable_values: "show",
   });
 });
 

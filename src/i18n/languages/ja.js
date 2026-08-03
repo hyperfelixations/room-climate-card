@@ -57,6 +57,14 @@ export const ja = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 各部屋の値から算出`,
   "value.ariaOpen": "平均値を開く",
+  "status.noData": "データなし",
+  "availability.entityMissing": (v) => `エンティティ ${v.entity} が見つかりません。`,
+  "availability.entitiesMissing": (v) => `設定された部屋エンティティが ${v.count} 件見つかりません: ${v.entities}。`,
+  "availability.valueUnavailable": "現在、値を利用できません。",
+  "availability.noUsableRooms": "現在利用できる設定済みの部屋値がありません。",
+  "availability.incompatible": "設定されたソースの測定種類または単位に互換性がありません。",
+  "availability.roomNoData": (v) => `${v.name}: データなし。詳細を開く。`,
+  "availability.valueNoData": (v) => `${v.label}: データなし`,
 
   "subtitle.aboveComfort": (v) => `平均は快適範囲を ${v.diff} 上回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 上回っています。`,
@@ -103,8 +111,4 @@ export const ja = {
 
   "views.none": "利用可能な表示がありません。",
 
-  "empty.title": "利用可能なデータがありません。",
-  "empty.hintNoRooms": "設定された平均エンティティが数値を返していません。",
-  "empty.hintMissingRooms": (v) => `設定されたエンティティ${v.count}件が見つからないか、数値を返していません。`,
-  "empty.hintNoRoomData": "設定された部屋エンティティのいずれも数値を返していません。",
 };

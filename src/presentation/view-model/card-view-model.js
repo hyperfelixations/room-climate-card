@@ -30,6 +30,53 @@ import {
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
+import { AVAILABILITY } from "../../application/model/entity-model.js";
+import { CARD_NAME } from "../../core/card-metadata.js";
+import { UNAVAILABLE_TEXT } from "../../core/text.js";
+import { rgba } from "../../core/color.js";
+
+const NO_DATA_COLOR = "#7F8792";
+const PLACEHOLDER_STATUSES = new Set([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE]);
+
+function buildNeutralTone(icon, texts) {
+  return {
+    label: texts.t("status.noData"),
+    color: NO_DATA_COLOR,
+    score: null,
+    zone: "neutral",
+    source: "availability",
+    profileId: null,
+    icon,
+    soft: rgba(NO_DATA_COLOR, 0.20),
+  };
+}
+
+// Joins calculation rooms with display-only placeholders by YAML index. Missing
+// and incompatible sources never enter this list, and placeholders carry no
+// numeric value, classification or colour that a calculation could accidentally
+// consume.
+function buildDisplayRooms(domainModel, config) {
+  const usableByIndex = new Map((domainModel.rooms?.declared || []).map((room) => [room.index, room]));
+  const availabilityByIndex = new Map((domainModel.rooms?.availability || []).map((room) => [room.index, room]));
+  const displayed = [];
+  for (const [index, configured] of (config.rooms || []).entries()) {
+    const usable = usableByIndex.get(index);
+    if (usable) {
+      displayed.push(usable);
+      continue;
+    }
+    const availability = availabilityByIndex.get(index);
+    if (config.unavailable_values !== "show" || !PLACEHOLDER_STATUSES.has(availability?.status)) continue;
+    displayed.push({
+      ...configured,
+      index,
+      value: null,
+      placeholder: true,
+      availability: availability.status,
+    });
+  }
+  return displayed;
+}
 
 function buildSubtitleText(subtitle, texts, metricKind) {
   const meta = metricMetaFor(metricKind);
@@ -149,26 +196,140 @@ function buildAverage({ domainModel, config, topology, texts, tone, position, tr
   };
 }
 
-// The empty state is its own small model: a title, one hint sentence and an icon.
-// The wording distinguishes "no rooms are configured" from "configured rooms report
-// nothing", because those need different fixes.
-function buildEmptyViewModel({ domainModel, config, texts, title, metricKind }) {
-  const hint = (config.rooms || []).length === 0
-    ? texts.t("empty.hintNoRooms")
-    : domainModel.missingRooms
-      ? texts.t("empty.hintMissingRooms", { count: domainModel.missingRooms })
-      : texts.t("empty.hintNoRoomData");
+function noDataHeadlineSource(domainModel, config, topology) {
+  const availability = domainModel.context.availability;
+  if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
+    return { ...availability.rooms[topology.roomIndex], source: "room", roomIndex: topology.roomIndex };
+  }
+  if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY || topology.kind === SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS) {
+    return { ...availability.primary, source: "sensor", roomIndex: null };
+  }
+  return { entity: null, status: null, source: "calculated", roomIndex: null };
+}
+
+function buildNoDataSubtitle({ domainModel, headline, texts }) {
+  const missingRooms = domainModel.context.availability.rooms.filter(
+    (room) => room.status === AVAILABILITY.MISSING && room.entity !== headline.entity
+  );
+  const incompatible = [
+    domainModel.context.availability.primary,
+    ...domainModel.context.availability.rooms,
+  ].some((source) => [AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(source.status));
+
+  const missingRoomText = () => texts.t("availability.entitiesMissing", {
+    count: missingRooms.length,
+    entities: missingRooms.map((room) => room.entity).join(", "),
+  });
+  // A missing configured room is independently actionable information. Keep it
+  // visible even when the headline has its own outage or incompatibility reason.
+  const appendMissingRooms = (result) => missingRooms.length === 0
+    ? result
+    : {
+        kind: `${result.kind}+rooms-missing`,
+        text: `${result.text} ${missingRoomText()}`,
+      };
+
+  if (headline.status === AVAILABILITY.MISSING) {
+    return appendMissingRooms({
+      kind: "entity-missing",
+      text: texts.t("availability.entityMissing", { entity: headline.entity }),
+    });
+  }
+  if ([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(headline.status)) {
+    return appendMissingRooms({ kind: "value-unavailable", text: texts.t("availability.valueUnavailable") });
+  }
+  if ([AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(headline.status)) {
+    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
+  }
+  if (domainModel.configurationState === "mixed_metric_kinds" || incompatible) {
+    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
+  }
+  if (missingRooms.length > 0) {
+    return {
+      kind: "rooms-missing",
+      text: missingRoomText(),
+    };
+  }
+  if (domainModel.context.availability.rooms.length > 0) {
+    return { kind: "rooms-unavailable", text: texts.t("availability.noUsableRooms") };
+  }
+  return { kind: "source-unavailable", text: texts.t("availability.valueUnavailable") };
+}
+
+// No data is a normal card shell, not a separate error component. It uses the
+// same header, headline and keyed room-grid contracts as the data state, with a
+// deliberately collapsed view area and neutral presentation values.
+function buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta }) {
+  const headline = noDataHeadlineSource(domainModel, config, topology);
+  const label = resolveHeadlineLabel({ config, topology, roomIndex: headline.roomIndex, texts });
+  const hasLabel = label !== "";
+  const headlineExists = headline.entity && headline.status !== AVAILABILITY.MISSING;
+  const statusLabel = texts.t("status.noData");
+  const tooltip = hasLabel
+    ? texts.t("availability.valueNoData", { label })
+    : statusLabel;
+  const ariaOpen = headline.roomIndex !== null
+    ? texts.t("room.ariaOpen", { name: config.rooms[headline.roomIndex].name })
+    : texts.t("value.ariaOpen");
+  const icon = config.icon || meta?.emptyIcon || "mdi:home-thermometer-outline";
+  const tone = buildNeutralTone(icon, texts);
+  const noData = buildNoDataSubtitle({ domainModel, headline, texts });
+
+  const displayRooms = buildDisplayRooms(domainModel, config);
+  const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
+  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, metricKind, language: texts.language });
+  const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
+  const showChips =
+    config.show_rooms !== "never" &&
+    chips.length >= 1 &&
+    (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology));
+
   return {
     empty: true,
-    metric: { kind: metricKind },
+    metric: { kind: metricKind, unit: "", displayUnitProfile: null },
     title,
+    subtitle: noData.text,
     missingRooms: domainModel.missingRooms,
     configurationState: domainModel.configurationState,
-    emptyState: {
-      icon: metricMetaFor(metricKind).emptyIcon,
-      title,
-      subtitle: `${texts.t("empty.title")} ${hint}`,
+    noData: { hintKind: noData.kind },
+    tone,
+    toneStyle: toneStyleDeclaration(tone),
+    header: { icon, title, subtitle: noData.text, statusLabel },
+    average: {
+      value: null,
+      valueText: UNAVAILABLE_TEXT,
+      unitText: "",
+      label,
+      hasLabel,
+      entity: headlineExists ? headline.entity : "",
+      source: headline.source,
+      roomIndex: headline.roomIndex,
+      color: NO_DATA_COLOR,
+      position: null,
+      tooltip,
+      ariaLabel: headlineExists ? `${ariaOpen}. ${statusLabel}` : tooltip,
+      trendDirection: null,
+      unavailable: true,
     },
+    rooms: {
+      visible: layout.visible,
+      rowSizes: layout.rowSizes,
+      count: domainModel.rooms.count,
+      comparable: false,
+      showChips,
+      chips,
+      chipRows: buildRoomChipRows(chips, layout.rowSizes),
+    },
+    extremes: null,
+    roomMarkers: [],
+    comfort: null,
+    spread: null,
+    range: null,
+    trend: { model: null, text: "" },
+    scale: null,
+    rangeScale: null,
+    views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
+    carousel: { hint: "", noActiveViewsHint: "" },
   };
 }
 
@@ -178,11 +339,11 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   // the same single answer.
   const topology = resolveSourceTopology(config);
   const metricKind = domainModel.metric.kind;
-  const meta = metricMetaFor(metricKind);
-  const title = config.title || texts.t(meta.titleKey);
+  const meta = metricKind ? metricMetaFor(metricKind) : null;
+  const title = config.title || (meta ? texts.t(meta.titleKey) : CARD_NAME);
 
   if (domainModel.empty) {
-    return buildEmptyViewModel({ domainModel, config, texts, title, metricKind });
+    return buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta });
   }
 
   const unit = domainModel.metric.unit;
@@ -200,7 +361,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   // Decorated once, in declaration order, then reused for both the visible chip list
   // and the extremes — so a room object is the same object wherever it appears.
   const decoratedByIndex = new Map();
-  const decoratedDeclared = domainModel.rooms.declared.map((room) => {
+  const displayRooms = buildDisplayRooms(domainModel, config);
+  const decoratedDeclared = displayRooms.map((room) => {
     const decorated = decorateRoomForDisplay(room, config.room_label);
     decoratedByIndex.set(room.index, decorated);
     return decorated;
@@ -386,7 +548,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       // data sources whether or not they are drawn.
       showChips:
         config.show_rooms !== "never" &&
-        rooms.count >= 1 &&
+        chips.length >= 1 &&
         (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),

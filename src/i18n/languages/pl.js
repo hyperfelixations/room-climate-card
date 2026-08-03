@@ -61,6 +61,14 @@ export const pl = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · obliczona na podstawie wartości z pomieszczeń`,
   "value.ariaOpen": "Otwórz wartość średnią",
+  "status.noData": "Brak danych",
+  "availability.entityMissing": (v) => `Nie znaleziono encji ${v.entity}.`,
+  "availability.entitiesMissing": (v) => `Nie znaleziono skonfigurowanych encji pomieszczeń (${v.count}): ${v.entities}.`,
+  "availability.valueUnavailable": "Wartość jest obecnie niedostępna.",
+  "availability.noUsableRooms": "Żadna skonfigurowana wartość pomieszczenia nie jest obecnie użyteczna.",
+  "availability.incompatible": "Skonfigurowane źródła używają niezgodnych typów pomiaru lub jednostek.",
+  "availability.roomNoData": (v) => `${v.name}: brak danych. Otwórz szczegóły.`,
+  "availability.valueNoData": (v) => `${v.label}: brak danych`,
 
   "subtitle.aboveComfort": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu.`,
@@ -110,13 +118,4 @@ export const pl = {
 
   "views.none": "Brak dostępnego widoku.",
 
-  "empty.title": "Brak dostępnych danych.",
-  "empty.hintNoRooms": "Skonfigurowana encja wartości średniej nie zwraca liczby.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("pl", v.count);
-    if (category === "one") return `${v.count} skonfigurowana encja jest niedostępna lub nie zwraca liczby.`;
-    if (category === "few") return `${v.count} skonfigurowane encje są niedostępne lub nie zwracają liczby.`;
-    return `${v.count} skonfigurowanych encji jest niedostępnych lub nie zwraca liczby.`;
-  },
-  "empty.hintNoRoomData": "Żadna skonfigurowana encja pomieszczenia nie zwraca liczby.",
 };

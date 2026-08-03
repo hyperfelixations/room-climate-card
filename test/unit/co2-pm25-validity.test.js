@@ -132,7 +132,7 @@ test("a CO2 primary (average) entity reading of 0 is rejected — falls back to 
   env.cleanup(el);
 });
 
-test("all CO2 room readings physically invalid + no valid primary entity -> empty state, not a crash or a 0/negative display", () => {
+test("all CO2 room readings physically invalid + no valid primary entity -> no-data state, not a crash or a 0/negative display", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", -1, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
     "sensor.r1": mkState("sensor.r1", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),

@@ -61,6 +61,14 @@ export const it = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calcolato dai valori delle stanze`,
   "value.ariaOpen": "Apri la media",
+  "status.noData": "Nessun dato",
+  "availability.entityMissing": (v) => `Entità ${v.entity} non trovata.`,
+  "availability.entitiesMissing": (v) => `${v.count} ${v.count === 1 ? "entità stanza configurata non è stata trovata" : "entità stanza configurate non sono state trovate"}: ${v.entities}.`,
+  "availability.valueUnavailable": "Il valore non è attualmente disponibile.",
+  "availability.noUsableRooms": "Nessun valore stanza configurato è attualmente utilizzabile.",
+  "availability.incompatible": "Le sorgenti configurate usano tipi di misura o unità incompatibili.",
+  "availability.roomNoData": (v) => `${v.name}: nessun dato. Apri i dettagli.`,
+  "availability.valueNoData": (v) => `${v.label}: nessun dato`,
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} sopra il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} sopra il comfort.`,
@@ -107,8 +115,4 @@ export const it = {
 
   "views.none": "Nessuna vista disponibile.",
 
-  "empty.title": "Nessun dato disponibile.",
-  "empty.hintNoRooms": "L'entità della media configurata non restituisce un numero.",
-  "empty.hintMissingRooms": (v) => `${v.count} ${v.count === 1 ? "entità configurata risulta mancante o non restituisce" : "entità configurate risultano mancanti o non restituiscono"} un numero.`,
-  "empty.hintNoRoomData": "Nessuna entità stanza configurata restituisce un numero.",
 };

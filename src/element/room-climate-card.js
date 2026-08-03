@@ -56,6 +56,7 @@ import {
 } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
 import { createRenderContext } from "../render/primitives/render-context.js";
+import { applyFocusFallback } from "../render/primitives/focus.js";
 import {
   patchCardBody,
   patchEmptyCardBody,
@@ -197,7 +198,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         viewRenderers: VIEW_RENDERERS,
         computeViewModel: () => this._computeViewModel(),
         isDragging: () => this._isDragging,
-        isCurrentlyEmpty: () => Boolean(this.shadowRoot.querySelector(".rtc-empty")),
+        isCurrentlyEmpty: () => this.shadowRoot.querySelector(".rtc-root")?.getAttribute("data-state") === "no-data",
         renderAll: (viewModel, options) => this._renderAll(viewModel, options),
         updateEmpty: (viewModel) => this._updateEmpty(viewModel),
         updateContent: (viewModel) => this._updateContent(viewModel),
@@ -612,7 +613,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       if (key === this._lastMetricContextWarningKey) return;
       this._lastMetricContextWarningKey = key;
       console.warn(
-        `${CARD_NAME}: rooms report incompatible metric kinds (${diagnostic.metricKinds.join(", ")}) and no usable primary entity is configured to arbitrate — no average is computed (see the empty-state hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity.`
+        `${CARD_NAME}: rooms report incompatible metric kinds (${diagnostic.metricKinds.join(", ")}) and no usable primary entity is configured to arbitrate — no average is computed (see the no-data hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity.`
       );
     }
 
@@ -760,6 +761,13 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // only after this method returns, so "is there a previous view worth protecting"
       // is decided once, by the owner of that fact, rather than read back mid-render.
 
+      // Preserve a focused source across the structural replacement where possible.
+      // Attribute equality is checked in JS rather than interpolated into a selector,
+      // so even a hostile entity id remains plain data.
+      const focusedBefore = this.shadowRoot?.activeElement ?? null;
+      const focusedEntity = focusedBefore?.getAttribute?.("data-entity") ?? null;
+      const hadCardFocus = Boolean(focusedBefore);
+
       // The innerHTML replacement below destroys everything an
       // unclassified in-flight gesture is anchored to. The runtime owns that decision
       // and states the reasoning in full; the element only has to say when.
@@ -794,8 +802,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const previousActiveKey = preConfigVisualKey !== undefined
         ? preConfigVisualKey
         : (this._views[this._currentVisualViewIndex()] ?? null);
-      this._views = viewModel.empty ? [] : viewModel.views.keys;
-      this._viewAreaCollapsed = viewModel.empty ? false : Boolean(viewModel.views.collapsed);
+      this._views = viewModel.views.keys;
+      this._viewAreaCollapsed = Boolean(viewModel.views.collapsed);
       let nextIndex = this._views.indexOf(previousActiveKey);
       if (nextIndex === -1) nextIndex = this._views.indexOf(this._config?.start_view);
       // No view is mandatory: nextIndex === -1 ? 0 : nextIndex already means "the first
@@ -811,6 +819,15 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           ${renderCardBody(context, viewModel, VIEW_RENDERERS)}
         </ha-card>
       `;
+      if (hadCardFocus) {
+        const matchingSource = focusedEntity
+          ? Array.from(this.shadowRoot.querySelectorAll("[data-entity]")).find(
+              (node) => node.getAttribute("data-entity") === focusedEntity
+            )
+          : null;
+        if (matchingSource) matchingSource.focus();
+        else applyFocusFallback(this.shadowRoot);
+      }
       this._bindEvents();
       if (!isFirstRender && !viewModel.empty) {
         // previousActiveKey above is correctly preserved, but that alone is only a JS
@@ -857,9 +874,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _updateEmpty(viewModel) {
-      // Updates the empty state without a full DOM rebuild.
+      // Updates the normal no-data shell without a full DOM rebuild.
       if (!this.shadowRoot) return;
-      patchEmptyCardBody(this.shadowRoot, viewModel);
+      patchEmptyCardBody(this._renderContext(), this.shadowRoot, viewModel);
     }
 
     _updateContent(viewModel) {

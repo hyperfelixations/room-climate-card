@@ -13,7 +13,15 @@
 //                        coerce.
 
 // Home Assistant state values that never represent a usable measurement.
-const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
+const UNAVAILABLE_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
+
+// Whether a raw Home Assistant state explicitly says "there is currently no
+// measurement". Kept separate from parseNumericState() so EntityModel can
+// distinguish an HA availability sentinel from arbitrary malformed text.
+export function isUnavailableState(raw) {
+  if (raw === undefined || raw === null) return true;
+  return UNAVAILABLE_STATES.has(String(raw).trim().toLowerCase());
+}
 
 // Shared numeric parser for entity states and attributes: accepts comma
 // decimals, treats HA's non-numeric states as invalid, and handles attributes
@@ -26,7 +34,7 @@ const INVALID_STATES = new Set(["", "unknown", "unavailable", "none", "null", "u
 export function parseNumericState(raw) {
   if (raw === undefined || raw === null) return null;
   const rawString = String(raw).trim().toLowerCase();
-  if (INVALID_STATES.has(rawString)) return null;
+  if (UNAVAILABLE_STATES.has(rawString)) return null;
   const normalized = rawString.replace(",", ".");
   if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(e[+-]?\d+)?$/.test(normalized)) return null;
   const value = Number(normalized);

@@ -113,6 +113,20 @@ test("non-numeric and sentinel states are not measurements", () => {
   }
 });
 
+test("EntityModel assigns every availability status at the raw-state boundary", () => {
+  const config = cfg();
+  assert.equal(entityModel.buildEntityModel({}, config, "sensor.a", "primary").availability, "missing");
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st("unavailable", C) }, config, "sensor.a", "primary").availability, "unavailable");
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st("garbage", C) }, config, "sensor.a", "primary").availability, "invalid_value");
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-5, RH) }, config, "sensor.a", "primary").availability, "invalid_value");
+  assert.equal(
+    entityModel.buildEntityModel({ "sensor.a": st(21, { device_class: "temperature" }) }, config, "sensor.a", "primary").availability,
+    "incompatible_unit"
+  );
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st(21, {}) }, config, "sensor.a", "primary").availability, "incompatible_kind");
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st(21, C) }, config, "sensor.a", "primary").availability, "usable");
+});
+
 test("a missing entity yields an all-null model rather than throwing", () => {
   const model = entityModel.buildEntityModel({}, cfg(), "sensor.absent", "room");
   assert.equal(model.stateObject, null);
@@ -312,16 +326,17 @@ test("the display unit follows a usable primary", () => {
   assert.equal(context.unit, "K");
 });
 
-test("with nothing usable anywhere the kind still falls back sensibly", () => {
+test("an unavailable source preserves its kind while absent metadata preserves null", () => {
   const fromPrimary = measurementContext.resolveMeasurementContext({ "sensor.avg": st("unavailable", RH) }, cfg());
   assert.equal(fromPrimary.metricKind, "humidity", "an unavailable primary still names the kind");
   assert.equal(fromPrimary.averageSource, null);
   assert.equal(fromPrimary.sourceKind, "primary");
 
   const fromNothing = measurementContext.resolveMeasurementContext({}, cfg());
-  assert.equal(fromNothing.metricKind, "temperature", "the documented default");
-  assert.equal(fromNothing.sourceKind, "default");
-  assert.equal(fromNothing.unit, "°C");
+  assert.equal(fromNothing.metricKind, null, "no source metadata means no invented display kind");
+  assert.equal(fromNothing.identityMetricKind, null);
+  assert.equal(fromNothing.sourceKind, "primary");
+  assert.equal(fromNothing.unit, "");
 });
 
 test("effectiveMetricKind() substitutes the default for the mixed state", () => {

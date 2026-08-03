@@ -39,7 +39,7 @@ import {
   resolveProfileIcon,
   resolveScaleConfig,
 } from "./classification.js";
-import { hasEntity, readNumericAttribute, convertMetricValue } from "./entity-model.js";
+import { AVAILABILITY, readNumericAttribute, convertMetricValue } from "./entity-model.js";
 import { effectiveMetricKind } from "./measurement-context.js";
 import { resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
@@ -58,23 +58,56 @@ export function buildCardDomainModel({ states, config, context, language }) {
   // Recomputed rather than threaded through, because it is a pure function of the
   // config and having one owner beats having one carrier.
   const topology = resolveSourceTopology(config);
-  const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
-  const comfort = scaleConfig.comfort;
-  const optimal = scaleConfig.optimal;
+  const sourceAvailability = {
+    primary: {
+      entity: context.primary.entityId,
+      status: context.primary.availability,
+      metricKind: context.primary.metricKind,
+    },
+    rooms: context.rooms.map((room, index) => ({
+      index,
+      entity: room.entityId,
+      status: room.availability,
+      metricKind: room.metricKind,
+    })),
+  };
+  const missingRooms = sourceAvailability.rooms.filter((room) => room.status === AVAILABILITY.MISSING).length;
 
   // No usable average source at all: either nothing resolvable anywhere, or rooms
   // reporting genuinely incompatible metric kinds with no usable primary to
   // arbitrate. Exposed as a configuration state so a future release can surface it
-  // more specifically; today it renders as the empty state, never as a
+  // more specifically; today it renders as the no-data state, never as a
   // cross-metric-kind average.
   if (context.averageSource === null) {
     return {
       empty: true,
-      metric: { kind: metricKind },
-      missingRooms: (config.rooms || []).filter((room) => !hasEntity(states, room.entity)).length,
+      // Unlike effectiveMetricKind(), this may be null. No-data presentation uses
+      // that fact to show the product name instead of inventing a temperature card.
+      metric: { kind: context.identityMetricKind },
+      context: {
+        diagnostics: context.diagnostics,
+        consistent: context.consistent,
+        excludedRoomIds: context.excludedRoomIds,
+        sourceKind: context.sourceKind,
+        sourceEntity: context.sourceEntity,
+        availability: sourceAvailability,
+      },
+      rooms: {
+        declared: [],
+        byValue: [],
+        count: 0,
+        comparable: false,
+        missing: missingRooms,
+        availability: sourceAvailability.rooms,
+      },
+      missingRooms,
       configurationState: context.diagnostics[0]?.code ?? null,
     };
   }
+
+  const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
+  const comfort = scaleConfig.comfort;
+  const optimal = scaleConfig.optimal;
 
   // From here on every number is projected into the resolved display unit exactly
   // once. Comfort, classification and scale decisions must be made against the
@@ -159,8 +192,6 @@ export function buildCardDomainModel({ states, config, context, language }) {
     averageEntity ? states?.[averageEntity]?.attributes ?? null : null
   );
 
-  const missingRooms = (config.rooms || []).length - roomsByValue.length;
-
   return {
     empty: false,
     metric: {
@@ -175,6 +206,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
       excludedRoomIds: context.excludedRoomIds,
       sourceKind: context.sourceKind,
       sourceEntity: context.sourceEntity,
+      availability: sourceAvailability,
     },
     average: {
       value: average,
@@ -188,6 +220,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
       count: roomsByValue.length,
       comparable: roomsComparable,
       missing: missingRooms,
+      availability: sourceAvailability.rooms,
     },
     roomColors,
     extremes: roomsComparable

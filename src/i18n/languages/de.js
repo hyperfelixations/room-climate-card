@@ -57,6 +57,14 @@ export const de = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aus Raumwerten berechnet`,
   "value.ariaOpen": "Durchschnitt öffnen",
+  "status.noData": "Keine Daten",
+  "availability.entityMissing": (v) => `Entität ${v.entity} nicht gefunden.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurierte Raum-Entität${v.count === 1 ? " wurde" : "en wurden"} nicht gefunden: ${v.entities}.`,
+  "availability.valueUnavailable": "Der Wert ist derzeit nicht verfügbar.",
+  "availability.noUsableRooms": "Derzeit ist kein konfigurierter Raumwert nutzbar.",
+  "availability.incompatible": "Konfigurierte Quellen verwenden inkompatible Messarten oder Einheiten.",
+  "availability.roomNoData": (v) => `${v.name}: keine Daten. Details öffnen.`,
+  "availability.valueNoData": (v) => `${v.label}: keine Daten`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} über Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} über Komfort.`,
@@ -103,8 +111,4 @@ export const de = {
 
   "views.none": "Keine Ansicht verfügbar.",
 
-  "empty.title": "Keine Daten verfügbar.",
-  "empty.hintNoRooms": "Die konfigurierte Durchschnitts-Entität liefert keine Zahl.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurierte Entität${v.count === 1 ? "" : "en"} fehlen oder liefern keine Zahl.`,
-  "empty.hintNoRoomData": "Keine konfigurierte Raum-Entität liefert eine Zahl.",
 };

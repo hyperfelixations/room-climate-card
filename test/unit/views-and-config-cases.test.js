@@ -124,7 +124,7 @@ test("viewsChanged: length change -> true", () => {
   assert.equal(viewsChanged(["range", "scale", "extremes"], ["range", "scale"], false), true);
 });
 
-test("viewsChanged: empty-state data always reports false regardless of arrays", () => {
+test("viewsChanged: no-data models always report false regardless of arrays", () => {
   assert.equal(viewsChanged(["range", "scale"], [], true), false);
   assert.equal(viewsChanged([], ["range", "scale"], true), false);
 });

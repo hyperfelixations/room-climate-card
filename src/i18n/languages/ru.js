@@ -61,6 +61,14 @@ export const ru = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · рассчитано по значениям комнат`,
   "value.ariaOpen": "Открыть среднее значение",
+  "status.noData": "Нет данных",
+  "availability.entityMissing": (v) => `Сущность ${v.entity} не найдена.`,
+  "availability.entitiesMissing": (v) => `Не найдены настроенные сущности комнат (${v.count}): ${v.entities}.`,
+  "availability.valueUnavailable": "Значение сейчас недоступно.",
+  "availability.noUsableRooms": "Сейчас нет доступных значений настроенных комнат.",
+  "availability.incompatible": "Настроенные источники используют несовместимые типы измерений или единицы.",
+  "availability.roomNoData": (v) => `${v.name}: нет данных. Открыть подробности.`,
+  "availability.valueNoData": (v) => `${v.label}: нет данных`,
 
   "subtitle.aboveComfort": (v) => `Среднее на ${v.diff} выше комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Среднее на ${v.diff} выше комфортного диапазона.`,
@@ -107,13 +115,4 @@ export const ru = {
 
   "views.none": "Нет доступных представлений.",
 
-  "empty.title": "Нет доступных данных.",
-  "empty.hintNoRooms": "Настроенная сущность среднего значения не передаёт числовое значение.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("ru", v.count);
-    if (category === "one") return `${v.count} настроенная сущность отсутствует или не передаёт числовое значение.`;
-    if (category === "few") return `${v.count} настроенные сущности отсутствуют или не передают числовое значение.`;
-    return `${v.count} настроенных сущностей отсутствуют или не передают числовое значение.`;
-  },
-  "empty.hintNoRoomData": "Ни одна настроенная сущность комнаты не передаёт числовое значение.",
 };

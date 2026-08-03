@@ -65,6 +65,14 @@ export const sv = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beräknat utifrån rumsvärden`,
   "value.ariaOpen": "Öppna medelvärde",
+  "status.noData": "Inga data",
+  "availability.entityMissing": (v) => `Entiteten ${v.entity} hittades inte.`,
+  "availability.entitiesMissing": (v) => `${v.count} konfigurerade rumsentitet${v.count === 1 ? " hittades" : "er hittades"} inte: ${v.entities}.`,
+  "availability.valueUnavailable": "Värdet är inte tillgängligt just nu.",
+  "availability.noUsableRooms": "Inget konfigurerat rumsvärde kan användas just nu.",
+  "availability.incompatible": "Konfigurerade källor använder inkompatibla mätningstyper eller enheter.",
+  "availability.roomNoData": (v) => `${v.name}: inga data. Öppna detaljer.`,
+  "availability.valueNoData": (v) => `${v.label}: inga data`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,
@@ -111,8 +119,4 @@ export const sv = {
 
   "views.none": "Ingen vy tillgänglig.",
 
-  "empty.title": "Inga data tillgängliga.",
-  "empty.hintNoRooms": "Den konfigurerade medelvärdesenheten rapporterar inget tal.",
-  "empty.hintMissingRooms": (v) => `${v.count} konfigurerad${v.count === 1 ? "" : "e"} enhet${v.count === 1 ? " saknas" : "er saknas"} eller rapporterar inget tal.`,
-  "empty.hintNoRoomData": "Ingen konfigurerad rumsenhet rapporterar ett tal.",
 };

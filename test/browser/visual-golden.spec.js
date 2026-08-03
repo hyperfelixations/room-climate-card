@@ -1,7 +1,7 @@
 "use strict";
 
 // Visual golden tests cover desktop/mobile widths, light/dark, all four modes,
-// empty state, 1-4 views, supported languages and RangeScale collisions.
+// no-data state, 1-4 views, supported languages and RangeScale collisions.
 // Uses Playwright's built-in
 // toHaveScreenshot(), which on the FIRST run writes baseline PNGs into
 // test/browser/visual-golden.spec.js-snapshots/ (committed alongside the
@@ -11,7 +11,7 @@
 // Coverage note: a representative cross-section rather than the full
 // 4-mode x 5-language x N-width x light/dark combinatorial matrix (that
 // many baseline images would be impractical to review/maintain by hand) —
-// all 4 modes once each, empty state, 1/2/3/4 views, one narrow+one wide
+// all 4 modes once each, no-data state, 1/2/3/4 views, one narrow+one wide
 // width, light+dark, and one non-English language as a sanity check that
 // longer translated strings don't visibly break layout.
 
@@ -106,11 +106,11 @@ test.describe("visual golden: narrow trend arrow and Scale footer per mode", () 
   }
 });
 
-test("visual golden: empty state", async ({ page }) => {
+test("visual golden: no-data state", async ({ page }) => {
   await gotoHarness(page);
   const states = { "sensor.avg": mkStateObj("sensor.avg", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }) };
   const cardId = await createCard(page, { entity: "sensor.avg" }, states);
-  await shot(page, cardId, "empty-state.png");
+  await shot(page, cardId, "no-data-state.png");
 });
 
 test.describe("visual golden: 1/2/3/4 views", () => {

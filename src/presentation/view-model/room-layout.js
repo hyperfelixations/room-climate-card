@@ -6,7 +6,7 @@
 // subtitle always use every valid room.
 
 import { rgba } from "../../core/color.js";
-import { isTwoUpperLetterLabel } from "../../core/text.js";
+import { isTwoUpperLetterLabel, UNAVAILABLE_TEXT } from "../../core/text.js";
 import { autoRoomColumnsFor } from "./metric-meta.js";
 
 // The alphas a chip's own custom properties are derived at. A chip outside the
@@ -15,6 +15,7 @@ import { autoRoomColumnsFor } from "./metric-meta.js";
 const CHIP_MARK_ALPHA = 0.18;
 const CHIP_OUT_BG_ALPHA = 0.10;
 const CHIP_OUT_BORDER_ALPHA = 0.36;
+const UNAVAILABLE_COLOR = "#7F8792";
 
 // room_label picks which of the configured short/name pair a chip shows. "auto"
 // and "short" both resolve to the short code; "name" shows the full name and
@@ -106,9 +107,19 @@ export function roomGridRows(count, columns, rows, autoMaxColumns = 7) {
 // confusing. Declaration order keeps it stable and predictable.
 export function buildRoomLayout({ declaredRooms, config, metricKind, language }) {
   const grid = roomGridRows(declaredRooms.length, config.room_columns, config.room_rows, autoRoomColumnsFor(metricKind));
-  const capped = grid.capacity < declaredRooms.length ? declaredRooms.slice(0, grid.capacity) : declaredRooms;
+  // A placeholder is display-only and always follows every usable room. The cap
+  // still selects usable rooms in declaration order before sorting them, preserving
+  // the stable visible set the existing grid contract promises.
+  const usable = declaredRooms.filter((room) => !room.placeholder);
+  const placeholders = declaredRooms.filter((room) => room.placeholder).sort((a, b) => a.index - b.index);
+  const selectedUsable = usable.slice(0, grid.capacity);
+  const remaining = Math.max(0, grid.capacity - selectedUsable.length);
+  const visible = [
+    ...resolveRoomDisplayOrder(selectedUsable, config.room_sort, language),
+    ...placeholders.slice(0, remaining),
+  ];
   return {
-    visible: resolveRoomDisplayOrder(capped, config.room_sort, language),
+    visible,
     rowSizes: grid.rowSizes,
   };
 }
@@ -121,6 +132,27 @@ export function buildRoomLayout({ declaredRooms, config, metricKind, language })
 // The mark is a direction glyph, not a translation: it means the same thing in
 // every language.
 export function buildRoomChipModel({ room, color, comfort, unit, texts }) {
+  if (room.placeholder) {
+    const title = texts.t("availability.roomNoData", { name: room.name });
+    return {
+      room,
+      entity: room.entity,
+      index: room.index,
+      displayLabel: room.displayLabel,
+      shortGuaranteed: room.shortGuaranteed,
+      unavailable: true,
+      color: UNAVAILABLE_COLOR,
+      mark: "–",
+      out: false,
+      markBackground: rgba(UNAVAILABLE_COLOR, CHIP_MARK_ALPHA),
+      background: "var(--rtc-chip-bg)",
+      border: "var(--rtc-hairline)",
+      valueText: UNAVAILABLE_TEXT,
+      unitText: "",
+      title,
+      ariaLabel: title,
+    };
+  }
   const out = room.value < comfort.min || room.value > comfort.max;
   return {
     room,

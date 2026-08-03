@@ -32,13 +32,14 @@ export function renderAverage(viewModel) {
   const average = viewModel.average;
   const trendClass = average.trendDirection ? " rtc-has-trend" : "";
   const labelClass = average.hasLabel ? "" : " rtc-no-label";
+  const unavailableClass = average.unavailable ? " rtc-unavailable" : "";
   const trendDirection = average.trendDirection ? ` data-trend-direction="${escapeHtml(average.trendDirection)}"` : "";
   const content = contentHtml(average);
 
   if (!average.entity) {
     return `
           <div
-            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}"
+            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}${unavailableClass}"
             ${trendDirection}
             title="${escapeHtml(average.tooltip)}"
             aria-label="${escapeHtml(average.ariaLabel)}"
@@ -55,7 +56,7 @@ export function renderAverage(viewModel) {
   return `
         <button
           type="button"
-          class="rtc-avg-button${trendClass}${labelClass}"
+          class="rtc-avg-button${trendClass}${labelClass}${unavailableClass}"
           ${trendDirection}
           data-entity="${escapeHtml(average.entity)}"${roomIndex}
           aria-label="${escapeHtml(average.ariaLabel)}"
@@ -94,6 +95,7 @@ export function patchAverage(element, viewModel) {
   const hasTrend = Boolean(average.trendDirection);
   element.classList.toggle("rtc-has-trend", hasTrend);
   element.classList.toggle("rtc-no-label", !average.hasLabel);
+  element.classList.toggle("rtc-unavailable", Boolean(average.unavailable));
   if (hasTrend) {
     element.setAttribute("data-trend-direction", average.trendDirection);
   } else {

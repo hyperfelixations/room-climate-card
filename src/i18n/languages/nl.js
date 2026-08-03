@@ -60,6 +60,14 @@ export const nl = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · berekend uit kamerwaarden`,
   "value.ariaOpen": "Gemiddelde openen",
+  "status.noData": "Geen gegevens",
+  "availability.entityMissing": (v) => `Entiteit ${v.entity} niet gevonden.`,
+  "availability.entitiesMissing": (v) => `${v.count} geconfigureerde ruimte-entiteit${v.count === 1 ? " is" : "en zijn"} niet gevonden: ${v.entities}.`,
+  "availability.valueUnavailable": "De waarde is momenteel niet beschikbaar.",
+  "availability.noUsableRooms": "Geen geconfigureerde ruimtewaarde is momenteel bruikbaar.",
+  "availability.incompatible": "Geconfigureerde bronnen gebruiken incompatibele meettypen of eenheden.",
+  "availability.roomNoData": (v) => `${v.name}: geen gegevens. Details openen.`,
+  "availability.valueNoData": (v) => `${v.label}: geen gegevens`,
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} boven comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} boven comfort.`,
@@ -106,8 +114,4 @@ export const nl = {
 
   "views.none": "Geen weergave beschikbaar.",
 
-  "empty.title": "Geen gegevens beschikbaar.",
-  "empty.hintNoRooms": "De geconfigureerde gemiddelde-entiteit levert geen getal.",
-  "empty.hintMissingRooms": (v) => `${v.count} geconfigureerde ${v.count === 1 ? "entiteit ontbreekt of levert" : "entiteiten ontbreken of leveren"} geen getal.`,
-  "empty.hintNoRoomData": "Geen geconfigureerde kamer-entiteit levert een getal.",
 };

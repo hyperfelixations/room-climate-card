@@ -4,7 +4,8 @@
 // is a product decision rather than an implementation detail:
 //
 //   throw    a structurally invalid value the card cannot work around — a
-//            missing required or malformed entity id, a malformed classification block.
+//            a missing required room entity, a malformed supplied entity id, or a
+//            malformed classification block.
 //   fall back  a malformed OPTIONAL value — a typo in `decimals` or
 //            `room_columns` degrades to the built-in default instead of taking
 //            the whole dashboard card down with it.

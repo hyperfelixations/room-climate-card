@@ -57,6 +57,14 @@ export const ko = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 방별 값으로 계산`,
   "value.ariaOpen": "평균값 열기",
+  "status.noData": "데이터 없음",
+  "availability.entityMissing": (v) => `엔티티 ${v.entity}을(를) 찾을 수 없습니다.`,
+  "availability.entitiesMissing": (v) => `구성된 방 엔티티 ${v.count}개를 찾을 수 없습니다: ${v.entities}.`,
+  "availability.valueUnavailable": "현재 값을 사용할 수 없습니다.",
+  "availability.noUsableRooms": "현재 사용할 수 있는 구성된 방 값이 없습니다.",
+  "availability.incompatible": "구성된 소스의 측정 유형 또는 단위가 호환되지 않습니다.",
+  "availability.roomNoData": (v) => `${v.name}: 데이터 없음. 세부 정보 열기.`,
+  "availability.valueNoData": (v) => `${v.label}: 데이터 없음`,
 
   "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,
@@ -103,8 +111,4 @@ export const ko = {
 
   "views.none": "사용 가능한 보기가 없습니다.",
 
-  "empty.title": "사용 가능한 데이터가 없습니다.",
-  "empty.hintNoRooms": "설정된 평균 엔터티가 숫자 값을 보고하지 않습니다.",
-  "empty.hintMissingRooms": (v) => `설정된 엔터티 ${v.count}개가 없거나 숫자 값을 보고하지 않습니다.`,
-  "empty.hintNoRoomData": "설정된 방 엔터티 중 숫자 값을 보고하는 항목이 없습니다.",
 };

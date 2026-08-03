@@ -57,6 +57,14 @@ export const zh = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 根据各房间数值计算`,
   "value.ariaOpen": "打开平均值",
+  "status.noData": "无数据",
+  "availability.entityMissing": (v) => `未找到实体 ${v.entity}。`,
+  "availability.entitiesMissing": (v) => `未找到 ${v.count} 个已配置的房间实体：${v.entities}。`,
+  "availability.valueUnavailable": "当前无法使用该值。",
+  "availability.noUsableRooms": "当前没有可用的已配置房间值。",
+  "availability.incompatible": "已配置的来源使用了不兼容的测量类型或单位。",
+  "availability.roomNoData": (v) => `${v.name}：无数据。打开详情。`,
+  "availability.valueNoData": (v) => `${v.label}：无数据`,
 
   "subtitle.aboveComfort": (v) => `平均值高于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均值高于舒适范围 ${v.diff}。`,
@@ -103,8 +111,4 @@ export const zh = {
 
   "views.none": "暂无可用视图。",
 
-  "empty.title": "暂无可用数据。",
-  "empty.hintNoRooms": "配置的平均值实体未返回数值。",
-  "empty.hintMissingRooms": (v) => `${v.count}个已配置实体缺失或未返回数值。`,
-  "empty.hintNoRoomData": "配置的房间实体均未返回数值。",
 };

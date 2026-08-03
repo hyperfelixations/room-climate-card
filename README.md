@@ -14,6 +14,9 @@ A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a c
   usable primary or room source by `device_class`, with a recognized unit as
   fallback)
 - Optional per-room breakdown with a coldest/warmest room comparison, shown as a swipeable/auto-rotating carousel alongside the main scale, automatically wrapping into multiple rows past 7 rooms (or laid out to an explicit grid you choose)
+- Honest temporary-outage handling: unavailable room values can remain visible
+  as actionable `--` chips, while a card with no usable value keeps its normal
+  header and large-value layout instead of disappearing into a separate state
 - Optional daily range (min/max) views and a compact rate-of-change segment
   in the main scale footer, when the matching entities are configured
 - Optional alternate scale view showing today's min/max instead of the room comparison
@@ -41,8 +44,9 @@ With more than one view enabled (here: the scale and room-comparison views), the
   pm25` selects the mode; without a recognized `device_class`, a recognized
   unit (e.g. `°C`, `%`, `ppm`, `µg/m³`) is used. If a configured primary value
   is unavailable or invalid, compatible usable rooms can supply a calculated
-  consensus. There is no fixed domain restriction, but `sensor.*` entities are
-  the practical case.
+  consensus. Temporarily unavailable or invalid values are shown as `--` by
+  default but never participate in calculations. There is no fixed domain
+  restriction, but `sensor.*` entities are the practical case.
 - **Home Assistant / browser**: no minimum Home Assistant version is
   enforced — the card is a dependency-free custom element with no backend
   integration. It does use CSS container queries for its responsive
@@ -195,7 +199,8 @@ do not add an empty placeholder.
 | --- | --- | --- |
 | `room_sort` | `value_asc` | Orders visible chips by `value_asc`, `value_desc`, `name`, or `configured` order. This never changes the coldest/warmest room, comfort count, spread, or scale calculations. |
 | `room_label` | `auto` | Chooses the chip text: `auto` and `short` use `rooms[].short`; `name` uses `rooms[].name`. |
-| `show_rooms` | `auto` | Controls only the room-chip grid: `auto` hides the redundant chip of a direct single-room card and otherwise shows usable room chips; `true` always shows usable room chips; `false` always hides them. Configured rooms remain data sources for comparisons and calculations in every mode. |
+| `show_rooms` | `auto` | Controls only the room-chip grid: `auto` hides the redundant chip of a direct single-room card and otherwise shows eligible room chips; `true` always shows eligible room chips; `false` always hides them. Configured rooms remain data sources for comparisons and calculations in every mode. |
+| `unavailable_values` | `show` | `show` keeps configured room values whose entity currently reports an unavailable sentinel or a malformed non-numeric value visible as neutral, clickable `--` chips; `hide` omits those optional placeholders. Missing entities and incompatible kinds/units are always omitted. The necessary large headline remains `--` in either mode. |
 | `room_columns` | automatic | Sets `1`–`20` grid columns. If `room_rows` is omitted, enough rows are added automatically. |
 | `room_rows` | automatic | Sets `1`–`20` grid rows. If `room_columns` is omitted, enough columns are added automatically. |
 
@@ -215,8 +220,11 @@ no chips regardless of the setting):
 | Primary with rooms | shown | shown | hidden |
 
 Chip visibility is independent of whether enough usable rooms exist for
-comparisons. `extremes`, spread, comfort counts, and room-bound footers still
-require at least two compatible usable room values.
+comparisons. With `unavailable_values: show`, placeholders follow the same
+`show_rooms` matrix and are placed after usable chips in configured order.
+They remain clickable but never contribute to `extremes`, spread, comfort
+counts, scale markers, consensus, or room-bound footers; those calculations
+still require compatible usable values.
 
 #### Carousel, footers, and actions
 
@@ -410,8 +418,10 @@ Unless the top-level `icon` option overrides it, the header icon follows the
 active profile's value: temperature keeps its thermometer/fire/snowflake
 sequence; humidity uses water-percent/plus/minus/alert variants; CO₂ switches
 to an alert icon at its critical tier; and PM2.5 progresses through molecule,
-haze, dust, and alert icons. The empty-state icon remains metric-specific but
-does not classify a missing value.
+haze, dust, and alert icons. The no-data shell keeps a metric-specific icon
+when a configured source still identifies the metric, but never classifies a
+missing value. If no source identifies any supported metric, its title is the
+untranslated product name “Room Climate Card”.
 
 The canonical object form supports four sources:
 
@@ -586,6 +596,7 @@ rooms:
 room_sort: name
 room_label: name
 show_rooms: true
+unavailable_values: show
 room_columns: 4
 
 auto_slide: false
@@ -647,13 +658,25 @@ Check the card's `type:` — it must be exactly `custom:room-climate-card`
 (the `custom:` prefix is required), and the resource must have loaded
 without a console error.
 
-**The card shows an empty/"no data" state.**
+**The card shows “No data” and `--` as its large value.**
 This means none of the configured current-value sources currently provides a
 usable numeric value, or the card cannot resolve one compatible metric mode.
-Check the primary and room entities for numeric states and a `device_class` of
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`, or a recognized unit
-of measurement (see [Requirements](#requirements)). Rooms with incompatible
-metric kinds or units are not included in a calculated consensus.
+The card mode and label remain configuration-driven during a temporary outage.
+An existing source that still represents the headline keeps its click target;
+a calculated room fallback is not falsely clickable as the primary, and a
+missing source cannot be opened. Check the subtitle and entity states:
+
+- an entity that is not present in Home Assistant has no chip and is named in
+  the subtitle;
+- `unknown`, `unavailable`, and malformed non-numeric states appear as
+  neutral, clickable `--` chips by default;
+- incompatible metric kinds or units are excluded as configuration problems.
+
+Check for a `device_class` of `temperature`, `humidity`, `carbon_dioxide`, or
+`pm25`, or a recognized unit of measurement (see
+[Requirements](#requirements)). Set `unavailable_values: hide` if optional
+room placeholders should be omitted; the necessary large headline still
+shows `--` until a usable source returns.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the

@@ -19,4 +19,5 @@ export const DEFAULT_CONFIG = {
   hold_action: { action: "more-info" },
   auto_slide: true,
   swipe: true, // Manual swiping remains independent of automatic rotation.
+  unavailable_values: "show", // Preserve visible source identity during temporary outages.
 };

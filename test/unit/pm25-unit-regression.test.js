@@ -82,7 +82,7 @@ test("reported PM2.5 dashboard configuration stays usable with normalized primar
   assert.equal(data.range.max, 4.5);
   assert.equal(data.trend.value, -0.4);
   assert.equal(data.trend.unit, "µg/m³/h");
-  assert.equal(el.shadowRoot.querySelector(".rtc-empty"), null, "must not render the reported empty state");
+  assert.equal(el.shadowRoot.querySelector(".rtc-root")?.dataset.state, "data", "must not render the no-data state");
   assert.equal(el.shadowRoot.querySelectorAll(".rtc-room-chip").length, 4, "all configured PM2.5 rooms must render");
   env.cleanup(el);
 });

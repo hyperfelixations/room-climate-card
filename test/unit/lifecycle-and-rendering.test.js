@@ -4,7 +4,7 @@
 // AFTER a render actually succeeds, so a thrown exception doesn't leave a
 // "successful-looking" signature that suppresses a correct retry. LIFE-01:
 // setConfig() must cancel any in-progress pointer gesture atomically before
-// applying the new config. The suite also covers empty-state icon updates
+// applying the new config. The suite also covers no-data icon updates
 // and retrying an identical update after a render error.
 
 const test = require("node:test");
@@ -59,10 +59,10 @@ test("ROB-01: a thrown _computeViewModel() does not commit the render signature,
   env.cleanup(el);
 });
 
-test("DOM-01: the empty-state icon updates on a pure partial update (metric mode changes while staying empty)", () => {
+test("DOM-01: the no-data icon updates on a pure partial update (metric mode changes while staying empty)", () => {
   const states1 = { "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "temperature" }) };
   const el = env.createCard({ entity: "sensor.avg" }, mkHass(states1));
-  let iconEl = el.shadowRoot.querySelector(".rtc-empty-icon ha-icon");
+  let iconEl = el.shadowRoot.querySelector(".rtc-icon-badge ha-icon");
   assert.equal(iconEl?.getAttribute("icon"), "mdi:thermometer-off");
 
   // Same entity, still unavailable, device_class flips to humidity — a real
@@ -72,8 +72,8 @@ test("DOM-01: the empty-state icon updates on a pure partial update (metric mode
   const states2 = { "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "humidity" }) };
   states2["sensor.avg"].last_updated = new Date(Date.now() + 1000).toISOString();
   el.hass = mkHass(states2);
-  iconEl = el.shadowRoot.querySelector(".rtc-empty-icon ha-icon");
-  assert.equal(iconEl?.getAttribute("icon"), "mdi:water-off", "empty-state icon must follow the new metric mode on a partial update");
+  iconEl = el.shadowRoot.querySelector(".rtc-icon-badge ha-icon");
+  assert.equal(iconEl?.getAttribute("icon"), "mdi:water-off", "no-data icon must follow the new metric mode on a partial update");
   env.cleanup(el);
 });
 

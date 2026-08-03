@@ -32,7 +32,7 @@ export const RENDER_PATH = {
   SKIPPED: "skipped",
   // The markup itself had to change.
   FULL: "full",
-  // The card is in its empty state and stayed there.
+  // The card is in its no-data state and stayed there.
   EMPTY: "empty",
   // Same markup, new values.
   CONTENT: "content",
@@ -109,7 +109,7 @@ export function createRenderController({
       const structureChanged = nextStructure !== structureSignature;
       const structuralConfigChanged = nextStructuralConfig !== structuralConfigSignature;
 
-      if (!rendered || viewModel.empty !== currentlyEmpty || (!viewModel.empty && (structureChanged || structuralConfigChanged))) {
+      if (!rendered || viewModel.empty !== currentlyEmpty || structureChanged || structuralConfigChanged) {
         // isFirstRender is passed in rather than read back afterwards: the render path
         // needs to know whether there is a previous view worth protecting, and it must
         // learn that before `rendered` flips.

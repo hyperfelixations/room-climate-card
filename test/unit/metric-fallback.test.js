@@ -79,13 +79,14 @@ test("primary entity's own device_class always wins over any room fallback", () 
   env.cleanup(el);
 });
 
-test("no metric type resolvable anywhere -> falls back to temperature as the final default", () => {
+test("no metric type resolvable anywhere -> keeps a null kind and uses the product title", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
-  assert.equal(data.metric.kind, "temperature");
+  assert.equal(data.metric.kind, null);
+  assert.equal(data.title, "Room Climate Card");
   env.cleanup(el);
 });
 
@@ -258,10 +259,8 @@ test("rooms of different metric kinds are never averaged together", () => {
   assert.equal(context.diagnostics[0].code, "mixed_metric_kinds");
   const data = el._computeViewModel();
   assert.equal(data.empty, true);
-  // Stronger than the old flat assertion that the average simply was not 36: an empty
-  // card carries no average model at all, so there is nothing that could hold a blended
-  // cross-metric number.
-  assert.equal(data.average, undefined, "the old raw cross-metric average must never appear");
+  assert.equal(data.average.value, null, "the normal no-data shell carries no numeric value");
+  assert.equal(data.average.valueText, "--", "the old raw cross-metric average must never appear");
   assert.equal(data.configurationState, "mixed_metric_kinds");
   env.cleanup(el);
 });
@@ -353,7 +352,7 @@ test("a temperature primary without a unit is unusable and falls back to room co
   const primaryModel = internals.entityModel(el, "sensor.avg", "primary");
   assert.equal(primaryModel.validUnit, false);
   assert.equal(primaryModel.unitProfile, null, "no silent canonical assumption for a missing unit");
-  assert.equal(primaryModel.metricKind, "temperature", "metricKind stays resolved via device_class even though the reading itself is unusable, so empty-state title/icon fallbacks remain sensible");
+  assert.equal(primaryModel.metricKind, "temperature", "metricKind stays resolved via device_class even though the reading itself is unusable, so no-data title/icon fallbacks remain sensible");
   const data = el._computeViewModel();
   assert.equal(data.average.value, 22, "the room-consensus average (20/24 -> 22), never a value derived from the unusable primary reading");
   env.cleanup(el);
@@ -372,19 +371,19 @@ test("a temperature room without a unit is excluded as unusable_unit", () => {
     "must be diagnosed, not silently dropped, even though it's the only candidate"
   );
   const data = el._computeViewModel();
-  assert.equal(data.empty, true, "no usable measurement anywhere -> empty state, never a value derived from the unit-less room");
+  assert.equal(data.empty, true, "no usable measurement anywhere -> no-data state, never a value derived from the unit-less room");
   assert.equal(data.metric.kind, "temperature", "title/icon must still be temperature-appropriate via the room's own resolved (but untrusted) metricKind, not the generic default");
   env.cleanup(el);
 });
 
-test("an empty state retains metric-specific presentation when every entity lacks a unit", () => {
+test("a no-data state retains metric-specific presentation when every entity lacks a unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 55, { device_class: "humidity" }), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
   assert.equal(data.empty, true);
-  assert.equal(data.metric.kind, "humidity", "device_class alone still drives the empty-state title/icon, even though the reading itself is unusable");
+  assert.equal(data.metric.kind, "humidity", "device_class alone still drives the no-data title/icon, even though the reading itself is unusable");
   env.cleanup(el);
 });
 

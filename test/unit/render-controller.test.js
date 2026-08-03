@@ -24,14 +24,17 @@ test.before(async () => {
 // A view model shaped only as far as cardStructureSignature() reads it. The real shell
 // composition is tested in the rendering-layer tests; here it only has to be a faithful
 // enough input that the structure signature is a genuine function of the view model.
-function viewModelOf({ empty = false, structure = "s1" } = {}) {
+function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavailable", headlineEntity = "" } = {}) {
   return {
     empty,
     // hasLabel is part of the structure signature: the caption is a node that either
     // exists or does not, so the fixture has to carry it like the renderer does.
-    average: { hasLabel: true },
+    average: { hasLabel: true, entity: headlineEntity },
     rooms: { showChips: true },
-    views: { keys: ["scale"], collapsed: false, byKey: { scale: { marker: structure } } },
+    noData: { hintKind },
+    views: empty
+      ? { keys: [], collapsed: true, byKey: {} }
+      : { keys: ["scale"], collapsed: false, byKey: { scale: { marker: structure } } },
   };
 }
 
@@ -120,20 +123,23 @@ test("a changed structural config signature forces a rebuild", () => {
   assert.equal(calls.renderAll.length, 2);
 });
 
-test("crossing into and out of the empty state rebuilds; staying empty patches", () => {
+test("crossing into and out of the no-data state rebuilds; staying there patches", () => {
   const { render, calls, state } = harness();
   render();
 
   state.viewModel = viewModelOf({ empty: true });
-  assert.equal(render({ dataSignature: "d2" }), RENDER_PATH.FULL, "entering the empty state changes the markup");
+  assert.equal(render({ dataSignature: "d2" }), RENDER_PATH.FULL, "entering the no-data state changes the markup");
   assert.equal(calls.renderAll.length, 2);
 
   state.viewModel = viewModelOf({ empty: true, structure: "s9" });
   assert.equal(render({ dataSignature: "d3" }), RENDER_PATH.EMPTY, "an empty card that stays empty is patched");
   assert.equal(calls.updateEmpty, 1);
 
+  state.viewModel = viewModelOf({ empty: true, hintKind: "entity-missing" });
+  assert.equal(render({ dataSignature: "d3b" }), RENDER_PATH.FULL, "a different no-data structure is rebuilt");
+
   state.viewModel = viewModelOf({ empty: false });
-  assert.equal(render({ dataSignature: "d4" }), RENDER_PATH.FULL, "leaving the empty state changes it back");
+  assert.equal(render({ dataSignature: "d4" }), RENDER_PATH.FULL, "leaving the no-data state changes it back");
 });
 
 // -------------------------------------------------------- commit on success --

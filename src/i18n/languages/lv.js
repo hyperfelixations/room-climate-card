@@ -63,6 +63,14 @@ export const lv = {
   "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
   "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aprēķināts no telpu vērtībām`,
   "value.ariaOpen": "Atvērt vidējo vērtību",
+  "status.noData": "Nav datu",
+  "availability.entityMissing": (v) => `Entītija ${v.entity} nav atrasta.`,
+  "availability.entitiesMissing": (v) => `Nav atrastas ${v.count} konfigurētās telpu entītijas: ${v.entities}.`,
+  "availability.valueUnavailable": "Vērtība pašlaik nav pieejama.",
+  "availability.noUsableRooms": "Pašlaik nav izmantojama neviena konfigurētā telpas vērtība.",
+  "availability.incompatible": "Konfigurētie avoti izmanto nesaderīgus mērījumu veidus vai mērvienības.",
+  "availability.roomNoData": (v) => `${v.name}: nav datu. Atvērt informāciju.`,
+  "availability.valueNoData": (v) => `${v.label}: nav datu`,
 
   // Latvian cardinal numbers have a three-way CLDR plural split (zero:
   // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:
@@ -117,13 +125,4 @@ export const lv = {
 
   "views.none": "Nav pieejams neviens skats.",
 
-  "empty.title": "Dati nav pieejami.",
-  "empty.hintNoRooms": "Konfigurētā vidējās vērtības entītija nesniedz skaitli.",
-  "empty.hintMissingRooms": (v) => {
-    const category = getPluralCategory("lv", v.count);
-    if (category === "one") return `${v.count} konfigurēta entītija trūkst vai nesniedz skaitli.`;
-    if (category === "zero") return `${v.count} konfigurētu entītiju trūkst vai nesniedz skaitli.`;
-    return `${v.count} konfigurētas entītijas trūkst vai nesniedz skaitli.`;
-  },
-  "empty.hintNoRoomData": "Neviena konfigurētā telpas entītija nesniedz skaitli.",
 };

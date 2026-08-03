@@ -16,7 +16,6 @@
 
 import { escapeHtml } from "../../core/text.js";
 import { renderAverage, updateAverage } from "../primitives/average.js";
-import { patchEmptyState, renderEmptyState } from "../primitives/empty-state.js";
 import { renderRoomGridRows, updateRoomGrid } from "../primitives/room-grid.js";
 
 // The two null-view states are deliberately different. A configuration that genuinely
@@ -66,8 +65,8 @@ function renderViewArea(context, viewModel, viewRenderers) {
 //
 // A view without a structureSignature() is declaring that it reconciles everything.
 export function cardStructureSignature(viewModel, viewRenderers) {
-  if (viewModel.empty) return "empty";
   const parts = [
+    `state:${viewModel.empty ? "no-data" : "data"}`,
     `chips:${viewModel.rooms.showChips ? 1 : 0}`,
     // The headline's caption is a NODE that is either there or not (see
     // renderAverage()). A patch can change its text; it cannot create or delete it, so
@@ -76,6 +75,13 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];
+  if (viewModel.empty) {
+    // These are the no-data structures a text patch cannot create or remove.
+    // The keyed grid still reconciles individual chips while it remains present.
+    parts.push(`avgButton:${viewModel.average.entity ? 1 : 0}`);
+    parts.push(`hint:${viewModel.noData.hintKind}`);
+    return parts.join("|");
+  }
   for (const view of viewRenderers) {
     const content = viewModel.views.byKey[view.key];
     if (!content || typeof view.structureSignature !== "function") continue;
@@ -85,8 +91,6 @@ export function cardStructureSignature(viewModel, viewRenderers) {
 }
 
 export function renderCardBody(context, viewModel, viewRenderers) {
-  if (viewModel.empty) return renderEmptyState(viewModel);
-
   const roomGrid = viewModel.rooms.showChips
     ? `
           <div class="rtc-room-grid">
@@ -99,7 +103,7 @@ export function renderCardBody(context, viewModel, viewRenderers) {
   // last-resort focus fallback target when a focused element disappears and no average
   // button exists to fall back to instead.
   return `
-        <div class="rtc-root" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
+        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
           <div class="rtc-top-line"></div>
 
           <div class="rtc-header">
@@ -129,13 +133,14 @@ export function renderCardBody(context, viewModel, viewRenderers) {
 // The partial update: only text, colours, markers and the dynamic subsections change,
 // so the slide animation never restarts. Each view patches its own subsection; a view
 // that is not currently mounted is a no-op through its own container guard.
-export function patchCardBody(context, root, viewModel, viewRenderers) {
+function patchShell(context, root, viewModel) {
   if (!root) return;
 
   const contentRoot = root.querySelector(".rtc-root");
   if (contentRoot) {
     contentRoot.setAttribute("style", viewModel.toneStyle);
-    contentRoot.setAttribute("data-metric", viewModel.metric.kind);
+    contentRoot.setAttribute("data-state", viewModel.empty ? "no-data" : "data");
+    contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
   }
 
   const iconEl = root.querySelector(".rtc-icon-badge ha-icon");
@@ -152,12 +157,16 @@ export function patchCardBody(context, root, viewModel, viewRenderers) {
 
   updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);
+}
+
+export function patchCardBody(context, root, viewModel, viewRenderers) {
+  patchShell(context, root, viewModel);
 
   for (const view of viewRenderers) view.patch(context, root, viewModel);
 }
 
-export function patchEmptyCardBody(root, viewModel) {
-  patchEmptyState(root, viewModel);
+export function patchEmptyCardBody(context, root, viewModel) {
+  patchShell(context, root, viewModel);
 }
 
 // Re-resolves every mounted view's own measured layout. The single entry point for

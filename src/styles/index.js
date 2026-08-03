@@ -23,7 +23,7 @@ import { RANGE_SCALE_VIEW_CSS } from "./range-scale-view.js";
 import { SCALE_BAR_CSS } from "./scale-bar.js";
 import { CARDS_CSS } from "./cards.js";
 import { ROOMS_CSS } from "./rooms.js";
-import { EMPTY_CSS } from "./empty.js";
+import { AVAILABILITY_CSS } from "./availability.js";
 import { RESPONSIVE_CSS } from "./responsive.js";
 import { MOTION_CSS } from "./motion.js";
 
@@ -39,7 +39,7 @@ export function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidth
     SCALE_BAR_CSS,
     CARDS_CSS,
     ROOMS_CSS,
-    EMPTY_CSS,
+    AVAILABILITY_CSS,
     RESPONSIVE_CSS,
     MOTION_CSS,
   ].join("");
