@@ -51,10 +51,12 @@ export const de = {
   "adjective.elevated": "erhöht",
   "adjective.low": "niedrig",
 
-  "avg.label": "Ø Wohnung",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
-  "avg.ariaOpen": "Durchschnitt öffnen",
+  "value.homeAverage": "Ø Wohnung",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aus Raumwerten berechnet`,
+  "value.ariaOpen": "Durchschnitt öffnen",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} über Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} über Komfort.`,

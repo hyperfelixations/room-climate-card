@@ -67,7 +67,7 @@ const hassDe = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: 
 test("I18N-01: language:fr overrides hass.language:de", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "fr" }, hassDe);
   assert.equal(el._language(), "fr");
-  assert.equal(el._t("avg.label"), "Moy. maison");
+  assert.equal(el._t("value.homeAverage"), "Moy. maison");
   env.cleanup(el);
 });
 
@@ -124,7 +124,7 @@ test("I18N-02: every new language has native representative card text instead of
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
     assert.equal(el._t("title.temperature"), text.title, `lang=${lang}: title`);
-    assert.equal(el._t("avg.label"), text.avg, `lang=${lang}: average label`);
+    assert.equal(el._t("value.homeAverage"), text.avg, `lang=${lang}: average label`);
     assert.equal(el._t("empty.title"), text.empty, `lang=${lang}: empty title`);
     env.cleanup(el);
   }
@@ -132,8 +132,8 @@ test("I18N-02: every new language has native representative card text instead of
 
 test("I18N-02: every function-valued translation executes with the full runtime variable contract in all supported languages", () => {
   const functionKeys = [
-    "avg.tooltip",
-    "avg.tooltipCalculated",
+    "value.tooltip",
+    "value.tooltipCalculated",
     "subtitle.aboveComfort",
     "subtitle.aboveComfortNoRooms",
     "subtitle.belowComfort",

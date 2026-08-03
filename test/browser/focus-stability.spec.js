@@ -13,7 +13,7 @@ const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../helpers/browser-helpers");
 
 // 3 rooms (not 2): removing one to trigger the focus-fallback test must
-// leave >=2 valid rooms, or hasRoomsView itself flips false -- a
+// leave >=2 valid rooms, or roomsComparable itself flips false -- a
 // structural change routed through _renderAll(), not the _updateRoomGrid()
 // patch path this file is actually testing.
 function fourAreaStates(overrides) {

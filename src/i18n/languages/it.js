@@ -47,7 +47,7 @@ export const it = {
   // Predicative fragment ("2/4 stanze calde"); "stanza"/"stanze" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "calde",
   "adjective.cool": "fresche",
   "adjective.humid": "umide",
@@ -55,10 +55,12 @@ export const it = {
   "adjective.elevated": "alte",
   "adjective.low": "basse",
 
-  "avg.label": "Media casa",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
-  "avg.ariaOpen": "Apri la media",
+  "value.homeAverage": "Media casa",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calcolato dai valori delle stanze`,
+  "value.ariaOpen": "Apri la media",
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} sopra il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} sopra il comfort.`,

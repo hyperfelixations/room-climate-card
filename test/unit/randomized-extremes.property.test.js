@@ -124,7 +124,7 @@ function checkInvariants(el, data, metricType, roomValues) {
   if (!data.empty) {
     push(Number.isFinite(data.scale.scaleMin) && Number.isFinite(data.scale.scaleMax), "scaleMin/scaleMax must be finite");
     push(data.scale.scaleMin < data.scale.scaleMax, `scaleMin=${data.scale.scaleMin} must be < scaleMax=${data.scale.scaleMax}`);
-    if (data.rooms.hasRoomsView) {
+    if (data.rooms.comparable) {
       push(data.extremes.coolest.value <= data.extremes.warmest.value, "coolest.value must be <= warmest.value");
       push(Number.isFinite(data.spread) && data.spread >= 0, `spread=${data.spread} must be finite and >= 0`);
       push(data.rooms.count >= 0 && data.comfort.inComfort >= 0 && data.comfort.inComfort <= data.rooms.count, `inComfort=${data.comfort.inComfort} must be in [0, roomCount=${data.rooms.count}]`);
@@ -133,16 +133,16 @@ function checkInvariants(el, data, metricType, roomValues) {
       push(isPhysicallyValid(metricType, data.extremes.coolest.value), `coolest.value=${data.extremes.coolest.value} must be physically valid for ${metricType}`);
       push(isPhysicallyValid(metricType, data.extremes.warmest.value), `warmest.value=${data.extremes.warmest.value} must be physically valid for ${metricType}`);
     }
-    // hasRoomsView/roomCount must exactly reflect the physically-valid
+    // roomsComparable/roomCount must exactly reflect the physically-valid
     // subset of generated room values, not the raw configured room count —
     // the single most direct property-level check that invalid readings
     // are actually excluded from the pipeline, not just recolored.
     const expectedValidRoomCount = roomValues.filter((v) => v.numeric !== null && isPhysicallyValid(metricType, v.numeric)).length;
     push(
-      data.rooms.hasRoomsView === expectedValidRoomCount >= 2,
-      `hasRoomsView=${data.rooms.hasRoomsView} must match (expectedValidRoomCount=${expectedValidRoomCount} >= 2)`
+      data.rooms.comparable === expectedValidRoomCount >= 2,
+      `rooms.comparable=${data.rooms.comparable} must match (expectedValidRoomCount=${expectedValidRoomCount} >= 2)`
     );
-    if (data.rooms.hasRoomsView) {
+    if (data.rooms.comparable) {
       push(data.rooms.count === expectedValidRoomCount, `roomCount=${data.rooms.count} must equal expectedValidRoomCount=${expectedValidRoomCount}`);
     }
 

@@ -90,7 +90,7 @@ test("views: range_scale enabled:true without a valid range_entity has no effect
   env.cleanup(el);
 });
 
-test("hasRoomsView requires >= 2 valid room values, not just >= 2 configured rooms", () => {
+test("roomsComparable requires >= 2 valid room values, not just >= 2 configured rooms", () => {
   const oneRoomHass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -98,7 +98,7 @@ test("hasRoomsView requires >= 2 valid room values, not just >= 2 configured roo
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, oneRoomHass);
   const data = el._computeViewModel();
-  assert.equal(data.rooms.hasRoomsView, false, "only 1 of 2 configured rooms is valid -> minimal mode");
+  assert.equal(data.rooms.comparable, false, "only 1 of 2 configured rooms is valid -> minimal mode");
   assert.deepEqual(normalize(el._views), ["scale"]);
   env.cleanup(el);
 });

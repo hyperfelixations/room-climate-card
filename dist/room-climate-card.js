@@ -16,7 +16,7 @@
 
 const CARD_TYPE = "room-climate-card";
 const CARD_NAME = "Room Climate Card";
-const CARD_VERSION = "2.36.3";
+const CARD_VERSION = "2.37.0";
 
 // Language codes and their Intl locales.
 //
@@ -192,10 +192,12 @@ const en = {
   "adjective.elevated": "elevated",
   "adjective.low": "low",
 
-  "avg.label": "Home avg.",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
-  "avg.ariaOpen": "Open average",
+  "value.homeAverage": "Home avg.",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculated from room values`,
+  "value.ariaOpen": "Open average",
 
   "subtitle.aboveComfort": (v) => `Avg. ${v.diff} above comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Avg. ${v.diff} above comfort.`,
@@ -301,10 +303,12 @@ const de = {
   "adjective.elevated": "erhöht",
   "adjective.low": "niedrig",
 
-  "avg.label": "Ø Wohnung",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
-  "avg.ariaOpen": "Durchschnitt öffnen",
+  "value.homeAverage": "Ø Wohnung",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aus Raumwerten berechnet`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aus Raumwerten berechnet`,
+  "value.ariaOpen": "Durchschnitt öffnen",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} über Komfort · ${v.count}/${v.total} ${v.total === 1 ? "Raum" : "Räume"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} über Komfort.`,
@@ -413,10 +417,12 @@ const nl = {
   "adjective.elevated": "verhoogd",
   "adjective.low": "laag",
 
-  "avg.label": "Ø Woning",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
-  "avg.ariaOpen": "Gemiddelde openen",
+  "value.homeAverage": "Ø Woning",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · berekend uit kamerwaarden`,
+  "value.ariaOpen": "Gemiddelde openen",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} boven comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} boven comfort.`,
@@ -518,7 +524,7 @@ const fr = {
   // Predicative fragment ("2/4 pièces chaudes"); "pièce"/"pièces" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "chaudes",
   "adjective.cool": "fraîches",
   "adjective.humid": "humides",
@@ -526,10 +532,12 @@ const fr = {
   "adjective.elevated": "élevées",
   "adjective.low": "basses",
 
-  "avg.label": "Moy. maison",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
-  "avg.ariaOpen": "Ouvrir la moyenne",
+  "value.homeAverage": "Moy. maison",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculé à partir des valeurs des pièces`,
+  "value.ariaOpen": "Ouvrir la moyenne",
 
   "subtitle.aboveComfort": (v) => `Moy. ${v.diff} au-dessus du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Moy. ${v.diff} au-dessus du confort.`,
@@ -633,7 +641,7 @@ const it = {
   // Predicative fragment ("2/4 stanze calde"); "stanza"/"stanze" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "calde",
   "adjective.cool": "fresche",
   "adjective.humid": "umide",
@@ -641,10 +649,12 @@ const it = {
   "adjective.elevated": "alte",
   "adjective.low": "basse",
 
-  "avg.label": "Media casa",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
-  "avg.ariaOpen": "Apri la media",
+  "value.homeAverage": "Media casa",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calcolato dai valori delle stanze`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calcolato dai valori delle stanze`,
+  "value.ariaOpen": "Apri la media",
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} sopra il comfort · ${v.count}/${v.total} ${v.total === 1 ? "stanza" : "stanze"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} sopra il comfort.`,
@@ -753,10 +763,12 @@ const es = {
   "adjective.elevated": "con valores elevados",
   "adjective.low": "con valores bajos",
 
-  "avg.label": "Media del hogar",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
-  "avg.ariaOpen": "Abrir la media",
+  "value.homeAverage": "Media del hogar",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculada a partir de los valores de las habitaciones`,
+  "value.ariaOpen": "Abrir la media",
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} por encima del confort · ${v.count}/${v.total} ${v.total === 1 ? "habitación" : "habitaciones"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} por encima del confort.`,
@@ -865,10 +877,12 @@ const ru = {
   "adjective.elevated": "уровень повышен",
   "adjective.low": "уровень низкий",
 
-  "avg.label": "Среднее по дому",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
-  "avg.ariaOpen": "Открыть среднее значение",
+  "value.homeAverage": "Среднее по дому",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · рассчитано по значениям комнат`,
+  "value.ariaOpen": "Открыть среднее значение",
 
   "subtitle.aboveComfort": (v) => `Среднее на ${v.diff} выше комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Среднее на ${v.diff} выше комфортного диапазона.`,
@@ -982,10 +996,12 @@ const pl = {
   "adjective.elevated": "wartości są podwyższone",
   "adjective.low": "wartości są niskie",
 
-  "avg.label": "Średnia dla domu",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
-  "avg.ariaOpen": "Otwórz wartość średnią",
+  "value.homeAverage": "Średnia dla domu",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · obliczona na podstawie wartości z pomieszczeń`,
+  "value.ariaOpen": "Otwórz wartość średnią",
 
   "subtitle.aboveComfort": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu.`,
@@ -1099,10 +1115,12 @@ const ko = {
   "adjective.elevated": "수치가 높음",
   "adjective.low": "수치가 낮음",
 
-  "avg.label": "집 전체 평균",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
-  "avg.ariaOpen": "평균값 열기",
+  "value.homeAverage": "집 전체 평균",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 방별 값으로 계산`,
+  "value.ariaOpen": "평균값 열기",
 
   "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,
@@ -1208,10 +1226,12 @@ const ja = {
   "adjective.elevated": "数値が高め",
   "adjective.low": "数値が低め",
 
-  "avg.label": "住宅平均",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
-  "avg.ariaOpen": "平均値を開く",
+  "value.homeAverage": "住宅平均",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 各部屋の値から算出`,
+  "value.ariaOpen": "平均値を開く",
 
   "subtitle.aboveComfort": (v) => `平均は快適範囲を ${v.diff} 上回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 上回っています。`,
@@ -1317,10 +1337,12 @@ const zh = {
   "adjective.elevated": "数值偏高",
   "adjective.low": "数值偏低",
 
-  "avg.label": "全屋平均",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
-  "avg.ariaOpen": "打开平均值",
+  "value.homeAverage": "全屋平均",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 根据各房间数值计算`,
+  "value.ariaOpen": "打开平均值",
 
   "subtitle.aboveComfort": (v) => `平均值高于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均值高于舒适范围 ${v.diff}。`,
@@ -1422,7 +1444,7 @@ const nb = {
   // Predicative fragment ("2/4 rom er varme"); Norwegian predicative
   // adjectives DO inflect for number (unlike German/English/Dutch) — these
   // are the plural forms, the only ones this key is ever used with
-  // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+  // (subtitle.*Comfort's rooms branch is only reachable once rooms.comparable
   // requires >= 2 rooms, see buildCardDomainModel()). Note "rom" itself is
   // plural-invariant ("et rom" / "flere rom"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
@@ -1434,10 +1456,12 @@ const nb = {
   "adjective.elevated": "forhøyede",
   "adjective.low": "lave",
 
-  "avg.label": "Ø bolig",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
-  "avg.ariaOpen": "Åpne gjennomsnitt",
+  "value.homeAverage": "Ø bolig",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beregnet ut fra romverdier`,
+  "value.ariaOpen": "Åpne gjennomsnitt",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,
@@ -1539,7 +1563,7 @@ const sv = {
   // Predicative fragment ("2/4 rum är varma"); Swedish predicative
   // adjectives DO inflect for number (unlike German/English/Dutch) —
   // these are the plural forms, the only ones this key is ever used with
-  // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+  // (subtitle.*Comfort's rooms branch is only reachable once rooms.comparable
   // requires >= 2 rooms, see buildCardDomainModel()). Note "rum" itself is
   // plural-invariant ("ett rum" / "flera rum"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
@@ -1551,10 +1575,12 @@ const sv = {
   "adjective.elevated": "förhöjda",
   "adjective.low": "låga",
 
-  "avg.label": "Ø hem",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
-  "avg.ariaOpen": "Öppna medelvärde",
+  "value.homeAverage": "Ø hem",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beräknat utifrån rumsvärden`,
+  "value.ariaOpen": "Öppna medelvärde",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,
@@ -1657,7 +1683,7 @@ const lv = {
   // Predicative fragment ("2/4 telpas ir siltas"); "telpa" (room) is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "siltas",
   "adjective.cool": "vēsas",
   "adjective.humid": "mitras",
@@ -1665,10 +1691,12 @@ const lv = {
   "adjective.elevated": "paaugstinātas",
   "adjective.low": "zemas",
 
-  "avg.label": "Ø māja",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
-  "avg.ariaOpen": "Atvērt vidējo vērtību",
+  "value.homeAverage": "Ø māja",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aprēķināts no telpu vērtībām`,
+  "value.ariaOpen": "Atvērt vidējo vērtību",
 
   // Latvian cardinal numbers have a three-way CLDR plural split (zero:
   // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:
@@ -1798,8 +1826,12 @@ function translate(language, key, vars) {
 // presentation metadata lives with the metric registries, and every semantic
 // classification/scale decision lives in the domain classification profiles.
 //
-// There are no default entities. `entity` is the only required config field;
-// `rooms` is optional and the card falls back to minimal mode without it.
+// There are no default entities, and none of them is individually required. What IS
+// required is that at least one CURRENT-VALUE source exists: either `entity` or at
+// least one `rooms` entry. `range_entity` and `trend_entity` describe a value rather
+// than being one, so they never satisfy that on their own. The check lives in
+// normalize-config.js, where both fields have been normalized and can be judged
+// together.
 
 const DEFAULT_CONFIG = {
   rotation_seconds: 14, // hold time per view
@@ -1906,7 +1938,7 @@ function pathError(path, message) {
 // is a product decision rather than an implementation detail:
 //
 //   throw    a structurally invalid value the card cannot work around — a
-//            missing or malformed entity id, a malformed classification block.
+//            missing required or malformed entity id, a malformed classification block.
 //   fall back  a malformed OPTIONAL value — a typo in `decimals` or
 //            `room_columns` degrades to the built-in default instead of taking
 //            the whole dashboard card down with it.
@@ -1920,7 +1952,7 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-// Required entity id (e.g. rooms[i].entity or the average entity).
+// Required entity id (currently used by rooms[i].entity).
 function requiredEntity(value, name) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`Invalid configuration: ${name} must be a non-empty entity id.`);
@@ -1939,10 +1971,21 @@ function optionalEntity(value, fallback, name) {
   return value.trim();
 }
 
-// Optional free-text override (avg_label/title/icon); a non-string or empty
-// value means "use the built-in default" rather than throwing.
+// Optional free-text override (title/icon); a non-string or empty value means "use the
+// built-in default" rather than throwing.
 function optionalString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+// Optional label text, where an EXPLICIT empty string is a real answer.
+//
+// The difference from optionalString() is the whole point: for a label, "" means "show
+// no label here", which is not the same as "not configured, use the default". Collapsing
+// the two — as optionalString() does — makes it impossible to ask for a bare number.
+// null therefore means only "absent", and every other string, including "", is honoured
+// as written.
+function optionalLabel(value) {
+  return typeof value === "string" ? value.trim() : null;
 }
 
 // String helper for optional display names.
@@ -2588,6 +2631,16 @@ function normalizeLanguage(value, isSupportedLanguage) {
   return isSupportedLanguage(normalized) ? normalized : "auto";
 }
 
+// `show_rooms` accepts what YAML naturally produces. `true`/`false` are booleans there,
+// not the strings "true"/"false", so they are mapped onto the three-state vocabulary
+// rather than compared as text. Anything unrecognized falls back to "auto" silently,
+// the same convention room_sort and room_label already use.
+function normalizeShowRooms(value) {
+  if (value === true) return "always";
+  if (value === false) return "never";
+  return "auto";
+}
+
 function normalizeConfig(config, collaborators) {
   const { isSupportedLanguage, optionSchemaForView } = collaborators;
   const userConfig = config ?? {};
@@ -2595,12 +2648,25 @@ function normalizeConfig(config, collaborators) {
     throw new Error("Invalid configuration: card configuration must be an object.");
   }
 
-  // entity (average value) is the only required config field.
-  const entity = requiredEntity(userConfig.entity, "entity");
+  // `entity` is OPTIONAL, and deliberately normalized before the requirement below is
+  // checked. Absent or empty is a legitimate configuration — the rooms can carry the
+  // card on their own. Present but malformed is still a hard error with its own path,
+  // because silently ignoring a typo'd entity id would leave the user staring at a card
+  // that reads correctly and shows the wrong thing.
+  const entity = optionalEntity(userConfig.entity, null, "entity");
 
-  // rooms is optional; below two valid room values the card stays in minimal
-  // mode.
+  // rooms is optional too, and every entry is fully validated (each needs its own
+  // entity, and they must be unique) before the combined requirement is judged.
   const rooms = normalizeRooms(userConfig.rooms === undefined ? [] : userConfig.rooms);
+
+  // THE requirement: a card has to be able to show a current value, and there are
+  // exactly two ways to give it one. `range_entity` and `trend_entity` are auxiliary —
+  // they describe a value, they cannot BE it — so neither satisfies this on its own.
+  if (!entity && rooms.length === 0) {
+    throw new Error(
+      "Invalid configuration: at least one current-value source is required — set entity, or add at least one entry to rooms."
+    );
+  }
 
   // Optional daily-range/trend entities, as produced by a template sensor.
   const rangeEntity = optionalEntity(userConfig.range_entity, null, "range_entity");
@@ -2614,7 +2680,10 @@ function normalizeConfig(config, collaborators) {
     // Cosmetic/optional overrides: a malformed value falls back to the previous
     // default rather than throwing, so a typo in an optional field can't break
     // the whole card the way a bad entity id would.
-    avg_label: optionalString(userConfig.avg_label),
+    //
+    // value_label is the headline's caption, and uses optionalLabel() rather than
+    // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
+    value_label: optionalLabel(userConfig.value_label),
     title: optionalString(userConfig.title),
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),
@@ -2635,11 +2704,20 @@ function normalizeConfig(config, collaborators) {
     room_rows: positiveInteger(userConfig.room_rows),
     // Purely presentation decisions: room_sort only reorders the rendered chips,
     // never the value-sorted list every calculation uses; room_label picks
-    // between the existing short/name pair; show_rooms hides the chip grid only,
-    // rooms stay full data sources either way.
+    // between the existing short/name pair; show_rooms governs the chip grid only,
+    // rooms stay full data sources in every setting.
     room_sort: normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
     room_label: normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
-    show_rooms: userConfig.show_rooms !== false,
+    // Three states, written in YAML as `auto` | `true` | `false`. The booleans are
+    // mapped rather than kept, so downstream code reads one vocabulary instead of
+    // switching on a mixed boolean/string type:
+    //
+    //   always  show a chip for every usable room, even the one that duplicates the
+    //           headline — an explicit request beats the redundancy rule
+    //   never   no chips at all; the rooms remain data sources
+    //   auto    chips unless they would only repeat the headline (see
+    //           chipsWouldDuplicateHeadline() in application/model/source-topology.js)
+    show_rooms: normalizeShowRooms(userConfig.show_rooms),
     // views: is the single public view-composition surface. null is the "not
     // configured at all" sentinel, which resolves to one auto entry per
     // registered view; a present-but-possibly-empty array is authoritative even
@@ -3900,11 +3978,80 @@ function buildEntityModel(states, config, entityId, sourceRole) {
   };
 }
 
+// Which sources a card is CONFIGURED with, and what that makes the headline value.
+//
+// One pure function over the normalized configuration, and the only place this is
+// decided. Four consumers ask it — the measurement context, the headline label, the
+// chip-visibility policy and the card's size hint — and they must not be able to
+// disagree, because between them they decide what the big number IS, what it is called,
+// whether it can be clicked, and whether the room it came from also gets a chip.
+//
+// CONFIGURATION, NOT AVAILABILITY. This reads `config` only. A sensor that drops out
+// changes the VALUE the card can show; it must never change what kind of card this is.
+// Deciding the mode from live availability would make a two-room card relabel its
+// headline to a room name and turn it into a button the moment one of the two sensors
+// went quiet — and back again when it returned. The value falls back, the identity does
+// not.
+
+const SOURCE_TOPOLOGY = {
+  // `entity` alone. The headline is that sensor and nothing on the card competes with
+  // it, so it needs no label to tell it apart from anything.
+  PRIMARY_ONLY: "primaryOnly",
+  // The whole card refers to exactly one entity, and that entity is a room. Covers both
+  // "one room, no entity" and "entity that IS the one configured room" — they are the
+  // same card, written two ways.
+  SINGLE_ROOM: "singleRoom",
+  // `entity` plus rooms that are something else. The headline is the primary; the rooms
+  // are context beside it.
+  PRIMARY_WITH_ROOMS: "primaryWithRooms",
+  // No `entity`, several rooms. The headline is computed from them and belongs to no
+  // single entity.
+  ROOM_CONSENSUS: "roomConsensus",
+};
+
+// Returns { kind, headlineEntity, roomIndex }.
+//
+//   headlineEntity  the entity the big number represents, or null when it is computed
+//   roomIndex       the configured room that entity IS, or null
+//
+// roomIndex is set ONLY for SINGLE_ROOM, and that restriction is deliberate. A card
+// configured as `entity: sensor.a` with rooms `[sensor.a, sensor.b, sensor.c]` is a
+// whole-home card that happens to list its primary among the rooms; labelling its
+// headline "Kitchen" and giving it Kitchen's tap action would be wrong. Only when the
+// card refers to exactly one entity, and that entity is the one room, is the headline
+// genuinely that room.
+function resolveSourceTopology(config) {
+  const entity = config?.entity || null;
+  const rooms = config?.rooms || [];
+  const distinctSources = new Set([entity, ...rooms.map((room) => room.entity)].filter(Boolean));
+
+  if (rooms.length === 1 && distinctSources.size === 1) {
+    return { kind: SOURCE_TOPOLOGY.SINGLE_ROOM, headlineEntity: rooms[0].entity, roomIndex: 0 };
+  }
+  if (!entity) {
+    return { kind: SOURCE_TOPOLOGY.ROOM_CONSENSUS, headlineEntity: null, roomIndex: null };
+  }
+  if (rooms.length === 0) {
+    return { kind: SOURCE_TOPOLOGY.PRIMARY_ONLY, headlineEntity: entity, roomIndex: null };
+  }
+  return { kind: SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS, headlineEntity: entity, roomIndex: null };
+}
+
+// Whether the chip grid would only repeat the headline. True for exactly the card whose
+// single room IS the big number — a chip there is the same value twice.
+function chipsWouldDuplicateHeadline(topology) {
+  return topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM;
+}
+
 // The atomic MeasurementContext: metric kind, average source and display unit,
 // decided together from the same EntityModels.
 //
 // The arbitration rules, in order:
 //
+//   0. CONFIGURATION FIRST. A card that names exactly one entity, and whose one entity
+//      is a room, has a headline that IS that sensor — not an average of anything. That
+//      is decided from the configuration alone (see source-topology.js), so a sensor
+//      dropping out changes the value the card can show and never what the card is.
 //   1. A USABLE primary (numeric + physically valid + resolvable unit + resolvable
 //      kind) alone determines the metric kind and is the average source. Rooms of
 //      the same kind participate; rooms of a different kind, or with an unusable
@@ -3935,6 +4082,9 @@ function resolveMeasurementContext(states, config) {
   const primary = buildEntityModel(states, config, config?.entity, "primary");
   const rooms = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
   const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
+  // WHICH KIND OF CARD this is, decided from the configuration alone. Availability
+  // decides what value can be shown, never what the card is.
+  const topology = resolveSourceTopology(config);
 
   let metricKind;
   let averageSource;
@@ -3946,7 +4096,28 @@ function resolveMeasurementContext(states, config) {
   let sourceKind;
   let displayUnitProfileKey;
 
-  if (primaryUsable) {
+  if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
+    // The whole card refers to exactly one entity, and that entity is a room. The
+    // headline is not an average of anything — it IS that sensor — so it gets its own
+    // source kind rather than being smuggled through as a one-element consensus. Both
+    // spellings of this card reach here: "one room, no entity" and "entity that is the
+    // one configured room".
+    const room = rooms[0];
+    const roomUsable = room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null;
+    // The room's own kind names the card even when the room currently reports nothing,
+    // so an unavailable humidity sensor still titles the card "Humidity".
+    metricKind = room.metricKind || FALLBACK_METRIC_KIND;
+    excludedRoomIds = [];
+    diagnostics = [];
+    consistent = true;
+    participatingRooms = roomUsable ? [room] : [];
+    averageSource = roomUsable
+      ? { kind: "roomDirect", entityId: room.entityId, canonicalValue: room.canonicalValue, unitProfile: room.unitProfile }
+      : null;
+    sourceEntity = roomUsable ? room.entityId : null;
+    sourceKind = roomUsable ? "roomDirect" : "default";
+    displayUnitProfileKey = roomUsable ? room.unitProfile : null;
+  } else if (primaryUsable) {
     metricKind = primary.metricKind;
     participatingRooms = [];
     excludedRoomIds = [];
@@ -4272,8 +4443,8 @@ function buildRoomModels({ config, context, toDisplay }) {
   return declared;
 }
 
-function computeComfortCounts(rooms, comfort, hasRoomsView) {
-  if (!hasRoomsView) return { inComfort: 0, tooWarm: 0, tooCool: 0 };
+function computeComfortCounts(rooms, comfort, roomsComparable) {
+  if (!roomsComparable) return { inComfort: 0, tooWarm: 0, tooCool: 0 };
   return {
     inComfort: rooms.filter((room) => room.value >= comfort.min && room.value <= comfort.max).length,
     tooWarm: rooms.filter((room) => room.value > comfort.max).length,
@@ -4291,11 +4462,11 @@ function computeComfortCounts(rooms, comfort, hasRoomsView) {
 // The attribute is a DELTA in the primary's own unit, so it is canonicalized and
 // then projected with the delta path; using the absolute path would add the
 // Fahrenheit offset to a difference.
-function computeSpread({ attributeValue, hasRoomsView, coolest, warmest }) {
+function computeSpread({ attributeValue, roomsComparable, coolest, warmest }) {
   // A negative room-to-room range is physically impossible; treat it exactly like
   // a missing attribute.
   const attrSpread = attributeValue !== null && attributeValue >= 0 ? attributeValue : null;
-  const computedSpread = hasRoomsView ? warmest.value - coolest.value : 0;
+  const computedSpread = roomsComparable ? warmest.value - coolest.value : 0;
   return attrSpread !== null ? attrSpread : computedSpread;
 }
 
@@ -4306,24 +4477,24 @@ function computeSpread({ attributeValue, hasRoomsView, coolest, warmest }) {
 // one of those two endpoints. Reusing those already-computed objects instead of a
 // second, independent sort is what keeps the named room and the extreme-value
 // cards from disagreeing on an exact value tie.
-function buildSubtitleModel({ avg, comfort, hasRoomsView, counts, roomCount, coolest, warmest, missingRooms }) {
+function buildSubtitleModel({ avg, comfort, roomsComparable, counts, roomCount, coolest, warmest, missingRooms }) {
   let sentence;
   if (avg > comfort.max) {
-    sentence = hasRoomsView
+    sentence = roomsComparable
       ? { kind: "aboveComfort", diff: avg - comfort.max, count: counts.tooWarm, total: roomCount, adjective: "above" }
       : { kind: "aboveComfortNoRooms", diff: avg - comfort.max };
   } else if (avg < comfort.min) {
-    sentence = hasRoomsView
+    sentence = roomsComparable
       ? { kind: "belowComfort", diff: comfort.min - avg, count: counts.tooCool, total: roomCount, adjective: "below" }
       : { kind: "belowComfortNoRooms", diff: comfort.min - avg };
-  } else if (hasRoomsView && counts.tooWarm + counts.tooCool > 0) {
+  } else if (roomsComparable && counts.tooWarm + counts.tooCool > 0) {
     const warmestOut = warmest.value > comfort.max;
     const coolestOut = coolest.value < comfort.min;
     const issue = warmestOut && coolestOut
       ? (Math.abs(warmest.value - avg) >= Math.abs(coolest.value - avg) ? warmest : coolest)
       : warmestOut ? warmest : coolest;
     sentence = { kind: "inComfortIssue", name: issue.name };
-  } else if (hasRoomsView) {
+  } else if (roomsComparable) {
     sentence = { kind: "inComfortAllGood" };
   } else {
     sentence = { kind: "inComfort" };
@@ -4368,6 +4539,10 @@ function buildSubtitleModel({ avg, comfort, hasRoomsView, counts, roomCount, coo
 function buildCardDomainModel({ states, config, context, language }) {
   const policy = classificationPolicyOf(config);
   const metricKind = effectiveMetricKind(context);
+  // The same configuration-only classification the measurement context branched on.
+  // Recomputed rather than threaded through, because it is a pure function of the
+  // config and having one owner beats having one carrier.
+  const topology = resolveSourceTopology(config);
   const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
   const comfort = scaleConfig.comfort;
   const optimal = scaleConfig.optimal;
@@ -4402,23 +4577,34 @@ function buildCardDomainModel({ states, config, context, language }) {
   // rooms. Driven by the complete list, never by the possibly capped visible
   // subset: a grid override that hides chips must not turn off the room-comparison
   // features it does not otherwise affect.
-  const hasRoomsView = roomsByValue.length >= 2;
-  const coolest = hasRoomsView ? roomsByValue[0] : null;
-  const warmest = hasRoomsView ? roomsByValue[roomsByValue.length - 1] : null;
+  const roomsComparable = roomsByValue.length >= 2;
+  const coolest = roomsComparable ? roomsByValue[0] : null;
+  const warmest = roomsComparable ? roomsByValue[roomsByValue.length - 1] : null;
 
   const average = toDisplay(context.averageSource.canonicalValue);
-  // The single source of truth for whether the displayed average came from the
-  // primary entity's own state. Everything attributed to that entity — the
-  // average's clickability, its colour, the spread attribute — must follow it
-  // exactly; a looser "the entity exists" check would keep the average clickable
-  // and colour it from a stale entity while showing the room-based fallback.
-  const averageSourceKind = context.averageSource.kind === "primary" ? "sensor" : "calculated";
-  const averageEntity = averageSourceKind === "sensor" ? config.entity : "";
+  // WHICH ENTITY, if any, the displayed headline actually is. Everything attributed to
+  // an entity follows this exactly — clickability, the colour taken from its attributes,
+  // the spread attribute, and which action config a tap resolves against. A looser "the
+  // entity exists" check would keep the headline clickable and colour it from a stale
+  // entity while showing a room-derived fallback value.
+  //
+  //   sensor      the configured primary's own reading
+  //   room        one configured room's own reading, because the card names exactly
+  //               that one entity (see source-topology.js)
+  //   calculated  a consensus over several rooms; no single entity represents it
+  const averageSourceKind =
+    context.averageSource.kind === "primary" ? "sensor" : context.averageSource.kind === "roomDirect" ? "room" : "calculated";
+  const averageEntity = averageSourceKind === "calculated" ? "" : context.averageSource.entityId;
+  // Set only where the headline genuinely IS a configured room, which the topology
+  // decides. Carries the room's label and its per-room action overrides to the big
+  // value without a second lookup — and never fires for a primary that merely happens
+  // to appear among several rooms.
+  const averageRoomIndex = averageSourceKind === "room" ? topology.roomIndex : null;
 
   const range = buildRangeModel({ states, config, policy, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
   const trend = buildTrendContext({ states, config, metricKind, unit: context.unit, toDisplayDelta });
 
-  const counts = computeComfortCounts(roomsByValue, comfort, hasRoomsView);
+  const counts = computeComfortCounts(roomsByValue, comfort, roomsComparable);
 
   let spreadAttribute = averageSourceKind === "sensor" ? readNumericAttribute(states, config.entity, "spread") : null;
   if (spreadAttribute !== null && context.averageSource.unitProfile && METRIC_DEFINITIONS[metricKind]) {
@@ -4431,7 +4617,7 @@ function buildCardDomainModel({ states, config, context, language }) {
       })
     );
   }
-  const spread = computeSpread({ attributeValue: spreadAttribute, hasRoomsView, coolest, warmest });
+  const spread = computeSpread({ attributeValue: spreadAttribute, roomsComparable, coolest, warmest });
 
   // One classification colour per participating room, keyed by the room's original
   // YAML index. Every consumer that tints something per room — the chips, the
@@ -4479,16 +4665,17 @@ function buildCardDomainModel({ states, config, context, language }) {
       value: average,
       source: averageSourceKind,
       entity: averageEntity,
+      roomIndex: averageRoomIndex,
     },
     rooms: {
       declared: declaredRooms,
       byValue: roomsByValue,
       count: roomsByValue.length,
-      hasRoomsView,
+      comparable: roomsComparable,
       missing: missingRooms,
     },
     roomColors,
-    extremes: hasRoomsView
+    extremes: roomsComparable
       ? {
           coolest,
           warmest,
@@ -4513,7 +4700,7 @@ function buildCardDomainModel({ states, config, context, language }) {
     subtitle: buildSubtitleModel({
       avg: average,
       comfort,
-      hasRoomsView,
+      roomsComparable,
       counts,
       roomCount: roomsByValue.length,
       coolest,
@@ -4874,8 +5061,8 @@ const VIEW_DEFINITIONS = [
   },
   {
     key: "extremes",
-    condition: (availability) => availability.hasRoomsView,
-    defaultEnabled: (availability) => availability.hasRoomsView,
+    condition: (availability) => availability.roomsComparable,
+    defaultEnabled: (availability) => availability.roomsComparable,
     // show_value toggles the numeric value on the coldest/warmest cards; the
     // label, room name and colour stay regardless.
     optionsSchema: { show_value: boolOption(true) },
@@ -5400,7 +5587,7 @@ function buildRangeScaleViewContent(shared, options, axis) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately NOT tied to hasRoomsView, unlike the main scale's footer: this
+      // Deliberately NOT tied to rooms.comparable, unlike the main scale's footer: this
       // view must show its daily span with zero rooms configured.
       footerText: options.footer === false || shared.hideFooter ? null : buildFooterText$1(shared, options.footer),
     }),
@@ -5436,7 +5623,7 @@ function buildRangeScaleViewContent(shared, options, axis) {
       average: buildMarker({
         position: positions.current,
         color: average.color,
-        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: texts.t("rangeScale.currentLabel") }),
+        title: texts.t("value.tooltip", { value: texts.fmtWithUnit(average.value), label: texts.t("rangeScale.currentLabel") }),
       }),
     },
   };
@@ -5481,10 +5668,10 @@ function buildScaleViewContent(shared, options) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately tied to hasRoomsView: two of the three segments are statements
+      // Deliberately tied to rooms.comparable: two of the three segments are statements
       // about rooms. The global hide_footer and this view's own footer option are
       // ANDed with it.
-      footerText: rooms.hasRoomsView && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
+      footerText: rooms.comparable && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
     }),
     comfortLabel: options.show_comfort_band
       ? {
@@ -5497,7 +5684,7 @@ function buildScaleViewContent(shared, options) {
       : null,
     emphasizeAverage,
     markers: {
-      // Gated on the extremes object itself, never on hasRoomsView: one source of
+      // Gated on the extremes object itself, never on rooms.comparable: one source of
       // truth for "there are two rooms to compare", and no branch that could read a
       // position off null.
       extremes:
@@ -5521,7 +5708,12 @@ function buildScaleViewContent(shared, options) {
       average: buildMarker({
         position: average.position,
         color: average.color,
-        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: average.label }),
+        // Mirrors the headline's caption, including its absence: a card without one
+        // must not give its average marker a tooltip starting with ": ".
+        title: texts.t(average.hasLabel ? "value.tooltip" : "value.tooltipNoLabel", {
+          value: texts.fmtWithUnit(average.value),
+          label: average.label,
+        }),
       }),
     },
   };
@@ -5684,16 +5876,55 @@ function buildTrendText(trend, texts) {
   return `${value > 0 ? "+" : ""}${texts.fmt(value)} ${trend.unit}`;
 }
 
-function buildAverage({ domainModel, config, texts, tone, position, trendText }) {
-  const { value, entity, source } = domainModel.average;
+// What the headline value is CALLED.
+//
+// The caption exists to tell the big number apart from the other values on the card.
+// That is the whole rule, and the four cases fall out of it:
+//
+//   an explicit value_label   the user said what it is called, including "" for
+//                             "call it nothing" — always wins
+//   the headline IS a room    that room's name; `name` already falls back through
+//                             short to the entity id (see config/rooms.js)
+//   there are no rooms        nothing to tell it apart from, and the card title
+//                             already names the measurement — so no caption at all
+//   otherwise                 it stands among room chips, so it says which one it is
+//
+// Every branch reads configuration only. A sensor dropping out can change the VALUE,
+// never what it is called.
+function resolveHeadlineLabel({ config, topology, roomIndex, texts }) {
+  if (config.value_label !== null) return config.value_label;
+  if (roomIndex !== null) return config.rooms[roomIndex].name;
+  if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY) return "";
+  return texts.t("value.homeAverage");
+}
+
+function buildAverage({ domainModel, config, topology, texts, tone, position, trendText }) {
+  const { value, entity, source, roomIndex } = domainModel.average;
   const trend = domainModel.trend.model;
+  const label = resolveHeadlineLabel({ config, topology, roomIndex, texts });
+  // Carried as its own fact rather than left for each consumer to re-derive from an
+  // empty string. The renderer omits the whole element when it is false, which makes
+  // this a STRUCTURAL property — see cardStructureSignature().
+  const hasLabel = label !== "";
+  const valueText = texts.fmtWithUnit(value);
+
   // A calculated average gets its own tooltip wording: it is not a reading of the
-  // configured entity, and saying so is the honest thing to show on hover.
-  const tooltip = texts.t(source === "sensor" ? "avg.tooltip" : "avg.tooltipCalculated", {
-    value: texts.fmtWithUnit(value),
-    label: config.avg_label || texts.t("avg.label"),
-  });
-  const ariaBase = entity ? texts.t("avg.ariaOpen") : tooltip;
+  // configured entity, and saying so is the honest thing to show on hover. Without a
+  // caption the label-prefixed forms would produce a tooltip starting with ": ", so
+  // each has a captionless twin.
+  const tooltipKey = source === "calculated"
+    ? (hasLabel ? "value.tooltipCalculated" : "value.tooltipCalculatedNoLabel")
+    : (hasLabel ? "value.tooltip" : "value.tooltipNoLabel");
+  const tooltip = texts.t(tooltipKey, { value: valueText, label });
+
+  // A headline that IS a room announces that room by name, reusing the same phrasing
+  // its chip uses. Otherwise the generic "open the average" wording applies, and a
+  // headline that opens nothing falls back to describing itself.
+  const ariaBase = !entity
+    ? tooltip
+    : roomIndex !== null
+      ? texts.t("room.ariaOpen", { name: config.rooms[roomIndex].name })
+      : texts.t("value.ariaOpen");
   const trendAria = trend
     ? texts.t("trend.aria", { direction: texts.t(trend.directionTranslationKey), value: trendText })
     : "";
@@ -5701,9 +5932,14 @@ function buildAverage({ domainModel, config, texts, tone, position, trendText })
     value,
     valueText: texts.fmt(value),
     unitText: domainModel.metric.unit,
-    label: config.avg_label || texts.t("avg.label"),
+    label,
+    hasLabel,
     entity,
     source,
+    // The configured room the headline is, or null. The renderer forwards it as
+    // data-room-index so a tap resolves against that room's own action overrides
+    // through the ordinary action path.
+    roomIndex,
     color: tone.color,
     position,
     tooltip,
@@ -5736,6 +5972,10 @@ function buildEmptyViewModel({ domainModel, config, texts, title, metricKind }) 
 }
 
 function buildCardViewModel({ domainModel, config, texts }) {
+  // Which sources this card is configured with. Decides the headline's caption and
+  // whether a chip would only repeat it — both configuration questions, so both read
+  // the same single answer.
+  const topology = resolveSourceTopology(config);
   const metricKind = domainModel.metric.kind;
   const meta = metricMetaFor(metricKind);
   const title = config.title || texts.t(meta.titleKey);
@@ -5769,7 +6009,7 @@ function buildCardViewModel({ domainModel, config, texts }) {
   const average = domainModel.average.value;
   const rooms = domainModel.rooms;
   // Everything that dereferences an extreme is gated on the extremes object itself
-  // rather than on hasRoomsView. The domain guarantees the two agree; keying off the
+  // rather than on rooms.comparable. The domain guarantees the two agree; keying off the
   // object means a single place decides, and no branch can read `.value` off null.
   const hasExtremes = Boolean(domainModel.extremes);
   const coolest = hasExtremes ? domainModel.extremes.coolest : null;
@@ -5813,6 +6053,7 @@ function buildCardViewModel({ domainModel, config, texts }) {
   const averageModel = buildAverage({
     domainModel,
     config,
+    topology,
     texts,
     tone,
     position: scale.markerPositions.avg,
@@ -5853,7 +6094,7 @@ function buildCardViewModel({ domainModel, config, texts }) {
   const viewState = buildViewState({
     availability: {
       hasRange: domainModel.range.hasRange,
-      hasRoomsView: rooms.hasRoomsView,
+      roomsComparable: rooms.comparable,
       rangeScaleAvailable: domainModel.range.rangeScaleAvailable,
     },
     config,
@@ -5875,7 +6116,7 @@ function buildCardViewModel({ domainModel, config, texts }) {
     hideFooter: Boolean(config.hide_footer),
     rangeEntity: config.range_entity,
     average: { ...averageModel },
-    rooms: { hasRoomsView: rooms.hasRoomsView, count: rooms.count, byValue: rooms.byValue },
+    rooms: { comparable: rooms.comparable, count: rooms.count, byValue: rooms.byValue },
     roomColors: domainModel.roomColors,
     extremes,
     roomMarkers,
@@ -5928,11 +6169,24 @@ function buildCardViewModel({ domainModel, config, texts }) {
       visible: layout.visible,
       rowSizes: layout.rowSizes,
       count: rooms.count,
-      hasRoomsView: rooms.hasRoomsView,
-      // show_rooms hides the chip grid only. Everything derived from the rooms —
-      // extrema, comfort count, spread, the scale's markers — stays exactly as it
-      // would with the chips visible, because the rooms remain full data sources.
-      showChips: rooms.hasRoomsView && config.show_rooms !== false,
+      comparable: rooms.comparable,
+      // Whether the chip grid is DRAWN. Deliberately independent of `comparable`:
+      // those are two different facts, and tying them together is why a card with a
+      // primary and one room used to show no chip for it at all.
+      //
+      //   never   no grid; the rooms stay full data sources regardless
+      //   always  a chip for every usable room — an explicit request outranks the
+      //           redundancy rule below
+      //   auto    chips unless the only room IS the headline, where a chip would
+      //           print the same value twice
+      //
+      // Everything derived from the rooms — extrema, comfort count, spread, the
+      // scale's markers — is unaffected by all three, because the rooms remain full
+      // data sources whether or not they are drawn.
+      showChips:
+        config.show_rooms !== "never" &&
+        rooms.count >= 1 &&
+        (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),
     },
@@ -6044,9 +6298,16 @@ function applyFocusFallback(root) {
 
 function contentHtml(average) {
   const hidden = average.trendDirection ? "" : " hidden";
+  // Omitted entirely rather than rendered empty: an empty block would still occupy its
+  // own line box and push the value down, which is exactly what a card configured
+  // without a caption is asking not to have. Because this is a NODE appearing and
+  // disappearing, `hasLabel` is part of cardStructureSignature() — the patch path can
+  // update a label, it cannot conjure one.
+  const label = average.hasLabel ? `<span class="rtc-avg-label">${escapeHtml(average.label)}</span>` : "";
+  const valueStyle = average.hasLabel ? "" : ' style="margin-top: 0px;"';
   return `
-        <span class="rtc-avg-label">${escapeHtml(average.label)}</span>
-        <span class="rtc-avg-value">
+        ${label}
+        <span class="rtc-avg-value"${valueStyle}>
           <span class="rtc-avg-value-num">${average.valueText}</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true"${hidden}><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit">${escapeHtml(average.unitText)}</span></span></span>
         </span>
       `;
@@ -6055,13 +6316,14 @@ function contentHtml(average) {
 function renderAverage(viewModel) {
   const average = viewModel.average;
   const trendClass = average.trendDirection ? " rtc-has-trend" : "";
+  const labelClass = average.hasLabel ? "" : " rtc-no-label";
   const trendDirection = average.trendDirection ? ` data-trend-direction="${escapeHtml(average.trendDirection)}"` : "";
   const content = contentHtml(average);
 
   if (!average.entity) {
     return `
           <div
-            class="rtc-avg-button rtc-avg-button-disabled${trendClass}"
+            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}"
             ${trendDirection}
             title="${escapeHtml(average.tooltip)}"
             aria-label="${escapeHtml(average.ariaLabel)}"
@@ -6071,12 +6333,16 @@ function renderAverage(viewModel) {
         `;
   }
 
+  // data-room-index is what makes a headline that IS a room obey that room's own
+  // tap_action/hold_action: the action runtime reads it from the clicked element, the
+  // same way it does for a chip. No second action path, no special case there.
+  const roomIndex = average.roomIndex !== null ? ` data-room-index="${escapeHtml(String(average.roomIndex))}"` : "";
   return `
         <button
           type="button"
-          class="rtc-avg-button${trendClass}"
+          class="rtc-avg-button${trendClass}${labelClass}"
           ${trendDirection}
-          data-entity="${escapeHtml(average.entity)}"
+          data-entity="${escapeHtml(average.entity)}"${roomIndex}
           aria-label="${escapeHtml(average.ariaLabel)}"
           title="${escapeHtml(average.tooltip)}"
         >
@@ -6094,12 +6360,25 @@ function patchAverage(element, viewModel) {
   if (average.entity) {
     element.setAttribute("data-entity", average.entity);
   }
+  // Removed as well as set: a card that stops being a single-room card must stop
+  // resolving its headline against that room's action overrides.
+  if (average.roomIndex !== null) {
+    element.setAttribute("data-room-index", String(average.roomIndex));
+  } else {
+    element.removeAttribute("data-room-index");
+  }
   element.setAttribute("aria-label", average.ariaLabel);
-  element.querySelector(".rtc-avg-label").textContent = average.label;
+  // Absent by design when there is no caption; whether it exists at all is structural
+  // (see contentHtml()), so this only ever updates one that is already there.
+  const labelEl = element.querySelector(".rtc-avg-label");
+  if (labelEl) labelEl.textContent = average.label;
+  const valueEl = element.querySelector(".rtc-avg-value");
+  valueEl.style.marginTop = average.hasLabel ? "" : "0px";
   element.querySelector(".rtc-avg-value-num").textContent = average.valueText;
   element.querySelector(".rtc-avg-value-unit").textContent = average.unitText;
   const hasTrend = Boolean(average.trendDirection);
   element.classList.toggle("rtc-has-trend", hasTrend);
+  element.classList.toggle("rtc-no-label", !average.hasLabel);
   if (hasTrend) {
     element.setAttribute("data-trend-direction", average.trendDirection);
   } else {
@@ -6354,6 +6633,10 @@ function cardStructureSignature(viewModel, viewRenderers) {
   if (viewModel.empty) return "empty";
   const parts = [
     `chips:${viewModel.rooms.showChips ? 1 : 0}`,
+    // The headline's caption is a NODE that is either there or not (see
+    // renderAverage()). A patch can change its text; it cannot create or delete it, so
+    // its presence has to force a rebuild.
+    `avgLabel:${viewModel.average.hasLabel ? 1 : 0}`,
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];
@@ -10054,10 +10337,11 @@ function structuralConfigSignature(config) {
     }
 
     static getStubConfig() {
-      // Example config for the Home Assistant card editor; entity/rooms are
-      // generic editor placeholders only (matching the README's own
-      // Quickstart examples) — the card never falls back to default
-      // entities at runtime (see _normalizeConfig()).
+      // Example config for the Home Assistant card editor; entity/rooms are generic
+      // editor placeholders only (matching the README's own Quickstart examples) — the
+      // card never falls back to default entities at runtime (see _normalizeConfig()).
+      // Both a primary and rooms are offered because that is the richest starting
+      // point to edit down from; either one alone would also be a valid card.
       return {
         entity: "sensor.house_temperature",
         rooms: [
@@ -10152,7 +10436,7 @@ function structuralConfigSignature(config) {
       const configDiagnostics = this._config?._viewsDiagnostics || [];
       const { diagnostics: resolveDiagnostics } = resolveActiveViews(
         VIEW_DEFINITIONS,
-        { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+        { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
         this._config
       );
       const diagnostics = [...configDiagnostics, ...resolveDiagnostics];
@@ -10261,10 +10545,15 @@ function structuralConfigSignature(config) {
       // roomGridRows()). Extra chip rows add to the
       // base size one-for-one.
       const roomCount = this._config?.rooms?.length ?? 0;
-      // show_rooms:false never renders the chip grid, so its rows
-      // must not inflate the size hint either — same base size as too few
-      // rooms to ever have shown chips at all.
-      if (roomCount < 2 || this._config?.show_rooms === false) return 3;
+      // The same chip-visibility contract the view model applies, minus the parts that
+      // need live data — `never` draws nothing, and in `auto` a lone room that IS the
+      // headline gets no chip. A grid that will not be drawn must not inflate the hint.
+      const showRooms = this._config?.show_rooms ?? "auto";
+      const chipsDrawn =
+        roomCount >= 1 &&
+        showRooms !== "never" &&
+        (showRooms === "always" || !chipsWouldDuplicateHeadline(resolveSourceTopology(this._config)));
+      if (!chipsDrawn) return 3;
       const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);
     }

@@ -590,13 +590,20 @@ test("validation order is stable: the unit is checked before the bands", () => {
 
 // -------------------------------------------------------- normalizeConfig --
 
-test("normalizeConfig() rejects a non-object and a missing entity, in that order", () => {
+test("normalizeConfig() rejects a non-object, then a configuration with no value source at all", () => {
   const n = (config) => normalizeConfigModule.normalizeConfig(config, COLLABORATORS);
   for (const invalid of ["x", [], 5, true]) {
     assert.throws(() => n(invalid), { message: "Invalid configuration: card configuration must be an object." });
   }
-  assert.throws(() => n(null), { message: "Invalid configuration: entity must be a non-empty entity id." });
-  assert.throws(() => n({}), { message: "Invalid configuration: entity must be a non-empty entity id." });
+  const noSource = {
+    message:
+      "Invalid configuration: at least one current-value source is required — set entity, or add at least one entry to rooms.",
+  };
+  assert.throws(() => n(null), noSource);
+  assert.throws(() => n({}), noSource);
+  assert.throws(() => n({ rooms: [] }), noSource, "an empty rooms list is not a source");
+  assert.throws(() => n({ range_entity: "sensor.r" }), noSource, "an auxiliary entity cannot BE the value");
+  assert.throws(() => n({ trend_entity: "sensor.t" }), noSource);
 });
 
 test("normalizeConfig() fills in every default for a minimal config", () => {
@@ -611,7 +618,7 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.auto_slide, true);
   assert.equal(result.swipe, true);
   assert.equal(result.hide_footer, false);
-  assert.equal(result.show_rooms, true);
+  assert.equal(result.show_rooms, "auto");
   assert.equal(result.language, "auto");
   assert.equal(result.views, null);
   assert.deepEqual(result._viewsDiagnostics, []);
@@ -620,6 +627,47 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.deepEqual(result.hold_action, { action: "more-info" });
   assert.equal(result.room_sort, "value_asc");
   assert.equal(result.room_label, "auto");
+});
+
+test("normalizeConfig() accepts a room as the only current-value source", () => {
+  const result = normalizeConfigModule.normalizeConfig(
+    { entity: null, rooms: [{ entity: "sensor.kitchen", name: "Kitchen" }] },
+    COLLABORATORS
+  );
+  assert.equal(result.entity, null);
+  assert.equal(result.rooms.length, 1);
+  assert.equal(result.rooms[0].entity, "sensor.kitchen");
+});
+
+test("normalizeConfig() distinguishes an omitted primary from a malformed one", () => {
+  const n = (config) => normalizeConfigModule.normalizeConfig(config, COLLABORATORS);
+  assert.equal(n({ entity: "", rooms: [{ entity: "sensor.room" }] }).entity, null);
+  assert.throws(
+    () => n({ entity: [], rooms: [{ entity: "sensor.room" }] }),
+    { message: "Invalid configuration: entity must be an entity id string." }
+  );
+  assert.throws(
+    () => n({ entity: "   ", rooms: [{ entity: "sensor.room" }] }),
+    { message: "Invalid configuration: entity must be an entity id string." }
+  );
+});
+
+test("value_label preserves the explicit empty-string sentinel", () => {
+  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", value_label: value }, COLLABORATORS);
+  assert.equal(n(undefined).value_label, null);
+  assert.equal(n(" Home ").value_label, "Home");
+  assert.equal(n("").value_label, "");
+  assert.equal(n("   ").value_label, "");
+  assert.equal(n(5).value_label, null);
+});
+
+test("show_rooms maps the three public states and defaults everything else to auto", () => {
+  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", show_rooms: value }, COLLABORATORS).show_rooms;
+  assert.equal(n("auto"), "auto");
+  assert.equal(n(true), "always");
+  assert.equal(n(false), "never");
+  assert.equal(n("always"), "auto", "internal sentinels are not public YAML values");
+  assert.equal(n("invalid"), "auto");
 });
 
 test("normalizeConfig() carries view diagnostics on the returned config", () => {

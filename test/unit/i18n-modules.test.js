@@ -136,8 +136,8 @@ test("the real registry passes its own parity check", () => {
 
 test("translate() resolves plain and function-valued keys", () => {
   const { translate } = translateModule;
-  assert.equal(translate("en", "avg.label"), "Home avg.");
-  assert.equal(translate("de", "avg.label"), "Ø Wohnung");
+  assert.equal(translate("en", "value.homeAverage"), "Home avg.");
+  assert.equal(translate("de", "value.homeAverage"), "Ø Wohnung");
   assert.equal(
     translate("en", "footer.spread", { value: "2.0 °C" }),
     "Spread 2.0 °C",
@@ -148,7 +148,7 @@ test("translate() resolves plain and function-valued keys", () => {
 test("translate() falls back to English, then to the key itself", () => {
   const { translate } = translateModule;
   assert.equal(
-    translate("xx", "avg.label"),
+    translate("xx", "value.homeAverage"),
     "Home avg.",
     "an unregistered language falls back to the reference language"
   );

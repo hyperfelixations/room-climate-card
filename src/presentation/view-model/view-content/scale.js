@@ -40,10 +40,10 @@ export function buildScaleViewContent(shared, options) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately tied to hasRoomsView: two of the three segments are statements
+      // Deliberately tied to rooms.comparable: two of the three segments are statements
       // about rooms. The global hide_footer and this view's own footer option are
       // ANDed with it.
-      footerText: rooms.hasRoomsView && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
+      footerText: rooms.comparable && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
     }),
     comfortLabel: options.show_comfort_band
       ? {
@@ -56,7 +56,7 @@ export function buildScaleViewContent(shared, options) {
       : null,
     emphasizeAverage,
     markers: {
-      // Gated on the extremes object itself, never on hasRoomsView: one source of
+      // Gated on the extremes object itself, never on rooms.comparable: one source of
       // truth for "there are two rooms to compare", and no branch that could read a
       // position off null.
       extremes:
@@ -80,7 +80,12 @@ export function buildScaleViewContent(shared, options) {
       average: buildMarker({
         position: average.position,
         color: average.color,
-        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: average.label }),
+        // Mirrors the headline's caption, including its absence: a card without one
+        // must not give its average marker a tooltip starting with ": ".
+        title: texts.t(average.hasLabel ? "value.tooltip" : "value.tooltipNoLabel", {
+          value: texts.fmtWithUnit(average.value),
+          label: average.label,
+        }),
       }),
     },
   };

@@ -51,10 +51,12 @@ export const zh = {
   "adjective.elevated": "数值偏高",
   "adjective.low": "数值偏低",
 
-  "avg.label": "全屋平均",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
-  "avg.ariaOpen": "打开平均值",
+  "value.homeAverage": "全屋平均",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 根据各房间数值计算`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 根据各房间数值计算`,
+  "value.ariaOpen": "打开平均值",
 
   "subtitle.aboveComfort": (v) => `平均值高于舒适范围 ${v.diff} · ${v.total}个房间中有${v.count}个${v.adjective}。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均值高于舒适范围 ${v.diff}。`,

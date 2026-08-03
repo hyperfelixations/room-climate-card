@@ -141,13 +141,13 @@ test("the round trip is idempotent: one to two to one leaves the original struct
 test("the values and the visible view stay consistent across the structural flip", () => {
   const el = env.createCard(config(), oneValidRoom());
   const before = el._computeViewModel();
-  assert.equal(before.rooms.hasRoomsView, false);
+  assert.equal(before.rooms.comparable, false);
   assert.deepEqual([...el._views], ["scale"]);
   assert.equal(el._activeView, 0);
 
   el.hass = twoValidRooms(1000);
   const after = el._computeViewModel();
-  assert.equal(after.rooms.hasRoomsView, true);
+  assert.equal(after.rooms.comparable, true);
   assert.equal(after.rooms.count, 2);
   assert.deepEqual([...el._views], ["scale"], "the view list itself did not change");
   assert.equal(el._activeView, 0, "and the visible view is preserved");

@@ -132,13 +132,13 @@ test("setConfig() preserves the active view across a structural rebuild when its
   // phase — see accessibility-logic.test.js for the same pattern.
   el._updateTrackTransform(true);
 
-  // Same structure, cosmetic-only change (avg_label) -> goes through
+  // Same structure, cosmetic-only change (value_label) -> goes through
   // _updateContent(), not _renderAll() at all -> _activeView untouched.
   el.setConfig({
     entity: "sensor.avg",
     range_entity: "sensor.range",
     rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
-    avg_label: "Custom",
+    value_label: "Custom",
   });
   assert.equal(el._activeView, el._views.indexOf("extremes"), "a non-structural config change must not reset the manually-swiped position");
 

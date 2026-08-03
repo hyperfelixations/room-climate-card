@@ -54,10 +54,12 @@ export const nl = {
   "adjective.elevated": "verhoogd",
   "adjective.low": "laag",
 
-  "avg.label": "Ø Woning",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
-  "avg.ariaOpen": "Gemiddelde openen",
+  "value.homeAverage": "Ø Woning",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · berekend uit kamerwaarden`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · berekend uit kamerwaarden`,
+  "value.ariaOpen": "Gemiddelde openen",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} boven comfort · ${v.count}/${v.total} ${v.total === 1 ? "kamer" : "kamers"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} boven comfort.`,

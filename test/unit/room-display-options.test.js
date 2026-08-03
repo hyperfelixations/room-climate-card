@@ -69,13 +69,13 @@ test("integration: room_sort/room_label/show_rooms default correctly, invalid va
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.equal(el._config.room_sort, "value_asc");
   assert.equal(el._config.room_label, "auto");
-  assert.equal(el._config.show_rooms, true);
+  assert.equal(el._config.show_rooms, "auto");
   env.cleanup(el);
 
   const el2 = env.createCard(fourRoomConfig({ room_sort: "bogus", room_label: "bogus", show_rooms: "bogus" }), fourRoomHass());
   assert.equal(el2._config.room_sort, "value_asc", "invalid room_sort falls back to the default");
   assert.equal(el2._config.room_label, "auto", "invalid room_label falls back to the default");
-  assert.equal(el2._config.show_rooms, true, "show_rooms only disables on the literal boolean false, like hide_footer's === true convention");
+  assert.equal(el2._config.show_rooms, "auto", "an unrecognized show_rooms falls back to auto, like every other optional top-level enum");
   env.cleanup(el2);
 });
 
@@ -181,9 +181,9 @@ test("room_label: does not affect any data computation (value, color classificat
 // exactly two Unicode uppercase letters -- a pure text match, independent
 // of whether `short` was explicitly configured or derived from `name`.
 
-// hasRoomsView (and therefore the whole chip grid) requires >= 2 valid
-// rooms, so every shortGuaranteed fixture below carries a fixed second
-// room purely to satisfy that minimum -- only sensor.r0 varies per test.
+// Keep a fixed second room so these fixtures also cover the comparable-room
+// path; chip visibility itself is independent of comparability. Only sensor.r0
+// varies per test.
 function oneRoomConfig(roomOverrides, extra) {
   return {
     entity: "sensor.avg",
@@ -274,18 +274,18 @@ test("shortGuaranteed: a stale data-short-guaranteed attribute is removed on set
 
 // ==== show_rooms ====
 
-test("show_rooms:false removes .rtc-room-grid from the DOM but leaves data.rooms.hasRoomsView/extrema/footer text fully populated", () => {
+test("show_rooms:false removes .rtc-room-grid from the DOM but leaves data.rooms.comparable/extrema/footer text fully populated", () => {
   const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-room-grid"), null);
   const data = el._computeViewModel();
-  assert.equal(data.rooms.hasRoomsView, true, "rooms remain a data source even with chips hidden");
+  assert.equal(data.rooms.comparable, true, "rooms remain a data source even with chips hidden");
   assert.equal(data.rooms.showChips, false);
   assert.ok((data.extremes?.coolest ?? null) && (data.extremes?.warmest ?? null), "extrema must still be computed");
   assert.equal(data.rooms.visible.length, 4, "data.rooms.visible itself is untouched -- only the render path hides it");
   env.cleanup(el);
 });
 
-test("show_rooms: true (default) renders .rtc-room-grid as before (regression)", () => {
+test("show_rooms: auto (default) renders .rtc-room-grid for several rooms, as before", () => {
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.ok(el.shadowRoot.querySelector(".rtc-room-grid"));
   env.cleanup(el);
@@ -299,7 +299,7 @@ test("show_rooms:false via setConfig() removes an already-rendered grid (forces 
   env.cleanup(el);
 });
 
-test("show_rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by hasRoomsView, not showRoomChips)", () => {
+test("show_rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by roomsComparable, not showRoomChips)", () => {
   const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
   const html = internals.viewMarkup(el, "scale");
   assert.ok(html.includes("rtc-marker-cold"), "cold marker must still render");
@@ -318,7 +318,7 @@ test("getCardSize(): show_rooms:false returns the base size (3) regardless of ro
   }
 });
 
-test("getCardSize(): show_rooms true (default) still scales with room count (regression)", () => {
+test("getCardSize(): show_rooms auto scales with a multi-room grid (regression)", () => {
   const el = env.document.createElement("room-climate-card");
   el.setConfig({
     entity: "sensor.avg",

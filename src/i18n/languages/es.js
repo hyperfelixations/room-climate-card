@@ -54,10 +54,12 @@ export const es = {
   "adjective.elevated": "con valores elevados",
   "adjective.low": "con valores bajos",
 
-  "avg.label": "Media del hogar",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
-  "avg.ariaOpen": "Abrir la media",
+  "value.homeAverage": "Media del hogar",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculada a partir de los valores de las habitaciones`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculada a partir de los valores de las habitaciones`,
+  "value.ariaOpen": "Abrir la media",
 
   "subtitle.aboveComfort": (v) => `Media ${v.diff} por encima del confort · ${v.count}/${v.total} ${v.total === 1 ? "habitación" : "habitaciones"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Media ${v.diff} por encima del confort.`,

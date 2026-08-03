@@ -36,14 +36,16 @@ function stubTexts(overrides = {}) {
 
 function cfg(overrides = {}) {
   return {
+    entity: "sensor.avg",
+    rooms: [],
     title: null,
-    avg_label: null,
+    value_label: null,
     icon: null,
     room_label: "auto",
     room_sort: "value_asc",
     room_columns: null,
     room_rows: null,
-    show_rooms: true,
+    show_rooms: "auto",
     views: null,
     ...overrides,
   };
@@ -256,8 +258,8 @@ function minimalDomainModel(overrides = {}) {
     empty: false,
     metric: { kind: "temperature", canonicalUnit: "°C", unit: "°C", displayUnitProfile: { key: "celsius" } },
     context: { diagnostics: [], consistent: true, excludedRoomIds: [], sourceKind: "primary", sourceEntity: "sensor.avg" },
-    average: { value: 22, source: "sensor", entity: "sensor.avg" },
-    rooms: { declared: [], byValue: [], count: 0, hasRoomsView: false, missing: 0 },
+    average: { value: 22, source: "sensor", entity: "sensor.avg", roomIndex: null },
+    rooms: { declared: [], byValue: [], count: 0, comparable: false, missing: 0 },
     roomColors: {},
     extremes: null,
     comfort: { min: 20, max: 24, inComfort: 0, tooWarm: 0, tooCool: 0 },
@@ -287,15 +289,43 @@ test("the title and average label prefer the configured overrides", () => {
   const texts = stubTexts();
   const fromKeys = cardViewModel.buildCardViewModel({ domainModel: minimalDomainModel(), config: cfg(), texts });
   assert.equal(fromKeys.title, "title.temperature");
-  assert.equal(fromKeys.average.label, "avg.label");
+  assert.equal(fromKeys.average.label, "");
+  assert.equal(fromKeys.average.hasLabel, false);
 
   const overridden = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel(),
-    config: cfg({ title: "My title", avg_label: "My label" }),
+    config: cfg({ title: "My title", value_label: "My label" }),
     texts,
   });
   assert.equal(overridden.title, "My title");
   assert.equal(overridden.average.label, "My label");
+});
+
+test("the four headline-label rules are configuration-stable", () => {
+  const texts = stubTexts();
+  const primaryOnly = cardViewModel.buildCardViewModel({ domainModel: minimalDomainModel(), config: cfg(), texts });
+  assert.deepEqual({ label: primaryOnly.average.label, hasLabel: primaryOnly.average.hasLabel }, { label: "", hasLabel: false });
+
+  const single = roomModel(0, "Kitchen", "KI", 21);
+  const singleRoom = cardViewModel.buildCardViewModel({
+    domainModel: minimalDomainModel({
+      average: { value: 21, source: "room", entity: single.entity, roomIndex: 0 },
+      rooms: { declared: [single], byValue: [single], count: 1, comparable: false, missing: 0 },
+    }),
+    config: cfg({ entity: null, rooms: [{ entity: single.entity, name: "Kitchen", short: "KI" }] }),
+    texts,
+  });
+  assert.deepEqual({ label: singleRoom.average.label, hasLabel: singleRoom.average.hasLabel }, { label: "Kitchen", hasLabel: true });
+
+  const withRooms = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms(), texts });
+  assert.deepEqual({ label: withRooms.average.label, hasLabel: withRooms.average.hasLabel }, { label: "value.homeAverage", hasLabel: true });
+
+  const explicitEmpty = cardViewModel.buildCardViewModel({
+    domainModel: withTwoRooms(),
+    config: cfgWithTwoRooms({ value_label: "" }),
+    texts,
+  });
+  assert.deepEqual({ label: explicitEmpty.average.label, hasLabel: explicitEmpty.average.hasLabel }, { label: "", hasLabel: false });
 });
 
 test("a built-in level is translated, a custom or entity level is not", () => {
@@ -377,7 +407,7 @@ test("the metric-specific adjective is used, not a generic one", () => {
   assert.match(humidity.subtitle, /adjective\.humid/);
 });
 
-// A domain model with two comparable rooms. hasRoomsView, byValue, roomColors and
+// A domain model with two comparable rooms. comparable, byValue, roomColors and
 // extremes are set together on purpose: the real domain model guarantees they agree,
 // and a fixture that separates them would exercise a state the pipeline cannot
 // produce.
@@ -385,17 +415,27 @@ function withTwoRooms(overrides = {}) {
   const cool = roomModel(0, "A", "AA", 21);
   const warm = roomModel(1, "B", "BB", 23);
   return minimalDomainModel({
-    rooms: { declared: [cool, warm], byValue: [cool, warm], count: 2, hasRoomsView: true, missing: 0 },
+    rooms: { declared: [cool, warm], byValue: [cool, warm], count: 2, comparable: true, missing: 0 },
     roomColors: { 0: "#4488cc", 1: "#cc4444" },
     extremes: { coolest: cool, warmest: warm, coolestColor: "#4488cc", warmestColor: "#cc4444" },
     ...overrides,
   });
 }
 
+function cfgWithTwoRooms(overrides = {}) {
+  return cfg({
+    rooms: [
+      { entity: "sensor.r0", name: "A", short: "AA" },
+      { entity: "sensor.r1", name: "B", short: "BB" },
+    ],
+    ...overrides,
+  });
+}
+
 test("show_rooms hides the chips without touching anything else", () => {
   const domainModel = withTwoRooms();
-  const shown = cardViewModel.buildCardViewModel({ domainModel, config: cfg(), texts: stubTexts() });
-  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfg({ show_rooms: false }), texts: stubTexts() });
+  const shown = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms(), texts: stubTexts() });
+  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms({ show_rooms: "never" }), texts: stubTexts() });
   assert.equal(shown.rooms.showChips, true);
   assert.equal(hidden.rooms.showChips, false);
   assert.equal(hidden.rooms.count, 2, "the rooms remain full data sources");
@@ -406,7 +446,7 @@ test("show_rooms hides the chips without touching anything else", () => {
 });
 
 test("a chip carries every string and custom property its renderer needs", () => {
-  const result = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfg(), texts: stubTexts() });
+  const result = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms(), texts: stubTexts() });
   const [cool, warm] = result.rooms.chips;
 
   assert.equal(cool.room, result.rooms.visible[0], "the room object is carried by identity");
@@ -428,7 +468,7 @@ test("a chip carries every string and custom property its renderer needs", () =>
 
 test("a chip outside the comfort band is tinted and marked with its direction", () => {
   const domainModel = withTwoRooms({ comfort: { min: 22, max: 24, inComfort: 1, tooWarm: 0, tooCool: 1 } });
-  const result = cardViewModel.buildCardViewModel({ domainModel, config: cfg(), texts: stubTexts() });
+  const result = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms(), texts: stubTexts() });
   const [cool, warm] = result.rooms.chips;
   assert.equal(cool.mark, "↓", "21 is below a 22–24 band");
   assert.equal(cool.out, true);
@@ -441,7 +481,7 @@ test("a chip outside the comfort band is tinted and marked with its direction", 
 test("the chips are grouped into the rows the grid resolved", () => {
   const result = cardViewModel.buildCardViewModel({
     domainModel: withTwoRooms(),
-    config: cfg({ room_columns: 1 }),
+    config: cfgWithTwoRooms({ room_columns: 1 }),
     texts: stubTexts(),
   });
   assert.deepEqual(result.rooms.rowSizes, [{ itemCount: 1, columnCount: 1 }, { itemCount: 1, columnCount: 1 }]);
@@ -555,8 +595,8 @@ function sharedFor(overrides = {}) {
     spread: 2,
     hideFooter: false,
     rangeEntity: "sensor.range",
-    average: { value: 22, label: "Average", position: 50, color: "#79A86C" },
-    rooms: { hasRoomsView: true, count: 2, byValue: [] },
+    average: { value: 22, label: "Average", hasLabel: true, position: 50, color: "#79A86C" },
+    rooms: { comparable: true, count: 2, byValue: [] },
     roomColors: {},
     extremes: null,
     roomMarkers: [],

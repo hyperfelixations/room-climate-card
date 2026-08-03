@@ -42,7 +42,7 @@ function toLegacyData(viewModel) {
 
   return {
     empty: false,
-    hasRoomsView: rooms.hasRoomsView,
+    hasRoomsView: rooms.comparable,
     showRoomChips: rooms.showChips,
     hasRange: range.hasRange,
     rangeState: range.state,

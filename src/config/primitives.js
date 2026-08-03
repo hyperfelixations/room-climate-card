@@ -4,7 +4,7 @@
 // is a product decision rather than an implementation detail:
 //
 //   throw    a structurally invalid value the card cannot work around — a
-//            missing or malformed entity id, a malformed classification block.
+//            missing required or malformed entity id, a malformed classification block.
 //   fall back  a malformed OPTIONAL value — a typo in `decimals` or
 //            `room_columns` degrades to the built-in default instead of taking
 //            the whole dashboard card down with it.
@@ -20,7 +20,7 @@ export function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-// Required entity id (e.g. rooms[i].entity or the average entity).
+// Required entity id (currently used by rooms[i].entity).
 export function requiredEntity(value, name) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`Invalid configuration: ${name} must be a non-empty entity id.`);
@@ -39,10 +39,21 @@ export function optionalEntity(value, fallback, name) {
   return value.trim();
 }
 
-// Optional free-text override (avg_label/title/icon); a non-string or empty
-// value means "use the built-in default" rather than throwing.
+// Optional free-text override (title/icon); a non-string or empty value means "use the
+// built-in default" rather than throwing.
 export function optionalString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+// Optional label text, where an EXPLICIT empty string is a real answer.
+//
+// The difference from optionalString() is the whole point: for a label, "" means "show
+// no label here", which is not the same as "not configured, use the default". Collapsing
+// the two — as optionalString() does — makes it impossible to ask for a bare number.
+// null therefore means only "absent", and every other string, including "", is honoured
+// as written.
+export function optionalLabel(value) {
+  return typeof value === "string" ? value.trim() : null;
 }
 
 // String helper for optional display names.

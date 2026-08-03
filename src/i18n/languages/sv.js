@@ -47,7 +47,7 @@ export const sv = {
   // Predicative fragment ("2/4 rum är varma"); Swedish predicative
   // adjectives DO inflect for number (unlike German/English/Dutch) —
   // these are the plural forms, the only ones this key is ever used with
-  // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+  // (subtitle.*Comfort's rooms branch is only reachable once rooms.comparable
   // requires >= 2 rooms, see buildCardDomainModel()). Note "rum" itself is
   // plural-invariant ("ett rum" / "flera rum"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
@@ -59,10 +59,12 @@ export const sv = {
   "adjective.elevated": "förhöjda",
   "adjective.low": "låga",
 
-  "avg.label": "Ø hem",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
-  "avg.ariaOpen": "Öppna medelvärde",
+  "value.homeAverage": "Ø hem",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beräknat utifrån rumsvärden`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beräknat utifrån rumsvärden`,
+  "value.ariaOpen": "Öppna medelvärde",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} över komfort · ${v.count}/${v.total} ${v.total === 1 ? "rum" : "rum"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} över komfort.`,

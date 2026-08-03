@@ -2,7 +2,7 @@
   "avg": 295.35,
   "avgColor": "#79A86C",
   "avgEntity": "sensor.avg",
-  "avgLabel": "Home avg.",
+  "avgLabel": "",
   "avgPos": 47.85714285714318,
   "avgSource": "sensor",
   "boundaryLabels": {

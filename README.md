@@ -10,7 +10,9 @@ A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a c
 
 ## Features
 
-- One card, four modes: temperature, humidity, CO₂, PM2.5 (detected from the usable primary entity's `device_class`, with unit and compatible-room fallbacks)
+- One card, four modes: temperature, humidity, CO₂, PM2.5 (detected from a
+  usable primary or room source by `device_class`, with a recognized unit as
+  fallback)
 - Optional per-room breakdown with a coldest/warmest room comparison, shown as a swipeable/auto-rotating carousel alongside the main scale, automatically wrapping into multiple rows past 7 rooms (or laid out to an explicit grid you choose)
 - Optional daily range (min/max) views and a compact rate-of-change segment
   in the main scale footer, when the matching entities are configured
@@ -33,12 +35,14 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ## Requirements
 
-- **Entities**: any numeric sensor-like entity works. A usable primary entity's
-  `device_class: temperature | humidity | carbon_dioxide | pm25` selects the
-  mode; without a recognized `device_class`, a recognized unit (e.g. `°C`,
-  `%`, `ppm`, `µg/m³`) is used. If the primary value is unavailable or invalid,
-  compatible usable rooms can supply a room-consensus average. There is no fixed
-  domain restriction, but `sensor.*` entities are the practical case.
+- **Entities**: at least one current-value source is required: either `entity`,
+  at least one entry in `rooms`, or both. Any numeric sensor-like entity works.
+  A usable source's `device_class: temperature | humidity | carbon_dioxide |
+  pm25` selects the mode; without a recognized `device_class`, a recognized
+  unit (e.g. `°C`, `%`, `ppm`, `µg/m³`) is used. If a configured primary value
+  is unavailable or invalid, compatible usable rooms can supply a calculated
+  consensus. There is no fixed domain restriction, but `sensor.*` entities are
+  the practical case.
 - **Home Assistant / browser**: no minimum Home Assistant version is
   enforced — the card is a dependency-free custom element with no backend
   integration. It does use CSS container queries for its responsive
@@ -68,14 +72,50 @@ manually:
 
 ## Quickstart
 
-The only required option is `entity`:
+Choose the source layout that matches the card. At least one current-value
+source is required.
+
+### Primary value only
 
 ```yaml
 type: custom:room-climate-card
 entity: sensor.house_temperature
 ```
 
-A few rooms for the coldest/warmest comparison and chip grid:
+The large value opens the primary entity. Because there is nothing to
+distinguish it from, it has no label unless `value_label` is set.
+
+### One room without a separate primary
+
+```yaml
+type: custom:room-climate-card
+rooms:
+  - name: Kitchen
+    short: KI
+    entity: sensor.kitchen_temperature
+```
+
+The room sensor is used directly: the room name labels the large value, and
+tapping or holding it uses that room's action. Its redundant chip is hidden
+by the default `show_rooms: auto`; set `show_rooms: true` to show it.
+
+### Several rooms, calculated consensus
+
+```yaml
+type: custom:room-climate-card
+rooms:
+  - name: Kitchen
+    short: KI
+    entity: sensor.kitchen_temperature
+  - name: Bedroom
+    short: BE
+    entity: sensor.bedroom_temperature
+```
+
+The headline is the calculated mean of compatible usable rooms and is not
+clickable. Room chips keep their own actions.
+
+### Primary value with rooms
 
 ```yaml
 type: custom:room-climate-card
@@ -92,23 +132,17 @@ rooms:
     entity: sensor.living_room_temperature
 ```
 
-Humidity mode with a daily range view:
-
-```yaml
-type: custom:room-climate-card
-entity: sensor.house_humidity
-range_entity: sensor.house_humidity_daily_range
-views:
-  - range_scale
-  - extremes
-```
+The primary drives the headline. Compatible rooms provide chips, comparisons,
+markers, and a calculated fallback if the primary value is temporarily
+unusable.
 
 See [Configuration](#configuration) below for every available option.
 
 ## Configuration
 
-Only `entity` is required. Everything else is optional, and omitting an
-option keeps the card's default behavior.
+At least one current-value source is required: `entity` or one or more
+`rooms`. All other options are optional, and omitting an option keeps the
+card's default behavior.
 
 ### Top-level options
 
@@ -116,7 +150,7 @@ option keeps the card's default behavior.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `entity` | required | The main or whole-home sensor. Its `device_class`, or its unit as a fallback, selects temperature, humidity, CO₂, or PM2.5 mode. |
+| `entity` | none | Optional main or whole-home sensor. Its `device_class`, or its unit as a fallback, selects temperature, humidity, CO₂, or PM2.5 mode. Without it, one room is used directly and several rooms form a calculated consensus. |
 | `rooms` | `[]` | A list of room sensors. Two or more currently valid room values enable room comparison features and the `extremes` view. Each room needs a unique `entity`; see [Room entries](#room-entries). |
 | `range_entity` | none | A daily-range sensor. Its state should be the numeric range; `minimum` and `maximum` attributes supply the daily values. Optional `minimum_zeitpunkt` and `maximum_zeitpunkt` attributes supply their times. |
 | `trend_entity` | none | A rate-of-change sensor compatible with the selected metric, for example `°C/h`. A valid value adds a localized third segment to the room-bound main scale footer, while a rising, stable, or falling arrow appears above the average unit. |
@@ -150,7 +184,7 @@ do not add an empty placeholder.
 | Option | Default | What it does |
 | --- | --- | --- |
 | `title` | automatic | Replaces the mode-dependent card title, such as “Temperature”. |
-| `avg_label` | translated default | Replaces the label above the large main value. This is useful when the card represents one room rather than a whole-home average. |
+| `value_label` | automatic | Replaces the label above the large main value. Use `value_label: ""` to remove the label and its spacing explicitly. When omitted, a direct single-room source uses its room name, a primary-only card has no label, and layouts that distinguish a primary or consensus from rooms use the translated home-average label. |
 | `icon` | automatic | Replaces the header icon with an `mdi:*` icon, for example `mdi:home-thermometer`. Without an override, all four metric modes use their profile-driven value icon. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for values such as the average, rooms, daily extremes, spread, and trend. Default per mode: `0` for CO₂, `1` for temperature, humidity, and PM2.5. Scale boundary and comfort/optimal range labels intentionally remain whole numbers. |
 | `language` | `auto` | Uses `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `ko`, `ja`, `zh`, `nb`, `sv`, or `lv`. `auto` follows Home Assistant's language; an unsupported value also falls back to automatic detection. |
@@ -161,7 +195,7 @@ do not add an empty placeholder.
 | --- | --- | --- |
 | `room_sort` | `value_asc` | Orders visible chips by `value_asc`, `value_desc`, `name`, or `configured` order. This never changes the coldest/warmest room, comfort count, spread, or scale calculations. |
 | `room_label` | `auto` | Chooses the chip text: `auto` and `short` use `rooms[].short`; `name` uses `rooms[].name`. |
-| `show_rooms` | `true` | `false` hides only the room-chip grid. All configured rooms remain data sources for extrema, comfort count, spread, markers, and views. |
+| `show_rooms` | `auto` | Controls only the room-chip grid: `auto` hides the redundant chip of a direct single-room card and otherwise shows usable room chips; `true` always shows usable room chips; `false` always hides them. Configured rooms remain data sources for comparisons and calculations in every mode. |
 | `room_columns` | automatic | Sets `1`–`20` grid columns. If `room_rows` is omitted, enough rows are added automatically. |
 | `room_rows` | automatic | Sets `1`–`20` grid rows. If `room_columns` is omitted, enough columns are added automatically. |
 
@@ -169,6 +203,20 @@ If both `room_columns` and `room_rows` are set, their product is the maximum
 number of visible chips. The visible set is taken from `rooms:` in configured
 order before `room_sort` is applied. Rooms hidden only by this visual grid cap
 still participate in extrema, comfort, spread, and scale calculations.
+
+`show_rooms` follows this complete matrix (a mode with no configured room has
+no chips regardless of the setting):
+
+| Source layout | `auto` | `true` | `false` |
+| --- | --- | --- | --- |
+| Primary only | hidden | hidden | hidden |
+| One direct room | hidden | shown | hidden |
+| Several rooms, no primary | shown | shown | hidden |
+| Primary with rooms | shown | shown | hidden |
+
+Chip visibility is independent of whether enough usable rooms exist for
+comparisons. `extremes`, spread, comfort counts, and room-bound footers still
+require at least two compatible usable room values.
 
 #### Carousel, footers, and actions
 
@@ -489,9 +537,11 @@ Custom-profile rules:
 
 ### Validation and fixed behavior
 
-The card reports invalid required structure, such as a missing `entity`, a
-non-list `rooms` value, a room without an entity, or duplicate room entity
-IDs. Invalid optional cosmetic values fall back to their defaults. Invalid or
+The card reports invalid required structure, such as having neither `entity`
+nor a room source, a non-list `rooms` value, a room without an entity, or
+duplicate room entity IDs. An explicitly supplied but malformed `entity`
+still fails with a path-specific error. Invalid optional cosmetic values fall
+back to their defaults. Invalid or
 unknown `views:` entries and `options:` keys are ignored with a browser-console
 warning instead of breaking the card.
 
@@ -522,7 +572,7 @@ trend_entity: sensor.house_temperature_trend
 classification: indoor
 
 title: Indoor climate
-avg_label: Home average
+value_label: Home average
 decimals: 1
 language: auto
 
@@ -598,11 +648,12 @@ Check the card's `type:` — it must be exactly `custom:room-climate-card`
 without a console error.
 
 **The card shows an empty/"no data" state.**
-This means the configured `entity` doesn't currently report a usable
-numeric value, or the card can't determine a metric mode for it — verify
-the entity has a numeric state and either a `device_class` of
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`, or a recognized
-unit of measurement (see [Requirements](#requirements)).
+This means none of the configured current-value sources currently provides a
+usable numeric value, or the card cannot resolve one compatible metric mode.
+Check the primary and room entities for numeric states and a `device_class` of
+`temperature`, `humidity`, `carbon_dioxide`, or `pm25`, or a recognized unit
+of measurement (see [Requirements](#requirements)). Rooms with incompatible
+metric kinds or units are not included in a calculated consensus.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the

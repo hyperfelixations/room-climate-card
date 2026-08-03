@@ -55,10 +55,12 @@ export const ru = {
   "adjective.elevated": "уровень повышен",
   "adjective.low": "уровень низкий",
 
-  "avg.label": "Среднее по дому",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
-  "avg.ariaOpen": "Открыть среднее значение",
+  "value.homeAverage": "Среднее по дому",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · рассчитано по значениям комнат`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · рассчитано по значениям комнат`,
+  "value.ariaOpen": "Открыть среднее значение",
 
   "subtitle.aboveComfort": (v) => `Среднее на ${v.diff} выше комфортного диапазона · в ${v.count} ${selectPlural("ru", v.count, { one: "комнате", few: "комнатах", many: "комнатах", other: "комнатах" })} из ${v.total} ${selectPlural("ru", v.total, { one: "комнаты", few: "комнат", many: "комнат", other: "комнат" })} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Среднее на ${v.diff} выше комфортного диапазона.`,

@@ -27,6 +27,9 @@ test.before(async () => {
 function viewModelOf({ empty = false, structure = "s1" } = {}) {
   return {
     empty,
+    // hasLabel is part of the structure signature: the caption is a node that either
+    // exists or does not, so the fixture has to carry it like the renderer does.
+    average: { hasLabel: true },
     rooms: { showChips: true },
     views: { keys: ["scale"], collapsed: false, byKey: { scale: { marker: structure } } },
   };

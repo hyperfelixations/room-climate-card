@@ -41,6 +41,7 @@ import {
 } from "./classification.js";
 import { hasEntity, readNumericAttribute, convertMetricValue } from "./entity-model.js";
 import { effectiveMetricKind } from "./measurement-context.js";
+import { resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
 import {
   buildRoomModels,
@@ -53,6 +54,10 @@ import {
 export function buildCardDomainModel({ states, config, context, language }) {
   const policy = classificationPolicyOf(config);
   const metricKind = effectiveMetricKind(context);
+  // The same configuration-only classification the measurement context branched on.
+  // Recomputed rather than threaded through, because it is a pure function of the
+  // config and having one owner beats having one carrier.
+  const topology = resolveSourceTopology(config);
   const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
   const comfort = scaleConfig.comfort;
   const optimal = scaleConfig.optimal;
@@ -87,23 +92,34 @@ export function buildCardDomainModel({ states, config, context, language }) {
   // rooms. Driven by the complete list, never by the possibly capped visible
   // subset: a grid override that hides chips must not turn off the room-comparison
   // features it does not otherwise affect.
-  const hasRoomsView = roomsByValue.length >= 2;
-  const coolest = hasRoomsView ? roomsByValue[0] : null;
-  const warmest = hasRoomsView ? roomsByValue[roomsByValue.length - 1] : null;
+  const roomsComparable = roomsByValue.length >= 2;
+  const coolest = roomsComparable ? roomsByValue[0] : null;
+  const warmest = roomsComparable ? roomsByValue[roomsByValue.length - 1] : null;
 
   const average = toDisplay(context.averageSource.canonicalValue);
-  // The single source of truth for whether the displayed average came from the
-  // primary entity's own state. Everything attributed to that entity — the
-  // average's clickability, its colour, the spread attribute — must follow it
-  // exactly; a looser "the entity exists" check would keep the average clickable
-  // and colour it from a stale entity while showing the room-based fallback.
-  const averageSourceKind = context.averageSource.kind === "primary" ? "sensor" : "calculated";
-  const averageEntity = averageSourceKind === "sensor" ? config.entity : "";
+  // WHICH ENTITY, if any, the displayed headline actually is. Everything attributed to
+  // an entity follows this exactly — clickability, the colour taken from its attributes,
+  // the spread attribute, and which action config a tap resolves against. A looser "the
+  // entity exists" check would keep the headline clickable and colour it from a stale
+  // entity while showing a room-derived fallback value.
+  //
+  //   sensor      the configured primary's own reading
+  //   room        one configured room's own reading, because the card names exactly
+  //               that one entity (see source-topology.js)
+  //   calculated  a consensus over several rooms; no single entity represents it
+  const averageSourceKind =
+    context.averageSource.kind === "primary" ? "sensor" : context.averageSource.kind === "roomDirect" ? "room" : "calculated";
+  const averageEntity = averageSourceKind === "calculated" ? "" : context.averageSource.entityId;
+  // Set only where the headline genuinely IS a configured room, which the topology
+  // decides. Carries the room's label and its per-room action overrides to the big
+  // value without a second lookup — and never fires for a primary that merely happens
+  // to appear among several rooms.
+  const averageRoomIndex = averageSourceKind === "room" ? topology.roomIndex : null;
 
   const range = buildRangeModel({ states, config, policy, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
   const trend = buildTrendContext({ states, config, metricKind, unit: context.unit, toDisplayDelta });
 
-  const counts = computeComfortCounts(roomsByValue, comfort, hasRoomsView);
+  const counts = computeComfortCounts(roomsByValue, comfort, roomsComparable);
 
   let spreadAttribute = averageSourceKind === "sensor" ? readNumericAttribute(states, config.entity, "spread") : null;
   if (spreadAttribute !== null && context.averageSource.unitProfile && METRIC_DEFINITIONS[metricKind]) {
@@ -116,7 +132,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
       })
     );
   }
-  const spread = computeSpread({ attributeValue: spreadAttribute, hasRoomsView, coolest, warmest });
+  const spread = computeSpread({ attributeValue: spreadAttribute, roomsComparable, coolest, warmest });
 
   // One classification colour per participating room, keyed by the room's original
   // YAML index. Every consumer that tints something per room — the chips, the
@@ -164,16 +180,17 @@ export function buildCardDomainModel({ states, config, context, language }) {
       value: average,
       source: averageSourceKind,
       entity: averageEntity,
+      roomIndex: averageRoomIndex,
     },
     rooms: {
       declared: declaredRooms,
       byValue: roomsByValue,
       count: roomsByValue.length,
-      hasRoomsView,
+      comparable: roomsComparable,
       missing: missingRooms,
     },
     roomColors,
-    extremes: hasRoomsView
+    extremes: roomsComparable
       ? {
           coolest,
           warmest,
@@ -198,7 +215,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
     subtitle: buildSubtitleModel({
       avg: average,
       comfort,
-      hasRoomsView,
+      roomsComparable,
       counts,
       roomCount: roomsByValue.length,
       coolest,

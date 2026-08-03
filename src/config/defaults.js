@@ -4,8 +4,12 @@
 // presentation metadata lives with the metric registries, and every semantic
 // classification/scale decision lives in the domain classification profiles.
 //
-// There are no default entities. `entity` is the only required config field;
-// `rooms` is optional and the card falls back to minimal mode without it.
+// There are no default entities, and none of them is individually required. What IS
+// required is that at least one CURRENT-VALUE source exists: either `entity` or at
+// least one `rooms` entry. `range_entity` and `trend_entity` describe a value rather
+// than being one, so they never satisfy that on their own. The check lives in
+// normalize-config.js, where both fields have been normalized and can be judged
+// together.
 
 export const DEFAULT_CONFIG = {
   rotation_seconds: 14, // hold time per view

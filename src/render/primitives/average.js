@@ -13,9 +13,16 @@ import { applyFocusFallback } from "./focus.js";
 
 function contentHtml(average) {
   const hidden = average.trendDirection ? "" : " hidden";
+  // Omitted entirely rather than rendered empty: an empty block would still occupy its
+  // own line box and push the value down, which is exactly what a card configured
+  // without a caption is asking not to have. Because this is a NODE appearing and
+  // disappearing, `hasLabel` is part of cardStructureSignature() — the patch path can
+  // update a label, it cannot conjure one.
+  const label = average.hasLabel ? `<span class="rtc-avg-label">${escapeHtml(average.label)}</span>` : "";
+  const valueStyle = average.hasLabel ? "" : ' style="margin-top: 0px;"';
   return `
-        <span class="rtc-avg-label">${escapeHtml(average.label)}</span>
-        <span class="rtc-avg-value">
+        ${label}
+        <span class="rtc-avg-value"${valueStyle}>
           <span class="rtc-avg-value-num">${average.valueText}</span><span class="rtc-avg-unit-wrap"><span class="rtc-avg-unit-gap" aria-hidden="true"> </span><span class="rtc-avg-unit-core"><span class="rtc-avg-trend-arrow" aria-hidden="true"${hidden}><svg class="rtc-avg-trend-arrow-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" focusable="false"><path d="M3 13L13 3M8 3H13V8" vector-effect="non-scaling-stroke"></path></svg></span><span class="rtc-avg-value-unit">${escapeHtml(average.unitText)}</span></span></span>
         </span>
       `;
@@ -24,13 +31,14 @@ function contentHtml(average) {
 export function renderAverage(viewModel) {
   const average = viewModel.average;
   const trendClass = average.trendDirection ? " rtc-has-trend" : "";
+  const labelClass = average.hasLabel ? "" : " rtc-no-label";
   const trendDirection = average.trendDirection ? ` data-trend-direction="${escapeHtml(average.trendDirection)}"` : "";
   const content = contentHtml(average);
 
   if (!average.entity) {
     return `
           <div
-            class="rtc-avg-button rtc-avg-button-disabled${trendClass}"
+            class="rtc-avg-button rtc-avg-button-disabled${trendClass}${labelClass}"
             ${trendDirection}
             title="${escapeHtml(average.tooltip)}"
             aria-label="${escapeHtml(average.ariaLabel)}"
@@ -40,12 +48,16 @@ export function renderAverage(viewModel) {
         `;
   }
 
+  // data-room-index is what makes a headline that IS a room obey that room's own
+  // tap_action/hold_action: the action runtime reads it from the clicked element, the
+  // same way it does for a chip. No second action path, no special case there.
+  const roomIndex = average.roomIndex !== null ? ` data-room-index="${escapeHtml(String(average.roomIndex))}"` : "";
   return `
         <button
           type="button"
-          class="rtc-avg-button${trendClass}"
+          class="rtc-avg-button${trendClass}${labelClass}"
           ${trendDirection}
-          data-entity="${escapeHtml(average.entity)}"
+          data-entity="${escapeHtml(average.entity)}"${roomIndex}
           aria-label="${escapeHtml(average.ariaLabel)}"
           title="${escapeHtml(average.tooltip)}"
         >
@@ -63,12 +75,25 @@ export function patchAverage(element, viewModel) {
   if (average.entity) {
     element.setAttribute("data-entity", average.entity);
   }
+  // Removed as well as set: a card that stops being a single-room card must stop
+  // resolving its headline against that room's action overrides.
+  if (average.roomIndex !== null) {
+    element.setAttribute("data-room-index", String(average.roomIndex));
+  } else {
+    element.removeAttribute("data-room-index");
+  }
   element.setAttribute("aria-label", average.ariaLabel);
-  element.querySelector(".rtc-avg-label").textContent = average.label;
+  // Absent by design when there is no caption; whether it exists at all is structural
+  // (see contentHtml()), so this only ever updates one that is already there.
+  const labelEl = element.querySelector(".rtc-avg-label");
+  if (labelEl) labelEl.textContent = average.label;
+  const valueEl = element.querySelector(".rtc-avg-value");
+  valueEl.style.marginTop = average.hasLabel ? "" : "0px";
   element.querySelector(".rtc-avg-value-num").textContent = average.valueText;
   element.querySelector(".rtc-avg-value-unit").textContent = average.unitText;
   const hasTrend = Boolean(average.trendDirection);
   element.classList.toggle("rtc-has-trend", hasTrend);
+  element.classList.toggle("rtc-no-label", !average.hasLabel);
   if (hasTrend) {
     element.setAttribute("data-trend-direction", average.trendDirection);
   } else {

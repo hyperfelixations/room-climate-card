@@ -63,8 +63,8 @@ export const VIEW_DEFINITIONS = [
   },
   {
     key: "extremes",
-    condition: (availability) => availability.hasRoomsView,
-    defaultEnabled: (availability) => availability.hasRoomsView,
+    condition: (availability) => availability.roomsComparable,
+    defaultEnabled: (availability) => availability.roomsComparable,
     // show_value toggles the numeric value on the coldest/warmest cards; the
     // label, room name and colour stay regardless.
     optionsSchema: { show_value: boolOption(true) },

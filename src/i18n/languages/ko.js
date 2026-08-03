@@ -51,10 +51,12 @@ export const ko = {
   "adjective.elevated": "수치가 높음",
   "adjective.low": "수치가 낮음",
 
-  "avg.label": "집 전체 평균",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
-  "avg.ariaOpen": "평균값 열기",
+  "value.homeAverage": "집 전체 평균",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 방별 값으로 계산`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 방별 값으로 계산`,
+  "value.ariaOpen": "평균값 열기",
 
   "subtitle.aboveComfort": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음 · ${v.total}개 방 중 ${v.count}개 방: ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `평균이 쾌적 범위보다 ${v.diff} 높음.`,

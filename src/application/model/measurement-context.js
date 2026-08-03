@@ -3,6 +3,10 @@
 //
 // The arbitration rules, in order:
 //
+//   0. CONFIGURATION FIRST. A card that names exactly one entity, and whose one entity
+//      is a room, has a headline that IS that sensor — not an average of anything. That
+//      is decided from the configuration alone (see source-topology.js), so a sensor
+//      dropping out changes the value the card can show and never what the card is.
 //   1. A USABLE primary (numeric + physically valid + resolvable unit + resolvable
 //      kind) alone determines the metric kind and is the average source. Rooms of
 //      the same kind participate; rooms of a different kind, or with an unusable
@@ -27,6 +31,7 @@
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { buildEntityModel } from "./entity-model.js";
+import { SOURCE_TOPOLOGY, resolveSourceTopology } from "./source-topology.js";
 
 // Used only for the title/icon fallback when nothing at all resolves.
 const FALLBACK_METRIC_KIND = "temperature";
@@ -35,6 +40,9 @@ export function resolveMeasurementContext(states, config) {
   const primary = buildEntityModel(states, config, config?.entity, "primary");
   const rooms = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
   const primaryUsable = primary.validNumeric && primary.validPhysical && primary.validUnit && primary.metricKind !== null;
+  // WHICH KIND OF CARD this is, decided from the configuration alone. Availability
+  // decides what value can be shown, never what the card is.
+  const topology = resolveSourceTopology(config);
 
   let metricKind;
   let averageSource;
@@ -46,7 +54,28 @@ export function resolveMeasurementContext(states, config) {
   let sourceKind;
   let displayUnitProfileKey;
 
-  if (primaryUsable) {
+  if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
+    // The whole card refers to exactly one entity, and that entity is a room. The
+    // headline is not an average of anything — it IS that sensor — so it gets its own
+    // source kind rather than being smuggled through as a one-element consensus. Both
+    // spellings of this card reach here: "one room, no entity" and "entity that is the
+    // one configured room".
+    const room = rooms[0];
+    const roomUsable = room.validNumeric && room.validPhysical && room.validUnit && room.metricKind !== null;
+    // The room's own kind names the card even when the room currently reports nothing,
+    // so an unavailable humidity sensor still titles the card "Humidity".
+    metricKind = room.metricKind || FALLBACK_METRIC_KIND;
+    excludedRoomIds = [];
+    diagnostics = [];
+    consistent = true;
+    participatingRooms = roomUsable ? [room] : [];
+    averageSource = roomUsable
+      ? { kind: "roomDirect", entityId: room.entityId, canonicalValue: room.canonicalValue, unitProfile: room.unitProfile }
+      : null;
+    sourceEntity = roomUsable ? room.entityId : null;
+    sourceKind = roomUsable ? "roomDirect" : "default";
+    displayUnitProfileKey = roomUsable ? room.unitProfile : null;
+  } else if (primaryUsable) {
     metricKind = primary.metricKind;
     participatingRooms = [];
     excludedRoomIds = [];

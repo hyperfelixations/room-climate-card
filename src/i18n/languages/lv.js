@@ -49,7 +49,7 @@ export const lv = {
   // Predicative fragment ("2/4 telpas ir siltas"); "telpa" (room) is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "siltas",
   "adjective.cool": "vēsas",
   "adjective.humid": "mitras",
@@ -57,10 +57,12 @@ export const lv = {
   "adjective.elevated": "paaugstinātas",
   "adjective.low": "zemas",
 
-  "avg.label": "Ø māja",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
-  "avg.ariaOpen": "Atvērt vidējo vērtību",
+  "value.homeAverage": "Ø māja",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · aprēķināts no telpu vērtībām`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · aprēķināts no telpu vērtībām`,
+  "value.ariaOpen": "Atvērt vidējo vērtību",
 
   // Latvian cardinal numbers have a three-way CLDR plural split (zero:
   // n%10=0 or n%100 in 11..19; one: n%10=1 and n%100!=11; other:

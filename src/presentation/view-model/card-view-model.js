@@ -22,6 +22,11 @@ import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
 import { buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
+import {
+  SOURCE_TOPOLOGY,
+  chipsWouldDuplicateHeadline,
+  resolveSourceTopology,
+} from "../../application/model/source-topology.js";
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
@@ -72,16 +77,55 @@ export function buildTrendText(trend, texts) {
   return `${value > 0 ? "+" : ""}${texts.fmt(value)} ${trend.unit}`;
 }
 
-function buildAverage({ domainModel, config, texts, tone, position, trendText }) {
-  const { value, entity, source } = domainModel.average;
+// What the headline value is CALLED.
+//
+// The caption exists to tell the big number apart from the other values on the card.
+// That is the whole rule, and the four cases fall out of it:
+//
+//   an explicit value_label   the user said what it is called, including "" for
+//                             "call it nothing" — always wins
+//   the headline IS a room    that room's name; `name` already falls back through
+//                             short to the entity id (see config/rooms.js)
+//   there are no rooms        nothing to tell it apart from, and the card title
+//                             already names the measurement — so no caption at all
+//   otherwise                 it stands among room chips, so it says which one it is
+//
+// Every branch reads configuration only. A sensor dropping out can change the VALUE,
+// never what it is called.
+function resolveHeadlineLabel({ config, topology, roomIndex, texts }) {
+  if (config.value_label !== null) return config.value_label;
+  if (roomIndex !== null) return config.rooms[roomIndex].name;
+  if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY) return "";
+  return texts.t("value.homeAverage");
+}
+
+function buildAverage({ domainModel, config, topology, texts, tone, position, trendText }) {
+  const { value, entity, source, roomIndex } = domainModel.average;
   const trend = domainModel.trend.model;
+  const label = resolveHeadlineLabel({ config, topology, roomIndex, texts });
+  // Carried as its own fact rather than left for each consumer to re-derive from an
+  // empty string. The renderer omits the whole element when it is false, which makes
+  // this a STRUCTURAL property — see cardStructureSignature().
+  const hasLabel = label !== "";
+  const valueText = texts.fmtWithUnit(value);
+
   // A calculated average gets its own tooltip wording: it is not a reading of the
-  // configured entity, and saying so is the honest thing to show on hover.
-  const tooltip = texts.t(source === "sensor" ? "avg.tooltip" : "avg.tooltipCalculated", {
-    value: texts.fmtWithUnit(value),
-    label: config.avg_label || texts.t("avg.label"),
-  });
-  const ariaBase = entity ? texts.t("avg.ariaOpen") : tooltip;
+  // configured entity, and saying so is the honest thing to show on hover. Without a
+  // caption the label-prefixed forms would produce a tooltip starting with ": ", so
+  // each has a captionless twin.
+  const tooltipKey = source === "calculated"
+    ? (hasLabel ? "value.tooltipCalculated" : "value.tooltipCalculatedNoLabel")
+    : (hasLabel ? "value.tooltip" : "value.tooltipNoLabel");
+  const tooltip = texts.t(tooltipKey, { value: valueText, label });
+
+  // A headline that IS a room announces that room by name, reusing the same phrasing
+  // its chip uses. Otherwise the generic "open the average" wording applies, and a
+  // headline that opens nothing falls back to describing itself.
+  const ariaBase = !entity
+    ? tooltip
+    : roomIndex !== null
+      ? texts.t("room.ariaOpen", { name: config.rooms[roomIndex].name })
+      : texts.t("value.ariaOpen");
   const trendAria = trend
     ? texts.t("trend.aria", { direction: texts.t(trend.directionTranslationKey), value: trendText })
     : "";
@@ -89,9 +133,14 @@ function buildAverage({ domainModel, config, texts, tone, position, trendText })
     value,
     valueText: texts.fmt(value),
     unitText: domainModel.metric.unit,
-    label: config.avg_label || texts.t("avg.label"),
+    label,
+    hasLabel,
     entity,
     source,
+    // The configured room the headline is, or null. The renderer forwards it as
+    // data-room-index so a tap resolves against that room's own action overrides
+    // through the ordinary action path.
+    roomIndex,
     color: tone.color,
     position,
     tooltip,
@@ -124,6 +173,10 @@ function buildEmptyViewModel({ domainModel, config, texts, title, metricKind }) 
 }
 
 export function buildCardViewModel({ domainModel, config, texts }) {
+  // Which sources this card is configured with. Decides the headline's caption and
+  // whether a chip would only repeat it — both configuration questions, so both read
+  // the same single answer.
+  const topology = resolveSourceTopology(config);
   const metricKind = domainModel.metric.kind;
   const meta = metricMetaFor(metricKind);
   const title = config.title || texts.t(meta.titleKey);
@@ -157,7 +210,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const average = domainModel.average.value;
   const rooms = domainModel.rooms;
   // Everything that dereferences an extreme is gated on the extremes object itself
-  // rather than on hasRoomsView. The domain guarantees the two agree; keying off the
+  // rather than on rooms.comparable. The domain guarantees the two agree; keying off the
   // object means a single place decides, and no branch can read `.value` off null.
   const hasExtremes = Boolean(domainModel.extremes);
   const coolest = hasExtremes ? domainModel.extremes.coolest : null;
@@ -201,6 +254,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const averageModel = buildAverage({
     domainModel,
     config,
+    topology,
     texts,
     tone,
     position: scale.markerPositions.avg,
@@ -241,7 +295,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const viewState = buildViewState({
     availability: {
       hasRange: domainModel.range.hasRange,
-      hasRoomsView: rooms.hasRoomsView,
+      roomsComparable: rooms.comparable,
       rangeScaleAvailable: domainModel.range.rangeScaleAvailable,
     },
     config,
@@ -263,7 +317,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     hideFooter: Boolean(config.hide_footer),
     rangeEntity: config.range_entity,
     average: { ...averageModel },
-    rooms: { hasRoomsView: rooms.hasRoomsView, count: rooms.count, byValue: rooms.byValue },
+    rooms: { comparable: rooms.comparable, count: rooms.count, byValue: rooms.byValue },
     roomColors: domainModel.roomColors,
     extremes,
     roomMarkers,
@@ -316,11 +370,24 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       visible: layout.visible,
       rowSizes: layout.rowSizes,
       count: rooms.count,
-      hasRoomsView: rooms.hasRoomsView,
-      // show_rooms hides the chip grid only. Everything derived from the rooms —
-      // extrema, comfort count, spread, the scale's markers — stays exactly as it
-      // would with the chips visible, because the rooms remain full data sources.
-      showChips: rooms.hasRoomsView && config.show_rooms !== false,
+      comparable: rooms.comparable,
+      // Whether the chip grid is DRAWN. Deliberately independent of `comparable`:
+      // those are two different facts, and tying them together is why a card with a
+      // primary and one room used to show no chip for it at all.
+      //
+      //   never   no grid; the rooms stay full data sources regardless
+      //   always  a chip for every usable room — an explicit request outranks the
+      //           redundancy rule below
+      //   auto    chips unless the only room IS the headline, where a chip would
+      //           print the same value twice
+      //
+      // Everything derived from the rooms — extrema, comfort count, spread, the
+      // scale's markers — is unaffected by all three, because the rooms remain full
+      // data sources whether or not they are drawn.
+      showChips:
+        config.show_rooms !== "never" &&
+        rooms.count >= 1 &&
+        (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),
     },

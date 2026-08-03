@@ -87,7 +87,7 @@ test("a bare pointerdown is invalidated by a hass-driven structural rebuild", ()
   assert.equal(el._isDragging, false, "sanity check: must not have crossed the drag threshold");
 
   // Pure hass-driven structural change (no setConfig()): rooms drop from 2
-  // to 1, changing hasRoomsView / view composition.
+  // to 1, changing roomsComparable / view composition.
   el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),

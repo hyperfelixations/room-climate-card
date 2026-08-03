@@ -69,6 +69,10 @@ export function cardStructureSignature(viewModel, viewRenderers) {
   if (viewModel.empty) return "empty";
   const parts = [
     `chips:${viewModel.rooms.showChips ? 1 : 0}`,
+    // The headline's caption is a NODE that is either there or not (see
+    // renderAverage()). A patch can change its text; it cannot create or delete it, so
+    // its presence has to force a rebuild.
+    `avgLabel:${viewModel.average.hasLabel ? 1 : 0}`,
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];

@@ -51,10 +51,12 @@ export const ja = {
   "adjective.elevated": "数値が高め",
   "adjective.low": "数値が低め",
 
-  "avg.label": "住宅平均",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
-  "avg.ariaOpen": "平均値を開く",
+  "value.homeAverage": "住宅平均",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · 各部屋の値から算出`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · 各部屋の値から算出`,
+  "value.ariaOpen": "平均値を開く",
 
   "subtitle.aboveComfort": (v) => `平均は快適範囲を ${v.diff} 上回っています · ${v.total}室中${v.count}室は${v.adjective}です。`,
   "subtitle.aboveComfortNoRooms": (v) => `平均は快適範囲を ${v.diff} 上回っています。`,

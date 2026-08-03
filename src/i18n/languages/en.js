@@ -51,10 +51,12 @@ export const en = {
   "adjective.elevated": "elevated",
   "adjective.low": "low",
 
-  "avg.label": "Home avg.",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
-  "avg.ariaOpen": "Open average",
+  "value.homeAverage": "Home avg.",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculated from room values`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculated from room values`,
+  "value.ariaOpen": "Open average",
 
   "subtitle.aboveComfort": (v) => `Avg. ${v.diff} above comfort · ${v.count}/${v.total} ${v.total === 1 ? "room" : "rooms"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Avg. ${v.diff} above comfort.`,

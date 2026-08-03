@@ -50,8 +50,8 @@ export function buildRoomModels({ config, context, toDisplay }) {
   return declared;
 }
 
-export function computeComfortCounts(rooms, comfort, hasRoomsView) {
-  if (!hasRoomsView) return { inComfort: 0, tooWarm: 0, tooCool: 0 };
+export function computeComfortCounts(rooms, comfort, roomsComparable) {
+  if (!roomsComparable) return { inComfort: 0, tooWarm: 0, tooCool: 0 };
   return {
     inComfort: rooms.filter((room) => room.value >= comfort.min && room.value <= comfort.max).length,
     tooWarm: rooms.filter((room) => room.value > comfort.max).length,
@@ -69,11 +69,11 @@ export function computeComfortCounts(rooms, comfort, hasRoomsView) {
 // The attribute is a DELTA in the primary's own unit, so it is canonicalized and
 // then projected with the delta path; using the absolute path would add the
 // Fahrenheit offset to a difference.
-export function computeSpread({ attributeValue, hasRoomsView, coolest, warmest }) {
+export function computeSpread({ attributeValue, roomsComparable, coolest, warmest }) {
   // A negative room-to-room range is physically impossible; treat it exactly like
   // a missing attribute.
   const attrSpread = attributeValue !== null && attributeValue >= 0 ? attributeValue : null;
-  const computedSpread = hasRoomsView ? warmest.value - coolest.value : 0;
+  const computedSpread = roomsComparable ? warmest.value - coolest.value : 0;
   return attrSpread !== null ? attrSpread : computedSpread;
 }
 
@@ -84,24 +84,24 @@ export function computeSpread({ attributeValue, hasRoomsView, coolest, warmest }
 // one of those two endpoints. Reusing those already-computed objects instead of a
 // second, independent sort is what keeps the named room and the extreme-value
 // cards from disagreeing on an exact value tie.
-export function buildSubtitleModel({ avg, comfort, hasRoomsView, counts, roomCount, coolest, warmest, missingRooms }) {
+export function buildSubtitleModel({ avg, comfort, roomsComparable, counts, roomCount, coolest, warmest, missingRooms }) {
   let sentence;
   if (avg > comfort.max) {
-    sentence = hasRoomsView
+    sentence = roomsComparable
       ? { kind: "aboveComfort", diff: avg - comfort.max, count: counts.tooWarm, total: roomCount, adjective: "above" }
       : { kind: "aboveComfortNoRooms", diff: avg - comfort.max };
   } else if (avg < comfort.min) {
-    sentence = hasRoomsView
+    sentence = roomsComparable
       ? { kind: "belowComfort", diff: comfort.min - avg, count: counts.tooCool, total: roomCount, adjective: "below" }
       : { kind: "belowComfortNoRooms", diff: comfort.min - avg };
-  } else if (hasRoomsView && counts.tooWarm + counts.tooCool > 0) {
+  } else if (roomsComparable && counts.tooWarm + counts.tooCool > 0) {
     const warmestOut = warmest.value > comfort.max;
     const coolestOut = coolest.value < comfort.min;
     const issue = warmestOut && coolestOut
       ? (Math.abs(warmest.value - avg) >= Math.abs(coolest.value - avg) ? warmest : coolest)
       : warmestOut ? warmest : coolest;
     sentence = { kind: "inComfortIssue", name: issue.name };
-  } else if (hasRoomsView) {
+  } else if (roomsComparable) {
     sentence = { kind: "inComfortAllGood" };
   } else {
     sentence = { kind: "inComfort" };

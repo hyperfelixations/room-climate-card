@@ -52,7 +52,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately NOT tied to hasRoomsView, unlike the main scale's footer: this
+      // Deliberately NOT tied to rooms.comparable, unlike the main scale's footer: this
       // view must show its daily span with zero rooms configured.
       footerText: options.footer === false || shared.hideFooter ? null : buildFooterText(shared, options.footer),
     }),
@@ -88,7 +88,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       average: buildMarker({
         position: positions.current,
         color: average.color,
-        title: texts.t("avg.tooltip", { value: texts.fmtWithUnit(average.value), label: texts.t("rangeScale.currentLabel") }),
+        title: texts.t("value.tooltip", { value: texts.fmtWithUnit(average.value), label: texts.t("rangeScale.currentLabel") }),
       }),
     },
   };

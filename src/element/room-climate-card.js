@@ -46,6 +46,7 @@ import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/re
 import { normalizeUnitToken } from "../domain/units/unit-token.js";
 import { resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
+import { chipsWouldDuplicateHeadline, resolveSourceTopology } from "../application/model/source-topology.js";
 import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
 import {
@@ -258,10 +259,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     static getStubConfig() {
-      // Example config for the Home Assistant card editor; entity/rooms are
-      // generic editor placeholders only (matching the README's own
-      // Quickstart examples) — the card never falls back to default
-      // entities at runtime (see _normalizeConfig()).
+      // Example config for the Home Assistant card editor; entity/rooms are generic
+      // editor placeholders only (matching the README's own Quickstart examples) — the
+      // card never falls back to default entities at runtime (see _normalizeConfig()).
+      // Both a primary and rooms are offered because that is the richest starting
+      // point to edit down from; either one alone would also be a valid card.
       return {
         entity: "sensor.house_temperature",
         rooms: [
@@ -356,7 +358,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const configDiagnostics = this._config?._viewsDiagnostics || [];
       const { diagnostics: resolveDiagnostics } = resolveActiveViews(
         VIEW_DEFINITIONS,
-        { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+        { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
         this._config
       );
       const diagnostics = [...configDiagnostics, ...resolveDiagnostics];
@@ -465,10 +467,15 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // roomGridRows()). Extra chip rows add to the
       // base size one-for-one.
       const roomCount = this._config?.rooms?.length ?? 0;
-      // show_rooms:false never renders the chip grid, so its rows
-      // must not inflate the size hint either — same base size as too few
-      // rooms to ever have shown chips at all.
-      if (roomCount < 2 || this._config?.show_rooms === false) return 3;
+      // The same chip-visibility contract the view model applies, minus the parts that
+      // need live data — `never` draws nothing, and in `auto` a lone room that IS the
+      // headline gets no chip. A grid that will not be drawn must not inflate the hint.
+      const showRooms = this._config?.show_rooms ?? "auto";
+      const chipsDrawn =
+        roomCount >= 1 &&
+        showRooms !== "never" &&
+        (showRooms === "always" || !chipsWouldDuplicateHeadline(resolveSourceTopology(this._config)));
+      if (!chipsDrawn) return 3;
       const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);
     }

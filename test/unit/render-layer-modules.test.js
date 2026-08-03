@@ -171,8 +171,10 @@ function viewModel(overrides = {}) {
       valueText: "22.0",
       unitText: "°C",
       label: "Average",
+      hasLabel: true,
       entity: "sensor.avg",
       source: "sensor",
+      roomIndex: null,
       color: "#79A86C",
       position: 50,
       tooltip: "Average 22.0 °C",
@@ -183,7 +185,7 @@ function viewModel(overrides = {}) {
       visible: chips.map((c) => c.room),
       rowSizes: [{ itemCount: 2, columnCount: 2 }],
       count: 2,
-      hasRoomsView: true,
+      comparable: true,
       showChips: true,
       chips,
       chipRows: [{ columnCount: 2, chips }],
@@ -301,6 +303,27 @@ test("the average's trend arrow is hidden without a direction and exposed with o
   const withTrend = average.renderAverage(viewModel({ average: { ...model.average, trendDirection: "rising" } }));
   assert.match(withTrend, /data-trend-direction="rising"/);
   assert.match(withTrend, /rtc-has-trend/);
+});
+
+test("the average omits its label node and residual spacing when hasLabel is false", () => {
+  const model = viewModel();
+  const html = average.renderAverage(viewModel({ average: { ...model.average, label: "", hasLabel: false } }));
+  assert.ok(!html.includes("rtc-avg-label"));
+  assert.match(html, /rtc-avg-button rtc-no-label/);
+});
+
+test("the room index is rendered, patched and removed with the headline identity", () => {
+  const realm = makeRealm();
+  const model = viewModel();
+  const asRoom = viewModel({ average: { ...model.average, entity: "sensor.room", roomIndex: 0 } });
+  const element = realm.context.htmlToElement(average.renderAverage(asRoom));
+  assert.equal(element.getAttribute("data-room-index"), "0");
+
+  average.patchAverage(element, model);
+  assert.equal(element.hasAttribute("data-room-index"), false);
+
+  average.patchAverage(element, asRoom);
+  assert.equal(element.getAttribute("data-room-index"), "0");
 });
 
 test("patching the average mirrors every field the renderer writes", () => {

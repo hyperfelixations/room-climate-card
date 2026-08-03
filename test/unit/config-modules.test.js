@@ -33,8 +33,8 @@ test("the card defaults are unchanged", () => {
 });
 
 test("the defaults declare no entities", () => {
-  // `entity` is the only required config field and must never fall back to a
-  // built-in value; `rooms` is optional (minimal mode).
+  // No source is invented by defaults; normalizeConfig enforces that callers
+  // provide `entity`, at least one room, or both.
   assert.equal("entity" in defaults.DEFAULT_CONFIG, false);
   assert.equal("rooms" in defaults.DEFAULT_CONFIG, false);
   assert.equal("range_entity" in defaults.DEFAULT_CONFIG, false);

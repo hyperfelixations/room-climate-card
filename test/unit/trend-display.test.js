@@ -206,8 +206,8 @@ test("trend rendering: minimal mode keeps the compact average and shows only the
   assert.equal(avg.querySelector(".rtc-avg-reading"), null, "the 2.33 label/value structure must be restored");
   assert.deepEqual(
     Array.from(avg.children, (child) => child.className),
-    ["rtc-avg-label", "rtc-avg-value"],
-    "average must contain exactly its historic label and value rows"
+    ["rtc-avg-value"],
+    "a primary-only card omits the redundant label row while retaining the compact value row"
   );
   assert.equal(value.contains(unit), true);
   assert.equal(value.contains(arrow), true);

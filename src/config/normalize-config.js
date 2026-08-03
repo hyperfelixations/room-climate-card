@@ -25,11 +25,11 @@ import {
   decimalsOverride,
   isPlainObject,
   optionalEntity,
+  optionalLabel,
   optionalString,
   normalizeEnum,
   positiveInteger,
   positiveSeconds,
-  requiredEntity,
 } from "./primitives.js";
 
 // Optional language override; "auto" (the default for anything invalid or
@@ -43,6 +43,16 @@ export function normalizeLanguage(value, isSupportedLanguage) {
   return isSupportedLanguage(normalized) ? normalized : "auto";
 }
 
+// `show_rooms` accepts what YAML naturally produces. `true`/`false` are booleans there,
+// not the strings "true"/"false", so they are mapped onto the three-state vocabulary
+// rather than compared as text. Anything unrecognized falls back to "auto" silently,
+// the same convention room_sort and room_label already use.
+export function normalizeShowRooms(value) {
+  if (value === true) return "always";
+  if (value === false) return "never";
+  return "auto";
+}
+
 export function normalizeConfig(config, collaborators) {
   const { isSupportedLanguage, optionSchemaForView } = collaborators;
   const userConfig = config ?? {};
@@ -50,12 +60,25 @@ export function normalizeConfig(config, collaborators) {
     throw new Error("Invalid configuration: card configuration must be an object.");
   }
 
-  // entity (average value) is the only required config field.
-  const entity = requiredEntity(userConfig.entity, "entity");
+  // `entity` is OPTIONAL, and deliberately normalized before the requirement below is
+  // checked. Absent or empty is a legitimate configuration — the rooms can carry the
+  // card on their own. Present but malformed is still a hard error with its own path,
+  // because silently ignoring a typo'd entity id would leave the user staring at a card
+  // that reads correctly and shows the wrong thing.
+  const entity = optionalEntity(userConfig.entity, null, "entity");
 
-  // rooms is optional; below two valid room values the card stays in minimal
-  // mode.
+  // rooms is optional too, and every entry is fully validated (each needs its own
+  // entity, and they must be unique) before the combined requirement is judged.
   const rooms = normalizeRooms(userConfig.rooms === undefined ? [] : userConfig.rooms);
+
+  // THE requirement: a card has to be able to show a current value, and there are
+  // exactly two ways to give it one. `range_entity` and `trend_entity` are auxiliary —
+  // they describe a value, they cannot BE it — so neither satisfies this on its own.
+  if (!entity && rooms.length === 0) {
+    throw new Error(
+      "Invalid configuration: at least one current-value source is required — set entity, or add at least one entry to rooms."
+    );
+  }
 
   // Optional daily-range/trend entities, as produced by a template sensor.
   const rangeEntity = optionalEntity(userConfig.range_entity, null, "range_entity");
@@ -69,7 +92,10 @@ export function normalizeConfig(config, collaborators) {
     // Cosmetic/optional overrides: a malformed value falls back to the previous
     // default rather than throwing, so a typo in an optional field can't break
     // the whole card the way a bad entity id would.
-    avg_label: optionalString(userConfig.avg_label),
+    //
+    // value_label is the headline's caption, and uses optionalLabel() rather than
+    // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
+    value_label: optionalLabel(userConfig.value_label),
     title: optionalString(userConfig.title),
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),
@@ -90,11 +116,20 @@ export function normalizeConfig(config, collaborators) {
     room_rows: positiveInteger(userConfig.room_rows),
     // Purely presentation decisions: room_sort only reorders the rendered chips,
     // never the value-sorted list every calculation uses; room_label picks
-    // between the existing short/name pair; show_rooms hides the chip grid only,
-    // rooms stay full data sources either way.
+    // between the existing short/name pair; show_rooms governs the chip grid only,
+    // rooms stay full data sources in every setting.
     room_sort: normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
     room_label: normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
-    show_rooms: userConfig.show_rooms !== false,
+    // Three states, written in YAML as `auto` | `true` | `false`. The booleans are
+    // mapped rather than kept, so downstream code reads one vocabulary instead of
+    // switching on a mixed boolean/string type:
+    //
+    //   always  show a chip for every usable room, even the one that duplicates the
+    //           headline — an explicit request beats the redundancy rule
+    //   never   no chips at all; the rooms remain data sources
+    //   auto    chips unless they would only repeat the headline (see
+    //           chipsWouldDuplicateHeadline() in application/model/source-topology.js)
+    show_rooms: normalizeShowRooms(userConfig.show_rooms),
     // views: is the single public view-composition surface. null is the "not
     // configured at all" sentinel, which resolves to one auto entry per
     // registered view; a present-but-possibly-empty array is authoritative even

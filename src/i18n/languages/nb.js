@@ -47,7 +47,7 @@ export const nb = {
   // Predicative fragment ("2/4 rom er varme"); Norwegian predicative
   // adjectives DO inflect for number (unlike German/English/Dutch) — these
   // are the plural forms, the only ones this key is ever used with
-  // (subtitle.*Comfort's rooms branch is only reachable once hasRoomsView
+  // (subtitle.*Comfort's rooms branch is only reachable once rooms.comparable
   // requires >= 2 rooms, see buildCardDomainModel()). Note "rom" itself is
   // plural-invariant ("et rom" / "flere rom"), unlike English
   // "room"/"rooms" — see the ternaries below, which are correctly
@@ -59,10 +59,12 @@ export const nb = {
   "adjective.elevated": "forhøyede",
   "adjective.low": "lave",
 
-  "avg.label": "Ø bolig",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
-  "avg.ariaOpen": "Åpne gjennomsnitt",
+  "value.homeAverage": "Ø bolig",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · beregnet ut fra romverdier`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · beregnet ut fra romverdier`,
+  "value.ariaOpen": "Åpne gjennomsnitt",
 
   "subtitle.aboveComfort": (v) => `Ø ${v.diff} over komfort · ${v.count}/${v.total} ${v.total === 1 ? "rom" : "rom"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Ø ${v.diff} over komfort.`,

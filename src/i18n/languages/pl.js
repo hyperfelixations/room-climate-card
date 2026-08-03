@@ -55,10 +55,12 @@ export const pl = {
   "adjective.elevated": "wartości są podwyższone",
   "adjective.low": "wartości są niskie",
 
-  "avg.label": "Średnia dla domu",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
-  "avg.ariaOpen": "Otwórz wartość średnią",
+  "value.homeAverage": "Średnia dla domu",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · obliczona na podstawie wartości z pomieszczeń`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · obliczona na podstawie wartości z pomieszczeń`,
+  "value.ariaOpen": "Otwórz wartość średnią",
 
   "subtitle.aboveComfort": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu · w ${v.count} z ${v.total} ${v.total === 1 ? "pomieszczenia" : "pomieszczeń"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Średnia o ${v.diff} powyżej zakresu komfortu.`,

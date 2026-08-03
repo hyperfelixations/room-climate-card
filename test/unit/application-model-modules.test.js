@@ -46,10 +46,10 @@ function cfg(overrides = {}) {
     room_rows: null,
     room_sort: "value_asc",
     room_label: "auto",
-    show_rooms: true,
+    show_rooms: "auto",
     views: null,
     title: null,
-    avg_label: null,
+    value_label: null,
     icon: null,
     decimals: null,
     ...overrides,
@@ -498,11 +498,11 @@ test("comfort counting splits rooms into inside, too warm and too cool", () => {
 test("the spread prefers a valid sensor attribute and falls back otherwise", () => {
   const coolest = { value: 19 };
   const warmest = { value: 25 };
-  assert.equal(aggregates.computeSpread({ attributeValue: 6.5, hasRoomsView: true, coolest, warmest }), 6.5);
-  assert.equal(aggregates.computeSpread({ attributeValue: null, hasRoomsView: true, coolest, warmest }), 6);
-  assert.equal(aggregates.computeSpread({ attributeValue: -1, hasRoomsView: true, coolest, warmest }), 6, "a negative spread is impossible");
-  assert.equal(aggregates.computeSpread({ attributeValue: 0, hasRoomsView: true, coolest, warmest }), 0, "zero is a valid spread");
-  assert.equal(aggregates.computeSpread({ attributeValue: null, hasRoomsView: false, coolest: null, warmest: null }), 0);
+  assert.equal(aggregates.computeSpread({ attributeValue: 6.5, roomsComparable: true, coolest, warmest }), 6.5);
+  assert.equal(aggregates.computeSpread({ attributeValue: null, roomsComparable: true, coolest, warmest }), 6);
+  assert.equal(aggregates.computeSpread({ attributeValue: -1, roomsComparable: true, coolest, warmest }), 6, "a negative spread is impossible");
+  assert.equal(aggregates.computeSpread({ attributeValue: 0, roomsComparable: true, coolest, warmest }), 0, "zero is a valid spread");
+  assert.equal(aggregates.computeSpread({ attributeValue: null, roomsComparable: false, coolest: null, warmest: null }), 0);
 });
 
 test("the value sort breaks ties by name, deterministically", () => {
@@ -521,44 +521,44 @@ test("every subtitle branch is reachable and carries its own numbers", () => {
   const warmest = { name: "Küche", value: 26 };
   const counts = { inComfort: 1, tooWarm: 1, tooCool: 1 };
 
-  const above = aggregates.buildSubtitleModel({ avg: 25, comfort, hasRoomsView: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const above = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
   assert.equal(above.kind, "aboveComfort");
   assert.equal(above.diff, 1);
   assert.equal(above.count, 1);
   assert.equal(above.total, 3);
   assert.equal(above.adjective, "above");
 
-  const aboveNoRooms = aggregates.buildSubtitleModel({ avg: 25, comfort, hasRoomsView: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const aboveNoRooms = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
   assert.equal(aboveNoRooms.kind, "aboveComfortNoRooms");
   assert.equal(aboveNoRooms.diff, 1);
 
-  const below = aggregates.buildSubtitleModel({ avg: 19, comfort, hasRoomsView: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const below = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
   assert.equal(below.kind, "belowComfort");
   assert.equal(below.diff, 1);
   assert.equal(below.adjective, "below");
 
-  const belowNoRooms = aggregates.buildSubtitleModel({ avg: 19, comfort, hasRoomsView: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const belowNoRooms = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
   assert.equal(belowNoRooms.kind, "belowComfortNoRooms");
 
-  const issue = aggregates.buildSubtitleModel({ avg: 22, comfort, hasRoomsView: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const issue = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
   assert.equal(issue.kind, "inComfortIssue");
   assert.equal(issue.name, "Küche", "26 is 4 away from 22, 18 is 4 away — the warmest wins the tie");
 
   const allGood = aggregates.buildSubtitleModel({
-    avg: 22, comfort, hasRoomsView: true,
+    avg: 22, comfort, roomsComparable: true,
     counts: { inComfort: 3, tooWarm: 0, tooCool: 0 },
     roomCount: 3, coolest: { name: "A", value: 21 }, warmest: { name: "B", value: 23 }, missingRooms: 0,
   });
   assert.equal(allGood.kind, "inComfortAllGood");
 
-  const plain = aggregates.buildSubtitleModel({ avg: 22, comfort, hasRoomsView: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const plain = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
   assert.equal(plain.kind, "inComfort");
 });
 
 test("the out-of-comfort room furthest from the average is the one named", () => {
   const comfort = { min: 20, max: 24 };
   const counts = { inComfort: 1, tooWarm: 1, tooCool: 1 };
-  const base = { avg: 22, comfort, hasRoomsView: true, counts, roomCount: 3, missingRooms: 0 };
+  const base = { avg: 22, comfort, roomsComparable: true, counts, roomCount: 3, missingRooms: 0 };
   // Only the warmest is out.
   assert.equal(
     aggregates.buildSubtitleModel({ ...base, coolest: { name: "Cool", value: 21 }, warmest: { name: "Warm", value: 30 } }).name,
@@ -578,7 +578,7 @@ test("the out-of-comfort room furthest from the average is the one named", () =>
 
 test("missing rooms are reported alongside whichever sentence applies", () => {
   const model = aggregates.buildSubtitleModel({
-    avg: 22, comfort: { min: 20, max: 24 }, hasRoomsView: false,
+    avg: 22, comfort: { min: 20, max: 24 }, roomsComparable: false,
     counts: { inComfort: 0, tooWarm: 0, tooCool: 0 }, roomCount: 0, coolest: null, warmest: null, missingRooms: 3,
   });
   assert.equal(model.kind, "inComfort");
@@ -736,7 +736,7 @@ test("the profile icon is a token, with null meaning 'use the metric default'", 
 
 test("without a views: config every view resolves from its own default", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: null },
   });
   assert.deepEqual(state.keys, ["range", "scale", "extremes"], "range_scale stays off by default");
@@ -746,7 +746,7 @@ test("without a views: config every view resolves from its own default", () => {
 
 test("availability alone can remove a view", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: false, hasRoomsView: false, rangeScaleAvailable: false },
+    availability: { hasRange: false, roomsComparable: false, rangeScaleAvailable: false },
     config: { views: null },
   });
   assert.deepEqual(state.keys, ["scale"], "scale is the only unconditional view");
@@ -754,7 +754,7 @@ test("availability alone can remove a view", () => {
 
 test("an explicit views: list is authoritative in content and order", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: [{ type: "extremes", enabled: true, options: {} }, { type: "range", enabled: true, options: {} }] },
   });
   assert.deepEqual(state.keys, ["extremes", "range"], "listed order wins, and scale is genuinely omitted");
@@ -762,7 +762,7 @@ test("an explicit views: list is authoritative in content and order", () => {
 
 test("an explicitly requested range_scale appears", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: [{ type: "range_scale", enabled: true, options: {} }] },
   });
   assert.deepEqual(state.keys, ["range_scale"]);
@@ -771,7 +771,7 @@ test("an explicitly requested range_scale appears", () => {
 
 test("an empty views: list collapses the view area", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: [] },
   });
   assert.deepEqual(state.keys, []);
@@ -780,7 +780,7 @@ test("an empty views: list collapses the view area", () => {
 
 test("a requested-but-unavailable view is NOT a collapse", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: false, hasRoomsView: false, rangeScaleAvailable: false },
+    availability: { hasRange: false, roomsComparable: false, rangeScaleAvailable: false },
     config: { views: [{ type: "range_scale", enabled: true, options: {} }] },
   });
   assert.deepEqual(state.keys, []);
@@ -790,7 +790,7 @@ test("a requested-but-unavailable view is NOT a collapse", () => {
 
 test("an explicitly disabled view is neither active nor a reason for a hint", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: [{ type: "range", enabled: false, options: {} }] },
   });
   assert.deepEqual(state.keys, []);
@@ -800,7 +800,7 @@ test("an explicitly disabled view is neither active nor a reason for a hint", ()
 test("unknown and duplicate view types are diagnosed, not thrown", () => {
   const { keys, diagnostics } = viewState.resolveActiveViews(
     viewState.VIEW_DEFINITIONS,
-    { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     { views: [{ type: "bogus", enabled: true, options: {} }, { type: "scale", enabled: true, options: {} }, { type: "scale", enabled: true, options: {} }] }
   );
   assert.deepEqual(keys, ["scale"]);
@@ -809,7 +809,7 @@ test("unknown and duplicate view types are diagnosed, not thrown", () => {
 
 test("every view's options are resolved, active or not", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: false, hasRoomsView: false, rangeScaleAvailable: false },
+    availability: { hasRange: false, roomsComparable: false, rangeScaleAvailable: false },
     config: { views: null },
   });
   assert.deepEqual(Object.keys(state.options).sort(), ["extremes", "range", "range_scale", "scale"]);
@@ -821,7 +821,7 @@ test("every view's options are resolved, active or not", () => {
 
 test("a configured option overrides its default and the rest keep theirs", () => {
   const state = viewState.buildViewState({
-    availability: { hasRange: true, hasRoomsView: true, rangeScaleAvailable: true },
+    availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     config: { views: [{ type: "scale", enabled: true, options: { markers: "all", footer: false } }] },
   });
   assert.deepEqual(state.options.scale, { show_comfort_band: true, show_optimal_band: true, footer: false, markers: "all" });

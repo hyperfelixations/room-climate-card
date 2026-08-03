@@ -248,7 +248,7 @@ test("Extrema view disappearing via availability change leaves no focus in the r
   coldCard.focus();
   assert.equal(el.shadowRoot.activeElement, coldCard);
 
-  // Drop to 1 valid room -> hasRoomsView false -> extremes view disappears (structural _renderAll()).
+  // Drop to 1 valid room -> roomsComparable false -> extremes view disappears (structural _renderAll()).
   el.hass = fourAreaStates({
     "sensor.r2": mkState("sensor.r2", "unavailable", {}),
     "sensor.r3": mkState("sensor.r3", "unavailable", {}),

@@ -47,7 +47,7 @@ export const fr = {
   // Predicative fragment ("2/4 pièces chaudes"); "pièce"/"pièces" is
   // feminine, so these are feminine-plural forms — the only form this
   // key is actually used with (subtitle.*Comfort's rooms branch is only
-  // reachable once hasRoomsView requires >= 2 rooms, see buildCardDomainModel()).
+  // reachable once rooms.comparable requires >= 2 rooms, see buildCardDomainModel()).
   "adjective.warm": "chaudes",
   "adjective.cool": "fraîches",
   "adjective.humid": "humides",
@@ -55,10 +55,12 @@ export const fr = {
   "adjective.elevated": "élevées",
   "adjective.low": "basses",
 
-  "avg.label": "Moy. maison",
-  "avg.tooltip": (v) => `${v.label}: ${v.value}`,
-  "avg.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
-  "avg.ariaOpen": "Ouvrir la moyenne",
+  "value.homeAverage": "Moy. maison",
+  "value.tooltip": (v) => `${v.label}: ${v.value}`,
+  "value.tooltipNoLabel": (v) => `${v.value}`,
+  "value.tooltipCalculated": (v) => `${v.label}: ${v.value} · calculé à partir des valeurs des pièces`,
+  "value.tooltipCalculatedNoLabel": (v) => `${v.value} · calculé à partir des valeurs des pièces`,
+  "value.ariaOpen": "Ouvrir la moyenne",
 
   "subtitle.aboveComfort": (v) => `Moy. ${v.diff} au-dessus du confort · ${v.count}/${v.total} ${v.total === 1 ? "pièce" : "pièces"} ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Moy. ${v.diff} au-dessus du confort.`,
