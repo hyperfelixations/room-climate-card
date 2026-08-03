@@ -11,6 +11,9 @@ permissions: {}
 
 jobs:
   validate-hacs:
+    # Named so the status check reads "Validate / HACS Validation" on GitHub,
+    # unambiguously alongside the two CI checks.
+    name: HACS Validation
     runs-on: ubuntu-latest
     steps:
       - name: HACS validation

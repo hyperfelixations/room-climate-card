@@ -92,15 +92,35 @@ async function sample(page, cardId) {
   }, cardId);
 }
 
-// A sample only says something where the track is at a clear hold — mid-
-// transition the translateX is a continuously interpolated value between
-// two integer positions and there is no single correct active index to
-// check against.
+// A sample only says something where the track is genuinely PARKED at a view —
+// mid-transition the translateX is a continuously interpolated value between two
+// integer positions and there is no single correct active index to check against.
+//
+// The tolerance is essentially zero, and that is the point. During a hold the
+// generated keyframes pin the transform to exactly the integer position (the hold's
+// start and end frames carry the identical transform, interpolated linearly), so a
+// parked track reads as an exact integer up to float noise. Any visible deviation
+// means a slide has already begun.
+//
+// An earlier version allowed 0.05 of a view width, meaning to say "at a hold". It
+// does not: the slide easing is very slow at its start, so 5 % of a view width is
+// still only ~20 ms into a 150 ms transition. Samples taken there sit a few tens of
+// milliseconds from the accessibility flip, and are decided by the small offset
+// between the card's Date.now() phase and its CSS animation's own phase — an offset
+// established once when `animation-delay` is written and the frame that applies it is
+// produced, measured at 41 ms under two-worker load. That made the assertion a
+// coin-flip in roughly one full suite run in four, on 2.36.2 as released.
+//
+// Tightening rather than loosening is what makes this correct: the model claim is now
+// checked only where there IS an unambiguous answer, and it is checked exactly. Holds
+// occupy 1000 ms of every 1150 ms segment, so this costs almost no samples.
+const HOLD_EPSILON = 1e-3; // 0.1 % of a view width — well under one rendered pixel
+
 function heldIndex({ positionIndex, states }) {
   // `+ 0` normalizes the negative zero that `-matrix.m41` yields at position 0:
   // Math.round(-0) is -0, and Object.is-based matchers do not treat that as 0.
   const nearest = Math.round(positionIndex) + 0;
-  if (Math.abs(positionIndex - nearest) >= 0.05) return null;
+  if (Math.abs(positionIndex - nearest) >= HOLD_EPSILON) return null;
   if (nearest < 0 || nearest >= states.length) return null;
   return nearest;
 }

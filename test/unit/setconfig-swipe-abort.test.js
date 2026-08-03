@@ -24,8 +24,12 @@ const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
 const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../helpers/gestures.js");
 
 let env;
+// The render paths, imported from the source module so the assertions name the same
+// constants production does.
+let RENDER_PATH;
 
-test.before(() => {
+test.before(async () => {
+  ({ RENDER_PATH } = await import("../../src/controllers/render/render-controller.js"));
   env = createTestEnvironment();
 });
 test.after(() => {
@@ -38,14 +42,25 @@ const BASE_CONFIG = {
   rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
 };
 
-function threeViewCard() {
-  const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+const C = { device_class: "temperature", unit_of_measurement: "°C" };
+
+// A fresh hass with a given average. `offsetMs` moves last_updated so a repeat push
+// with the same value is still a new state as far as the render signature is concerned.
+function states(average = 22, offsetMs = 0) {
+  const all = {
+    "sensor.avg": mkState("sensor.avg", average, C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-  });
-  return env.createCard(BASE_CONFIG, hass);
+    "sensor.r1": mkState("sensor.r1", 21, C),
+    "sensor.r2": mkState("sensor.r2", 23, C),
+  };
+  if (offsetMs) {
+    for (const state of Object.values(all)) state.last_updated = new Date(Date.now() + offsetMs).toISOString();
+  }
+  return mkHass(all);
+}
+
+function threeViewCard() {
+  return env.createCard(BASE_CONFIG, states(22));
 }
 
 test("setConfig mid-drag resolves the active view and clears drag state", () => {
@@ -111,14 +126,116 @@ test("setConfig during an unconfirmed pointerdown clears state without settling"
   env.cleanup(el);
 });
 
-test("an invalid setConfig mid-drag settles interaction before propagating", () => {
+// ---------------------------------------------- strong exception safety --
+//
+// A REJECTED setConfig() must change nothing at all.
+//
+// The previous contract was weaker and, on one path, actively harmful: setConfig()
+// ended the gesture first and only then validated. A configuration the editor rejects
+// therefore still destroyed the gesture — and with it the pointerup that was going to
+// settle a render deferred during that gesture. The card kept displaying a value Home
+// Assistant had already superseded, with no event left that would have applied it.
+//
+// So the rule is now all-or-nothing: normalize into a local first, and touch no state
+// until that has succeeded. An earlier assertion in this file demanded the opposite
+// ("the old interaction state must not be left dangling") — it described the behaviour
+// that caused the defect, and is replaced below.
+
+test("an invalid setConfig leaves the running gesture completely untouched", () => {
   const el = threeViewCard();
   beginConfirmedDrag(el, 1);
+  const pointerBefore = el._interaction.pointer;
 
   assert.throws(() => el.setConfig({ entity: "" })); // invalid: empty required entity
 
-  assert.equal(el._interaction.pointer, null, "the old interaction state must not be left dangling just because the new config was rejected");
+  assert.equal(el._interaction.pointer, pointerBefore, "a rejected configuration must not end the gesture");
+  assert.equal(el._isDragging, true, "the drag is still in progress; nothing about it changed");
+  env.cleanup(el);
+});
+
+test("a render deferred by a drag survives an invalid setConfig and is settled by the pointerup", () => {
+  // The reported sequence, end to end. Nothing here reconnects the card and nothing
+  // pushes a second hass: the only thing that may settle the debt is the gesture ending,
+  // which is exactly what the old ordering destroyed.
+  const el = threeViewCard();
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/);
+
+  beginConfirmedDrag(el, 1);
+  el.hass = states(30);
+  assert.equal(el._renderController.isRenderPending, true, "the mid-drag update is deferred");
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/);
+
+  assert.throws(() => el.setConfig({ range_entity: "sensor.range" }), /entity/i);
+
+  // Nothing was consumed by the rejected call.
+  assert.equal(el._renderController.isRenderPending, true, "the debt is still owed");
+  assert.equal(el._isDragging, true, "and the gesture that will pay it is still alive");
+  assert.equal(el._config.entity, "sensor.avg", "the last valid configuration is untouched");
+
+  endDrag(el, -4); // a tiny move: the gesture ends without committing a swipe
+  assert.match(
+    el.shadowRoot.querySelector(".rtc-avg-value-num").textContent,
+    /30/,
+    "ending the gesture must apply the update received during it"
+  );
+  assert.equal(el._renderController.isRenderPending, false);
+  env.cleanup(el);
+});
+
+test("a pointercancel settles the debt just as well after a rejected setConfig", () => {
+  const el = threeViewCard();
+  beginConfirmedDrag(el, 1);
+  el.hass = states(30);
+  assert.throws(() => el.setConfig({ entity: 42 }));
+
+  cancelDrag(el);
+  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
+  assert.equal(el._renderController.isRenderPending, false);
+  env.cleanup(el);
+});
+
+test("an invalid setConfig with no interaction leaves configuration, DOM and signatures intact", () => {
+  const el = threeViewCard();
+  const configBefore = el._config;
+  const markupBefore = el.shadowRoot.innerHTML;
+
+  assert.throws(() => el.setConfig({ rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r1" }] }));
+
+  assert.equal(el._config, configBefore, "the previous configuration object is still installed, not partially replaced");
+  assert.equal(el.shadowRoot.innerHTML, markupBefore, "nothing was re-rendered");
+  // The signature was not invalidated either: an unchanged card still skips.
+  assert.equal(el._render(), RENDER_PATH.SKIPPED, "a rejected config must not force a pointless re-render later");
+  env.cleanup(el);
+});
+
+test("an invalid setConfig does not disturb a pending resume or the carousel", () => {
+  const el = threeViewCard();
+  beginConfirmedDrag(el, 1);
+  endDrag(el, -200); // a committed swipe arms the phase-aware resume
+  const resumeBefore = el._carousel.resumeTimerHandle;
+  const activeBefore = el._activeView;
+  assert.notEqual(resumeBefore, null);
+
+  assert.throws(() => el.setConfig({ entity: null, rooms: [] }));
+
+  assert.equal(el._carousel.resumeTimerHandle, resumeBefore, "the pending resume must survive a rejected configuration");
+  assert.equal(el._activeView, activeBefore);
+  env.cleanup(el);
+});
+
+test("a valid setConfig mid-drag still settles the gesture exactly as before", () => {
+  // The strong-exception-safety rewrite must not weaken the accepted path: a VALID
+  // configuration still aborts the drag, snaps the track and schedules the resume.
+  const el = threeViewCard();
+  beginConfirmedDrag(el, 2);
+  el._activeView = 0; // stale
+
+  el.setConfig({ ...BASE_CONFIG, avg_label: "Custom" });
+
+  assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
+  assert.equal(el._activeView, 2, "resolved from the frozen drag position");
+  assert.notEqual(el._carousel.resumeTimerHandle, null, "and a phase-aware resume is scheduled");
   env.cleanup(el);
 });
 

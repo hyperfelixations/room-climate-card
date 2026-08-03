@@ -272,52 +272,60 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       };
     }
 
-    _cancelInteractionForConfigChange() {
-      // A configuration change can arrive mid-swipe — live editing in the dashboard
-      // editor. Only the gesture is aborted here. A render deferred by that gesture is
-      // NOT dropped: setConfig() renders immediately afterwards and settles it, and if
-      // the new configuration is rejected and that render never happens, the update is
-      // still genuinely owed.
-      this._interaction.cancelForConfigChange();
-    }
-
+    // STRONG EXCEPTION SAFETY. Either the whole configuration change happens, or
+    // nothing observable does.
+    //
+    // Home Assistant's live YAML editor calls setConfig() on every keystroke, so most
+    // calls during editing are INVALID — a half-typed entity id, a `rooms:` list with
+    // one line still missing. Those must propagate the error (the editor shows it) and
+    // otherwise leave the card exactly as it was.
+    //
+    // The previous ordering ended the running gesture before validating. That looked
+    // harmless, because the render deferred during the gesture was correctly kept. But
+    // the pointerup that would have SETTLED that render was now the end of a gesture
+    // that no longer existed, so nothing applied it: a card mid-swipe when an update
+    // arrived, followed by one rejected keystroke in the editor, kept showing the old
+    // value until an unrelated update happened along. Keeping the debt is not enough if
+    // the occasion to pay it is destroyed.
+    //
+    // Hence the split below. Everything that can throw runs first and writes nothing;
+    // the commit phase cannot fail.
     setConfig(config) {
-      this._cancelInteractionForConfigChange();
-      // The view visible before this call must be
-      // read via the OLD this._config/this._views (both still intact right
-      // here) — _currentVisualViewIndex() internally reads this._config for
-      // its wall-clock phase math, so computing it AFTER the overwrite two
-      // lines down would reinterpret the still-on-screen OLD CSS animation
-      // with whatever NEW rotation_seconds/slide_seconds this call installs
-      // (a live timing change is itself a structural change, see
-      // structuralConfigSignature in _render()) — landing in the wrong
-      // segment and preserving the wrong view. _renderAll() prefers this
-      // snapshot over recomputing live.
+      // ---- validate: no observable state may change in here --------------------
+      const normalized = this._normalizeConfig(config);
+
+      // ---- commit: from here on nothing throws ---------------------------------
+      // The view visible "before" must be read while the OLD configuration and view
+      // list are still installed: _currentVisualViewIndex() reads this._config for its
+      // wall-clock phase math, so computing it after the overwrite would reinterpret
+      // the still-running old animation with the new timing and preserve the wrong
+      // view. _renderAll() prefers this snapshot over recomputing live.
       this._renderController.capturePreConfigVisualKey(this._views[this._currentVisualViewIndex()] ?? null);
-      // The cleanup below must run
-      // even if _normalizeConfig()/_render() throws (Home Assistant's own
-      // config-validation contract requires setConfig() to still propagate
-      // that error, so this is finally, not catch) — otherwise a thrown
-      // config leaves the controller's pre-config snapshot stuck on a stale
-      // value, ready to leak into a later, unrelated hass-driven rebuild.
       try {
-        this._config = this._normalizeConfig(config);
+        // A configuration change can arrive mid-swipe. The gesture is aborted through
+        // its owner, which settles a confirmed drag the same way a pointercancel does.
+        // A render deferred by that gesture is deliberately NOT dropped — the
+        // _render(false) below settles it.
+        this._interaction.cancelForConfigChange();
+        this._config = normalized;
         this._warnAboutViewConfigOnce();
-        // _activeView is intentionally left untouched here — _renderAll()
-        // preserves it across a structural change when the previously
-        // active view key still exists, falling back to config.start_view
-        // then the first active view otherwise (see _renderAll()).
+        // _activeView is intentionally left untouched here — _renderAll() preserves it
+        // across a structural change when the previously active view key still exists,
+        // falling back to config.start_view then the first active view otherwise.
         this._renderController.invalidateDataSignature();
-        // Do not restart rotation after this render: doing so would re-engage
-        // the synchronized animation and undo the freeze _renderAll() performs
-        // for every non-first-render structural change. _render(false)
-        // already handles rotation state completely on its own: via
-        // _renderAll() when the change is structural, or not at all when
-        // it's a purely cosmetic config edit that must not disturb an
-        // in-progress resume wait. connectedCallback() independently
-        // starts rotation when the card is first attached to the DOM.
+        // Do not restart rotation after this render: doing so would re-engage the
+        // synchronized animation and undo the freeze _renderAll() performs for every
+        // non-first-render structural change. _render(false) already handles rotation
+        // state completely on its own — via _renderAll() when the change is structural,
+        // or not at all when it is a purely cosmetic edit that must not disturb an
+        // in-progress resume wait. connectedCallback() independently starts rotation
+        // when the card is first attached to the DOM.
         this._render(false);
       } finally {
+        // The snapshot is transient by construction: it belongs to exactly the one
+        // render above. A `finally` because _render() can still throw on a malformed
+        // entity STATE (a runtime problem, not a configuration one), and a stuck
+        // snapshot would then leak into a later, unrelated rebuild.
         this._renderController.releasePreConfigVisualKey();
       }
     }
