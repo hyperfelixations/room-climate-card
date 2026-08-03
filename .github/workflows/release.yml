@@ -1,0 +1,370 @@
+# This workflow prepares a release candidate. It never publishes a release.
+# Only the repository owner may start it and publish the resulting draft.
+
+name: Release Candidate
+
+run-name: >-
+  Release candidate v${{ inputs.version }} from ${{ inputs.expected_sha }}
+  (${{ inputs.release_kind }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact package version, for example 2.38.0 or 2.39.0-beta.1"
+        required: true
+        type: string
+      expected_sha:
+        description: "Full 40-character commit SHA approved for release"
+        required: true
+        type: string
+      release_kind:
+        description: "Stable creates a normal draft; beta creates a prerelease draft"
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24.18.0"
+  RELEASE_ASSET: room-climate-card.js
+
+jobs:
+  build-and-test:
+    name: Build, unit and fuzz tests
+    runs-on: windows-latest
+    outputs:
+      artifact_sha256: ${{ steps.artifact-metadata.outputs.sha256 }}
+      release_tag: ${{ steps.release-metadata.outputs.tag }}
+      release_title: ${{ steps.release-metadata.outputs.title }}
+
+    steps:
+      - name: Check out the selected main commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install exactly from the lockfile
+        run: npm ci
+
+      - name: Validate branch, SHA, version and HACS contract
+        id: release-metadata
+        shell: pwsh
+        env:
+          ACTUAL_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_KIND: ${{ inputs.release_kind }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          SELECTED_REF: ${{ github.ref }}
+          TRIGGERING_ACTOR: ${{ github.actor }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $actualSha = $env:ACTUAL_SHA.ToLowerInvariant()
+          $expectedSha = $env:EXPECTED_SHA.Trim().ToLowerInvariant()
+          $version = $env:RELEASE_VERSION.Trim()
+          $releaseKind = $env:RELEASE_KIND
+
+          if ($env:TRIGGERING_ACTOR -ne $env:REPOSITORY_OWNER) {
+            throw "Only the repository owner may start a release candidate."
+          }
+          if ($env:SELECTED_REF -ne "refs/heads/main") {
+            throw "Release candidates must be started with branch 'main' selected."
+          }
+          if ($expectedSha -notmatch '^[0-9a-f]{40}$') {
+            throw "expected_sha must be the complete 40-character commit SHA."
+          }
+          if ($expectedSha -ne $actualSha) {
+            throw "The selected commit is $actualSha, not the approved commit $expectedSha."
+          }
+
+          switch ($releaseKind) {
+            "stable" {
+              if ($version -notmatch '^\d+\.\d+\.\d+$') {
+                throw "A stable version must look like 2.38.0."
+              }
+              $title = "Room Climate Card $version"
+            }
+            "beta" {
+              if ($version -notmatch '^\d+\.\d+\.\d+-beta\.\d+$') {
+                throw "A beta version must look like 2.39.0-beta.1."
+              }
+              $title = "Room Climate Card $version (Beta)"
+            }
+            default {
+              throw "Unsupported release kind '$releaseKind'."
+            }
+          }
+
+          $tag = "v$version"
+          $existingTags = @(git tag --list $tag)
+          if ($existingTags.Count -ne 0) {
+            throw "Tag '$tag' already exists. Release tags are immutable; use a new version."
+          }
+
+          "tag=$tag" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "title=$title" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+
+      - name: Validate version files and HACS manifest
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          @'
+          const fs = require("node:fs");
+
+          const version = process.env.RELEASE_VERSION.trim();
+          const asset = process.env.RELEASE_ASSET;
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const hacs = JSON.parse(fs.readFileSync("hacs.json", "utf8"));
+          const cardMetadata = fs.readFileSync("src/core/card-metadata.js", "utf8");
+
+          const versions = new Map([
+            ["package.json", packageJson.version],
+            ["package-lock.json root", packageLock.version],
+            ["package-lock.json package", packageLock.packages?.[""]?.version],
+          ]);
+          for (const [source, actual] of versions) {
+            if (actual !== version) {
+              throw new Error(`${source} contains version '${actual}', expected '${version}'.`);
+            }
+          }
+
+          const versionDeclaration = `export const CARD_VERSION = "${version}";`;
+          if (!cardMetadata.includes(versionDeclaration)) {
+            throw new Error(`CARD_VERSION does not exactly match '${version}'.`);
+          }
+          if (typeof hacs.name !== "string" || hacs.name.trim() === "") {
+            throw new Error("hacs.json must contain a non-empty name.");
+          }
+          if (hacs.filename !== asset) {
+            throw new Error(`hacs.json filename must be '${asset}'.`);
+          }
+
+          console.log(`Version ${version} and HACS asset ${asset} are consistent.`);
+          '@ | node
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Remove any checked-in bundle before the fresh build
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "dist/room-climate-card.js" -Force -ErrorAction SilentlyContinue
+
+      - name: Build a fresh bundle
+        run: npm run build
+
+      - name: Verify the generated bundle
+        run: npm run verify:dist
+
+      - name: Check bundle syntax
+        run: npm run check:run
+
+      - name: Run unit tests
+        run: npm run test:unit:run
+
+      - name: Run fuzz tests
+        run: npm run test:fuzz:run
+
+      - name: Record release asset checksum
+        id: artifact-metadata
+        shell: pwsh
+        run: |
+          $asset = "dist/$env:RELEASE_ASSET"
+          if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+            throw "Expected release asset '$asset' was not created."
+          }
+          $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $asset).Length
+          "sha256=$hash" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "Built $asset ($size bytes, SHA-256 $hash)"
+
+      - name: Upload the exact candidate bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-candidate-${{ steps.release-metadata.outputs.tag }}
+          path: dist/room-climate-card.js
+          if-no-files-found: error
+          retention-days: 14
+
+  browser-tests:
+    name: Browser tests on candidate bundle
+    needs: build-and-test
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the selected main commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install exactly from the lockfile
+        run: npm ci
+
+      - name: Remove any checked-in bundle
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "dist/room-climate-card.js" -Force -ErrorAction SilentlyContinue
+
+      - name: Download the exact candidate bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ needs.build-and-test.outputs.release_tag }}
+          path: dist
+
+      - name: Verify the downloaded bundle checksum
+        shell: pwsh
+        env:
+          EXPECTED_SHA256: ${{ needs.build-and-test.outputs.artifact_sha256 }}
+        run: |
+          $asset = "dist/$env:RELEASE_ASSET"
+          if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+            throw "The candidate bundle is missing."
+          }
+          $actualHash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:EXPECTED_SHA256) {
+            throw "The downloaded bundle checksum does not match the tested bundle."
+          }
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Run browser tests once without retries
+        run: npm run test:browser:run -- --retries=0
+
+      - name: Upload Playwright report after a failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  create-draft:
+    name: Create unpublished GitHub draft
+    needs:
+      - build-and-test
+      - browser-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      EXPECTED_SHA256: ${{ needs.build-and-test.outputs.artifact_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_KIND: ${{ inputs.release_kind }}
+      RELEASE_TAG: ${{ needs.build-and-test.outputs.release_tag }}
+      RELEASE_TITLE: ${{ needs.build-and-test.outputs.release_title }}
+
+    steps:
+      - name: Download the tested release asset
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ needs.build-and-test.outputs.release_tag }}
+          path: release-asset
+
+      - name: Verify the release asset one final time
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="release-asset/$RELEASE_ASSET"
+          test -f "$asset"
+          actual_sha256="$(sha256sum "$asset" | cut -d ' ' -f 1)"
+          if [[ "$actual_sha256" != "$EXPECTED_SHA256" ]]; then
+            echo "The final release asset does not match the tested candidate." >&2
+            exit 1
+          fi
+
+      - name: Refuse to reuse an existing tag or release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release for $RELEASE_TAG already exists. Use a new version." >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Tag $RELEASE_TAG already exists. Release tags are immutable; use a new version." >&2
+            exit 1
+          fi
+
+      - name: Create the draft release and its tag
+        id: draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          cat > "$notes_file" <<EOF
+          > Automatically built and tested release draft. Review and replace these notes before publishing.
+
+          Target commit: \`$EXPECTED_SHA\`
+
+          Release asset: \`$RELEASE_ASSET\`
+          SHA-256: \`$EXPECTED_SHA256\`
+
+          ## Release notes
+
+          Replace this paragraph with the approved, user-facing release notes.
+
+          ## Installation
+
+          Install or update Room Climate Card through HACS. Reload the browser after the update.
+          EOF
+
+          args=(
+            gh release create "$RELEASE_TAG"
+            "release-asset/$RELEASE_ASSET"
+            --repo "$GITHUB_REPOSITORY"
+            --draft
+            --target "$EXPECTED_SHA"
+            --title "$RELEASE_TITLE"
+            --notes-file "$notes_file"
+            --fail-on-no-commits
+          )
+          if [[ "$RELEASE_KIND" == "beta" ]]; then
+            args+=(--prerelease --latest=false)
+          fi
+          "${args[@]}"
+
+          release_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url)"
+          echo "url=$release_url" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize the manual approval step
+        shell: bash
+        run: |
+          {
+            echo "## Unpublished release draft created"
+            echo
+            echo "Nothing has been published. HACS cannot see this draft."
+            echo
+            echo "- Draft: ${{ steps.draft.outputs.url }}"
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Commit: \`$EXPECTED_SHA\`"
+            echo "- Asset: \`$RELEASE_ASSET\`"
+            echo "- SHA-256: \`$EXPECTED_SHA256\`"
+            echo
+            echo "The repository owner must review the notes, asset and settings, then publish manually."
+          } >> "$GITHUB_STEP_SUMMARY"
