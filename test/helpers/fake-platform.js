@@ -83,6 +83,12 @@ function createFakePlatform(options = {}) {
     createEvent: (type, init) => ({ type, ...init, __fake: true }),
 
     readTranslateXPx: (element) => options.translateXPx ?? element?.__translateXPx ?? null,
+
+    // Null by default, which is exactly what a realm without the Web Animations API
+    // reports and therefore keeps every existing test on the wall-clock fallback. A
+    // test that wants to reproduce the real browser's clock offset sets
+    // `animationPhase` (or `element.__animationPhase`) to {phaseMs, cycleMs}.
+    readAnimationPhase: (element, _animationName) => options.animationPhase ?? element?.__animationPhase ?? null,
   };
 
   // ---- the controls a test drives -------------------------------------------

@@ -16,6 +16,11 @@
 import { clamp } from "../../core/numbers.js";
 import { A11Y_FLIP_TIME_FRACTION, SLIDE_EASING_CSS } from "../../core/easing.js";
 
+// The one name the track's keyframes are declared and referenced under. It is also how
+// the runtime finds that animation again among everything else running on the element,
+// so a second spelling of it would be a silent lookup failure rather than a build error.
+export const TRACK_ANIMATION_NAME = "rtc-track-slide";
+
 // The hold-index sequence for one full cycle: a linear ping-pong straight through the
 // views in their actual left-to-right DOM order — 0,1,…,N-1,N-2,…,1, then wrapping
 // back to 0 — so every transition, including the wrap, moves exactly one position and
@@ -74,7 +79,7 @@ export function trackAnimationCss(timing, activeIndex) {
     const x = -(activeIndex || 0) * timing.viewWidthPct;
     return `animation:none;transform:translate3d(${x}%,0,0);`;
   }
-  return `animation:rtc-track-slide ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
+  return `animation:${TRACK_ANIMATION_NAME} ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
 }
 
 // Each hold position produces two breakpoints — the hold's start (linear, so it does
@@ -100,7 +105,7 @@ export function slideKeyframes(timing) {
   const closeX = -(timing.positions[0] * timing.viewWidthPct);
 
   return `
-        @keyframes rtc-track-slide {
+        @keyframes ${TRACK_ANIMATION_NAME} {
           ${frames.join("\n")}
           100% {
             transform: translate3d(${closeX}%,0,0);

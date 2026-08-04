@@ -22,6 +22,9 @@
 //   createEvent(type, init)        -> an Event from the card's own realm
 //   readTranslateXPx(element)      -> the element's current translate X in CSS
 //                                     pixels, or null when it cannot be read
+//   readAnimationPhase(element, name)
+//                                  -> {phaseMs, cycleMs} of the named CSS animation
+//                                     running on the element, or null
 //
 // A test substitutes a fake with the same shape and gets a deterministic controller.
 // createFakePlatform() lives in the test suite, not here: production must not ship a
@@ -62,6 +65,40 @@ function readTranslateXPx(element) {
   } catch (_error) {
     // A browser without DOMMatrixReadOnly, or an unparsable transform. The caller has
     // a value-derived fallback; guessing here would be worse than saying "unknown".
+    return null;
+  }
+}
+
+// Where the named CSS animation ACTUALLY is, read from the animation's own clock
+// rather than from the wall clock the card used to start it.
+//
+// The two are not the same, and the difference is not noise. The track is started with
+// `animation-delay: -phaseMs`, where phaseMs is read from the wall clock — but the
+// animation only begins with the frame that applies that declaration. Whatever time
+// passes in between becomes a CONSTANT offset for the whole lifetime of that animation:
+// measured at ~23 ms on a fast machine, and unbounded on a slow one, because it is
+// simply how long that first frame took. Anything that has to agree with what the user
+// can SEE therefore has to ask the animation, not the clock.
+//
+// Returns the cycle length alongside the phase on purpose. A running animation can
+// still carry the PREVIOUS timing configuration for a moment after `rotation_seconds`
+// changes, and a phase is meaningless without the cycle it belongs to; the caller
+// compares the two and falls back rather than reading the new schedule at the old
+// animation's phase.
+function readAnimationPhase(element, animationName) {
+  if (typeof element?.getAnimations !== "function") return null;
+  try {
+    const animation = element.getAnimations().find((candidate) => candidate.animationName === animationName);
+    const timing = animation?.effect?.getComputedTiming?.();
+    const cycleMs = Number(timing?.duration);
+    const progress = timing?.progress;
+    if (typeof progress !== "number" || !Number.isFinite(progress)) return null;
+    if (!Number.isFinite(cycleMs) || cycleMs <= 0) return null;
+    return { phaseMs: progress * cycleMs, cycleMs };
+  } catch (_error) {
+    // A realm without the Web Animations API, or an animation the browser will not
+    // describe. The caller keeps its wall-clock answer, which is what every version
+    // before this one used unconditionally.
     return null;
   }
 }
@@ -133,5 +170,6 @@ export function createBrowserPlatform(getDocument) {
     },
 
     readTranslateXPx,
+    readAnimationPhase,
   };
 }

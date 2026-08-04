@@ -16,7 +16,7 @@
 
 const CARD_TYPE = "room-climate-card";
 const CARD_NAME = "Room Climate Card";
-const CARD_VERSION = "2.38.0";
+const CARD_VERSION = "2.38.1";
 
 // Language codes and their Intl locales.
 //
@@ -8937,6 +8937,9 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 //   createEvent(type, init)        -> an Event from the card's own realm
 //   readTranslateXPx(element)      -> the element's current translate X in CSS
 //                                     pixels, or null when it cannot be read
+//   readAnimationPhase(element, name)
+//                                  -> {phaseMs, cycleMs} of the named CSS animation
+//                                     running on the element, or null
 //
 // A test substitutes a fake with the same shape and gets a deterministic controller.
 // createFakePlatform() lives in the test suite, not here: production must not ship a
@@ -8977,6 +8980,40 @@ function readTranslateXPx(element) {
   } catch (_error) {
     // A browser without DOMMatrixReadOnly, or an unparsable transform. The caller has
     // a value-derived fallback; guessing here would be worse than saying "unknown".
+    return null;
+  }
+}
+
+// Where the named CSS animation ACTUALLY is, read from the animation's own clock
+// rather than from the wall clock the card used to start it.
+//
+// The two are not the same, and the difference is not noise. The track is started with
+// `animation-delay: -phaseMs`, where phaseMs is read from the wall clock — but the
+// animation only begins with the frame that applies that declaration. Whatever time
+// passes in between becomes a CONSTANT offset for the whole lifetime of that animation:
+// measured at ~23 ms on a fast machine, and unbounded on a slow one, because it is
+// simply how long that first frame took. Anything that has to agree with what the user
+// can SEE therefore has to ask the animation, not the clock.
+//
+// Returns the cycle length alongside the phase on purpose. A running animation can
+// still carry the PREVIOUS timing configuration for a moment after `rotation_seconds`
+// changes, and a phase is meaningless without the cycle it belongs to; the caller
+// compares the two and falls back rather than reading the new schedule at the old
+// animation's phase.
+function readAnimationPhase(element, animationName) {
+  if (typeof element?.getAnimations !== "function") return null;
+  try {
+    const animation = element.getAnimations().find((candidate) => candidate.animationName === animationName);
+    const timing = animation?.effect?.getComputedTiming?.();
+    const cycleMs = Number(timing?.duration);
+    const progress = timing?.progress;
+    if (typeof progress !== "number" || !Number.isFinite(progress)) return null;
+    if (!Number.isFinite(cycleMs) || cycleMs <= 0) return null;
+    return { phaseMs: progress * cycleMs, cycleMs };
+  } catch (_error) {
+    // A realm without the Web Animations API, or an animation the browser will not
+    // describe. The caller keeps its wall-clock answer, which is what every version
+    // before this one used unconditionally.
     return null;
   }
 }
@@ -9048,6 +9085,7 @@ function createBrowserPlatform(getDocument) {
     },
 
     readTranslateXPx,
+    readAnimationPhase,
   };
 }
 
@@ -9116,6 +9154,11 @@ const A11Y_FLIP_TIME_FRACTION = timeFractionForEasedProgress(SLIDE_EASING, 0.5);
 // is.
 
 
+// The one name the track's keyframes are declared and referenced under. It is also how
+// the runtime finds that animation again among everything else running on the element,
+// so a second spelling of it would be a silent lookup failure rather than a build error.
+const TRACK_ANIMATION_NAME = "rtc-track-slide";
+
 // The hold-index sequence for one full cycle: a linear ping-pong straight through the
 // views in their actual left-to-right DOM order — 0,1,…,N-1,N-2,…,1, then wrapping
 // back to 0 — so every transition, including the wrap, moves exactly one position and
@@ -9174,7 +9217,7 @@ function trackAnimationCss(timing, activeIndex) {
     const x = -(activeIndex || 0) * timing.viewWidthPct;
     return `animation:none;transform:translate3d(${x}%,0,0);`;
   }
-  return `animation:rtc-track-slide ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
+  return `animation:${TRACK_ANIMATION_NAME} ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
 }
 
 // Each hold position produces two breakpoints — the hold's start (linear, so it does
@@ -9200,7 +9243,7 @@ function slideKeyframes(timing) {
   const closeX = -(timing.positions[0] * timing.viewWidthPct);
 
   return `
-        @keyframes rtc-track-slide {
+        @keyframes ${TRACK_ANIMATION_NAME} {
           ${frames.join("\n")}
           100% {
             transform: translate3d(${closeX}%,0,0);
@@ -9416,6 +9459,36 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
   }
 
   // ---- which view is actually in front --------------------------------------
+  // The phase the track is VISIBLY at, which is not the same thing as the phase the
+  // wall clock is at.
+  //
+  // The synchronized animation is started with `animation-delay: -phaseMs` read from
+  // the wall clock, but it only begins with the frame that applies that declaration.
+  // However long that frame took becomes a fixed offset between the two for the whole
+  // life of that animation — ~23 ms measured on a fast machine, and bounded by nothing
+  // on a slow one. Anything derived from the wall clock is therefore that much AHEAD of
+  // what is on screen.
+  //
+  // That is not a rounding detail for accessibility. The accessible view flips
+  // holdMs + 35.4 % of slideMs into a segment, i.e. 53 ms after the hold ends for this
+  // card's own defaults. Once the offset exceeds that, the flip lands while the track
+  // is still parked: assistive technology announces the next view while the current one
+  // is unmoved and fully on screen. It was observed exactly there, as a reproducible CI
+  // failure on a slower machine.
+  //
+  // Asking the animation removes the offset by construction, on every machine. The wall
+  // clock stays the fallback and stays the SOURCE of the synchronization — two cards on
+  // one dashboard still agree because both derive their delay from it; this only reads
+  // back where the resulting animation actually got to.
+  function visiblePhaseMs(track, current) {
+    const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
+    // A running animation still carries the PREVIOUS cycle length for a moment after
+    // rotation_seconds/slide_seconds change. Reading the new schedule at the old
+    // animation's phase would be worse than the offset this exists to remove.
+    if (!animation || Math.round(animation.cycleMs) !== Math.round(current.cycleMs)) return current.phaseMs;
+    return animation.phaseMs;
+  }
+
   // The single shared answer, used both by the accessibility sync and by the
   // active-view preservation across a structural rebuild, so the two can never quietly
   // disagree. While the synchronized animation drives the track, the JS index is stale
@@ -9425,7 +9498,7 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     const track = getTrack();
     const current = timing();
     const autoEngaged = current.enabled && track && !track.classList.contains("rtc-manual");
-    return autoEngaged ? accessibleViewIndexAt(current.phaseMs, current) : activeIndex;
+    return autoEngaged ? accessibleViewIndexAt(visiblePhaseMs(track, current), current) : activeIndex;
   }
 
   // Keeps offscreen views out of the tab order and hidden from assistive technology.
@@ -9454,7 +9527,9 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     const track = getTrack();
     const current = timing();
     if (!(current.enabled && track && !track.classList.contains("rtc-manual"))) return;
-    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(current.phaseMs, current));
+    // Armed against the same phase updateViewAccessibility() reads, so the timer fires
+    // when the FLIP is due on screen rather than when the wall clock says it is.
+    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(visiblePhaseMs(track, current), current));
     a11yTimer = platform.setTimeout(() => {
       a11yTimer = null;
       scheduleAccessibilitySync();
@@ -9476,7 +9551,7 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     track.classList.remove("rtc-manual");
     track.style.transition = "";
     track.style.transform = "";
-    track.style.animation = `rtc-track-slide ${current.cycleMs}ms linear infinite`;
+    track.style.animation = `${TRACK_ANIMATION_NAME} ${current.cycleMs}ms linear infinite`;
     track.style.animationDelay = `-${current.phaseMs}ms`;
     scheduleAccessibilitySync();
   }

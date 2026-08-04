@@ -15,10 +15,18 @@
 // comparing them naively is flaky. Measured, not
 // assumed (full parallel suite, ~270 samples per run):
 //
-//   the model     reads Date.now(). Its phase tracks the running CSS
-//                 animation's own phase (currentTime - delay) to within
-//                 -7..+9 ms, p50 -1 ms. There is no drift: the negative
-//                 animation-delay synchronization holds.
+//   the model     reads the running animation's OWN phase, and falls back to
+//                 Date.now() only where there is no animation to ask. Until
+//                 2.38.1 it read the wall clock unconditionally, which put it
+//                 permanently AHEAD of the track by however long the frame that
+//                 started the animation took: a constant -23 ms here, and >=97 ms
+//                 on the CI runner, where it exceeded the 53 ms of slack between
+//                 the end of a hold and the accessibility flip and failed this
+//                 file's second claim reproducibly. Measured after the fix, over
+//                 60 samples: the model agrees with the animation 60/60 and with
+//                 the wall clock 58/60 -- it differs exactly where the two clocks
+//                 imply different views. See visiblePhaseMs() in
+//                 carousel-runtime.js.
 //   the transform getComputedStyle() reports the LAST PRODUCED FRAME.
 //                 Read at an arbitrary moment it trails the wall clock by
 //                 p50 8 ms / max 17 ms, and much further across a dropped
@@ -82,6 +90,14 @@ async function sample(page, cardId) {
         modelIndex: el._carousel.currentVisualIndex(),
         frameStalenessMs: performance.now() - Number(document.timeline.currentTime),
         states: views.map((v) => ({ ariaHidden: v.getAttribute("aria-hidden"), inert: v.hasAttribute("inert") })),
+        // Diagnostics. A mismatch below is only actionable if it also says WHY the
+        // card was in the state it was in: whether the track had been handed back to
+        // manual control, whether the accessibility timer chain was still armed, and
+        // which discrete index the controller was holding.
+        manual: el._carousel.isTrackManual(),
+        timerArmed: el._carousel.accessibilityTimerHandle !== null,
+        activeIndex: el._carousel.activeIndex,
+        visibility: document.visibilityState,
       };
     };
 
@@ -105,11 +121,15 @@ async function sample(page, cardId) {
 // An earlier version allowed 0.05 of a view width, meaning to say "at a hold". It
 // does not: the slide easing is very slow at its start, so 5 % of a view width is
 // still only ~20 ms into a 150 ms transition. Samples taken there sit a few tens of
-// milliseconds from the accessibility flip, and are decided by the small offset
-// between the card's Date.now() phase and its CSS animation's own phase — an offset
-// established once when `animation-delay` is written and the frame that applies it is
-// produced, measured at 41 ms under two-worker load. That made the assertion a
-// coin-flip in roughly one full suite run in four, on 2.36.2 as released.
+// milliseconds from the accessibility flip, and were decided by the offset between the
+// card's phase and its CSS animation's own phase. That made the assertion a coin-flip
+// in roughly one full suite run in four, on 2.36.2 as released.
+//
+// 2.36.3 tightened this epsilon, which removed the mid-slide samples but left the
+// offset itself in place — so the failure simply moved to the END of a hold, where a
+// large enough offset flips the accessible view while the track is still parked. That
+// is what CI caught. 2.38.1 removed the offset at its source; this epsilon stays tight
+// because the reason for it never depended on the offset.
 //
 // Tightening rather than loosening is what makes this correct: the model claim is now
 // checked only where there IS an unambiguous answer, and it is checked exactly. Holds
@@ -166,12 +186,13 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
     const settledIndex = heldIndex(settled);
     if (settledIndex !== null) {
       domSamples++;
+      const where =
+        `positionIndex=${settled.positionIndex} model=${settled.modelIndex} activeIndex=${settled.activeIndex} ` +
+        `manual=${settled.manual} timerArmed=${settled.timerArmed} visibility=${settled.visibility}`;
       settled.states.forEach((s, i) => {
         const shouldBeActive = i === settledIndex;
-        expect(s.inert, `view ${i} inert at positionIndex=${settled.positionIndex}`).toBe(!shouldBeActive);
-        expect(s.ariaHidden, `view ${i} aria-hidden at positionIndex=${settled.positionIndex}`).toBe(
-          shouldBeActive ? null : "true"
-        );
+        expect(s.inert, `view ${i} inert at ${where}`).toBe(!shouldBeActive);
+        expect(s.ariaHidden, `view ${i} aria-hidden at ${where}`).toBe(shouldBeActive ? null : "true");
       });
     }
 

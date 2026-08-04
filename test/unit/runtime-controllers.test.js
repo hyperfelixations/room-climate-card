@@ -362,6 +362,58 @@ test("the visual index follows the phase while synchronized, and the JS index on
   assert.equal(controller.currentVisualIndex(), 2, "manual control makes the JS index authoritative");
 });
 
+// The regression guard for the 2.38.1 correction. See visiblePhaseMs() in
+// carousel-runtime.js for the full reasoning; in short, the wall clock is AHEAD of the
+// track by however long the frame that started the animation took, and on a slow
+// machine that exceeded the 53 ms of slack between the end of a hold and the
+// accessibility flip — announcing the next view while the current one was still parked
+// and fully on screen. It was a reproducible CI failure, not a theoretical one.
+test("the visible index comes from the animation's own clock, not the wall clock that started it", () => {
+  const platform = createFakePlatform({ now: 0 });
+  const { controller, track, jsdom } = makeController({ platform, rotationSeconds: 3, slideSeconds: 1 });
+  controller.applyAutoSlideStyles();
+  const at = controller.timing();
+  const flipMs = at.holdMs + at.slideMs * 0.354;
+
+  // A wall clock that has already passed the flip, and an animation that has not: the
+  // exact situation a slow first frame produces.
+  const wallPhase = Math.ceil(flipMs) + 5;
+  const animationPhase = Math.floor(flipMs) - 5;
+  platform.setNow(wallPhase);
+  assert.notEqual(
+    timing.accessibleViewIndexAt(wallPhase, at),
+    timing.accessibleViewIndexAt(animationPhase, at),
+    "the two phases must genuinely disagree, otherwise this test proves nothing"
+  );
+
+  track.__animationPhase = { phaseMs: animationPhase, cycleMs: at.cycleMs };
+  assert.equal(
+    controller.currentVisualIndex(),
+    timing.accessibleViewIndexAt(animationPhase, at),
+    "what is on screen wins over what the clock says"
+  );
+
+  controller.updateViewAccessibility();
+  const expected = timing.accessibleViewIndexAt(animationPhase, at);
+  [...jsdom.window.document.querySelectorAll(".rtc-view")].forEach((view, index) => {
+    assert.equal(view.hasAttribute("inert"), index !== expected, `view ${index} inert`);
+  });
+
+  // A cycle length the running animation does not share means its phase belongs to a
+  // schedule that no longer applies — the wall clock is the honest answer again.
+  track.__animationPhase = { phaseMs: animationPhase, cycleMs: at.cycleMs + 1000 };
+  assert.equal(
+    controller.currentVisualIndex(),
+    timing.accessibleViewIndexAt(wallPhase, at),
+    "a stale cycle length falls back rather than reading a new schedule at an old phase"
+  );
+
+  // No Web Animations API at all is the same fallback, which is what every version
+  // before this correction did unconditionally.
+  delete track.__animationPhase;
+  assert.equal(controller.currentVisualIndex(), timing.accessibleViewIndexAt(wallPhase, at));
+});
+
 test("the accessibility attributes follow the visible index at every transition boundary", () => {
   const platform = createFakePlatform({ now: 0 });
   const { controller, jsdom } = makeController({ platform, viewCount: 3, rotationSeconds: 3, slideSeconds: 1 });
@@ -619,7 +671,48 @@ test("the browser adapter degrades rather than throwing when a capability is mis
   assert.equal(platform.fontsReady(), null);
   assert.equal(platform.isDocumentHidden(), jsdom.window.document.hidden, "visibility is reported, not assumed");
   assert.equal(platform.readTranslateXPx(null), null);
+  // No Web Animations API, no element, and an element that has one but is running
+  // nothing: three different ways of "cannot be read", all one answer.
+  assert.equal(platform.readAnimationPhase(null, "rtc-track-slide"), null);
+  assert.equal(platform.readAnimationPhase({}, "rtc-track-slide"), null);
+  assert.equal(platform.readAnimationPhase({ getAnimations: () => [] }, "rtc-track-slide"), null);
   assert.equal(typeof platform.now(), "number");
+});
+
+test("the browser adapter reads the named animation's own phase and ignores every other one", () => {
+  const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
+  const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
+  const element = {
+    getAnimations: () => [
+      { animationName: "something-else", effect: { getComputedTiming: () => ({ progress: 0.9, duration: 100 }) } },
+      { animationName: "rtc-track-slide", effect: { getComputedTiming: () => ({ progress: 0.25, duration: 4600 }) } },
+    ],
+  };
+  assert.deepEqual(platform.readAnimationPhase(element, "rtc-track-slide"), { phaseMs: 1150, cycleMs: 4600 });
+
+  // A finished or not-yet-started animation reports a null progress. There is no phase
+  // to read, so there is nothing to prefer over the wall clock.
+  const idle = {
+    getAnimations: () => [
+      { animationName: "rtc-track-slide", effect: { getComputedTiming: () => ({ progress: null, duration: 4600 }) } },
+    ],
+  };
+  assert.equal(platform.readAnimationPhase(idle, "rtc-track-slide"), null);
+
+  // "auto"/0 durations cannot carry a phase either, and must not divide anything.
+  const durationless = {
+    getAnimations: () => [
+      { animationName: "rtc-track-slide", effect: { getComputedTiming: () => ({ progress: 0.5, duration: "auto" }) } },
+    ],
+  };
+  assert.equal(platform.readAnimationPhase(durationless, "rtc-track-slide"), null);
+
+  const throwing = {
+    getAnimations: () => {
+      throw new Error("no");
+    },
+  };
+  assert.equal(platform.readAnimationPhase(throwing, "rtc-track-slide"), null, "a throwing realm degrades");
 });
 
 test("the browser adapter hands back a working unsubscribe for visibility", () => {

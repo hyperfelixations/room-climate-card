@@ -18,6 +18,7 @@
 import { clamp } from "../../core/numbers.js";
 import { SLIDE_EASING_CSS } from "../../core/easing.js";
 import {
+  TRACK_ANIMATION_NAME,
   accessibleViewIndexAt,
   holdSequence,
   isPhaseInStableViewHold,
@@ -146,6 +147,36 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   }
 
   // ---- which view is actually in front --------------------------------------
+  // The phase the track is VISIBLY at, which is not the same thing as the phase the
+  // wall clock is at.
+  //
+  // The synchronized animation is started with `animation-delay: -phaseMs` read from
+  // the wall clock, but it only begins with the frame that applies that declaration.
+  // However long that frame took becomes a fixed offset between the two for the whole
+  // life of that animation — ~23 ms measured on a fast machine, and bounded by nothing
+  // on a slow one. Anything derived from the wall clock is therefore that much AHEAD of
+  // what is on screen.
+  //
+  // That is not a rounding detail for accessibility. The accessible view flips
+  // holdMs + 35.4 % of slideMs into a segment, i.e. 53 ms after the hold ends for this
+  // card's own defaults. Once the offset exceeds that, the flip lands while the track
+  // is still parked: assistive technology announces the next view while the current one
+  // is unmoved and fully on screen. It was observed exactly there, as a reproducible CI
+  // failure on a slower machine.
+  //
+  // Asking the animation removes the offset by construction, on every machine. The wall
+  // clock stays the fallback and stays the SOURCE of the synchronization — two cards on
+  // one dashboard still agree because both derive their delay from it; this only reads
+  // back where the resulting animation actually got to.
+  function visiblePhaseMs(track, current) {
+    const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
+    // A running animation still carries the PREVIOUS cycle length for a moment after
+    // rotation_seconds/slide_seconds change. Reading the new schedule at the old
+    // animation's phase would be worse than the offset this exists to remove.
+    if (!animation || Math.round(animation.cycleMs) !== Math.round(current.cycleMs)) return current.phaseMs;
+    return animation.phaseMs;
+  }
+
   // The single shared answer, used both by the accessibility sync and by the
   // active-view preservation across a structural rebuild, so the two can never quietly
   // disagree. While the synchronized animation drives the track, the JS index is stale
@@ -155,7 +186,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     const track = getTrack();
     const current = timing();
     const autoEngaged = current.enabled && track && !track.classList.contains("rtc-manual");
-    return autoEngaged ? accessibleViewIndexAt(current.phaseMs, current) : activeIndex;
+    return autoEngaged ? accessibleViewIndexAt(visiblePhaseMs(track, current), current) : activeIndex;
   }
 
   // Keeps offscreen views out of the tab order and hidden from assistive technology.
@@ -184,7 +215,9 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     const track = getTrack();
     const current = timing();
     if (!(current.enabled && track && !track.classList.contains("rtc-manual"))) return;
-    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(current.phaseMs, current));
+    // Armed against the same phase updateViewAccessibility() reads, so the timer fires
+    // when the FLIP is due on screen rather than when the wall clock says it is.
+    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(visiblePhaseMs(track, current), current));
     a11yTimer = platform.setTimeout(() => {
       a11yTimer = null;
       scheduleAccessibilitySync();
@@ -206,7 +239,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     track.classList.remove("rtc-manual");
     track.style.transition = "";
     track.style.transform = "";
-    track.style.animation = `rtc-track-slide ${current.cycleMs}ms linear infinite`;
+    track.style.animation = `${TRACK_ANIMATION_NAME} ${current.cycleMs}ms linear infinite`;
     track.style.animationDelay = `-${current.phaseMs}ms`;
     scheduleAccessibilitySync();
   }
