@@ -1,13 +1,14 @@
 # Room Climate Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
+
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
 
-Point this card at your climate sensors and it gives you the whole picture at a
-glance: one big current value, a scale that shows whether it is comfortable, and
-a chip for every room. It handles temperature, humidity, CO₂, and PM2.5, picks
-the right one from your entities, and follows your dashboard's light or dark
-theme.
+A custom dashboard card for [Home Assistant](https://www.home-assistant.io/)
+that shows the climate of one room or of your whole home: temperature,
+humidity, CO₂, or PM2.5. It reads the current value from your sensors, puts it
+on a scale with comfort and optimal ranges, and lists the individual rooms
+below. The card follows your dashboard's light or dark theme.
 
 ![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
 ![Room Climate Card in dark mode](screenshot-dark.png)
