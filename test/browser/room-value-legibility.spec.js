@@ -11,7 +11,7 @@
 // Average values are covered separately as a regression guard.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 // Common phone viewports plus the 460px container-query breakpoint.
 const WIDTHS = [360, 375, 390, 393, 412, 460];
@@ -36,13 +36,6 @@ test.beforeEach(async ({ page }) => {
     }
   });
 });
-
-async function setWidth(page, cardId, width) {
-  await page.evaluate(({ cardId, width }) => {
-    document.getElementById(cardId).style.width = `${width}px`;
-  }, { cardId, width });
-  await page.waitForTimeout(120);
-}
 
 // CSS ellipsis never changes textContent -- every assertion here is
 // geometric or computed-style based, never a text-content/"contains no
@@ -106,7 +99,7 @@ for (const width of WIDTHS) {
   test(`temperature: 7 rooms (WZ/WC/SZ/FL/BA/KÜ/AZ) stay in one row, fully legible at ${width}px`, async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
-    await setWidth(page, cardId, width);
+    await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);
     const rows = await card.locator(".rtc-room-row").all();
     expect(rows.length, `7 temperature rooms must fit in a single row (autoMaxColumns=7) at ${width}px`).toBe(1);
@@ -124,7 +117,7 @@ test("temperature: an 8th room automatically wraps into a second, evenly-split r
   const states = tempStates(TEMP_VALUES);
   states["sensor.extra"] = mkStateObj("sensor.extra", 22.9, { device_class: "temperature", unit_of_measurement: "°C" });
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
-  await setWidth(page, cardId, 390);
+  await setCardWidth(page, cardId, 390);
   const card = page.locator(`#${cardId}`);
   const rows = await card.locator(".rtc-room-row").all();
   expect(rows.length, "8 rooms must split into 2 rows").toBe(2);
@@ -163,7 +156,7 @@ for (const width of WIDTHS) {
   test(`humidity: 7 rooms stay in one row, fully legible at ${width}px (35,5/39,4/43,1% etc.)`, async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: humidityRooms() }, humidityStates(HUMIDITY_VALUES), LANGUAGE);
-    await setWidth(page, cardId, width);
+    await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);
     const rows = await card.locator(".rtc-room-row").all();
     expect(rows.length, `7 humidity rooms must fit in a single row at ${width}px`).toBe(1);
@@ -192,7 +185,7 @@ for (const width of WIDTHS) {
     await gotoHarness(page);
     const values = [800, 1200, 2000, 950, 1500];
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: co2Rooms(5) }, co2States(5, values), LANGUAGE);
-    await setWidth(page, cardId, width);
+    await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);
     const rows = await card.locator(".rtc-room-row").all();
     expect(rows.length, `5 CO2 rooms must fit in a single row at ${width}px`).toBe(1);
@@ -206,7 +199,7 @@ test("CO2: a 6th room automatically wraps into a second, evenly-split row (3+3)"
   await gotoHarness(page);
   const values = [800, 1200, 2000, 950, 1500, 700];
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: co2Rooms(6) }, co2States(6, values), LANGUAGE);
-  await setWidth(page, cardId, 390);
+  await setCardWidth(page, cardId, 390);
   const card = page.locator(`#${cardId}`);
   const rows = await card.locator(".rtc-room-row").all();
   expect(rows.length, "6 CO2 rooms must split into 2 rows").toBe(2);
@@ -238,7 +231,7 @@ for (const width of WIDTHS) {
     await gotoHarness(page);
     const values = [8.3, 15.9, 24.6, 41.2, 12.1];
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: pm25Rooms(5) }, pm25States(5, values), LANGUAGE);
-    await setWidth(page, cardId, width);
+    await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);
     const rows = await card.locator(".rtc-room-row").all();
     expect(rows.length, `5 PM2.5 rooms must fit in a single row at ${width}px`).toBe(1);
@@ -254,7 +247,7 @@ test("PM2.5: a 6th room automatically wraps into a second, evenly-split row (3+3
   await gotoHarness(page);
   const values = [8.3, 15.9, 24.6, 41.2, 12.1, 30.0];
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: pm25Rooms(6) }, pm25States(6, values), LANGUAGE);
-  await setWidth(page, cardId, 390);
+  await setCardWidth(page, cardId, 390);
   const card = page.locator(`#${cardId}`);
   const rows = await card.locator(".rtc-room-row").all();
   expect(rows.length, "6 PM2.5 rooms must split into 2 rows").toBe(2);
@@ -269,7 +262,7 @@ test("PM2.5: a 6th room automatically wraps into a second, evenly-split row (3+3
 test("room short codes: all seven example codes (WZ/WC/AZ/SZ/FL/BA/KÜ) stay fully visible at 360px", async ({ page }) => {
   await gotoHarness(page);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
-  await setWidth(page, cardId, 360);
+  await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
   for (const room of tempRooms()) {
     const chip = card.locator(`.rtc-room-chip[data-entity="${room.entity}"]`);
@@ -291,7 +284,7 @@ test("room short codes: a long explicit short (WOHNZ) is NOT guaranteed and stil
   const states = tempStates(TEMP_VALUES);
   states["sensor.long"] = mkStateObj("sensor.long", 22.5, { device_class: "temperature", unit_of_measurement: "°C" });
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
-  await setWidth(page, cardId, 360);
+  await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
   const rows = await card.locator(".rtc-room-row").all();
   expect(rows.length, "7 rooms must still fit in a single row (autoMaxColumns=7)").toBe(1);
@@ -307,7 +300,7 @@ test("room short codes: a room with no configured short (long derived name) is N
   const states = tempStates(TEMP_VALUES);
   states["sensor.noname"] = mkStateObj("sensor.noname", 21.3, { device_class: "temperature", unit_of_measurement: "°C" });
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
-  await setWidth(page, cardId, 360);
+  await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
   const chip = card.locator('.rtc-room-chip[data-entity="sensor.noname"]');
   const shortEl = chip.locator(".rtc-room-short");
@@ -321,7 +314,7 @@ test("average value never ellipsizes at any of the mandated widths (regression g
   await gotoHarness(page);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
   for (const width of WIDTHS) {
-    await setWidth(page, cardId, width);
+    await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);
     const avgNum = card.locator(".rtc-avg-value-num").first();
     await assertFullyVisible(avgNum, width, "average value number");

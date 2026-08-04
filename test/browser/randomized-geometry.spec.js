@@ -10,7 +10,7 @@
 // run, same 0xC1A6E default as the jsdom property test.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 const { SeededRandom } = require("../helpers/seeded-random.js");
 
 const SEED = 0xc1a6e;
@@ -82,10 +82,7 @@ test.describe("randomized geometry invariants across width/roomCount/language/mo
       const errors = [];
       page.on("pageerror", (err) => errors.push(err));
       const cardId = await createCard(page, config, states, c.language);
-      await page.evaluate(({ cardId, width }) => {
-        document.getElementById(cardId).style.width = `${width}px`;
-      }, { cardId, width: c.width });
-      await page.waitForTimeout(150);
+      await setCardWidth(page, cardId, c.width);
 
       expect(errors, `case ${i}: unexpected page errors: ${errors.map((e) => e.message).join(", ")}`).toHaveLength(0);
 

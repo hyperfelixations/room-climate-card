@@ -7,7 +7,7 @@
 // horizontal space is insufficient.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
 const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
@@ -34,13 +34,6 @@ test.beforeEach(async ({ page }) => {
     }
   });
 });
-
-async function setWidth(page, cardId, width) {
-  await page.evaluate(({ cardId, width }) => {
-    document.getElementById(cardId).style.width = `${width}px`;
-  }, { cardId, width });
-  await page.waitForTimeout(120);
-}
 
 // Checks only the three classes whose containment contracts this file covers:
 // deliberately narrower than randomized-geometry.spec.js's generic sweep so
@@ -100,7 +93,7 @@ test.describe(".rtc-range-scale-view follows shared narrow-width height rules", 
   test("solo range_scale view at 360px matches .rtc-scale-view's 74px narrow height (no longer 70px)", async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.avg", ...RANGE_SCALE_EXTRA, ...soloViewConfig("range_scale") }, baseStates());
-    await setWidth(page, cardId, 360);
+    await setCardWidth(page, cardId, 360);
     const card = page.locator(`#${cardId}`);
     const box = await card.locator(".rtc-range-scale-view").boundingBox();
     expect(box.height, "range_scale must pick up the 74px narrow-width height, matching scale/extremes/range").toBeCloseTo(74, 0);
@@ -113,7 +106,7 @@ test.describe(".rtc-range-scale-view follows shared narrow-width height rules", 
       { entity: "sensor.avg", rooms: ROOMS, ...RANGE_SCALE_EXTRA, ...carouselConfig(["range_scale", "scale", "extremes"]) },
       baseStates()
     );
-    await setWidth(page, cardId, 360);
+    await setCardWidth(page, cardId, 360);
     const card = page.locator(`#${cardId}`);
     const rangeScaleBox = await card.locator(".rtc-range-scale-view").boundingBox();
     const scaleBox = await card.locator(".rtc-scale-view").boundingBox();
@@ -142,7 +135,7 @@ test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
       await gotoHarness(page);
       const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS, ...carouselConfig(["extremes", "scale"]) }, baseStates());
       if (width === 600) await page.setViewportSize({ width: 600, height: 720 });
-      await setWidth(page, cardId, width === 600 ? 599 : width);
+      await setCardWidth(page, cardId, width === 600 ? 599 : width);
       const card = page.locator(`#${cardId}`);
       const style = await card.locator(".rtc-extreme-label").first().evaluate((node) => {
         const computed = getComputedStyle(node);
@@ -156,7 +149,7 @@ test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
   test("an artificially long label visibly ellipsizes and stays within its card's bounds at 460px", async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS, ...carouselConfig(["extremes", "scale"]) }, baseStates());
-    await setWidth(page, cardId, 460);
+    await setCardWidth(page, cardId, 460);
     const card = page.locator(`#${cardId}`);
     const cardEl = card.locator(".rtc-extreme-card").first();
     await card.locator(".rtc-extreme-label").first().evaluate((node) => {
@@ -225,7 +218,7 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
       test(`CO2 realistic values (800/1.200/2.000 ppm) never ellipsize at ${width}px, language=${language}`, async ({ page }) => {
         await gotoHarness(page);
         const cardId = await createCard(page, { entity: "sensor.avg", rooms: roomsFor4 }, coHass(), language);
-        await setWidth(page, cardId, width);
+        await setCardWidth(page, cardId, width);
         const card = page.locator(`#${cardId}`);
         for (const chip of await card.locator(".rtc-room-chip").all()) {
           await assertNoEllipsis(chip, width, language);
@@ -235,7 +228,7 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
       test(`PM2.5 realistic values (µg/m³) never ellipsize at ${width}px, language=${language}`, async ({ page }) => {
         await gotoHarness(page);
         const cardId = await createCard(page, { entity: "sensor.avg", rooms: roomsFor4 }, pm25Hass(), language);
-        await setWidth(page, cardId, width);
+        await setCardWidth(page, cardId, width);
         const card = page.locator(`#${cardId}`);
         for (const chip of await card.locator(".rtc-room-chip").all()) {
           await assertNoEllipsis(chip, width, language);
@@ -257,7 +250,7 @@ test.describe("every view avoids unintended overflow across widths", () => {
           { entity: "sensor.avg", rooms: ROOMS, ...RANGE_SCALE_EXTRA, ...soloViewConfig(type) },
           baseStates()
         );
-        await setWidth(page, cardId, width);
+        await setCardWidth(page, cardId, width);
         const bad = await overflowingTargetElements(page, cardId);
         expect(bad, `view="${type}" at ${width}px: ${JSON.stringify(bad)}`).toHaveLength(0);
       }
@@ -270,7 +263,7 @@ test.describe("every view avoids unintended overflow across widths", () => {
         { entity: "sensor.avg", rooms: ROOMS, ...RANGE_SCALE_EXTRA, ...carouselConfig(viewTypes) },
         baseStates()
       );
-      await setWidth(page, cardId, width);
+      await setCardWidth(page, cardId, width);
       const bad = await overflowingTargetElements(page, cardId);
       expect(bad, `carousel at ${width}px: ${JSON.stringify(bad)}`).toHaveLength(0);
     });

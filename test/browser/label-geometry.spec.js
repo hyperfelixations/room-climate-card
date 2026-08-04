@@ -16,7 +16,7 @@
 // break the algorithm's assumptions, not re-testing the algorithm itself.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
 // Widths cover the supported 280-500 px range. Below that range, some long-label
@@ -53,16 +53,6 @@ function boxesOverlap2d(a, b, tolerance = 1.5) {
   );
 }
 
-async function setHostWidth(page, cardId, widthPx) {
-  await page.evaluate(
-    ({ cardId, widthPx }) => {
-      document.getElementById(cardId).style.width = `${widthPx}px`;
-    },
-    { cardId, widthPx }
-  );
-  // Let the CSS container-query/layout settle before measuring.
-  await page.waitForTimeout(120); // let ResizeObserver/rAF-batched relayout settle before measuring
-}
 
 async function expectUpperLabelPaintViewport(card, viewportSelector) {
   const policy = await card.locator(viewportSelector).evaluate((node) => {
@@ -118,7 +108,7 @@ test.describe("main scale: optimal-label never overlaps min/max labels", () => {
         const cardId = await createCard(page, { entity: fx.entity, auto_slide: false, rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, lang);
         const card = page.locator(`#${cardId}`);
         for (const width of WIDTHS) {
-          await setHostWidth(page, cardId, width);
+          await setCardWidth(page, cardId, width);
           const centerBox = await card.locator(".rtc-scale-label-center").first().boundingBox();
           const minBox = await card.locator(".rtc-scale-label-min").first().boundingBox();
           const maxBox = await card.locator(".rtc-scale-label-max").first().boundingBox();
@@ -149,7 +139,7 @@ test.describe("rangeScale: the 3-label solver never overlaps, across value confi
         const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, lang);
         const card = page.locator(`#${cardId}`);
         for (const width of WIDTHS) {
-          await setHostWidth(page, cardId, width);
+          await setCardWidth(page, cardId, width);
           const avgBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
           const minBox = await card.locator(".rtc-range-scale-label-min").first().boundingBox();
           const maxBox = await card.locator(".rtc-range-scale-label-max").first().boundingBox();
@@ -190,7 +180,7 @@ test.describe("label reading order follows displayed values, not raw anchor posi
       };
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
       const card = page.locator(`#${cardId}`);
-      await setHostWidth(page, cardId, 420); // wide enough that no ellipsis-shrink path interferes with pure ordering
+      await setCardWidth(page, cardId, 420); // wide enough that no ellipsis-shrink path interferes with pure ordering
       const currentBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
       const minBox = await card.locator(".rtc-range-scale-label-min").first().boundingBox();
       const maxBox = await card.locator(".rtc-range-scale-label-max").first().boundingBox();
@@ -224,7 +214,7 @@ test.describe("grouped and thousands-separated numbers sort correctly", () => {
       };
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
       const card = page.locator(`#${cardId}`);
-      await setHostWidth(page, cardId, 420);
+      await setCardWidth(page, cardId, 420);
       const currentBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
       const minBox = await card.locator(".rtc-range-scale-label-min").first().boundingBox();
       const maxBox = await card.locator(".rtc-range-scale-label-max").first().boundingBox();
@@ -275,7 +265,7 @@ test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads 
         "de"
       );
       const card = page.locator(`#${cardId}`);
-      await setHostWidth(page, cardId, 420);
+      await setCardWidth(page, cardId, 420);
       const currentEl = card.locator(".rtc-range-scale-label-current").first();
       const minEl = card.locator(".rtc-range-scale-label-min").first();
       const maxEl = card.locator(".rtc-range-scale-label-max").first();
@@ -321,7 +311,7 @@ test("rangeScale: a narrow side interval lifts only the colliding historical lab
   // already fit without any fallback), this reliably exceeds the bar's
   // natural capacity.
   const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "de");
-  await setHostWidth(page, cardId, 240);
+  await setCardWidth(page, cardId, 240);
   const card = page.locator(`#${cardId}`);
   const avgEl = card.locator(".rtc-range-scale-label-current").first();
   const minEl = card.locator(".rtc-range-scale-label-min").first();
@@ -366,7 +356,7 @@ test("rangeScale screenshot regression: current === max lifts max only; min stay
     states,
     "de"
   );
-  await setHostWidth(page, cardId, 529);
+  await setCardWidth(page, cardId, 529);
   const card = page.locator(`#${cardId}`);
   const currentEl = card.locator(".rtc-range-scale-label-current");
   const maxEl = card.locator(".rtc-range-scale-label-max");
@@ -425,7 +415,7 @@ test("rangeScale mirrored edge regression: current === min lifts min only withou
     states,
     "de"
   );
-  await setHostWidth(page, cardId, 529);
+  await setCardWidth(page, cardId, 529);
   const card = page.locator(`#${cardId}`);
   const minEl = card.locator(".rtc-range-scale-label-min");
   const maxEl = card.locator(".rtc-range-scale-label-max");
@@ -475,7 +465,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
       const card = page.locator(`#${cardId}`);
       for (const width of [300, 420]) {
-        await setHostWidth(page, cardId, width);
+        await setCardWidth(page, cardId, width);
         const currentLabelBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
         const currentMarkerBox = await card.locator(".rtc-marker-avg").first().boundingBox();
         const labelCenter = currentLabelBox.x + currentLabelBox.width / 2;
@@ -502,7 +492,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
     };
     const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
     const card = page.locator(`#${cardId}`);
-    await setHostWidth(page, cardId, 420);
+    await setCardWidth(page, cardId, 420);
     const currentBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
     const minBox = await card.locator(".rtc-range-scale-label-min").first().boundingBox();
     const maxBox = await card.locator(".rtc-range-scale-label-max").first().boundingBox();
@@ -521,7 +511,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
     };
     const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
     const card = page.locator(`#${cardId}`);
-    await setHostWidth(page, cardId, 420);
+    await setCardWidth(page, cardId, 420);
     const currentLabelBox = await card.locator(".rtc-range-scale-label-current").first().boundingBox();
     const currentMarkerBox = await card.locator(".rtc-marker-avg").first().boundingBox();
     const labelCenter = currentLabelBox.x + currentLabelBox.width / 2;
@@ -549,7 +539,7 @@ test("hidden comfort/optimal bands also omit their labels while scale-edge label
     states,
     "en"
   );
-  await setHostWidth(page, cardId, 420);
+  await setCardWidth(page, cardId, 420);
   const card = page.locator(`#${cardId}`);
 
   await expect(card.locator(".rtc-comfort-band")).toHaveCount(0);

@@ -16,11 +16,14 @@
 // longer translated strings don't visibly break layout.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 async function shot(page, cardId, name, width = 400) {
-  await page.evaluate(({ id, width }) => { document.getElementById(id).style.width = `${width}px`; }, { id: cardId, width });
-  await page.waitForTimeout(200); // let ResizeObserver/font-ready settle
+  // Waits on the layout mechanism rather than on a duration — see setCardWidth(). A
+  // screenshot taken a frame too early is not a visible failure, it is a baseline that
+  // quietly disagrees with itself from one run to the next, which is exactly the kind
+  // of noise that forces a tolerance wide enough to hide real regressions.
+  await setCardWidth(page, cardId, width);
   // #stage (not the bare card) so the card's box-shadow and the
   // surrounding page-background gutter are captured too -- see the
   // #stage comment in harness.html.
@@ -238,8 +241,7 @@ test.describe("visual golden: long-/short-form label architecture", () => {
     };
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, "pl");
     const card = page.locator(`#${cardId}`);
-    await page.evaluate((id) => { document.getElementById(id).style.width = "320px"; }, cardId);
-    await page.waitForTimeout(200);
+    await setCardWidth(page, cardId, 320);
     // Functional assertion first: either the full "optymalny" or
     // its "opt." fallback is legitimately on screen, never neither/garbled.
     const text = await card.locator(".rtc-card").innerText();
@@ -263,8 +265,7 @@ test.describe("visual golden: long-/short-form label architecture", () => {
       "fr"
     );
     const card = page.locator(`#${cardId}`);
-    await page.evaluate((id) => { document.getElementById(id).style.width = "320px"; }, cardId);
-    await page.waitForTimeout(200);
+    await setCardWidth(page, cardId, 320);
     const text = await card.locator(".rtc-card").innerText();
     expect(text).toMatch(/maintenant|act\./);
     await expect(page.locator("#stage")).toHaveScreenshot("label-short-form-fr-320.png", { animations: "disabled" });
@@ -349,8 +350,7 @@ test("visual golden: rangeScale edge collision lifts max only while min remains 
     "de"
   );
   const card = page.locator(`#${cardId}`);
-  await page.evaluate((id) => { document.getElementById(id).style.width = "529px"; }, cardId);
-  await page.waitForTimeout(200);
+  await setCardWidth(page, cardId, 529);
   await expect(card.locator(".rtc-range-scale-label-max")).toHaveClass(/rtc-range-scale-label-upper/);
   await expect(card.locator(".rtc-range-scale-label-min")).not.toHaveClass(/rtc-range-scale-label-upper/);
   await shot(page, cardId, "rangescale-single-label-upper.png", 529);
@@ -391,8 +391,7 @@ test("visual golden: PM2.5 rangeScale keeps the lifted min label fully painted",
     "de"
   );
   const card = page.locator(`#${cardId}`);
-  await page.evaluate((id) => { document.getElementById(id).style.width = "393px"; }, cardId);
-  await page.waitForTimeout(200);
+  await setCardWidth(page, cardId, 393);
   const minLabel = card.locator(".rtc-range-scale-label-min");
   await expect(minLabel).toHaveClass(/rtc-range-scale-label-upper/);
   await expect(card.locator(".rtc-range-scale-label-max")).not.toHaveClass(/rtc-range-scale-label-upper/);

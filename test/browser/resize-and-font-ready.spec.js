@@ -8,10 +8,17 @@
 // 2.12.0 font-ready correction, both for the main scale AND the rangeScale
 // view.
 //
-// NO FIXED TIMEOUTS. These tests assert label positions to within a pixel, and an
-// A flat timeout is not a
-// contract, it is a guess about how busy the machine is, and it failed once under load.
-// Everything below waits on the mechanism instead — see settledLabels().
+// NO FIXED TIMEOUTS. These tests assert label positions to within a pixel. A flat
+// timeout is not a contract, it is a guess about how busy the machine is, and it failed
+// once under load. Everything below waits on the mechanism instead — see
+// settledLabels().
+//
+// settledLabels() stays local rather than deferring to waitForStableLayout() in
+// test/helpers/browser-helpers.js, which every other measuring spec now uses. The
+// shared helper answers "has the layout settled"; this one answers that AND returns the
+// measurements from the SAME page evaluation, so nothing can move between the check and
+// the values it vouches for. That atomicity is this file's entire subject, and splitting
+// it across two round-trips would give it up to save a little code.
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");

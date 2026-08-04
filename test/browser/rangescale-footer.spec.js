@@ -9,7 +9,7 @@
 // and that it renders at all in a real browser with zero rooms configured.
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 test("RangeScale footer renders in a real browser with zero rooms configured, and fits a narrow card without overflowing", async ({ page }) => {
   await gotoHarness(page);
@@ -26,10 +26,7 @@ test("RangeScale footer renders in a real browser with zero rooms configured, an
   // German ("Tagesspanne ...") is one of the longer footer translations —
   // deliberately chosen here, at a narrow width, to stress-test wrapping.
   const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true }] }, states, "de");
-  await page.evaluate((id) => {
-    document.getElementById(id).style.width = "300px";
-  }, cardId);
-  await page.waitForTimeout(120);
+  await setCardWidth(page, cardId, 300);
 
   const card = page.locator(`#${cardId}`);
   const footerEl = card.locator(".rtc-range-scale-view .rtc-scale-footer").first();
