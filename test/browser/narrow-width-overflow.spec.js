@@ -163,6 +163,59 @@ test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
   });
 });
 
+// Reported against 2.38.0: a single-room card with a long room name painted its
+// headline caption straight across the scale beside it. The caption column is capped at
+// 106px, and .rtc-avg-label carried white-space: nowrap without the overflow/ellipsis
+// pair every other single-line label on the card has. It was unreachable before
+// 2.37.0, when the text here was always a short translated constant; a single-room card
+// now captions itself with the room's own name, which the user writes.
+test.describe(".rtc-avg-label stays inside its column whatever the room is called", () => {
+  const LONG_NAME = "DASISTEINETESTKONFIGURATION";
+  const singleRoomStates = () => ({
+    "sensor.az": mkStateObj("sensor.az", 28.6, { device_class: "temperature", unit_of_measurement: "°C" }),
+  });
+
+  for (const width of [320, 400, 600]) {
+    test(`an overlong room name is clipped rather than painted over the view at ${width}px`, async ({ page }) => {
+      await gotoHarness(page);
+      const cardId = await createCard(page, { rooms: [{ entity: "sensor.az", name: LONG_NAME }] }, singleRoomStates());
+      await setCardWidth(page, cardId, width);
+      const label = page.locator(`#${cardId}`).locator(".rtc-avg-label");
+      await expect(label).toHaveText(LONG_NAME);
+
+      const measured = await label.evaluate((node) => {
+        const computed = getComputedStyle(node);
+        const column = node.closest(".rtc-average") || node.parentElement;
+        return {
+          overflow: computed.overflowX,
+          textOverflow: computed.textOverflow,
+          clipped: node.scrollWidth > node.clientWidth,
+          right: node.getBoundingClientRect().right,
+          columnRight: column.getBoundingClientRect().right,
+        };
+      });
+
+      // overflow:hidden is what actually stops the paint; the ellipsis is what makes the
+      // truncation legible rather than a word cut in half.
+      expect(measured.overflow, "the caption must clip its own overflow").toBe("hidden");
+      expect(measured.textOverflow, "a clipped caption must end in an ellipsis").toBe("ellipsis");
+      expect(measured.clipped, "this name must genuinely be too long, or the test proves nothing").toBe(true);
+      expect(measured.right, "the caption box must not reach past its column").toBeLessThanOrEqual(measured.columnRight + 0.5);
+    });
+  }
+
+  test("a room name that fits is not truncated", async ({ page }) => {
+    await gotoHarness(page);
+    const cardId = await createCard(page, { rooms: [{ entity: "sensor.az", name: "Bad" }] }, singleRoomStates());
+    await setCardWidth(page, cardId, 400);
+    const clipped = await page
+      .locator(`#${cardId}`)
+      .locator(".rtc-avg-label")
+      .evaluate((node) => node.scrollWidth > node.clientWidth);
+    expect(clipped, "a short caption must render in full — the fix must not shorten what already fits").toBe(false);
+  });
+});
+
 test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes realistic CO2/PM2.5 values", () => {
   // Realistic values only (see room-value-legibility.spec.js for the full
   // matrix) -- the old synthetic 7-digit stress values (1234567 ppm,

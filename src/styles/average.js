@@ -42,6 +42,12 @@ export const AVERAGE_CSS = `        button {
           outline-offset: 2px;
         }
 
+        /* Clipped like every other single-line label on the card (see the header
+           subtitle, the room-chip label and the extreme cards). The caption sits in a
+           column capped at 106px, so a long one paints straight across the view beside
+           it. Until 2.37.0 the text here was always a short translated constant and the
+           overflow was unreachable; a single-room card now captions itself with the
+           room's own name, which the user writes and which can be any length. */
         .rtc-avg-label {
           display: block;
           font-size: 10px;
@@ -50,6 +56,8 @@ export const AVERAGE_CSS = `        button {
           text-transform: uppercase;
           color: var(--rtc-faint);
           white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .rtc-avg-value {
