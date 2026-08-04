@@ -42,8 +42,10 @@ jobs:
   build-and-test:
     name: Build, unit and fuzz tests
     runs-on: windows-latest
+    timeout-minutes: 20
     outputs:
       artifact_sha256: ${{ steps.artifact-metadata.outputs.sha256 }}
+      baseline_anchor: ${{ steps.baseline-anchor.outputs.posix }}
       release_tag: ${{ steps.release-metadata.outputs.tag }}
       release_title: ${{ steps.release-metadata.outputs.title }}
 
@@ -52,6 +54,9 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          # Nothing in this job pushes. Leaving the token in .git/config would let any
+          # later step, or any script it runs, write to the repository with it.
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -164,16 +169,29 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      - name: Remove any checked-in bundle before the fresh build
+      # ORDER MATTERS, and it used to be wrong here. verify:dist compares the COMMITTED
+      # bundle against one it rebuilds in memory, so it only proves anything while that
+      # committed file is untouched. Running it after the rebuild below compared the
+      # build with itself: a step that could not fail, standing exactly where the
+      # guarantee was supposed to be.
+      #
+      # Here it proves the one thing the rest of this job cannot: that the artifact
+      # sitting on main for the approved commit really is what src/ produces. The fresh
+      # build that follows then yields the same bytes by construction, so the asset a
+      # user installs and the bundle a reviewer can read are the same thing.
+      #
+      # This step is what disappears — and only this step — when dist/ eventually moves
+      # into .gitignore and the release asset becomes the sole artifact.
+      - name: Prove the committed bundle matches src/
+        run: npm run verify:dist
+
+      - name: Remove the committed bundle so the release asset is built here
         shell: pwsh
         run: |
           Remove-Item -LiteralPath "dist/room-climate-card.js" -Force -ErrorAction SilentlyContinue
 
       - name: Build a fresh bundle
         run: npm run build
-
-      - name: Verify the generated bundle
-        run: npm run verify:dist
 
       - name: Check bundle syntax
         run: npm run check:run
@@ -183,6 +201,22 @@ jobs:
 
       - name: Run fuzz tests
         run: npm run test:fuzz:run
+
+      # Provenance for the characterization corpus. The digest covers every committed
+      # model/DOM/style baseline, so the draft can state which frozen evidence the
+      # tested bundle was accepted against, rather than leaving that to memory.
+      - name: Record the characterization baseline anchor
+        id: baseline-anchor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $report = (npm run --silent baseline:anchor) -join "`n"
+          $digest = [regex]::Match($report, 'posix\s+([0-9a-f]{64})')
+          if (-not $digest.Success) {
+            throw "baseline:anchor did not report a posix digest:`n$report"
+          }
+          "posix=$($digest.Groups[1].Value)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          $report
 
       - name: Record release asset checksum
         id: artifact-metadata
@@ -205,14 +239,31 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Runs against the repository as GitHub sees it, exactly like the push-triggered
+  # Validate workflow. Repeated here so a release candidate carries its own HACS
+  # verdict instead of depending on someone having checked another workflow's badge.
+  hacs-validation:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: plugin
+
   browser-tests:
     name: Browser tests on candidate bundle
     needs: build-and-test
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out the selected main commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -268,10 +319,13 @@ jobs:
     needs:
       - build-and-test
       - browser-tests
+      - hacs-validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     env:
+      BASELINE_ANCHOR: ${{ needs.build-and-test.outputs.baseline_anchor }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       EXPECTED_SHA256: ${{ needs.build-and-test.outputs.artifact_sha256 }}
       GH_TOKEN: ${{ github.token }}
@@ -311,7 +365,10 @@ jobs:
             exit 1
           fi
 
-      - name: Create the draft release and its tag
+      # The tag does NOT exist yet after this step. GitHub records the target commit on
+      # the draft and creates the tag when the draft is published — which is why a
+      # discarded draft leaves nothing behind to clean up.
+      - name: Create the unpublished draft against the approved commit
         id: draft
         shell: bash
         run: |
@@ -361,10 +418,11 @@ jobs:
             echo "Nothing has been published. HACS cannot see this draft."
             echo
             echo "- Draft: ${{ steps.draft.outputs.url }}"
-            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Tag to be created on publish: \`$RELEASE_TAG\`"
             echo "- Commit: \`$EXPECTED_SHA\`"
             echo "- Asset: \`$RELEASE_ASSET\`"
             echo "- SHA-256: \`$EXPECTED_SHA256\`"
+            echo "- Characterization baseline anchor: \`$BASELINE_ANCHOR\`"
             echo
             echo "The repository owner must review the notes, asset and settings, then publish manually."
           } >> "$GITHUB_STEP_SUMMARY"

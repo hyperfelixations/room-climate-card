@@ -15,6 +15,7 @@ jobs:
     # unambiguously alongside the two CI checks.
     name: HACS Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: HACS validation
         uses: hacs/action@main
