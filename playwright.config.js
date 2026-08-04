@@ -32,12 +32,29 @@ module.exports = defineConfig({
   },
   expect: {
     toHaveScreenshot: {
-      // Small tolerance for sub-pixel text anti-aliasing variance between
-      // otherwise-identical Chromium launches (observed occasionally on
-      // this machine) — large enough to absorb that noise, far too small
-      // to hide an actual visual regression (a real layout/color change
-      // affects far more than 1% of the card's pixels).
-      maxDiffPixelRatio: 0.01,
+      // An ABSOLUTE budget, and a deliberately small one.
+      //
+      // This used to be maxDiffPixelRatio: 0.01, and that was the wrong instrument.
+      // A ratio scales with the image, so the same rendering noise got a different
+      // allowance per screenshot — 1028 px on the 400x257 shot, 1559 px on the
+      // 609x256 one — while the noise it exists to absorb does not scale with area
+      // at all. One percent of a card is a lot: seven baselines went on passing for
+      // two releases while depicting a headline caption the card had stopped
+      // rendering, at 638-1006 differing pixels each, the largest sitting at 86 % of
+      // its own budget. Nothing reported it.
+      //
+      // The rule this replaces it with: the budget must exceed the measured capture
+      // noise and stay well under the smallest UI element whose loss would be
+      // unacceptable. Measured, after setCardWidth() made capture wait on the layout
+      // mechanism instead of a fixed 200 ms: two consecutive full runs at zero
+      // tolerance differ by exactly 0 pixels across all 36 baselines. The only real
+      // variance left is between environments, and the largest ever observed here —
+      // a Chromium version change — moved 45-163 px. 200 covers that with room, and
+      // is still a factor of three below the smallest defect class it has to catch.
+      //
+      // Re-record baselines deliberately (--update-snapshots=all) and review every
+      // image; never widen this number to make a diff go away.
+      maxDiffPixels: 200,
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
