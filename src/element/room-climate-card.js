@@ -472,10 +472,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // need live data — `never` draws nothing, and in `auto` a lone room that IS the
       // headline gets no chip. A grid that will not be drawn must not inflate the hint.
       const showRooms = this._config?.show_rooms ?? "auto";
+      // Same source rule the card itself applies, including the one part that needs
+      // live state: an id Home Assistant does not know is not a source. Before the
+      // first update there is nothing to ask, and the configuration alone decides —
+      // which is the stable answer for a size hint.
+      const states = this._hass?.states;
+      const topology = states
+        ? resolveSourceTopology(this._config, (entityId) => Boolean(entityId && states[entityId]))
+        : resolveSourceTopology(this._config);
       const chipsDrawn =
-        roomCount >= 1 &&
-        showRooms !== "never" &&
-        (showRooms === "always" || !chipsWouldDuplicateHeadline(resolveSourceTopology(this._config)));
+        roomCount >= 1 && showRooms !== "never" && (showRooms === "always" || !chipsWouldDuplicateHeadline(topology));
       if (!chipsDrawn) return 3;
       const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);

@@ -73,7 +73,7 @@ export const en = {
   "subtitle.inComfortIssue": (v) => `Avg. in comfort · ${v.name} stands out most.`,
   "subtitle.inComfortAllGood": "Avg. in comfort · all rooms are within target range.",
   "subtitle.inComfort": "Avg. in comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "room" : "rooms"} without data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} configured ${v.count === 1 ? "room was" : "rooms were"} not found.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spread ${v.value}`,

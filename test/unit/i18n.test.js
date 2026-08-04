@@ -235,12 +235,12 @@ test("I18N-02: JS-derived classification is localized, while HA-provided value_l
 test("I18N-02: Russian room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "ru" }, hassDe);
   const roomExpected = new Map([
-    [1, " 1 комната без данных."],
-    [2, " 2 комнаты без данных."],
-    [5, " 5 комнат без данных."],
-    [21, " 21 комната без данных."],
-    [22, " 22 комнаты без данных."],
-    [25, " 25 комнат без данных."],
+    [1, " 1 комната не найдена."],
+    [2, " 2 комнаты не найдены."],
+    [5, " 5 комнат не найдено."],
+    [21, " 21 комната не найдена."],
+    [22, " 22 комнаты не найдены."],
+    [25, " 25 комнат не найдено."],
   ]);
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
@@ -261,12 +261,12 @@ test("I18N-02: Russian room grammar follows one/few/many plural categories", () 
 test("I18N-02: Polish room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "pl" }, hassDe);
   const roomExpected = new Map([
-    [1, " 1 pokój bez danych."],
-    [2, " 2 pokoje bez danych."],
-    [5, " 5 pokoi bez danych."],
-    [21, " 21 pokoi bez danych."],
-    [22, " 22 pokoje bez danych."],
-    [25, " 25 pokoi bez danych."],
+    [1, " 1 pokój nie został znaleziony."],
+    [2, " 2 pokoje nie zostały znalezione."],
+    [5, " 5 pokoi nie zostało znalezionych."],
+    [21, " 21 pokoi nie zostało znalezionych."],
+    [22, " 22 pokoje nie zostały znalezione."],
+    [25, " 25 pokoi nie zostało znalezionych."],
   ]);
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
@@ -276,9 +276,9 @@ test("I18N-02: Polish room grammar follows one/few/many plural categories", () =
 
 test("I18N-02: Korean, Japanese, and Chinese count phrases do not invent grammatical noun plurals", () => {
   const expected = {
-    ko: [" 1개 방은 데이터 없음.", " 5개 방은 데이터 없음."],
-    ja: [" 1室はデータなし。", " 5室はデータなし。"],
-    zh: [" 1个房间无数据。", " 5个房间无数据。"],
+    ko: [" 구성된 방 1개를 찾을 수 없습니다.", " 구성된 방 5개를 찾을 수 없습니다."],
+    ja: [" 設定された部屋が 1 件見つかりません。", " 設定された部屋が 5 件見つかりません。"],
+    zh: [" 未找到 1 个已配置的房间。", " 未找到 5 个已配置的房间。"],
   };
   for (const [lang, [one, many]] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
@@ -294,12 +294,12 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
   // one: n%10=1 and n%100!=11 (nominative singular "telpa");
   // other: everything else (nominative plural "telpas").
   const roomExpected = new Map([
-    [0, " 0 telpu bez datiem."],
-    [1, " 1 telpa bez datiem."],
-    [2, " 2 telpas bez datiem."],
-    [11, " 11 telpu bez datiem."],
-    [20, " 20 telpu bez datiem."],
-    [21, " 21 telpa bez datiem."],
+    [0, " 0 telpu nav atrastas."],
+    [1, " 1 telpa nav atrasta."],
+    [2, " 2 telpas nav atrastas."],
+    [11, " 11 telpu nav atrastas."],
+    [20, " 20 telpu nav atrastas."],
+    [21, " 21 telpa nav atrasta."],
   ]);
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
@@ -323,8 +323,8 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
 
 test("I18N-02: Norwegian and Swedish keep 'rom'/'rum' plural-invariant while still inflecting the predicative adjective", () => {
   const expected = {
-    nb: { one: " 1 rom uten data.", many: " 5 rom uten data.", adjectivePlural: "varme" },
-    sv: { one: " 1 rum utan data.", many: " 5 rum utan data.", adjectivePlural: "varma" },
+    nb: { one: " 1 konfigurerte rom ble ikke funnet.", many: " 5 konfigurerte rom ble ikke funnet.", adjectivePlural: "varme" },
+    sv: { one: " 1 konfigurerade rum hittades inte.", many: " 5 konfigurerade rum hittades inte.", adjectivePlural: "varma" },
   };
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
@@ -368,6 +368,9 @@ test("pluralization: missingRooms uses singular/plural correctly for 1 vs N miss
     hass
   );
   const data = el._computeViewModel();
-  assert.match(data.subtitle, /1 room without data/);
+  // "not found", not "without data": a room whose entity Home Assistant does not know
+  // is a configuration problem, and the card must not describe it the same way it
+  // describes a room whose sensor is merely offline — that one keeps its `--` chip.
+  assert.match(data.subtitle, /1 configured room was not found/);
   env.cleanup(el);
 });

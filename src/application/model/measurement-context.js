@@ -7,7 +7,7 @@
 // primary-with-rooms or room-consensus.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
-import { AVAILABILITY, buildEntityModel } from "./entity-model.js";
+import { AVAILABILITY, buildEntityModel, hasEntity } from "./entity-model.js";
 import { SOURCE_TOPOLOGY, resolveSourceTopology } from "./source-topology.js";
 
 // Numeric consumers use this only after the no-data branch has returned. Display
@@ -57,7 +57,7 @@ function withContextAvailability(model, metricKind, mixed) {
 export function resolveMeasurementContext(states, config) {
   const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
   const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
-  const topology = resolveSourceTopology(config);
+  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
   const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
   let metricKind;
@@ -71,7 +71,10 @@ export function resolveMeasurementContext(states, config) {
   let displayUnitProfileKey;
 
   if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
-    const room = roomModels[0];
+    // The topology's own index, never a hard 0: the one room the card refers to is not
+    // necessarily the first one configured — the others may simply be ids Home Assistant
+    // does not know.
+    const room = roomModels[topology.roomIndex];
     metricKind = room.metricKind || null;
     excludedRoomIds = [];
     diagnostics = [];

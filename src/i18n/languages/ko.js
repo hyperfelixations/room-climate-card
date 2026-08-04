@@ -73,7 +73,7 @@ export const ko = {
   "subtitle.inComfortIssue": (v) => `평균은 쾌적 범위 · ${v.name}의 편차가 가장 큼.`,
   "subtitle.inComfortAllGood": "평균은 쾌적 범위 · 모든 방이 목표 범위 안에 있음.",
   "subtitle.inComfort": "평균은 쾌적 범위.",
-  "subtitle.missingRooms": (v) => ` ${v.count}개 방은 데이터 없음.`,
+  "subtitle.missingRooms": (v) => ` 구성된 방 ${v.count}개를 찾을 수 없습니다.`,
 
   "footer.comfort": (v) => `쾌적 ${v.count}/${v.total}`,
   "footer.spread": (v) => `편차 ${v.value}`,

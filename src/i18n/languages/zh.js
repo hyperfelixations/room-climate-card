@@ -73,7 +73,7 @@ export const zh = {
   "subtitle.inComfortIssue": (v) => `平均值处于舒适范围 · ${v.name}的偏差最大。`,
   "subtitle.inComfortAllGood": "平均值处于舒适范围 · 所有房间均在目标范围内。",
   "subtitle.inComfort": "平均值处于舒适范围。",
-  "subtitle.missingRooms": (v) => ` ${v.count}个房间无数据。`,
+  "subtitle.missingRooms": (v) => ` 未找到 ${v.count} 个已配置的房间。`,
 
   "footer.comfort": (v) => `舒适 ${v.count}/${v.total}`,
   "footer.spread": (v) => `极差 ${v.value}`,

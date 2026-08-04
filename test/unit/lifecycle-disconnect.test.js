@@ -292,7 +292,7 @@ test("a successful setConfig during the disconnect settles the debt by rendering
     range_entity: "sensor.range",
     rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
     auto_slide: true,
-    value_label: "Custom",
+    entity_label: "Custom",
   });
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
 

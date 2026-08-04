@@ -202,6 +202,59 @@ test("visual golden: narrow width (320px)", async ({ page }) => {
   await shot(page, cardId, "narrow-320.png", 320);
 });
 
+// The card exactly as the README advertises it — screenshot.png and
+// screenshot-dark.png at the top of that file show this configuration and nothing
+// else. Those two images are the first thing anyone sees about this project, so the
+// state they promise is pinned here rather than left to drift: a primary value with
+// five rooms, all inside the comfort band, at the default sort and default views.
+// If this ever needs re-recording, the README images have to be retaken with it.
+test.describe("visual golden: the card the README advertises", () => {
+  const HERO_ROOMS = [
+    { name: "Bedroom", short: "BE", entity: "sensor.bedroom", value: 20.6 },
+    { name: "Living Room", short: "LR", entity: "sensor.living_room", value: 21.8 },
+    { name: "Kitchen", short: "KI", entity: "sensor.kitchen", value: 22.4 },
+    { name: "Office", short: "OF", entity: "sensor.office", value: 23.1 },
+    { name: "Bathroom", short: "BA", entity: "sensor.bathroom", value: 24.0 },
+  ];
+  const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
+
+  async function createHeroCard(page) {
+    const states = { "sensor.house": mkStateObj("sensor.house", 22.4, TEMP) };
+    for (const room of HERO_ROOMS) states[room.entity] = mkStateObj(room.entity, room.value, TEMP);
+    return createCard(
+      page,
+      {
+        entity: "sensor.house",
+        rooms: HERO_ROOMS.map(({ name, short, entity }) => ({ name, short, entity })),
+      },
+      states
+    );
+  }
+
+  test("light", async ({ page }) => {
+    await gotoHarness(page);
+    const cardId = await createHeroCard(page);
+    const card = page.locator(`#${cardId}`);
+    // Assert the state the images actually promise, so a golden can never be
+    // re-recorded around a card that quietly stopped saying this.
+    await expect(card.locator(".rtc-status-pill")).toHaveText("Optimal");
+    await expect(card.locator(".rtc-avg-value-num")).toHaveText("22.4");
+    await expect(card.locator(".rtc-room-chip")).toHaveCount(5);
+    await expect(card.locator(".rtc-scale-footer").first()).toContainText("Comfort 5/5");
+    await expect(card.locator(".rtc-scale-footer").first()).toContainText("Spread 3.4");
+    // 450px, the width the published images were taken at: narrower and the subtitle
+    // ellipsizes, which is not what those images show.
+    await shot(page, cardId, "readme-hero-light.png", 450);
+  });
+
+  test("dark", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await gotoHarness(page);
+    const cardId = await createHeroCard(page);
+    await shot(page, cardId, "readme-hero-dark.png", 450);
+  });
+});
+
 test("visual golden: dark color scheme", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoHarness(page);

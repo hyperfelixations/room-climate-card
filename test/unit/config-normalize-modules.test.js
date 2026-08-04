@@ -653,13 +653,13 @@ test("normalizeConfig() distinguishes an omitted primary from a malformed one", 
   );
 });
 
-test("value_label preserves the explicit empty-string sentinel", () => {
-  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", value_label: value }, COLLABORATORS);
-  assert.equal(n(undefined).value_label, null);
-  assert.equal(n(" Home ").value_label, "Home");
-  assert.equal(n("").value_label, "");
-  assert.equal(n("   ").value_label, "");
-  assert.equal(n(5).value_label, null);
+test("entity_label preserves the explicit empty-string sentinel", () => {
+  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", entity_label: value }, COLLABORATORS);
+  assert.equal(n(undefined).entity_label, null);
+  assert.equal(n(" Home ").entity_label, "Home");
+  assert.equal(n("").entity_label, "");
+  assert.equal(n("   ").entity_label, "");
+  assert.equal(n(5).entity_label, null);
 });
 
 test("show_rooms maps the three public states and defaults everything else to auto", () => {

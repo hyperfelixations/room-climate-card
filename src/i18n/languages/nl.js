@@ -76,7 +76,7 @@ export const nl = {
   "subtitle.inComfortIssue": (v) => `Ø in comfort · ${v.name} valt het meest op.`,
   "subtitle.inComfortAllGood": "Ø in comfort · alle kamers liggen binnen het streefbereik.",
   "subtitle.inComfort": "Ø in comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "kamer" : "kamers"} zonder data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} geconfigureerde ${v.count === 1 ? "kamer is" : "kamers zijn"} niet gevonden.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spreiding ${v.value}`,

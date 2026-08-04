@@ -172,10 +172,21 @@ test("room consensus survives partial and total outages, restores focus and fits
   await expect(card.locator(".rtc-avg-value-num")).toHaveText("20.0");
   await expect(card.locator(".rtc-room-unavailable")).toHaveCount(1);
 
+  // sensor.beta now stops EXISTING, which is a different thing from being unavailable:
+  // Home Assistant keeps registered entities in the state machine, so an id that is
+  // gone is an id it no longer knows. The card is a one-room card from here on — its
+  // chip goes, and its one remaining source becomes the interactive headline.
   await card.locator('[data-entity="sensor.beta"]').focus();
   await updateHass(page, cardId, { "sensor.alpha": mkStateObj("sensor.alpha", 20, TEMP) });
   await expect(card.locator('[data-entity="sensor.beta"]')).toHaveCount(0);
-  expect(await page.evaluate((id) => document.getElementById(id).shadowRoot.activeElement?.className, cardId)).toContain("rtc-root");
+  await expect(card.locator(".rtc-avg-label")).toHaveText("Alpha");
+  await expect(card.locator("button.rtc-avg-button")).toHaveAttribute("data-entity", "sensor.alpha");
+  // Focus follows to that headline rather than to .rtc-root: focusFallbackTarget()
+  // prefers a real control whenever one exists. What the assertion protects either way
+  // is that focus never leaves the card.
+  expect(
+    await page.evaluate((id) => document.getElementById(id).shadowRoot.activeElement?.className, cardId)
+  ).toContain("rtc-avg-button");
 
   const unavailable = {
     "sensor.alpha": mkStateObj("sensor.alpha", "unknown", TEMP),

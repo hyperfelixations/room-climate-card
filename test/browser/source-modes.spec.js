@@ -96,7 +96,7 @@ test("removing the headline label also removes its vertical spacing", async ({ p
   await gotoHarness(page);
   const states = { "sensor.primary": mkStateObj("sensor.primary", 22, TEMP) };
   const noLabelId = await createCard(page, { entity: "sensor.primary" }, states);
-  const withLabelId = await createCard(page, { entity: "sensor.primary", value_label: "Current" }, states);
+  const withLabelId = await createCard(page, { entity: "sensor.primary", entity_label: "Current" }, states);
 
   const metrics = await page.evaluate(({ noLabelId, withLabelId }) => {
     function read(id) {
@@ -119,4 +119,59 @@ test("removing the headline label also removes its vertical spacing", async ({ p
   expect(metrics.withLabel.hasLabel).toBe(true);
   expect(metrics.withLabel.marginTop).toBe("4px");
   expect(metrics.withLabel.valueOffset).toBeGreaterThan(metrics.noLabel.valueOffset + 4);
+});
+
+// Reported against 2.38.0 from a live Home Assistant: a card configured with one real
+// room and one mistyped one drew a room chip and captioned itself "Home avg." — it had
+// counted the id Home Assistant does not know as a second source. Home Assistant keeps
+// REGISTERED entities in the state machine even while their integration is unloaded,
+// publishing them as `unavailable`; an id that is absent from hass.states is absent
+// because it is wrong. So this is a one-room card, and it has to look like one.
+test("a mistyped room does not turn a one-room card into a two-room card", async ({ page }) => {
+  await gotoHarness(page);
+  const cardId = await createCard(
+    page,
+    {
+      rooms: [
+        { name: "Arbeitszimmer", short: "AZ", entity: "sensor.az_temperatur" },
+        { name: "Bedroom", short: "BE", entity: "sensor.bedroom_temperature" },
+      ],
+    },
+    { "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.7, { device_class: "temperature", unit_of_measurement: "°C" }) }
+  );
+  const card = page.locator(`#${cardId}`);
+
+  // The single-room contract, in full: no chip repeating the headline, the room's own
+  // name as the caption, and the room's entity on the big value so its tap and hold
+  // actions apply.
+  await expect(card.locator(".rtc-room-chip")).toHaveCount(0);
+  await expect(card.locator(".rtc-room-grid")).toHaveCount(0);
+  await expect(card.locator(".rtc-avg-label")).toHaveText("Arbeitszimmer");
+  const headline = card.locator(".rtc-avg-button");
+  await expect(headline).toHaveAttribute("data-entity", "sensor.az_temperatur");
+  await expect(headline).toHaveAttribute("data-room-index", "0");
+  expect(await headline.evaluate((node) => node.tagName)).toBe("BUTTON");
+
+  // The typo is still reported — hidden from the layout is not hidden from the user.
+  await expect(card.locator(".rtc-subtitle")).toContainText("not found");
+
+  // And the counter-case, in the same browser: an entity that EXISTS but is
+  // unavailable keeps the two-room card it was configured as, with its `--` chip.
+  const bothId = await createCard(
+    page,
+    {
+      rooms: [
+        { name: "Arbeitszimmer", short: "AZ", entity: "sensor.az_temperatur" },
+        { name: "Bad", short: "BA", entity: "sensor.ba_temperatur" },
+      ],
+    },
+    {
+      "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.8, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.ba_temperatur": mkStateObj("sensor.ba_temperatur", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }),
+    }
+  );
+  const both = page.locator(`#${bothId}`);
+  await expect(both.locator(".rtc-room-chip")).toHaveCount(2);
+  await expect(both.locator(".rtc-avg-label")).toHaveText("Home avg.");
+  await expect(both.locator('[data-entity="sensor.ba_temperatur"] .rtc-room-value-num')).toHaveText("--");
 });

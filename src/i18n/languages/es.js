@@ -76,7 +76,7 @@ export const es = {
   "subtitle.inComfortIssue": (v) => `Media dentro del intervalo de confort · ${v.name} es la habitación que más se desvía.`,
   "subtitle.inComfortAllGood": "Media dentro del intervalo de confort · todas las habitaciones están dentro del intervalo objetivo.",
   "subtitle.inComfort": "Media dentro del intervalo de confort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "habitación" : "habitaciones"} sin datos.`,
+  "subtitle.missingRooms": (v) => ` No se ${v.count === 1 ? "encontró" : "encontraron"} ${v.count} ${v.count === 1 ? "habitación configurada" : "habitaciones configuradas"}.`,
 
   "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Diferencia ${v.value}`,

@@ -66,3 +66,78 @@ test("chip redundancy is exactly the single-room topology", () => {
     );
   }
 });
+
+// --------------------------------------------- sources Home Assistant knows --
+//
+// An id that is absent from hass.states is absent because it was mistyped, never
+// existed, or was deleted — Home Assistant keeps REGISTERED entities in the state
+// machine even while their integration is unloaded, publishing them as `unavailable`
+// with `attributes.restored === true` rather than removing them. So "unknown to Home
+// Assistant" is a property of the configuration, and an unknown source does not shape
+// the card; an unavailable one still does.
+
+const known = (...ids) => (entityId) => ids.includes(entityId);
+
+test("a configured room Home Assistant does not know does not shape the card", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  // Exactly the reported case: one real room, one typo. That is a one-room card.
+  const result = resolveSourceTopology(config(null, ["sensor.real", "sensor.typo"]), known("sensor.real"));
+  assert.deepEqual(result, {
+    kind: SOURCE_TOPOLOGY.SINGLE_ROOM,
+    headlineEntity: "sensor.real",
+    roomIndex: 0,
+  });
+});
+
+test("the surviving room keeps its CONFIGURED index, not its position after filtering", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  const result = resolveSourceTopology(config(null, ["sensor.typo", "sensor.real"]), known("sensor.real"));
+  assert.deepEqual(result, {
+    kind: SOURCE_TOPOLOGY.SINGLE_ROOM,
+    headlineEntity: "sensor.real",
+    roomIndex: 1,
+  });
+});
+
+test("an unavailable room still shapes the card, because it exists", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  // Both known to Home Assistant; one of them merely has no usable value right now.
+  const result = resolveSourceTopology(config(null, ["sensor.a", "sensor.b"]), known("sensor.a", "sensor.b"));
+  assert.equal(result.kind, SOURCE_TOPOLOGY.ROOM_CONSENSUS);
+});
+
+test("a primary Home Assistant does not know leaves the rooms to decide", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  assert.equal(
+    resolveSourceTopology(config("sensor.typo", ["sensor.a", "sensor.b"]), known("sensor.a", "sensor.b")).kind,
+    SOURCE_TOPOLOGY.ROOM_CONSENSUS
+  );
+  assert.deepEqual(resolveSourceTopology(config("sensor.typo", ["sensor.a"]), known("sensor.a")), {
+    kind: SOURCE_TOPOLOGY.SINGLE_ROOM,
+    headlineEntity: "sensor.a",
+    roomIndex: 0,
+  });
+});
+
+test("a card whose sources are ALL unknown keeps the identity its configuration gives it", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  const nothing = () => false;
+  // Otherwise a card would change shape during the moment at start-up before states
+  // are published — and a card with nothing to show still has a configured identity.
+  assert.deepEqual(resolveSourceTopology(config("sensor.primary"), nothing), {
+    kind: SOURCE_TOPOLOGY.PRIMARY_ONLY,
+    headlineEntity: "sensor.primary",
+    roomIndex: null,
+  });
+  assert.equal(resolveSourceTopology(config(null, ["sensor.a", "sensor.b"]), nothing).kind, SOURCE_TOPOLOGY.ROOM_CONSENSUS);
+  assert.equal(
+    resolveSourceTopology(config("sensor.primary", ["sensor.a"]), nothing).kind,
+    SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS
+  );
+});
+
+test("without the predicate every configured source counts, exactly as before", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
+  assert.equal(resolveSourceTopology(config(null, ["sensor.a", "sensor.b"])).kind, SOURCE_TOPOLOGY.ROOM_CONSENSUS);
+  assert.equal(resolveSourceTopology(config(null, ["sensor.a"])).kind, SOURCE_TOPOLOGY.SINGLE_ROOM);
+});

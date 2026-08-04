@@ -388,7 +388,7 @@ const SCENARIOS = [
       entity: "sensor.avg",
       rooms: sevenRoomConfig(),
       title: "Custom title",
-      value_label: "Custom average",
+      entity_label: "Custom average",
       icon: "mdi:home-thermometer",
       decimals: 0,
       hide_footer: true,

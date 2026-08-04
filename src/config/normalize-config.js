@@ -93,9 +93,9 @@ export function normalizeConfig(config, collaborators) {
     // default rather than throwing, so a typo in an optional field can't break
     // the whole card the way a bad entity id would.
     //
-    // value_label is the headline's caption, and uses optionalLabel() rather than
+    // entity_label is the headline's caption, and uses optionalLabel() rather than
     // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
-    value_label: optionalLabel(userConfig.value_label),
+    entity_label: optionalLabel(userConfig.entity_label),
     title: optionalString(userConfig.title),
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),

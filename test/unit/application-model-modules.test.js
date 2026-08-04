@@ -49,7 +49,7 @@ function cfg(overrides = {}) {
     show_rooms: "auto",
     views: null,
     title: null,
-    value_label: null,
+    entity_label: null,
     icon: null,
     decimals: null,
     ...overrides,

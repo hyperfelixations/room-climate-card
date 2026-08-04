@@ -77,7 +77,8 @@ export const pl = {
   "subtitle.inComfortIssue": (v) => `Średnia w zakresie komfortu · najbardziej wyróżnia się ${v.name}.`,
   "subtitle.inComfortAllGood": "Średnia w zakresie komfortu · wszystkie pomieszczenia są w zakresie docelowym.",
   "subtitle.inComfort": "Średnia w zakresie komfortu.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("pl", v.count, { one: "pokój", few: "pokoje", many: "pokoi", other: "pokoju" })} bez danych.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("pl", v.count, { one: "pokój", few: "pokoje", many: "pokoi", other: "pokoju" })} nie ${selectPlural("pl", v.count, { one: "został znaleziony", few: "zostały znalezione", many: "zostało znalezionych", other: "zostało znalezionych" })}.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Rozrzut ${v.value}`,

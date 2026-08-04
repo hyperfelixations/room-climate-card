@@ -77,7 +77,7 @@ export const fr = {
   "subtitle.inComfortIssue": (v) => `Moy. dans le confort · ${v.name} se démarque le plus.`,
   "subtitle.inComfortAllGood": "Moy. dans le confort · toutes les pièces sont dans la plage cible.",
   "subtitle.inComfort": "Moy. dans le confort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "pièce" : "pièces"} sans données.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "pièce configurée est introuvable" : "pièces configurées sont introuvables"}.`,
 
   "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Écart ${v.value}`,

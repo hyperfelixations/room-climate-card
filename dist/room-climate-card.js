@@ -16,7 +16,7 @@
 
 const CARD_TYPE = "room-climate-card";
 const CARD_NAME = "Room Climate Card";
-const CARD_VERSION = "2.38.1";
+const CARD_VERSION = "2.38.2";
 
 // Language codes and their Intl locales.
 //
@@ -214,7 +214,7 @@ const en = {
   "subtitle.inComfortIssue": (v) => `Avg. in comfort · ${v.name} stands out most.`,
   "subtitle.inComfortAllGood": "Avg. in comfort · all rooms are within target range.",
   "subtitle.inComfort": "Avg. in comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "room" : "rooms"} without data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} configured ${v.count === 1 ? "room was" : "rooms were"} not found.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spread ${v.value}`,
@@ -329,7 +329,7 @@ const de = {
   "subtitle.inComfortIssue": (v) => `Ø im Komfort · ${v.name} fällt am stärksten auf.`,
   "subtitle.inComfortAllGood": "Ø im Komfort · alle Räume liegen im Zielkorridor.",
   "subtitle.inComfort": "Ø im Komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "Raum" : "Räume"} ohne Daten.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurierte${v.count === 1 ? "r Raum wurde" : " Räume wurden"} nicht gefunden.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spanne ${v.value}`,
@@ -447,7 +447,7 @@ const nl = {
   "subtitle.inComfortIssue": (v) => `Ø in comfort · ${v.name} valt het meest op.`,
   "subtitle.inComfortAllGood": "Ø in comfort · alle kamers liggen binnen het streefbereik.",
   "subtitle.inComfort": "Ø in comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "kamer" : "kamers"} zonder data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} geconfigureerde ${v.count === 1 ? "kamer is" : "kamers zijn"} niet gevonden.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spreiding ${v.value}`,
@@ -566,7 +566,7 @@ const fr = {
   "subtitle.inComfortIssue": (v) => `Moy. dans le confort · ${v.name} se démarque le plus.`,
   "subtitle.inComfortAllGood": "Moy. dans le confort · toutes les pièces sont dans la plage cible.",
   "subtitle.inComfort": "Moy. dans le confort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "pièce" : "pièces"} sans données.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "pièce configurée est introuvable" : "pièces configurées sont introuvables"}.`,
 
   "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Écart ${v.value}`,
@@ -687,7 +687,7 @@ const it = {
   "subtitle.inComfortIssue": (v) => `Media nel comfort · ${v.name} spicca maggiormente.`,
   "subtitle.inComfortAllGood": "Media nel comfort · tutte le stanze rientrano nell'intervallo obiettivo.",
   "subtitle.inComfort": "Media nel comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "stanza" : "stanze"} senza dati.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "stanza configurata non è stata trovata" : "stanze configurate non sono state trovate"}.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Scarto ${v.value}`,
@@ -805,7 +805,7 @@ const es = {
   "subtitle.inComfortIssue": (v) => `Media dentro del intervalo de confort · ${v.name} es la habitación que más se desvía.`,
   "subtitle.inComfortAllGood": "Media dentro del intervalo de confort · todas las habitaciones están dentro del intervalo objetivo.",
   "subtitle.inComfort": "Media dentro del intervalo de confort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "habitación" : "habitaciones"} sin datos.`,
+  "subtitle.missingRooms": (v) => ` No se ${v.count === 1 ? "encontró" : "encontraron"} ${v.count} ${v.count === 1 ? "habitación configurada" : "habitaciones configuradas"}.`,
 
   "footer.comfort": (v) => `Confort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Diferencia ${v.value}`,
@@ -923,7 +923,8 @@ const ru = {
   "subtitle.inComfortIssue": (v) => `Среднее в комфортном диапазоне · сильнее всего выделяется ${v.name}.`,
   "subtitle.inComfortAllGood": "Среднее в комфортном диапазоне · все комнаты находятся в целевом диапазоне.",
   "subtitle.inComfort": "Среднее в комфортном диапазоне.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("ru", v.count, { one: "комната", few: "комнаты", many: "комнат", other: "комнаты" })} без данных.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("ru", v.count, { one: "комната", few: "комнаты", many: "комнат", other: "комнаты" })} не ${selectPlural("ru", v.count, { one: "найдена", few: "найдены", many: "найдено", other: "найдены" })}.`,
 
   "footer.comfort": (v) => `Комфорт ${v.count}/${v.total}`,
   "footer.spread": (v) => `Разброс ${v.value}`,
@@ -1041,7 +1042,8 @@ const pl = {
   "subtitle.inComfortIssue": (v) => `Średnia w zakresie komfortu · najbardziej wyróżnia się ${v.name}.`,
   "subtitle.inComfortAllGood": "Średnia w zakresie komfortu · wszystkie pomieszczenia są w zakresie docelowym.",
   "subtitle.inComfort": "Średnia w zakresie komfortu.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("pl", v.count, { one: "pokój", few: "pokoje", many: "pokoi", other: "pokoju" })} bez danych.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("pl", v.count, { one: "pokój", few: "pokoje", many: "pokoi", other: "pokoju" })} nie ${selectPlural("pl", v.count, { one: "został znaleziony", few: "zostały znalezione", many: "zostało znalezionych", other: "zostało znalezionych" })}.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Rozrzut ${v.value}`,
@@ -1159,7 +1161,7 @@ const ko = {
   "subtitle.inComfortIssue": (v) => `평균은 쾌적 범위 · ${v.name}의 편차가 가장 큼.`,
   "subtitle.inComfortAllGood": "평균은 쾌적 범위 · 모든 방이 목표 범위 안에 있음.",
   "subtitle.inComfort": "평균은 쾌적 범위.",
-  "subtitle.missingRooms": (v) => ` ${v.count}개 방은 데이터 없음.`,
+  "subtitle.missingRooms": (v) => ` 구성된 방 ${v.count}개를 찾을 수 없습니다.`,
 
   "footer.comfort": (v) => `쾌적 ${v.count}/${v.total}`,
   "footer.spread": (v) => `편차 ${v.value}`,
@@ -1274,7 +1276,7 @@ const ja = {
   "subtitle.inComfortIssue": (v) => `平均は快適範囲内 · ${v.name}が最も外れています。`,
   "subtitle.inComfortAllGood": "平均は快適範囲内 · すべての部屋が目標範囲内です。",
   "subtitle.inComfort": "平均は快適範囲内です。",
-  "subtitle.missingRooms": (v) => ` ${v.count}室はデータなし。`,
+  "subtitle.missingRooms": (v) => ` 設定された部屋が ${v.count} 件見つかりません。`,
 
   "footer.comfort": (v) => `快適 ${v.count}/${v.total}`,
   "footer.spread": (v) => `ばらつき ${v.value}`,
@@ -1389,7 +1391,7 @@ const zh = {
   "subtitle.inComfortIssue": (v) => `平均值处于舒适范围 · ${v.name}的偏差最大。`,
   "subtitle.inComfortAllGood": "平均值处于舒适范围 · 所有房间均在目标范围内。",
   "subtitle.inComfort": "平均值处于舒适范围。",
-  "subtitle.missingRooms": (v) => ` ${v.count}个房间无数据。`,
+  "subtitle.missingRooms": (v) => ` 未找到 ${v.count} 个已配置的房间。`,
 
   "footer.comfort": (v) => `舒适 ${v.count}/${v.total}`,
   "footer.spread": (v) => `极差 ${v.value}`,
@@ -1512,7 +1514,7 @@ const nb = {
   "subtitle.inComfortIssue": (v) => `Ø innenfor komfort · ${v.name} skiller seg mest ut.`,
   "subtitle.inComfortAllGood": "Ø innenfor komfort · alle rom er innenfor målområdet.",
   "subtitle.inComfort": "Ø innenfor komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} rom uten data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurerte rom ble ikke funnet.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spredning ${v.value}`,
@@ -1635,7 +1637,7 @@ const sv = {
   "subtitle.inComfortIssue": (v) => `Ø inom komfort · ${v.name} sticker ut mest.`,
   "subtitle.inComfortAllGood": "Ø inom komfort · alla rum ligger inom målintervallet.",
   "subtitle.inComfort": "Ø inom komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} rum utan data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurerade rum hittades inte.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spridning ${v.value}`,
@@ -1763,7 +1765,8 @@ const lv = {
   "subtitle.inComfortIssue": (v) => `Vidēji komforta zonā · ${v.name} izceļas visvairāk.`,
   "subtitle.inComfortAllGood": "Vidēji komforta zonā · visas telpas ir mērķa diapazonā.",
   "subtitle.inComfort": "Vidēji komforta zonā.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} bez datiem.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} nav ${selectPlural("lv", v.count, { zero: "atrastas", one: "atrasta", other: "atrastas" })}.`,
 
   "footer.comfort": (v) => `Komforts ${v.count}/${v.total}`,
   "footer.spread": (v) => `Izkliede ${v.value}`,
@@ -2732,9 +2735,9 @@ function normalizeConfig(config, collaborators) {
     // default rather than throwing, so a typo in an optional field can't break
     // the whole card the way a bad entity id would.
     //
-    // value_label is the headline's caption, and uses optionalLabel() rather than
+    // entity_label is the headline's caption, and uses optionalLabel() rather than
     // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
-    value_label: optionalLabel(userConfig.value_label),
+    entity_label: optionalLabel(userConfig.entity_label),
     title: optionalString(userConfig.title),
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),
@@ -4064,12 +4067,26 @@ function buildEntityModel(states, config, entityId, sourceRole) {
 // disagree, because between them they decide what the big number IS, what it is called,
 // whether it can be clicked, and whether the room it came from also gets a chip.
 //
-// CONFIGURATION, NOT AVAILABILITY. This reads `config` only. A sensor that drops out
-// changes the VALUE the card can show; it must never change what kind of card this is.
-// Deciding the mode from live availability would make a two-room card relabel its
-// headline to a room name and turn it into a button the moment one of the two sensors
-// went quiet — and back again when it returned. The value falls back, the identity does
-// not.
+// CONFIGURATION, NOT AVAILABILITY — and the difference between the two is exact.
+//
+// A sensor that drops out changes the VALUE the card can show; it must never change
+// what kind of card this is. Deciding the mode from live availability would make a
+// two-room card relabel its headline to a room name and turn it into a button the
+// moment one of the two sensors went quiet — and back again when it returned. The value
+// falls back, the identity does not.
+//
+// An entity id Home Assistant does not know at all is a different thing entirely, and
+// it is NOT an outage. Home Assistant keeps registered entities in the state machine
+// even while their integration is unloaded: it publishes them as `unavailable` carrying
+// `attributes.restored === true`, rather than removing them. So an id that is absent
+// from `hass.states` is absent because it was mistyped, never existed, or was deleted —
+// a property of the configuration, stable until the user edits the YAML.
+//
+// Such a source therefore does not count towards the card's shape. A card configured
+// with one real room and one typo IS a one-room card, and must present itself as one:
+// no chip repeating its own headline, the room's name as the caption, the room's own
+// actions on the big value. The typo is reported in the subtitle, not by silently
+// reshaping the card around it.
 
 const SOURCE_TOPOLOGY = {
   // `entity` alone. The headline is that sensor and nothing on the card competes with
@@ -4098,21 +4115,43 @@ const SOURCE_TOPOLOGY = {
 // headline "Kitchen" and giving it Kitchen's tap action would be wrong. Only when the
 // card refers to exactly one entity, and that entity is the one room, is the headline
 // genuinely that room.
-function resolveSourceTopology(config) {
+//
+// `isKnownEntity` answers "does Home Assistant have this id at all" (see the note above
+// on why that is a configuration question). It is OPTIONAL: without it every configured
+// source counts, which is what a caller holding only the configuration — the size hint
+// before the first update, and the pure-function tests — should see.
+function resolveSourceTopology(config, isKnownEntity) {
   const entity = config?.entity || null;
   const rooms = config?.rooms || [];
-  const distinctSources = new Set([entity, ...rooms.map((room) => room.entity)].filter(Boolean));
 
-  if (rooms.length === 1 && distinctSources.size === 1) {
-    return { kind: SOURCE_TOPOLOGY.SINGLE_ROOM, headlineEntity: rooms[0].entity, roomIndex: 0 };
+  const known = typeof isKnownEntity === "function" ? isKnownEntity : () => true;
+  const knownEntity = entity && known(entity) ? entity : null;
+  // Carries the CONFIGURED index, not the position in this filtered list: a roomIndex is
+  // used to look the room up in config.rooms again, so narrowing it here would silently
+  // point at the wrong room whenever the surviving one is not the first.
+  const knownRooms = rooms.map((room, index) => ({ index, entity: room.entity })).filter((room) => known(room.entity));
+
+  // Nothing the card was configured with exists. Shrinking to "no sources" would strip
+  // the card of the identity its YAML gives it, so the configuration alone decides —
+  // which is also what keeps a card stable through the moment during a Home Assistant
+  // start where states have not been published yet.
+  const effectiveEntity = !knownEntity && knownRooms.length === 0 ? entity : knownEntity;
+  const effectiveRooms =
+    !knownEntity && knownRooms.length === 0 ? rooms.map((room, index) => ({ index, entity: room.entity })) : knownRooms;
+
+  const distinctSources = new Set([effectiveEntity, ...effectiveRooms.map((room) => room.entity)].filter(Boolean));
+
+  if (effectiveRooms.length === 1 && distinctSources.size === 1) {
+    const room = effectiveRooms[0];
+    return { kind: SOURCE_TOPOLOGY.SINGLE_ROOM, headlineEntity: room.entity, roomIndex: room.index };
   }
-  if (!entity) {
+  if (!effectiveEntity) {
     return { kind: SOURCE_TOPOLOGY.ROOM_CONSENSUS, headlineEntity: null, roomIndex: null };
   }
-  if (rooms.length === 0) {
-    return { kind: SOURCE_TOPOLOGY.PRIMARY_ONLY, headlineEntity: entity, roomIndex: null };
+  if (effectiveRooms.length === 0) {
+    return { kind: SOURCE_TOPOLOGY.PRIMARY_ONLY, headlineEntity: effectiveEntity, roomIndex: null };
   }
-  return { kind: SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS, headlineEntity: entity, roomIndex: null };
+  return { kind: SOURCE_TOPOLOGY.PRIMARY_WITH_ROOMS, headlineEntity: effectiveEntity, roomIndex: null };
 }
 
 // Whether the chip grid would only repeat the headline. True for exactly the card whose
@@ -4177,7 +4216,7 @@ function withContextAvailability(model, metricKind, mixed) {
 function resolveMeasurementContext(states, config) {
   const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
   const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
-  const topology = resolveSourceTopology(config);
+  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
   const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
   let metricKind;
@@ -4191,7 +4230,10 @@ function resolveMeasurementContext(states, config) {
   let displayUnitProfileKey;
 
   if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
-    const room = roomModels[0];
+    // The topology's own index, never a hard 0: the one room the card refers to is not
+    // necessarily the first one configured — the others may simply be ids Home Assistant
+    // does not know.
+    const room = roomModels[topology.roomIndex];
     metricKind = room.metricKind || null;
     excludedRoomIds = [];
     diagnostics = [];
@@ -4641,9 +4683,11 @@ function buildCardDomainModel({ states, config, context, language }) {
   const policy = classificationPolicyOf(config);
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
-  // Recomputed rather than threaded through, because it is a pure function of the
-  // config and having one owner beats having one carrier.
-  const topology = resolveSourceTopology(config);
+  // Resolved once here and carried out on the model. It stopped being a pure function
+  // of the configuration alone when a configured id that Home Assistant does not know
+  // was excluded from it (see source-topology.js), and the presentation layer has no
+  // `states` to recompute it from — so the model that HAS them answers for everyone.
+  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
   const sourceAvailability = {
     primary: {
       entity: context.primary.entityId,
@@ -4667,6 +4711,9 @@ function buildCardDomainModel({ states, config, context, language }) {
   if (context.averageSource === null) {
     return {
       empty: true,
+      // Which sources the card actually refers to. Carried rather than recomputed
+      // downstream — see where it is resolved above.
+      topology,
       // Unlike effectiveMetricKind(), this may be null. No-data presentation uses
       // that fact to show the product name instead of inventing a temperature card.
       metric: { kind: context.identityMetricKind },
@@ -4780,6 +4827,7 @@ function buildCardDomainModel({ states, config, context, language }) {
 
   return {
     empty: false,
+    topology,
     metric: {
       kind: metricKind,
       canonicalUnit: context.canonicalUnit,
@@ -6095,7 +6143,7 @@ function buildTrendText(trend, texts) {
 // The caption exists to tell the big number apart from the other values on the card.
 // That is the whole rule, and the four cases fall out of it:
 //
-//   an explicit value_label   the user said what it is called, including "" for
+//   an explicit entity_label  the user said what it is called, including "" for
 //                             "call it nothing" — always wins
 //   the headline IS a room    that room's name; `name` already falls back through
 //                             short to the entity id (see config/rooms.js)
@@ -6106,7 +6154,7 @@ function buildTrendText(trend, texts) {
 // Every branch reads configuration only. A sensor dropping out can change the VALUE,
 // never what it is called.
 function resolveHeadlineLabel({ config, topology, roomIndex, texts }) {
-  if (config.value_label !== null) return config.value_label;
+  if (config.entity_label !== null) return config.entity_label;
   if (roomIndex !== null) return config.rooms[roomIndex].name;
   if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY) return "";
   return texts.t("value.homeAverage");
@@ -6300,10 +6348,11 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
 }
 
 function buildCardViewModel({ domainModel, config, texts }) {
-  // Which sources this card is configured with. Decides the headline's caption and
-  // whether a chip would only repeat it — both configuration questions, so both read
-  // the same single answer.
-  const topology = resolveSourceTopology(config);
+  // Which sources this card actually refers to. Decides the headline's caption and
+  // whether a chip would only repeat it, so both read the same single answer — taken
+  // from the model rather than recomputed, because deciding it needs `states` (an id
+  // Home Assistant does not know is not a source) and this layer has none.
+  const topology = domainModel.topology;
   const metricKind = domainModel.metric.kind;
   const meta = metricKind ? metricMetaFor(metricKind) : null;
   const title = config.title || (meta ? texts.t(meta.titleKey) : CARD_NAME);
@@ -10903,10 +10952,16 @@ function structuralConfigSignature(config) {
       // need live data — `never` draws nothing, and in `auto` a lone room that IS the
       // headline gets no chip. A grid that will not be drawn must not inflate the hint.
       const showRooms = this._config?.show_rooms ?? "auto";
+      // Same source rule the card itself applies, including the one part that needs
+      // live state: an id Home Assistant does not know is not a source. Before the
+      // first update there is nothing to ask, and the configuration alone decides —
+      // which is the stable answer for a size hint.
+      const states = this._hass?.states;
+      const topology = states
+        ? resolveSourceTopology(this._config, (entityId) => Boolean(entityId && states[entityId]))
+        : resolveSourceTopology(this._config);
       const chipsDrawn =
-        roomCount >= 1 &&
-        showRooms !== "never" &&
-        (showRooms === "always" || !chipsWouldDuplicateHeadline(resolveSourceTopology(this._config)));
+        roomCount >= 1 && showRooms !== "never" && (showRooms === "always" || !chipsWouldDuplicateHeadline(topology));
       if (!chipsDrawn) return 3;
       const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);

@@ -77,7 +77,7 @@ export const it = {
   "subtitle.inComfortIssue": (v) => `Media nel comfort · ${v.name} spicca maggiormente.`,
   "subtitle.inComfortAllGood": "Media nel comfort · tutte le stanze rientrano nell'intervallo obiettivo.",
   "subtitle.inComfort": "Media nel comfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "stanza" : "stanze"} senza dati.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "stanza configurata non è stata trovata" : "stanze configurate non sono state trovate"}.`,
 
   "footer.comfort": (v) => `Comfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Scarto ${v.value}`,

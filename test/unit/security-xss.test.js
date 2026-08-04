@@ -1,7 +1,7 @@
 "use strict";
 
 // Manipulated unit_of_measurement, trend unit, value_level,
-// title, value_label, room name/short, and entity id must never produce
+// title, entity_label, room name/short, and entity id must never produce
 // extra DOM nodes or event handlers. Also covers
 // action-type allowlisting (_normalizeAction()).
 //
@@ -84,9 +84,9 @@ test("XSS payload in value_level (HA attribute) produces no extra DOM nodes", ()
   env.cleanup(el);
 });
 
-test("XSS payload in title/value_label config overrides produces no extra DOM nodes", () => {
+test("XSS payload in title/entity_label config overrides produces no extra DOM nodes", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
-  const el = env.createCard({ entity: "sensor.avg", title: XSS_PAYLOAD, value_label: XSS_SCRIPT }, hass);
+  const el = env.createCard({ entity: "sensor.avg", title: XSS_PAYLOAD, entity_label: XSS_SCRIPT }, hass);
   assert.equal(countInjectedNodes(el.shadowRoot), 0);
   env.cleanup(el);
 });

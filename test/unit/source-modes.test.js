@@ -128,10 +128,46 @@ const cases = [
     expected: { empty: true, metricKind: "temperature", configurationState: "mixed_metric_kinds" },
   },
   {
-    name: "an explicit empty value_label removes the caption in a room consensus",
-    config: { rooms: [room("sensor.a", "A"), room("sensor.b", "B")], value_label: "" },
+    name: "an explicit empty entity_label removes the caption in a room consensus",
+    config: { rooms: [room("sensor.a", "A"), room("sensor.b", "B")], entity_label: "" },
     states: { "sensor.a": state("sensor.a", 20), "sensor.b": state("sensor.b", 24) },
     expected: { empty: false, source: "calculated", entity: "", roomIndex: null, label: "", chips: true, comparable: true },
+  },
+  // --- sources Home Assistant does not know ---------------------------------
+  //
+  // Absent from hass.states means the id was mistyped, never existed, or was deleted:
+  // Home Assistant keeps REGISTERED entities in the state machine even while their
+  // integration is unloaded, publishing them as `unavailable` with
+  // `attributes.restored === true`. Such a source therefore does not shape the card,
+  // while an unavailable one still does.
+  {
+    name: "a mistyped room leaves a genuine one-room card, not a two-room one",
+    config: { rooms: [room("sensor.real", "Arbeitszimmer"), room("sensor.typo", "Bedroom")] },
+    states: { "sensor.real": state("sensor.real", 28.7) },
+    expected: { empty: false, source: "room", entity: "sensor.real", roomIndex: 0, label: "Arbeitszimmer", chips: false },
+  },
+  {
+    name: "the surviving room is addressed by its configured index, not by its position",
+    config: { rooms: [room("sensor.typo", "Bedroom"), room("sensor.real", "Arbeitszimmer")] },
+    states: { "sensor.real": state("sensor.real", 28.7) },
+    expected: { empty: false, source: "room", entity: "sensor.real", roomIndex: 1, label: "Arbeitszimmer", chips: false },
+  },
+  {
+    name: "an unavailable second room keeps the consensus card it was configured as",
+    config: { rooms: [room("sensor.real", "Arbeitszimmer"), room("sensor.other", "Bad")] },
+    states: {
+      "sensor.real": state("sensor.real", 28.7),
+      "sensor.other": state("sensor.other", "unavailable"),
+    },
+    // Still the two-room card it was configured as: a calculated headline that belongs
+    // to no single entity, both chips drawn, one of them showing the placeholder.
+    expected: { empty: false, source: "calculated", entity: "", roomIndex: null, label: "Home avg.", chips: true },
+  },
+  {
+    name: "a mistyped primary hands the card to its rooms",
+    config: { entity: "sensor.typo", rooms: [room("sensor.real", "Arbeitszimmer")] },
+    states: { "sensor.real": state("sensor.real", 28.7) },
+    expected: { empty: false, source: "room", entity: "sensor.real", roomIndex: 0, label: "Arbeitszimmer", chips: false },
   },
 ];
 
@@ -237,17 +273,17 @@ test("setConfig rebuilds only when label-node presence changes", () => {
     const withoutLabel = el.shadowRoot.querySelector(".rtc-avg-button");
     assert.equal(withoutLabel.querySelector(".rtc-avg-label"), null);
 
-    el.setConfig({ entity: "sensor.primary", value_label: "First" });
+    el.setConfig({ entity: "sensor.primary", entity_label: "First" });
     const withLabel = el.shadowRoot.querySelector(".rtc-avg-button");
     assert.notEqual(withLabel, withoutLabel, "adding the label node is a structural rebuild");
     assert.equal(withLabel.querySelector(".rtc-avg-label").textContent, "First");
 
-    el.setConfig({ entity: "sensor.primary", value_label: "Second" });
+    el.setConfig({ entity: "sensor.primary", entity_label: "Second" });
     const patched = el.shadowRoot.querySelector(".rtc-avg-button");
     assert.equal(patched, withLabel, "changing one non-empty label patches the existing node");
     assert.equal(patched.querySelector(".rtc-avg-label").textContent, "Second");
 
-    el.setConfig({ entity: "sensor.primary", value_label: "" });
+    el.setConfig({ entity: "sensor.primary", entity_label: "" });
     const emptyAgain = el.shadowRoot.querySelector(".rtc-avg-button");
     assert.notEqual(emptyAgain, patched, "removing the label node is a structural rebuild");
     assert.equal(emptyAgain.querySelector(".rtc-avg-label"), null);

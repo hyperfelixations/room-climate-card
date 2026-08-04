@@ -39,7 +39,7 @@ function cfg(overrides = {}) {
     entity: "sensor.avg",
     rooms: [],
     title: null,
-    value_label: null,
+    entity_label: null,
     icon: null,
     room_label: "auto",
     room_sort: "value_asc",
@@ -257,6 +257,11 @@ test("two markers closer than the overlap threshold are nudged apart, not reposi
 function minimalDomainModel(overrides = {}) {
   return {
     empty: false,
+    // The model resolves this and the view model reads it rather than recomputing —
+    // deciding it needs `states`, which the presentation layer does not have. A fixture
+    // therefore has to state which sources its card refers to, exactly as the real
+    // model would (see resolveSourceTopology()).
+    topology: { kind: "primaryOnly", headlineEntity: "sensor.avg", roomIndex: null },
     metric: { kind: "temperature", canonicalUnit: "°C", unit: "°C", displayUnitProfile: { key: "celsius" } },
     context: { diagnostics: [], consistent: true, excludedRoomIds: [], sourceKind: "primary", sourceEntity: "sensor.avg" },
     average: { value: 22, source: "sensor", entity: "sensor.avg", roomIndex: null },
@@ -295,7 +300,7 @@ test("the title and average label prefer the configured overrides", () => {
 
   const overridden = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel(),
-    config: cfg({ title: "My title", value_label: "My label" }),
+    config: cfg({ title: "My title", entity_label: "My label" }),
     texts,
   });
   assert.equal(overridden.title, "My title");
@@ -310,6 +315,7 @@ test("the four headline-label rules are configuration-stable", () => {
   const single = roomModel(0, "Kitchen", "KI", 21);
   const singleRoom = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel({
+      topology: { kind: "singleRoom", headlineEntity: single.entity, roomIndex: 0 },
       average: { value: 21, source: "room", entity: single.entity, roomIndex: 0 },
       rooms: { declared: [single], byValue: [single], count: 1, comparable: false, missing: 0 },
     }),
@@ -323,7 +329,7 @@ test("the four headline-label rules are configuration-stable", () => {
 
   const explicitEmpty = cardViewModel.buildCardViewModel({
     domainModel: withTwoRooms(),
-    config: cfgWithTwoRooms({ value_label: "" }),
+    config: cfgWithTwoRooms({ entity_label: "" }),
     texts,
   });
   assert.deepEqual({ label: explicitEmpty.average.label, hasLabel: explicitEmpty.average.hasLabel }, { label: "", hasLabel: false });
@@ -416,6 +422,7 @@ function withTwoRooms(overrides = {}) {
   const cool = roomModel(0, "A", "AA", 21);
   const warm = roomModel(1, "B", "BB", 23);
   return minimalDomainModel({
+    topology: { kind: "primaryWithRooms", headlineEntity: "sensor.avg", roomIndex: null },
     rooms: { declared: [cool, warm], byValue: [cool, warm], count: 2, comparable: true, missing: 0 },
     roomColors: { 0: "#4488cc", 1: "#cc4444" },
     extremes: { coolest: cool, warmest: warm, coolestColor: "#4488cc", warmestColor: "#cc4444" },
@@ -504,9 +511,16 @@ test("range timestamps are formatted here, from the raw values", () => {
   assert.equal(result.range.maxTime, null);
 });
 
-function noDataDomain({ kind = "temperature", primaryStatus = "missing", rooms = [], configurationState = null } = {}) {
+function noDataDomain({
+  kind = "temperature",
+  primaryStatus = "missing",
+  rooms = [],
+  configurationState = null,
+  topology = { kind: "primaryWithRooms", headlineEntity: "sensor.avg", roomIndex: null },
+} = {}) {
   return {
     empty: true,
+    topology,
     metric: { kind },
     missingRooms: rooms.filter((room) => room.status === "missing").length,
     configurationState,

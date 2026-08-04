@@ -73,7 +73,7 @@ export const ja = {
   "subtitle.inComfortIssue": (v) => `平均は快適範囲内 · ${v.name}が最も外れています。`,
   "subtitle.inComfortAllGood": "平均は快適範囲内 · すべての部屋が目標範囲内です。",
   "subtitle.inComfort": "平均は快適範囲内です。",
-  "subtitle.missingRooms": (v) => ` ${v.count}室はデータなし。`,
+  "subtitle.missingRooms": (v) => ` 設定された部屋が ${v.count} 件見つかりません。`,
 
   "footer.comfort": (v) => `快適 ${v.count}/${v.total}`,
   "footer.spread": (v) => `ばらつき ${v.value}`,

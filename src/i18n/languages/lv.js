@@ -87,7 +87,8 @@ export const lv = {
   "subtitle.inComfortIssue": (v) => `Vidēji komforta zonā · ${v.name} izceļas visvairāk.`,
   "subtitle.inComfortAllGood": "Vidēji komforta zonā · visas telpas ir mērķa diapazonā.",
   "subtitle.inComfort": "Vidēji komforta zonā.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} bez datiem.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("lv", v.count, { zero: "telpu", one: "telpa", other: "telpas" })} nav ${selectPlural("lv", v.count, { zero: "atrastas", one: "atrasta", other: "atrastas" })}.`,
 
   "footer.comfort": (v) => `Komforts ${v.count}/${v.total}`,
   "footer.spread": (v) => `Izkliede ${v.value}`,

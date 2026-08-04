@@ -22,11 +22,7 @@ import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
 import { buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
-import {
-  SOURCE_TOPOLOGY,
-  chipsWouldDuplicateHeadline,
-  resolveSourceTopology,
-} from "../../application/model/source-topology.js";
+import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/model/source-topology.js";
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
@@ -129,7 +125,7 @@ export function buildTrendText(trend, texts) {
 // The caption exists to tell the big number apart from the other values on the card.
 // That is the whole rule, and the four cases fall out of it:
 //
-//   an explicit value_label   the user said what it is called, including "" for
+//   an explicit entity_label  the user said what it is called, including "" for
 //                             "call it nothing" — always wins
 //   the headline IS a room    that room's name; `name` already falls back through
 //                             short to the entity id (see config/rooms.js)
@@ -140,7 +136,7 @@ export function buildTrendText(trend, texts) {
 // Every branch reads configuration only. A sensor dropping out can change the VALUE,
 // never what it is called.
 function resolveHeadlineLabel({ config, topology, roomIndex, texts }) {
-  if (config.value_label !== null) return config.value_label;
+  if (config.entity_label !== null) return config.entity_label;
   if (roomIndex !== null) return config.rooms[roomIndex].name;
   if (topology.kind === SOURCE_TOPOLOGY.PRIMARY_ONLY) return "";
   return texts.t("value.homeAverage");
@@ -334,10 +330,11 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
 }
 
 export function buildCardViewModel({ domainModel, config, texts }) {
-  // Which sources this card is configured with. Decides the headline's caption and
-  // whether a chip would only repeat it — both configuration questions, so both read
-  // the same single answer.
-  const topology = resolveSourceTopology(config);
+  // Which sources this card actually refers to. Decides the headline's caption and
+  // whether a chip would only repeat it, so both read the same single answer — taken
+  // from the model rather than recomputed, because deciding it needs `states` (an id
+  // Home Assistant does not know is not a source) and this layer has none.
+  const topology = domainModel.topology;
   const metricKind = domainModel.metric.kind;
   const meta = metricKind ? metricMetaFor(metricKind) : null;
   const title = config.title || (meta ? texts.t(meta.titleKey) : CARD_NAME);

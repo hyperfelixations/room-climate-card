@@ -81,7 +81,7 @@ export const sv = {
   "subtitle.inComfortIssue": (v) => `Ø inom komfort · ${v.name} sticker ut mest.`,
   "subtitle.inComfortAllGood": "Ø inom komfort · alla rum ligger inom målintervallet.",
   "subtitle.inComfort": "Ø inom komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} rum utan data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurerade rum hittades inte.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spridning ${v.value}`,

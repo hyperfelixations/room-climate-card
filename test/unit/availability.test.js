@@ -263,9 +263,19 @@ test("focus falls back safely when a no-data placeholder disappears", () => {
   try {
     const chip = el.shadowRoot.querySelector('[data-entity="sensor.a"]');
     chip.focus();
+    // sensor.a stops existing at all — not "unavailable", GONE from the state machine.
+    // Home Assistant only does that for an id it no longer knows, so the card is now a
+    // one-room card and says so: no chip for the vanished room, and its single
+    // remaining source becomes the interactive headline.
     el.hass = mkHass({ "sensor.b": state("sensor.b", "unavailable") });
     assert.equal(el.shadowRoot.querySelector('[data-entity="sensor.a"]'), null);
-    assert.equal(el.shadowRoot.activeElement, el.shadowRoot.querySelector(".rtc-root"));
+    // Focus lands on that headline rather than on .rtc-root: focusFallbackTarget()
+    // prefers a real control when one exists, and here one now does. What matters for a
+    // keyboard user is that focus never leaves the card, which both targets satisfy.
+    const headline = el.shadowRoot.querySelector("button.rtc-avg-button");
+    assert.ok(headline, "the one remaining room is the headline, and it is interactive");
+    assert.equal(el.shadowRoot.activeElement, headline);
+    assert.equal(headline.getAttribute("data-entity"), "sensor.b");
   } finally {
     env.cleanup(el);
   }

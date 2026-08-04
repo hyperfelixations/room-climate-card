@@ -77,7 +77,8 @@ export const ru = {
   "subtitle.inComfortIssue": (v) => `Среднее в комфортном диапазоне · сильнее всего выделяется ${v.name}.`,
   "subtitle.inComfortAllGood": "Среднее в комфортном диапазоне · все комнаты находятся в целевом диапазоне.",
   "subtitle.inComfort": "Среднее в комфортном диапазоне.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${selectPlural("ru", v.count, { one: "комната", few: "комнаты", many: "комнат", other: "комнаты" })} без данных.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("ru", v.count, { one: "комната", few: "комнаты", many: "комнат", other: "комнаты" })} не ${selectPlural("ru", v.count, { one: "найдена", few: "найдены", many: "найдено", other: "найдены" })}.`,
 
   "footer.comfort": (v) => `Комфорт ${v.count}/${v.total}`,
   "footer.spread": (v) => `Разброс ${v.value}`,

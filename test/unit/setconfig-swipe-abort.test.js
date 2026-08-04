@@ -69,7 +69,7 @@ test("setConfig mid-drag resolves the active view and clears drag state", () => 
   beginConfirmedDrag(el, 2);
   el._activeView = 0; // stale/pre-drag value, must not leak through
 
-  el.setConfig({ ...BASE_CONFIG, value_label: "Custom" }); // non-structural change
+  el.setConfig({ ...BASE_CONFIG, entity_label: "Custom" }); // non-structural change
 
   assert.equal(el._activeView, 2, "must resolve from the frozen drag position (2), not the stale pre-drag value (0)");
   assert.equal(el._isDragging, false);
@@ -83,7 +83,7 @@ test("setConfig mid-drag settles the transform and schedules a resume", () => {
   const track = el.shadowRoot.querySelector(".rtc-track");
   track.style.transform = "translate3d(-17%,0,0)"; // an arbitrary mid-drag position, not aligned to any view
 
-  el.setConfig({ ...BASE_CONFIG, value_label: "Custom" });
+  el.setConfig({ ...BASE_CONFIG, entity_label: "Custom" });
 
   const viewWidthPct = el._viewWidthPct();
   assert.equal(el._activeView, 1);
@@ -106,7 +106,7 @@ test("setConfig without an active drag does not schedule a resume", () => {
   el._stopRotation();
   assert.equal(el._carousel.resumeTimerHandle, null, "starting point: nothing pending");
 
-  el.setConfig({ ...BASE_CONFIG, value_label: "Custom" });
+  el.setConfig({ ...BASE_CONFIG, entity_label: "Custom" });
 
   assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
@@ -119,7 +119,7 @@ test("setConfig during an unconfirmed pointerdown clears state without settling"
   beginTouch(el); // pointerdown happened, but the 10px/25deg drag threshold was never crossed
   assert.equal(el._isDragging, false);
 
-  el.setConfig({ ...BASE_CONFIG, value_label: "Custom" });
+  el.setConfig({ ...BASE_CONFIG, entity_label: "Custom" });
 
   assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
@@ -230,7 +230,7 @@ test("a valid setConfig mid-drag still settles the gesture exactly as before", (
   beginConfirmedDrag(el, 2);
   el._activeView = 0; // stale
 
-  el.setConfig({ ...BASE_CONFIG, value_label: "Custom" });
+  el.setConfig({ ...BASE_CONFIG, entity_label: "Custom" });
 
   assert.equal(el._interaction.pointer, null);
   assert.equal(el._isDragging, false);
@@ -244,7 +244,7 @@ test("setConfig mid-drag resolves each frozen track position to the correct view
   for (let targetIndex = 0; targetIndex <= 2; targetIndex++) {
     beginConfirmedDrag(el, targetIndex, { pointerId: 7 });
     el._activeView = (targetIndex + 1) % 3; // deliberately stale/wrong
-    el.setConfig({ ...BASE_CONFIG, value_label: `pass-${targetIndex}` });
+    el.setConfig({ ...BASE_CONFIG, entity_label: `pass-${targetIndex}` });
     assert.equal(el._activeView, targetIndex);
   }
   env.cleanup(el);

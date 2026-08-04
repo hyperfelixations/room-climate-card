@@ -39,7 +39,7 @@ import {
   resolveProfileIcon,
   resolveScaleConfig,
 } from "./classification.js";
-import { AVAILABILITY, readNumericAttribute, convertMetricValue } from "./entity-model.js";
+import { AVAILABILITY, hasEntity, readNumericAttribute, convertMetricValue } from "./entity-model.js";
 import { effectiveMetricKind } from "./measurement-context.js";
 import { resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
@@ -55,9 +55,11 @@ export function buildCardDomainModel({ states, config, context, language }) {
   const policy = classificationPolicyOf(config);
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
-  // Recomputed rather than threaded through, because it is a pure function of the
-  // config and having one owner beats having one carrier.
-  const topology = resolveSourceTopology(config);
+  // Resolved once here and carried out on the model. It stopped being a pure function
+  // of the configuration alone when a configured id that Home Assistant does not know
+  // was excluded from it (see source-topology.js), and the presentation layer has no
+  // `states` to recompute it from — so the model that HAS them answers for everyone.
+  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
   const sourceAvailability = {
     primary: {
       entity: context.primary.entityId,
@@ -81,6 +83,9 @@ export function buildCardDomainModel({ states, config, context, language }) {
   if (context.averageSource === null) {
     return {
       empty: true,
+      // Which sources the card actually refers to. Carried rather than recomputed
+      // downstream — see where it is resolved above.
+      topology,
       // Unlike effectiveMetricKind(), this may be null. No-data presentation uses
       // that fact to show the product name instead of inventing a temperature card.
       metric: { kind: context.identityMetricKind },
@@ -194,6 +199,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
 
   return {
     empty: false,
+    topology,
     metric: {
       kind: metricKind,
       canonicalUnit: context.canonicalUnit,

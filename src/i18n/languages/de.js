@@ -73,7 +73,7 @@ export const de = {
   "subtitle.inComfortIssue": (v) => `Ø im Komfort · ${v.name} fällt am stärksten auf.`,
   "subtitle.inComfortAllGood": "Ø im Komfort · alle Räume liegen im Zielkorridor.",
   "subtitle.inComfort": "Ø im Komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} ${v.count === 1 ? "Raum" : "Räume"} ohne Daten.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurierte${v.count === 1 ? "r Raum wurde" : " Räume wurden"} nicht gefunden.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spanne ${v.value}`,

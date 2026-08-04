@@ -1,7 +1,6 @@
 # Room Climate Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a compact, at-a-glance view of a room's or your whole home's climate: temperature, humidity, CO₂, or PM2.5 — auto-detected from the configured entities. It automatically adapts to your dashboard's light or dark mode.
 
@@ -14,17 +13,12 @@ A custom [Home Assistant](https://www.home-assistant.io/) dashboard card for a c
   usable primary or room source by `device_class`, with a recognized unit as
   fallback)
 - Optional per-room breakdown with a coldest/warmest room comparison, shown as a swipeable/auto-rotating carousel alongside the main scale, automatically wrapping into multiple rows past 7 rooms (or laid out to an explicit grid you choose)
-- Honest temporary-outage handling: unavailable room values can remain visible
-  as actionable `--` chips, while a card with no usable value keeps its normal
-  header and large-value layout instead of disappearing into a separate state
 - Optional daily range (min/max) views and a compact rate-of-change segment
   in the main scale footer, when the matching entities are configured
-- Optional alternate scale view showing today's min/max instead of the room comparison
 - A dynamic scale bar with comfort and optimal bands that expand to fit the current values
-- Profile-driven header icons for temperature, humidity, CO₂, and PM2.5
-- A configurable classification policy: complete `value_color`/`value_level`
-  entity attributes, built-in profiles, or a strictly validated custom YAML
-  profile. Temperature includes `indoor`, `outdoor`, and `fridge` profiles.
+- A configurable classification policy: use a built-in profile (temperature offers `indoor`, `outdoor`, and `fridge`) or define your own in YAML
+- Room sensors that are momentarily unavailable stay visible as clickable `--`
+  chips instead of disappearing from the card
 - Built-in UI in English, German, Dutch, French, Italian, Spanish, Russian, Polish, Korean, Japanese, Simplified Chinese, Norwegian Bokmål, Swedish, and Latvian, following Home Assistant's language setting — falls back to English for any other language
 - Extensive optional YAML customization for views, bands and labels, markers,
   footers, room chips, carousel behavior, language, and tap/hold actions (see
@@ -52,6 +46,7 @@ With more than one view enabled (here: the scale and room-comparison views), the
   integration. It does use CSS container queries for its responsive
   layout, so the dashboard needs a reasonably current browser (any
   currently supported version of Chrome, Edge, Firefox, or Safari).
+
 ## Installation
 
 ### HACS
@@ -87,7 +82,7 @@ entity: sensor.house_temperature
 ```
 
 The large value opens the primary entity. Because there is nothing to
-distinguish it from, it has no label unless `value_label` is set.
+distinguish it from, it has no label unless `entity_label` is set.
 
 ### One room without a separate primary
 
@@ -102,6 +97,10 @@ rooms:
 The room sensor is used directly: the room name labels the large value, and
 tapping or holding it uses that room's action. Its redundant chip is hidden
 by the default `show_rooms: auto`; set `show_rooms: true` to show it.
+
+Only entities Home Assistant actually knows count as sources here. A second
+room whose entity id is mistyped does not turn this into a two-room card — it
+stays a one-room card and the unknown id is named in the subtitle.
 
 ### Several rooms, calculated consensus
 
@@ -188,7 +187,7 @@ do not add an empty placeholder.
 | Option | Default | What it does |
 | --- | --- | --- |
 | `title` | automatic | Replaces the mode-dependent card title, such as “Temperature”. |
-| `value_label` | automatic | Replaces the label above the large main value. Use `value_label: ""` to remove the label and its spacing explicitly. When omitted, a direct single-room source uses its room name, a primary-only card has no label, and layouts that distinguish a primary or consensus from rooms use the translated home-average label. |
+| `entity_label` | automatic | Replaces the label above the large main value. Use `entity_label: ""` to remove the label and its spacing explicitly. When omitted, a direct single-room source uses its room name, a primary-only card has no label, and layouts that distinguish a primary or consensus from rooms use the translated home-average label. |
 | `icon` | automatic | Replaces the header icon with an `mdi:*` icon, for example `mdi:home-thermometer`. Without an override, all four metric modes use their profile-driven value icon. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for values such as the average, rooms, daily extremes, spread, and trend. Default per mode: `0` for CO₂, `1` for temperature, humidity, and PM2.5. Scale boundary and comfort/optimal range labels intentionally remain whole numbers. |
 | `language` | `auto` | Uses `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `ko`, `ja`, `zh`, `nb`, `sv`, or `lv`. `auto` follows Home Assistant's language; an unsupported value also falls back to automatic detection. |
@@ -381,8 +380,6 @@ current/minimum/maximum labels also remain visible.
 With no `classification` option, the card uses `source: auto`: a live entity
 classification is accepted only when both `value_color` and `value_level` are
 present and valid. Otherwise the complete numeric fallback profile is used.
-`value_score` and `value_zone` are carried with the classification but are not
-displayed as additional text.
 
 Temperature uses `indoor` by default. Select the built-in outdoor profile with
 the short form:
@@ -393,7 +390,7 @@ classification: outdoor
 
 The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
 `14–26 °C`. Unlike all anchored indoor profiles, its rendered scale has no
-fixed `10–30 °C` base anchor: both edges follow the current room/current-value
+fixed base anchor: both edges follow the current room/current-value
 range with the same rounded headroom algorithm used everywhere else. A
 fully off-axis comfort or optimal band is hidden until the live scale reaches
 it. Classification tiers and temperature icons still follow the outdoor
@@ -409,10 +406,10 @@ classification: fridge
 The fridge profile targets food-safety-appropriate temperatures rather than
 room comfort: an optimal band of `3–5 °C` and a comfort band of `1–6 °C`,
 with more headroom above the band than below it, since overheating — not
-overcooling — is the actual spoilage risk. Unlike `outdoor`, it keeps a
-fixed, anchored reference scale (`0–8 °C`, like `indoor`), because a
-fridge's normal operating range is narrow and well-defined by its
-compressor cycling rather than the weather.
+overcooling — is the actual spoilage risk. `fridge` keeps a fixed, anchored
+reference scale (`0–8 °C`, like `indoor`), because a fridge's normal operating
+range is narrow and well-defined by its compressor cycling rather than the
+weather.
 
 Unless the top-level `icon` option overrides it, the header icon follows the
 active profile's value: temperature keeps its thermometer/fire/snowflake
@@ -469,7 +466,7 @@ classification:
     max: 30
     step: 1
 
-  icons:                 # optional; shape depends on metric kind, see below
+  icons:
     fire: 35
     high: 30
     normal: 14
@@ -582,7 +579,7 @@ trend_entity: sensor.house_temperature_trend
 classification: indoor
 
 title: Indoor climate
-value_label: Home average
+entity_label: Home average
 decimals: 1
 language: auto
 
@@ -666,10 +663,13 @@ An existing source that still represents the headline keeps its click target;
 a calculated room fallback is not falsely clickable as the primary, and a
 missing source cannot be opened. Check the subtitle and entity states:
 
-- an entity that is not present in Home Assistant has no chip and is named in
-  the subtitle;
+- an entity Home Assistant does not know — a typo, or one that was removed —
+  is not a source at all: it gets no chip, it is named in the subtitle, and the
+  card is laid out as if it had not been configured. A card with one working
+  room and one mistyped one is therefore a one-room card;
 - `unknown`, `unavailable`, and malformed non-numeric states appear as
-  neutral, clickable `--` chips by default;
+  neutral, clickable `--` chips by default. These entities do exist, so they
+  still count as configured sources and the card keeps its shape;
 - incompatible metric kinds or units are excluded as configuration problems.
 
 Check for a `device_class` of `temperature`, `humidity`, `carbon_dioxide`, or

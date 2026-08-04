@@ -81,7 +81,7 @@ export const nb = {
   "subtitle.inComfortIssue": (v) => `Ø innenfor komfort · ${v.name} skiller seg mest ut.`,
   "subtitle.inComfortAllGood": "Ø innenfor komfort · alle rom er innenfor målområdet.",
   "subtitle.inComfort": "Ø innenfor komfort.",
-  "subtitle.missingRooms": (v) => ` ${v.count} rom uten data.`,
+  "subtitle.missingRooms": (v) => ` ${v.count} konfigurerte rom ble ikke funnet.`,
 
   "footer.comfort": (v) => `Komfort ${v.count}/${v.total}`,
   "footer.spread": (v) => `Spredning ${v.value}`,
