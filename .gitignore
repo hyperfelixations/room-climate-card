@@ -4,5 +4,9 @@ playwright-report/
 .cache/
 *.log
 
+# The shipped bundle is built, not stored. HACS installs it from the GitHub release
+# asset, and every test script builds it first, so a checkout never needs a copy.
+dist/
+
 # Local agent routing
 /AGENTS.md

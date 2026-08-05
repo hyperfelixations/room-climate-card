@@ -65,9 +65,10 @@ manually:
 
 ### Manual
 
-1. Download the repository's built
-   [`dist/room-climate-card.js`](dist/room-climate-card.js) file and copy it
-   into your Home Assistant `www/` folder (e.g. `www/room-climate-card.js`).
+1. Download
+   [`room-climate-card.js`](https://github.com/hyperfelixations/room-climate-card/releases/latest/download/room-climate-card.js)
+   from the latest release and copy it into your Home Assistant `www/` folder
+   (e.g. `www/room-climate-card.js`).
 2. Add it as a dashboard resource: Settings → Dashboards → the three-dot menu → **Resources** → add `/local/room-climate-card.js` as a JavaScript module.
 3. Add a card with `type: custom:room-climate-card` to a dashboard.
 
@@ -647,6 +648,7 @@ If none of this helps, please open a
 
 ## Links
 
-- [Releases](https://github.com/hyperfelixations/room-climate-card/releases)
+- [Releases](https://github.com/hyperfelixations/room-climate-card/releases) — every
+  version, with its notes and its download
 - [Issues](https://github.com/hyperfelixations/room-climate-card/issues)
 - [License](LICENSE) (MIT)

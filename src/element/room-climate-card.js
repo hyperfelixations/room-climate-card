@@ -30,10 +30,10 @@
 // Nothing below may be imported by a module above it, and Rollup's onwarn (see
 // rollup.config.mjs) turns any cycle or unresolved specifier into a build failure.
 
-// dist/room-climate-card.js is generated from this tree and committed; never edit it by
-// hand. `npm run build` regenerates it, `npm run verify:dist` proves the committed copy
-// still matches src/. The IIFE wrapper and the "use strict" prologue are emitted by the
-// build (see rollup.config.mjs), which is why this file is a plain module.
+// dist/room-climate-card.js is generated from this tree by `npm run build` and is not
+// stored in the repository; the published copy is the GitHub release asset. The IIFE
+// wrapper and the "use strict" prologue are emitted by the build (see
+// rollup.config.mjs), which is why this file is a plain module.
 
 import { CARD_NAME } from "../core/card-metadata.js";
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";

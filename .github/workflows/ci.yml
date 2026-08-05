@@ -5,9 +5,9 @@
 # and a failure in one says nothing about the other. Chaining them would hide the
 # browser result on every unit failure, exactly when knowing both is most useful.
 #
-# Both jobs re-verify the committed bundle. That repeats one Rollup build, which is
-# cheap, and it is what makes each status check meaningful on its own: no browser job
-# can ever report green while testing a stale artifact.
+# Both jobs build the bundle themselves. That repeats one Rollup build, which is cheap,
+# and it is what makes each status check meaningful on its own: no browser job can ever
+# report green while testing an artifact that some other job produced.
 
 name: CI
 
@@ -41,17 +41,16 @@ jobs:
 
       - run: npm ci
 
-      # Runs against the untouched checkout and never writes to dist/: it rebuilds the
-      # bundle in memory and compares it with the committed artifact. Building into
-      # dist/ first would compare the build with itself. Every later step loads that
-      # same committed artifact, so this has to come first.
+      # dist/ is not in the repository: the bundle is what src/ produces, and this is
+      # where it gets produced. Every later step loads that artifact, so this has to
+      # come first.
       #
       # The steps after it deliberately use the internal *:run scripts. The public
-      # commands (npm run check / test:unit) each verify the artifact themselves, which
-      # is what makes them safe to run on their own — but in a pipeline that would
-      # repeat the same Rollup build for no added guarantee.
-      - name: Verify committed bundle matches src/
-        run: npm run verify:dist
+      # commands (npm run check / test:unit) build first themselves, which is what makes
+      # them safe to run on their own — but in a pipeline that would repeat the same
+      # Rollup build for no added guarantee.
+      - name: Build the bundle from src/
+        run: npm run build
 
       - name: Syntax check
         run: npm run check:run
@@ -82,9 +81,9 @@ jobs:
       - run: npm ci
 
       # Repeated on purpose — see the file header. This job must not be able to pass
-      # against a bundle that no longer matches src/.
-      - name: Verify committed bundle matches src/
-        run: npm run verify:dist
+      # against a bundle it did not produce from the source it checked out.
+      - name: Build the bundle from src/
+        run: npm run build
 
       - name: Install Playwright's Chromium
         run: npx playwright install chromium

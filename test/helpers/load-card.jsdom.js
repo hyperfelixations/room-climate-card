@@ -7,9 +7,9 @@
 //
 // Testing the ARTIFACT rather than the sources is deliberate: it is the only
 // thing users ever execute, and it keeps the whole suite honest about the
-// build. dist/ is generated and committed; `npm run verify:dist` proves it
-// still matches src/, and the test script runs that check first, so a stale
-// bundle fails the suite instead of being silently tested.
+// build. dist/ is generated, not stored: every public test script runs
+// `npm run build` first, so the artifact under test is always the one this
+// checkout's src/ produces and a stale bundle cannot be silently tested.
 //
 // jsdom has no real layout engine (getBoundingClientRect always returns zeros,
 // no font metrics) — anything that depends on actual rendered geometry belongs

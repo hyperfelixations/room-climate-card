@@ -169,28 +169,16 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      # ORDER MATTERS, and it used to be wrong here. verify:dist compares the COMMITTED
-      # bundle against one it rebuilds in memory, so it only proves anything while that
-      # committed file is untouched. Running it after the rebuild below compared the
-      # build with itself: a step that could not fail, standing exactly where the
-      # guarantee was supposed to be.
+      # The release asset is BUILT HERE, from the approved commit's own sources, and
+      # nothing else in this workflow is allowed to substitute a file for it. That is
+      # what ties the published bundle to readable source: everything downstream —
+      # the browser job, the draft — receives this exact artifact and re-checks its
+      # SHA-256 before using it.
       #
-      # Here it proves the one thing the rest of this job cannot: that the artifact
-      # sitting on main for the approved commit really is what src/ produces. The fresh
-      # build that follows then yields the same bytes by construction, so the asset a
-      # user installs and the bundle a reviewer can read are the same thing.
-      #
-      # This step is what disappears — and only this step — when dist/ eventually moves
-      # into .gitignore and the release asset becomes the sole artifact.
-      - name: Prove the committed bundle matches src/
-        run: npm run verify:dist
-
-      - name: Remove the committed bundle so the release asset is built here
-        shell: pwsh
-        run: |
-          Remove-Item -LiteralPath "dist/room-climate-card.js" -Force -ErrorAction SilentlyContinue
-
-      - name: Build a fresh bundle
+      # A repository that carries a prebuilt bundle needs a separate step to prove that
+      # copy still matches src/. This one does not carry one, so there is no second
+      # artifact that could disagree.
+      - name: Build the release asset from src/
         run: npm run build
 
       - name: Check bundle syntax
@@ -273,11 +261,6 @@ jobs:
 
       - name: Install exactly from the lockfile
         run: npm ci
-
-      - name: Remove any checked-in bundle
-        shell: pwsh
-        run: |
-          Remove-Item -LiteralPath "dist/room-climate-card.js" -Force -ErrorAction SilentlyContinue
 
       - name: Download the exact candidate bundle
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
