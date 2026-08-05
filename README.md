@@ -10,8 +10,7 @@ humidity, CO₂, or PM2.5. It reads the current value from your sensors, puts it
 on a scale with comfort and optimal ranges, and lists the individual rooms
 below. The card follows your dashboard's light or dark theme.
 
-![Room Climate Card showing a temperature average with a comfort scale and five room chips](screenshot.png)
-![Room Climate Card in dark mode](screenshot-dark.png)
+![Room Climate Card with four modes and in dark and light mode](room-climate-card-four-modes.png)
 
 ## Features
 
