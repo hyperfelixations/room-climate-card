@@ -24,7 +24,9 @@
 //                                     pixels, or null when it cannot be read
 //   readAnimationPhase(element, name)
 //                                  -> {phaseMs, cycleMs} of the named CSS animation
-//                                     running on the element, or null
+//                                     running on the element, or null. phaseMs is where
+//                                     the animation is NOW, in any calling context —
+//                                     not where the last rendered frame left it.
 //
 // A test substitutes a fake with the same shape and gets a deterministic controller.
 // createFakePlatform() lives in the test suite, not here: production must not ship a
@@ -69,6 +71,38 @@ function readTranslateXPx(element) {
   }
 }
 
+// How long ago the frame was that an animation clock is still reporting.
+//
+// An animation's currentTime comes from its timeline, and a timeline only advances
+// BETWEEN RENDERED FRAMES — its value is fixed for the whole of any one task. Inside a
+// requestAnimationFrame callback that is exactly right, because the frame is now.
+// Inside a setTimeout callback it is not: the value is however old the last painted
+// frame is. Measured in this repository's own browser suite, that gap is p50 8 ms and
+// up to 17 ms on an idle machine, and far larger while the main thread is busy.
+//
+// That is not a rounding detail for the accessibility sync, which runs on a timer. A
+// timer armed to fire exactly at a flip would read a phase that still says "not yet",
+// leave the attributes on the outgoing view and re-arm — turning a due flip into a late
+// one. Adding the elapsed time back removes the quantization at its source.
+//
+// Only while the animation is RUNNING. A paused or finished animation's currentTime
+// stands still on purpose, and adding wall-clock time to it would invent a phase the
+// track is not at. Anything unreadable — no timeline, no performance clock, a realm
+// that reports neither — yields 0, which is the unextrapolated frame phase and exactly
+// what this function returned before it existed.
+function msSinceAnimationFrame(element, animation) {
+  if (animation?.playState !== "running") return 0;
+  const document = element.ownerDocument;
+  const frameMs = Number(animation.timeline?.currentTime ?? document?.timeline?.currentTime);
+  const nowMs = Number(document?.defaultView?.performance?.now?.());
+  if (!Number.isFinite(frameMs) || !Number.isFinite(nowMs)) return 0;
+  // Both are measured from the same document time origin, so their difference is the
+  // age of the frame. A negative result would mean the frame is in the future; take the
+  // honest reading of that, which is "no measurable age".
+  const ageMs = nowMs - frameMs;
+  return ageMs > 0 ? ageMs : 0;
+}
+
 // Where the named CSS animation ACTUALLY is, read from the animation's own clock
 // rather than from the wall clock the card used to start it.
 //
@@ -94,7 +128,10 @@ function readAnimationPhase(element, animationName) {
     const progress = timing?.progress;
     if (typeof progress !== "number" || !Number.isFinite(progress)) return null;
     if (!Number.isFinite(cycleMs) || cycleMs <= 0) return null;
-    return { phaseMs: progress * cycleMs, cycleMs };
+    // `progress` is the phase AT THE LAST RENDERED FRAME, not the phase now — see
+    // msSinceAnimationFrame(). Extrapolating makes the two agree with the promise this
+    // function's name makes, in every calling context rather than only inside a frame.
+    return { phaseMs: (progress * cycleMs + msSinceAnimationFrame(element, animation)) % cycleMs, cycleMs };
   } catch (_error) {
     // A realm without the Web Animations API, or an animation the browser will not
     // describe. The caller keeps its wall-clock answer, which is what every version

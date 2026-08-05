@@ -715,6 +715,123 @@ test("the browser adapter reads the named animation's own phase and ignores ever
   assert.equal(platform.readAnimationPhase(throwing, "rtc-track-slide"), null, "a throwing realm degrades");
 });
 
+// An animation clock is frozen for the whole of any one task and only advances between
+// rendered frames. Read inside requestAnimationFrame that is exactly right; read from
+// the timer callback that drives the accessibility sync it is as old as the last paint.
+// These build that situation by hand: a standing timeline and a performance clock that
+// has moved on.
+function animatedElement({ progress, duration, playState = "running", animationTimeMs, documentTimeMs, nowMs }) {
+  const animation = {
+    animationName: "rtc-track-slide",
+    playState,
+    timeline: animationTimeMs === undefined ? undefined : { currentTime: animationTimeMs },
+    effect: { getComputedTiming: () => ({ progress, duration }) },
+  };
+  return {
+    getAnimations: () => [animation],
+    ownerDocument: {
+      timeline: documentTimeMs === undefined ? undefined : { currentTime: documentTimeMs },
+      defaultView: { performance: { now: () => nowMs } },
+    },
+  };
+}
+
+test("the browser adapter reports the animation phase now, not the phase of the last painted frame", () => {
+  const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
+  const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
+  const read = (overrides) =>
+    platform.readAnimationPhase(
+      animatedElement({ progress: 0.25, duration: 4600, animationTimeMs: 8000, nowMs: 8040, ...overrides }),
+      "rtc-track-slide"
+    );
+
+  // 0.25 * 4600 = 1150ms was true at the last frame, and that frame is 40ms old.
+  assert.deepEqual(read(), { phaseMs: 1190, cycleMs: 4600 }, "the frame's age belongs on the phase");
+
+  // The same reading taken inside a frame, where the two clocks agree: nothing to add.
+  assert.deepEqual(read({ nowMs: 8000 }), { phaseMs: 1150, cycleMs: 4600 });
+
+  // A paused animation's clock stands still on purpose. Adding wall-clock time to it
+  // would invent a position the track is demonstrably not at.
+  assert.deepEqual(read({ playState: "paused" }), { phaseMs: 1150, cycleMs: 4600 });
+  assert.deepEqual(read({ playState: "finished" }), { phaseMs: 1150, cycleMs: 4600 });
+
+  // The document's timeline is the fallback when the animation does not name its own.
+  assert.deepEqual(read({ animationTimeMs: undefined, documentTimeMs: 8000 }), { phaseMs: 1190, cycleMs: 4600 });
+  // With neither, the frame phase is the honest answer rather than a guess.
+  assert.deepEqual(read({ animationTimeMs: undefined }), { phaseMs: 1150, cycleMs: 4600 });
+
+  // A frame that claims to be in the future has no measurable age.
+  assert.deepEqual(read({ nowMs: 7900 }), { phaseMs: 1150, cycleMs: 4600 });
+
+  // Extrapolation stays inside the cycle: 500ms in, 600ms later, is 100ms into the next.
+  assert.deepEqual(
+    platform.readAnimationPhase(
+      animatedElement({ progress: 0.5, duration: 1000, animationTimeMs: 1000, nowMs: 1600 }),
+      "rtc-track-slide"
+    ),
+    { phaseMs: 100, cycleMs: 1000 }
+  );
+});
+
+test("the accessibility state is re-derived on the frame that actually starts the animation", () => {
+  // Declaring `animation` and `animation-delay` does not create an animation; the frame
+  // that applies them does. Anything the card decides in between has only the wall clock
+  // to go on — and the wall clock is precisely what the running animation will lag by
+  // however long that frame takes.
+  const platform = createFakePlatform();
+  const { controller, track, views } = makeController({ rotationSeconds: 1, slideSeconds: 0.15, platform });
+  const cycleMs = controller.timing().cycleMs;
+  const inertFlags = () => views.map((view) => view.hasAttribute("inert"));
+
+  // Wall clock at phase 4550: past the flip in the cycle's last segment, so the wall
+  // clock says the accessible view is already view 0.
+  platform.setNow(Math.ceil(platform.now() / cycleMs) * cycleMs + 4550);
+  controller.applyAutoSlideStyles();
+  assert.deepEqual(inertFlags(), [false, true, true], "with no animation to ask, the wall clock is all there is");
+  assert.notEqual(controller.animationStartFrameHandle, null, "and a frame must be booked to ask again");
+
+  // One frame later the animation exists — and it is 60ms behind the wall clock, which
+  // puts it before that flip and on view 1. Without this second pass the card would hold
+  // the wrong accessible view until the NEXT flip, because the timer was armed from the
+  // same wrong phase.
+  track.__animationPhase = { phaseMs: 4490, cycleMs };
+  platform.flushFrames();
+  assert.deepEqual(inertFlags(), [true, false, true], "the animation's own phase wins as soon as there is one");
+  assert.equal(controller.animationStartFrameHandle, null, "the frame is a one-shot, not a poll");
+});
+
+test("the animation-start frame is cancelled with everything else the controller owns", () => {
+  const { controller, platform } = makeController();
+  controller.applyAutoSlideStyles();
+  assert.equal(platform.pendingFrameCount(), 1);
+  controller.destroy();
+  assert.equal(platform.pendingFrameCount(), 0, "a card torn down before its first frame leaves no callback behind");
+  assert.equal(controller.animationStartFrameHandle, null);
+});
+
+test("a flip that is already due is not deferred by the re-arm floor", () => {
+  // The card's own defaults: holdMs 1000, slideMs 150, so a segment is 1150ms and the
+  // accessible view flips 1053.06ms into it. Park the clock ~1ms before that boundary —
+  // the exact situation a timer firing a hair early creates.
+  const platform = createFakePlatform();
+  const { controller, views } = makeController({ rotationSeconds: 1, slideSeconds: 0.15, platform });
+  const cycleMs = controller.timing().cycleMs;
+  platform.setNow(Math.ceil(platform.now() / cycleMs) * cycleMs + 1052);
+
+  const inertFlags = () => views.map((view) => view.hasAttribute("inert"));
+
+  controller.applyAutoSlideStyles();
+  assert.deepEqual(inertFlags(), [false, true, true], "before the boundary the first view is still the accessible one");
+
+  // The floor may round the wait up, but only to the shortest delay a browser will
+  // actually schedule. Anything longer is a due flip held back: at the previous 50ms
+  // this advance left the DOM on the outgoing view, which is precisely how the
+  // attributes fell ~92ms behind the track on CI.
+  platform.advance(5);
+  assert.deepEqual(inertFlags(), [true, false, true], "the flip lands within a schedulable delay, not a twentieth of a second");
+});
+
 test("the browser adapter hands back a working unsubscribe for visibility", () => {
   const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
   const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);

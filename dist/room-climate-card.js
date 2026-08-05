@@ -8996,7 +8996,9 @@ function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct }) 
 //                                     pixels, or null when it cannot be read
 //   readAnimationPhase(element, name)
 //                                  -> {phaseMs, cycleMs} of the named CSS animation
-//                                     running on the element, or null
+//                                     running on the element, or null. phaseMs is where
+//                                     the animation is NOW, in any calling context —
+//                                     not where the last rendered frame left it.
 //
 // A test substitutes a fake with the same shape and gets a deterministic controller.
 // createFakePlatform() lives in the test suite, not here: production must not ship a
@@ -9041,6 +9043,38 @@ function readTranslateXPx(element) {
   }
 }
 
+// How long ago the frame was that an animation clock is still reporting.
+//
+// An animation's currentTime comes from its timeline, and a timeline only advances
+// BETWEEN RENDERED FRAMES — its value is fixed for the whole of any one task. Inside a
+// requestAnimationFrame callback that is exactly right, because the frame is now.
+// Inside a setTimeout callback it is not: the value is however old the last painted
+// frame is. Measured in this repository's own browser suite, that gap is p50 8 ms and
+// up to 17 ms on an idle machine, and far larger while the main thread is busy.
+//
+// That is not a rounding detail for the accessibility sync, which runs on a timer. A
+// timer armed to fire exactly at a flip would read a phase that still says "not yet",
+// leave the attributes on the outgoing view and re-arm — turning a due flip into a late
+// one. Adding the elapsed time back removes the quantization at its source.
+//
+// Only while the animation is RUNNING. A paused or finished animation's currentTime
+// stands still on purpose, and adding wall-clock time to it would invent a phase the
+// track is not at. Anything unreadable — no timeline, no performance clock, a realm
+// that reports neither — yields 0, which is the unextrapolated frame phase and exactly
+// what this function returned before it existed.
+function msSinceAnimationFrame(element, animation) {
+  if (animation?.playState !== "running") return 0;
+  const document = element.ownerDocument;
+  const frameMs = Number(animation.timeline?.currentTime ?? document?.timeline?.currentTime);
+  const nowMs = Number(document?.defaultView?.performance?.now?.());
+  if (!Number.isFinite(frameMs) || !Number.isFinite(nowMs)) return 0;
+  // Both are measured from the same document time origin, so their difference is the
+  // age of the frame. A negative result would mean the frame is in the future; take the
+  // honest reading of that, which is "no measurable age".
+  const ageMs = nowMs - frameMs;
+  return ageMs > 0 ? ageMs : 0;
+}
+
 // Where the named CSS animation ACTUALLY is, read from the animation's own clock
 // rather than from the wall clock the card used to start it.
 //
@@ -9066,7 +9100,10 @@ function readAnimationPhase(element, animationName) {
     const progress = timing?.progress;
     if (typeof progress !== "number" || !Number.isFinite(progress)) return null;
     if (!Number.isFinite(cycleMs) || cycleMs <= 0) return null;
-    return { phaseMs: progress * cycleMs, cycleMs };
+    // `progress` is the phase AT THE LAST RENDERED FRAME, not the phase now — see
+    // msSinceAnimationFrame(). Extrapolating makes the two agree with the promise this
+    // function's name makes, in every calling context rather than only inside a frame.
+    return { phaseMs: (progress * cycleMs + msSinceAnimationFrame(element, animation)) % cycleMs, cycleMs };
   } catch (_error) {
     // A realm without the Web Animations API, or an animation the browser will not
     // describe. The caller keeps its wall-clock answer, which is what every version
@@ -9384,9 +9421,9 @@ function waitFromTimestampUntilViewHold(targetIndex, timestampMs, timing) {
 // The carousel controller: everything that MOVES, and everything that has to be
 // cleaned up afterwards.
 //
-// It owns three pieces of state and nothing else owns them: the active view index, the
-// resume timer, and the accessibility-sync timer. Keeping them together gives every
-// timer one explicit reset owner.
+// It owns four pieces of state and nothing else owns them: the active view index, the
+// resume timer, the accessibility-sync timer, and the one animation frame that follows
+// an animation start. Keeping them together gives every timer one explicit reset owner.
 //
 // What it is NOT allowed to know is deliberate and complete: no hass, no configuration
 // object, no domain model, no renderer, no view model. It receives four things —
@@ -9401,7 +9438,14 @@ function waitFromTimestampUntilViewHold(targetIndex, timestampMs, timing) {
 
 // Guards against a 0ms re-arm loop if a phase lands exactly on — or a floating-point
 // hair past — a flip boundary.
-const MIN_RESCHEDULE_MS = 50;
+//
+// It is a floor on SCHEDULING, and deliberately not a moment longer than it has to be:
+// whatever it is set to, a flip that turns out to be due sooner than that is applied
+// that much late. At 50ms it was long enough to be seen — a timer that fired a hair
+// before its own flip deferred that flip by a twentieth of a second. 4ms is the point
+// below which browsers clamp nested timeouts anyway, so nothing shorter is schedulable
+// and nothing longer is needed to break a zero-delay loop.
+const MIN_RESCHEDULE_MS = 4;
 
 // How long the eased settle after a manual swipe takes, and how long the card waits
 // before it even considers rejoining the synchronized animation.
@@ -9413,6 +9457,7 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
   let activeIndex = 0;
   let resumeTimer = null;
   let a11yTimer = null;
+  let animationStartFrame = null;
 
   const viewCount = () => viewKeys.length;
   const interacting = () => Boolean(isInteracting?.());
@@ -9537,6 +9582,11 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
   // clock stays the fallback and stays the SOURCE of the synchronization — two cards on
   // one dashboard still agree because both derive their delay from it; this only reads
   // back where the resulting animation actually got to.
+  //
+  // "Where it got to" means NOW, including from the timer callback below, where an
+  // animation clock read raw would still be reporting the last painted frame. The
+  // platform port owns that correction; see msSinceAnimationFrame() in
+  // browser-platform.js.
   function visiblePhaseMs(track, current) {
     const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
     // A running animation still carries the PREVIOUS cycle length for a moment after
@@ -9611,6 +9661,22 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     track.style.animation = `${TRACK_ANIMATION_NAME} ${current.cycleMs}ms linear infinite`;
     track.style.animationDelay = `-${current.phaseMs}ms`;
     scheduleAccessibilitySync();
+    // The animation declared on the two lines above does not EXIST until the frame that
+    // applies them. The sync just scheduled therefore had nothing to ask and fell back
+    // to the wall clock — the one clock that is guaranteed to be wrong here, because the
+    // animation is about to lag it by however long that frame takes. Worse, the fallback
+    // does not merely mislabel this instant: msUntilNextAccessibilityFlip() then arms the
+    // chain against the same wrong phase, so a card can sit on the wrong accessible view
+    // for close to a full segment before anything reconsiders.
+    //
+    // One frame later there is something to ask. This is a single frame per animation
+    // start, not per flip, so the "one precisely-timed timer instead of polling" property
+    // is untouched.
+    clearAnimationStartFrame();
+    animationStartFrame = platform.requestAnimationFrame(() => {
+      animationStartFrame = null;
+      scheduleAccessibilitySync();
+    });
   }
 
   // Rejoin the synchronized animation only once its global phase already HOLDS the
@@ -9664,9 +9730,17 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     }
   }
 
+  function clearAnimationStartFrame() {
+    if (animationStartFrame !== null) {
+      platform.cancelAnimationFrame(animationStartFrame);
+      animationStartFrame = null;
+    }
+  }
+
   function stop() {
     clearResumeTimer();
     clearA11yTimer();
+    clearAnimationStartFrame();
   }
 
   return {
@@ -9711,6 +9785,9 @@ function createCarouselController({ platform, getTrack, getViewElements, getTimi
     },
     get accessibilityTimerHandle() {
       return a11yTimer;
+    },
+    get animationStartFrameHandle() {
+      return animationStartFrame;
     },
 
     // ---- commands ------------------------------------------------------------

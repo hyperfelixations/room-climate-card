@@ -1,9 +1,9 @@
 // The carousel controller: everything that MOVES, and everything that has to be
 // cleaned up afterwards.
 //
-// It owns three pieces of state and nothing else owns them: the active view index, the
-// resume timer, and the accessibility-sync timer. Keeping them together gives every
-// timer one explicit reset owner.
+// It owns four pieces of state and nothing else owns them: the active view index, the
+// resume timer, the accessibility-sync timer, and the one animation frame that follows
+// an animation start. Keeping them together gives every timer one explicit reset owner.
 //
 // What it is NOT allowed to know is deliberate and complete: no hass, no configuration
 // object, no domain model, no renderer, no view model. It receives four things —
@@ -32,7 +32,14 @@ import {
 
 // Guards against a 0ms re-arm loop if a phase lands exactly on — or a floating-point
 // hair past — a flip boundary.
-const MIN_RESCHEDULE_MS = 50;
+//
+// It is a floor on SCHEDULING, and deliberately not a moment longer than it has to be:
+// whatever it is set to, a flip that turns out to be due sooner than that is applied
+// that much late. At 50ms it was long enough to be seen — a timer that fired a hair
+// before its own flip deferred that flip by a twentieth of a second. 4ms is the point
+// below which browsers clamp nested timeouts anyway, so nothing shorter is schedulable
+// and nothing longer is needed to break a zero-delay loop.
+const MIN_RESCHEDULE_MS = 4;
 
 // How long the eased settle after a manual swipe takes, and how long the card waits
 // before it even considers rejoining the synchronized animation.
@@ -44,6 +51,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   let activeIndex = 0;
   let resumeTimer = null;
   let a11yTimer = null;
+  let animationStartFrame = null;
 
   const viewCount = () => viewKeys.length;
   const interacting = () => Boolean(isInteracting?.());
@@ -168,6 +176,11 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   // clock stays the fallback and stays the SOURCE of the synchronization — two cards on
   // one dashboard still agree because both derive their delay from it; this only reads
   // back where the resulting animation actually got to.
+  //
+  // "Where it got to" means NOW, including from the timer callback below, where an
+  // animation clock read raw would still be reporting the last painted frame. The
+  // platform port owns that correction; see msSinceAnimationFrame() in
+  // browser-platform.js.
   function visiblePhaseMs(track, current) {
     const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
     // A running animation still carries the PREVIOUS cycle length for a moment after
@@ -242,6 +255,22 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     track.style.animation = `${TRACK_ANIMATION_NAME} ${current.cycleMs}ms linear infinite`;
     track.style.animationDelay = `-${current.phaseMs}ms`;
     scheduleAccessibilitySync();
+    // The animation declared on the two lines above does not EXIST until the frame that
+    // applies them. The sync just scheduled therefore had nothing to ask and fell back
+    // to the wall clock — the one clock that is guaranteed to be wrong here, because the
+    // animation is about to lag it by however long that frame takes. Worse, the fallback
+    // does not merely mislabel this instant: msUntilNextAccessibilityFlip() then arms the
+    // chain against the same wrong phase, so a card can sit on the wrong accessible view
+    // for close to a full segment before anything reconsiders.
+    //
+    // One frame later there is something to ask. This is a single frame per animation
+    // start, not per flip, so the "one precisely-timed timer instead of polling" property
+    // is untouched.
+    clearAnimationStartFrame();
+    animationStartFrame = platform.requestAnimationFrame(() => {
+      animationStartFrame = null;
+      scheduleAccessibilitySync();
+    });
   }
 
   // Rejoin the synchronized animation only once its global phase already HOLDS the
@@ -295,9 +324,17 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     }
   }
 
+  function clearAnimationStartFrame() {
+    if (animationStartFrame !== null) {
+      platform.cancelAnimationFrame(animationStartFrame);
+      animationStartFrame = null;
+    }
+  }
+
   function stop() {
     clearResumeTimer();
     clearA11yTimer();
+    clearAnimationStartFrame();
   }
 
   return {
@@ -342,6 +379,9 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     },
     get accessibilityTimerHandle() {
       return a11yTimer;
+    },
+    get animationStartFrameHandle() {
+      return animationStartFrame;
     },
 
     // ---- commands ------------------------------------------------------------

@@ -57,6 +57,25 @@ const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-help
 // end of the test are what stop that from quietly emptying the run.
 const ONE_FRAME_MS = 17;
 
+// The card under test, in milliseconds. Declared once because the two claims
+// below need them for different reasons: the configuration is built from them,
+// and Claim 2's sampling window is defined in terms of them.
+const HOLD_MS = 1000;
+const SLIDE_MS = 150;
+const SEG_MS = HOLD_MS + SLIDE_MS;
+const TRACK_ANIMATION_NAME = "rtc-track-slide";
+
+// How far inside a hold a sample has to sit before Claim 2 will look at it.
+//
+// A hold is a span of TIME — [0, HOLD_MS) of each segment — and the accessible
+// view for all of it was decided at the previous segment's flip, 96.9ms before
+// this hold even began. Sampling 60ms in therefore leaves ~157ms of settling,
+// and stopping 60ms early keeps the window clear of the moment the track starts
+// moving again. Both ends also absorb the frame-scale skew between the phase and
+// the transform, which are read in the same task but produced by different
+// clocks.
+const HOLD_MARGIN_MS = 60;
+
 function threeViewStates() {
   return {
     "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
@@ -85,9 +104,19 @@ async function sample(page, cardId) {
     const read = () => {
       const matrix = new DOMMatrixReadOnly(getComputedStyle(track).transform);
       const viewWidthPx = track.getBoundingClientRect().width / views.length;
+      // The track's own animation clock. Used ONLY to decide whether a sample
+      // falls in a hold; what is true at that moment still comes from the
+      // rendered transform below, so the card is never its own witness.
+      const animation = track.getAnimations?.().find((candidate) => candidate.animationName === "rtc-track-slide");
+      const animationTiming = animation?.effect?.getComputedTiming?.();
+      const animationCycleMs = Number(animationTiming?.duration);
+      const animationProgress = animationTiming?.progress;
+      const readable = typeof animationProgress === "number" && Number.isFinite(animationCycleMs) && animationCycleMs > 0;
       return {
         positionIndex: -matrix.m41 / viewWidthPx,
         modelIndex: el._carousel.currentVisualIndex(),
+        animationPhaseMs: readable ? animationProgress * animationCycleMs : null,
+        animationCycleMs: readable ? animationCycleMs : null,
         frameStalenessMs: performance.now() - Number(document.timeline.currentTime),
         states: views.map((v) => ({ ariaHidden: v.getAttribute("aria-hidden"), inert: v.hasAttribute("inert") })),
         // Diagnostics. A mismatch below is only actionable if it also says WHY the
@@ -134,6 +163,17 @@ async function sample(page, cardId) {
 // Tightening rather than loosening is what makes this correct: the model claim is now
 // checked only where there IS an unambiguous answer, and it is checked exactly. Holds
 // occupy 1000 ms of every 1150 ms segment, so this costs almost no samples.
+//
+// What the reasoning above still got wrong, and what 2.38.2 was caught by: this is a
+// measure of SPACE, and the easing is flat at BOTH ends of a slide, not just the start.
+// 0.1 % of a view width from the finish is 97 % of the way through the slide in TIME —
+// so this epsilon quietly accepts the last 6.8 ms of every slide as "a hold", a point
+// at which the accessibility flip is already 90 ms past due. No epsilon in space can
+// express "parked", because the two axes are different curves.
+//
+// It therefore keeps exactly the job it can do — deciding WHICH integer position a
+// parked transform is at, which is what Claim 1 needs — and Claim 2, whose subject is a
+// hold, gates on the phase instead. See inSteadyHold().
 const HOLD_EPSILON = 1e-3; // 0.1 % of a view width — well under one rendered pixel
 
 function heldIndex({ positionIndex, states }) {
@@ -143,6 +183,19 @@ function heldIndex({ positionIndex, states }) {
   if (Math.abs(positionIndex - nearest) >= HOLD_EPSILON) return null;
   if (nearest < 0 || nearest >= states.length) return null;
   return nearest;
+}
+
+// Whether a sample was taken well inside a hold — measured on the clock a hold is
+// actually defined on.
+//
+// A segment is HOLD_MS parked followed by SLIDE_MS moving, and the cycle is a whole
+// number of segments, so the phase modulo one segment IS the position within a segment.
+// An unreadable animation (no Web Animations API, or a track handed back to manual
+// control) means there is no synchronized hold to speak of, and the sample is not used.
+function inSteadyHold({ animationPhaseMs }) {
+  if (typeof animationPhaseMs !== "number") return false;
+  const subPhaseMs = animationPhaseMs % SEG_MS;
+  return subPhaseMs >= HOLD_MARGIN_MS && subPhaseMs <= HOLD_MS - HOLD_MARGIN_MS;
 }
 
 test("aria-hidden/inert follow the live CSS auto-slide position throughout a cycle, not just the active view index", async ({ page }) => {
@@ -157,14 +210,22 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
       entity: "sensor.avg",
       range_entity: "sensor.range",
       rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
-      rotation_seconds: 1,
-      slide_seconds: 0.15,
+      rotation_seconds: HOLD_MS / 1000,
+      slide_seconds: SLIDE_MS / 1000,
     },
     threeViewStates()
   );
   await page.evaluate((id) => {
     document.getElementById(id).style.width = "400px";
   }, cardId);
+
+  // inSteadyHold() reduces the phase modulo one segment, which is only the position
+  // within a segment while the cycle is a whole number of them. Stated here so a
+  // changed view count or hold sequence fails loudly instead of silently sampling the
+  // wrong part of the cycle.
+  const cycleMs = (await sample(page, cardId)).framed.animationCycleMs;
+  expect(cycleMs, "the track animation must be readable").not.toBeNull();
+  expect(cycleMs % SEG_MS, `cycle ${cycleMs}ms must be a whole number of ${SEG_MS}ms segments`).toBeCloseTo(0, 6);
 
   let modelSamples = 0;
   let domSamples = 0;
@@ -183,12 +244,23 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
     }
 
     // Claim 2 — the attributes the card actually wrote agree with it.
+    //
+    // Two gates, and they answer different questions. inSteadyHold() asks WHEN, on the
+    // animation's clock: is this a moment at which a hold is being held, far enough from
+    // both flips that a main-thread write has plainly had its turn. heldIndex() then
+    // asks WHAT, from the compositor's own transform: which view is parked in front.
+    // Only the second decides what is correct — the phase never gets a vote on that.
     const settledIndex = heldIndex(settled);
-    if (settledIndex !== null) {
+    if (settledIndex !== null && inSteadyHold(settled)) {
       domSamples++;
       const where =
         `positionIndex=${settled.positionIndex} model=${settled.modelIndex} activeIndex=${settled.activeIndex} ` +
-        `manual=${settled.manual} timerArmed=${settled.timerArmed} visibility=${settled.visibility}`;
+        `subPhase=${(settled.animationPhaseMs % SEG_MS).toFixed(1)}ms ` +
+        `manual=${settled.manual} timerArmed=${settled.timerArmed} visibility=${settled.visibility} ` +
+        // The whole row, not just the view whose assertion trips first: "all three
+        // inert" and "the wrong one active" are different defects with different causes.
+        `inert=[${settled.states.map((s) => (s.inert ? 1 : 0)).join(",")}] ` +
+        `framedPos=${framed.positionIndex} framedSub=${(framed.animationPhaseMs % SEG_MS).toFixed(1)}ms`;
       settled.states.forEach((s, i) => {
         const shouldBeActive = i === settledIndex;
         expect(s.inert, `view ${i} inert at ${where}`).toBe(!shouldBeActive);
