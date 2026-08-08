@@ -26,6 +26,7 @@ import { it } from "./languages/it.js";
 import { es } from "./languages/es.js";
 import { ru } from "./languages/ru.js";
 import { pl } from "./languages/pl.js";
+import { uk } from "./languages/uk.js";
 import { ko } from "./languages/ko.js";
 import { ja } from "./languages/ja.js";
 import { zh } from "./languages/zh.js";

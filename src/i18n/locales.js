@@ -20,6 +20,7 @@ export const NUMBER_LOCALE_BY_LANGUAGE = {
   es: "es",
   ru: "ru",
   pl: "pl",
+  uk: "uk",
   ko: "ko",
   ja: "ja",
   zh: "zh",
