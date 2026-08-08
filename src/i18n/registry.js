@@ -34,7 +34,7 @@ import { nb } from "./languages/nb.js";
 import { sv } from "./languages/sv.js";
 import { lv } from "./languages/lv.js";
 
-export const TRANSLATIONS = { en, de, nl, fr, it, es, ru, pl, ko, ja, zh, nb, sv, lv };
+export const TRANSLATIONS = { en, de, nl, fr, it, es, ru, pl, uk, ko, ja, zh, nb, sv, lv };
 
 // Load-time only, exactly as before the source split: the check has to run
 // where the assembled table first exists.
