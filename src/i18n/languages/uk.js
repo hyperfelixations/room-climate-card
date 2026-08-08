@@ -1,8 +1,6 @@
-```js
-// Українські UI-рядки.
-//
-// Переклад українською для картки Home Assistant.
-// Ключі та функції повністю відповідають англійському набору.
+// Ukrainian UI strings
+// Ukrainian translation for the room climate card
+// The keys and functions correspond exactly to the English set
 
 export const uk = {
   "title.temperature": "Температура",
@@ -108,4 +106,3 @@ export const uk = {
 
   "views.none": "Немає доступного вигляду.",
 };
-```
