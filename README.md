@@ -29,7 +29,7 @@ below. The card follows your dashboard's light or dark theme.
   `outdoor`, and `fridge` — or from your own profile in YAML
 - Rooms whose sensor is briefly unavailable stay on the card as `--` chips you
   can still tap
-- Translated into 14 languages, following your Home Assistant language setting
+- Translated into 15 languages, following your Home Assistant language setting
 - Plenty of optional YAML for views, bands, markers, footers, chips, the
   carousel, and tap/hold actions — see [Configuration](#configuration)
 
@@ -173,7 +173,7 @@ needs at least two rooms with values.
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
-| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
+| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
 
 #### Room-chip display
 
