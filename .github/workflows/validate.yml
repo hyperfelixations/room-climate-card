@@ -2,17 +2,14 @@ name: Validate
 
 on:
   push:
-  pull_request:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * 6"
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   validate-hacs:
-    # Named so the status check reads "Validate / HACS Validation" on GitHub,
-    # unambiguously alongside the two CI checks.
     name: HACS Validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
