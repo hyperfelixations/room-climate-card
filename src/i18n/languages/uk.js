@@ -1,6 +1,9 @@
-// Ukrainian UI strings
-// Ukrainian translation for the room climate card
-// The keys and functions correspond exactly to the English set
+// Ukrainian UI strings.
+//
+// Key set must stay identical to en.js. Ukrainian has one/few/many plural
+// categories, so count-dependent room nouns use the shared CLDR helper.
+
+import { selectPlural } from "../formatters.js";
 
 export const uk = {
   "title.temperature": "Температура",
@@ -54,21 +57,23 @@ export const uk = {
   "status.noData": "Немає даних",
 
   "availability.entityMissing": (v) => `Сутність ${v.entity} не знайдена.`,
-  "availability.entitiesMissing": (v) => `Налаштовані сутності ${v.count === 1 ? "кімнати" : "кімнат"} не знайдені (${v.count}): ${v.entities}.`,
+  "availability.entitiesMissing": (v) =>
+    `${selectPlural("uk", v.count, { one: "Налаштовану сутність кімнати не знайдено", few: "Налаштовані сутності кімнат не знайдено", many: "Налаштовані сутності кімнат не знайдено", other: "Налаштованої сутності кімнати не знайдено" })} (${v.count}): ${v.entities}.`,
   "availability.valueUnavailable": "Значення наразі недоступне.",
   "availability.noUsableRooms": "Наразі немає доступних значень для налаштованих кімнат.",
   "availability.incompatible": "Налаштовані джерела використовують несумісні типи вимірювань або одиниці.",
   "availability.roomNoData": (v) => `${v.name}: немає даних. Відкрийте деталі.`,
   "availability.valueNoData": (v) => `${v.label}: немає даних`,
 
-  "subtitle.aboveComfort": (v) => `Середнє на ${v.diff} вище комфортного рівня · ${v.count}/${v.total} ${v.total === 1 ? "кімната" : "кімнат"}: ${v.adjective}.`,
+  "subtitle.aboveComfort": (v) => `Середнє на ${v.diff} вище комфортного рівня · ${v.count}/${v.total} ${selectPlural("uk", v.total, { one: "кімната", few: "кімнати", many: "кімнат", other: "кімнати" })}: ${v.adjective}.`,
   "subtitle.aboveComfortNoRooms": (v) => `Середнє на ${v.diff} вище комфортного рівня.`,
-  "subtitle.belowComfort": (v) => `Середнє на ${v.diff} нижче комфортного рівня · ${v.count}/${v.total} ${v.total === 1 ? "кімната" : "кімнат"}: ${v.adjective}.`,
+  "subtitle.belowComfort": (v) => `Середнє на ${v.diff} нижче комфортного рівня · ${v.count}/${v.total} ${selectPlural("uk", v.total, { one: "кімната", few: "кімнати", many: "кімнат", other: "кімнати" })}: ${v.adjective}.`,
   "subtitle.belowComfortNoRooms": (v) => `Середнє на ${v.diff} нижче комфортного рівня.`,
   "subtitle.inComfortIssue": (v) => `Середнє в межах комфорту · найбільше вирізняється: ${v.name}.`,
   "subtitle.inComfortAllGood": "Середнє в межах комфорту · у всіх кімнатах показники в цільовому діапазоні.",
   "subtitle.inComfort": "Середнє в межах комфорту.",
-  "subtitle.missingRooms": (v) => ` ${v.count} налаштован${v.count === 1 ? "а кімната не знайдена" : "их кімнат не знайдено"}.`,
+  "subtitle.missingRooms": (v) =>
+    ` ${v.count} ${selectPlural("uk", v.count, { one: "налаштована кімната не знайдена", few: "налаштовані кімнати не знайдені", many: "налаштованих кімнат не знайдено", other: "налаштованої кімнати не знайдено" })}.`,
 
   "footer.comfort": (v) => `Комфорт ${v.count}/${v.total}`,
   "footer.spread": (v) => `Розкид ${v.value}`,
