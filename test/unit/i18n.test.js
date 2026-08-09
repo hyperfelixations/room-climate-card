@@ -30,7 +30,7 @@ let internals;
 let access;
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
-const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
+const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
 
 test("all TRANSLATIONS language blocks stay in sync with en (the file's own load-time self-check never warns)", () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
@@ -271,6 +271,37 @@ test("I18N-02: Polish room grammar follows one/few/many plural categories", () =
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
   }
+  env.cleanup(el);
+});
+
+test("I18N-02: Ukrainian room grammar follows one/few/many plural categories", () => {
+  const el = env.createCard({ entity: "sensor.avg", language: "uk" }, hassDe);
+  const roomExpected = new Map([
+    [1, " 1 налаштована кімната не знайдена."],
+    [2, " 2 налаштовані кімнати не знайдені."],
+    [5, " 5 налаштованих кімнат не знайдено."],
+    [21, " 21 налаштована кімната не знайдена."],
+    [22, " 22 налаштовані кімнати не знайдені."],
+    [25, " 25 налаштованих кімнат не знайдено."],
+  ]);
+  for (const [count, expected] of roomExpected) {
+    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+  }
+  assert.match(
+    el._t("subtitle.aboveComfort", { diff: "1 °C", count: 1, total: 21, adjective: "тепло" }),
+    /1\/21 кімната: тепло\.$/,
+    "total=21 must use the singular room form"
+  );
+  assert.match(
+    el._t("subtitle.belowComfort", { diff: "1 °C", count: 2, total: 25, adjective: "прохолодно" }),
+    /2\/25 кімнат: прохолодно\.$/,
+    "total=25 must use the many room form"
+  );
+  assert.match(
+    el._t("availability.entitiesMissing", { count: 1, entities: "sensor.room" }),
+    /^Налаштовану сутність кімнати не знайдено \(1\):/,
+    "a single missing entity must use singular agreement"
+  );
   env.cleanup(el);
 });
 
