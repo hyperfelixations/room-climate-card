@@ -682,3 +682,65 @@ test.describe("visual golden: adaptive outdoor scale and per-room markers", () =
     await shot(page, cardId, "scale-markers-all.png", 420);
   });
 });
+
+// Two states the baseline set never depicted, and the gap is why both went unnoticed.
+//
+// A card whose headline is a CALCULATED consensus renders a different element than one
+// whose headline belongs to an entity, and no golden showed the former: the two shapes
+// were spaced differently for as long as the baselines existed, and each on its own
+// looked perfectly reasonable. And no golden showed a reading wide enough to leave its
+// column, so the unit painting across the view beside it was never in a picture either.
+test.describe("visual golden: headline shapes and headline widths", () => {
+  const CONSENSUS_ROOMS = [
+    { name: "Living Room", short: "LR", entity: "sensor.r1" },
+    { name: "Bedroom", short: "BE", entity: "sensor.r2" },
+  ];
+
+  test("a calculated consensus headline (no main entity)", async ({ page }) => {
+    await gotoHarness(page);
+    const states = {
+      "sensor.r1": mkStateObj("sensor.r1", 21.4, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r2": mkStateObj("sensor.r2", 23.2, { device_class: "temperature", unit_of_measurement: "°C" }),
+    };
+    const cardId = await createCard(page, { rooms: CONSENSUS_ROOMS }, states);
+    const card = page.locator(`#${cardId}`);
+    // The state the picture is supposed to show, asserted rather than assumed: a headline
+    // that is not attributable to any entity, and therefore not a control.
+    expect(await card.locator(".rtc-avg-button").evaluate((node) => node.tagName)).toBe("DIV");
+    await expect(card.locator(".rtc-avg-button")).not.toHaveAttribute("data-entity", /.*/);
+    await expect(card.locator(".rtc-avg-label")).toHaveText("Home avg.");
+    await shot(page, cardId, "source-calculated-consensus.png");
+  });
+
+  const WIDE_READINGS = {
+    co2: { value: 2252, device_class: "carbon_dioxide", unit: "ppm", low: 1800, high: 2700 },
+    pm25: { value: 23.5, device_class: "pm25", unit: "µg/m³", low: 18.1, high: 28.9 },
+  };
+  for (const [mode, fx] of Object.entries(WIDE_READINGS)) {
+    for (const width of [320, 520]) {
+      test(`${mode} ${fx.value} ${fx.unit} at ${width}px`, async ({ page }) => {
+        await gotoHarness(page);
+        const attributes = { device_class: fx.device_class, unit_of_measurement: fx.unit };
+        const states = {
+          "sensor.avg": mkStateObj("sensor.avg", fx.value, attributes),
+          "sensor.r1": mkStateObj("sensor.r1", fx.low, attributes),
+          "sensor.r2": mkStateObj("sensor.r2", fx.high, attributes),
+        };
+        const cardId = await createCard(
+          page,
+          { entity: "sensor.avg", rooms: [{ entity: "sensor.r1", short: "R1" }, { entity: "sensor.r2", short: "R2" }], auto_slide: false, views: [{ type: "scale" }] },
+          states
+        );
+        await setCardWidth(page, cardId, width);
+        // The claim the picture has to keep honest: the whole value is on screen, inside
+        // its own box. A baseline alone would not notice it creeping back out.
+        const fits = await page
+          .locator(`#${cardId}`)
+          .locator(".rtc-avg-value")
+          .evaluate((node) => node.scrollWidth <= node.clientWidth);
+        expect(fits, `${fx.value} ${fx.unit} must fit its column at ${width}px`).toBe(true);
+        await shot(page, cardId, `headline-wide-${mode}-${width}.png`, width);
+      });
+    }
+  }
+});

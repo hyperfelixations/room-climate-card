@@ -1,7 +1,7 @@
 "use strict";
 
 const { test, expect } = require("@playwright/test");
-const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
+const { gotoHarness, createCard, mkStateObj, setCardWidth, updateHass, waitForStableLayout } = require("../helpers/browser-helpers");
 
 const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
 
@@ -174,4 +174,113 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
   await expect(both.locator(".rtc-room-chip")).toHaveCount(2);
   await expect(both.locator(".rtc-avg-label")).toHaveText("Home avg.");
   await expect(both.locator('[data-entity="sensor.ba_temperatur"] .rtc-room-value-num')).toHaveText("--");
+});
+
+// The headline has two element types on purpose — a <button> when the value belongs to
+// one identifiable entity, a <div> when it is a consensus nothing can be attributed to
+// (see the two tests above). What they must NOT differ in is where they put the number.
+//
+// Until this was pinned, they did: the button reset in styles/average.js overrode
+// appearance, font, colour, border, margin and text-align but not padding, so Chrome's
+// UA `padding: 1px 6px` reached the button shape and nothing reached the div shape. The
+// number sat 6px further right and the shell 2px taller in exactly the cards that have a
+// main entity — and the card jumped between the two whenever that entity dropped out.
+//
+// Measured against the SHARED class, not the tag: that is the whole point of the fix.
+test.describe("both headline shapes occupy the same box", () => {
+  const CONSENSUS_ROOMS = [
+    { entity: "sensor.a", name: "A" },
+    { entity: "sensor.b", name: "B" },
+  ];
+  // One value, so any geometric difference is the shape's doing and nothing else's.
+  const sameValueStates = (withPrimary) => {
+    const states = {
+      "sensor.a": mkStateObj("sensor.a", 22.2, TEMP),
+      "sensor.b": mkStateObj("sensor.b", 22.2, TEMP),
+    };
+    if (withPrimary) states["sensor.primary"] = mkStateObj("sensor.primary", 22.2, TEMP);
+    return states;
+  };
+
+  async function headlineGeometry(page, cardId) {
+    return page.evaluate((id) => {
+      const root = document.getElementById(id).shadowRoot;
+      const shell = root.querySelector(".rtc-avg-button");
+      const num = root.querySelector(".rtc-avg-value-num");
+      const computed = getComputedStyle(shell);
+      const shellRect = shell.getBoundingClientRect();
+      const panelRect = root.querySelector(".rtc-main-panel").getBoundingClientRect();
+      return {
+        tag: shell.tagName,
+        padding: `${computed.paddingTop} ${computed.paddingRight} ${computed.paddingBottom} ${computed.paddingLeft}`,
+        // Relative to the panel: two cards sit at different page offsets, one card
+        // measured before and after a state change does not.
+        numLeft: Math.round((num.getBoundingClientRect().left - panelRect.left) * 100) / 100,
+        shellHeight: Math.round(shellRect.height * 100) / 100,
+      };
+    }, cardId);
+  }
+
+  test("a main entity and a calculated consensus indent the number identically", async ({ page }) => {
+    await gotoHarness(page);
+    const withPrimary = await createCard(page, { entity: "sensor.primary", rooms: CONSENSUS_ROOMS }, sameValueStates(true));
+    const withoutPrimary = await createCard(page, { rooms: CONSENSUS_ROOMS }, sameValueStates(false));
+    await setCardWidth(page, withPrimary, 520);
+    await setCardWidth(page, withoutPrimary, 520);
+
+    const button = await headlineGeometry(page, withPrimary);
+    const div = await headlineGeometry(page, withoutPrimary);
+
+    expect(button.tag, "the attributable headline must stay a real button").toBe("BUTTON");
+    expect(div.tag, "the consensus headline must stay a plain div").toBe("DIV");
+    expect(div.padding, "both shapes share .rtc-avg-button, so both must carry its padding").toBe(button.padding);
+    expect(div.numLeft, "the number must start at the same place in both shapes").toBeCloseTo(button.numLeft, 1);
+    expect(div.shellHeight, "the shell must be the same height in both shapes").toBeCloseTo(button.shellHeight, 1);
+  });
+
+  test("the headline does not move when the main entity drops out and returns", async ({ page }) => {
+    await gotoHarness(page);
+    const available = sameValueStates(true);
+    const outage = { ...available, "sensor.primary": mkStateObj("sensor.primary", "unavailable", TEMP) };
+    const cardId = await createCard(page, { entity: "sensor.primary", rooms: CONSENSUS_ROOMS }, available);
+    await setCardWidth(page, cardId, 520);
+    const before = await headlineGeometry(page, cardId);
+
+    await updateHass(page, cardId, outage);
+    await waitForStableLayout(page, cardId, 520);
+    const during = await headlineGeometry(page, cardId);
+
+    await updateHass(page, cardId, available);
+    await waitForStableLayout(page, cardId, 520);
+    const after = await headlineGeometry(page, cardId);
+
+    expect(during.tag, "the outage must genuinely flip the shape, or this test proves nothing").toBe("DIV");
+    expect(after.tag).toBe("BUTTON");
+    expect(during.numLeft, "the number must not jump sideways when the sensor drops out").toBeCloseTo(before.numLeft, 1);
+    expect(after.numLeft, "nor when it comes back").toBeCloseTo(before.numLeft, 1);
+    expect(during.shellHeight, "nor may the shell change height").toBeCloseTo(before.shellHeight, 1);
+    expect(after.shellHeight).toBeCloseTo(before.shellHeight, 1);
+  });
+
+  // The indentation has to come from the project's own stylesheet. As long as it came
+  // from the browser, the card looked different in browsers whose UA button padding
+  // differs from Chrome's — and the div shape had none at all.
+  test("the indentation is owned by .rtc-avg-button, not by the browser's button default", async ({ page }) => {
+    await gotoHarness(page);
+    const cardId = await createCard(page, { entity: "sensor.primary" }, { "sensor.primary": mkStateObj("sensor.primary", 22.2, TEMP) });
+    const measured = await page.evaluate((id) => {
+      const root = document.getElementById(id).shadowRoot;
+      const probe = document.createElement("button");
+      // A button carrying none of the card's classes: whatever padding it reports is
+      // what the reset rule leaves behind for any future button in this shadow root.
+      root.querySelector(".rtc-root").appendChild(probe);
+      const reset = getComputedStyle(probe).paddingLeft;
+      probe.remove();
+      const headline = getComputedStyle(root.querySelector(".rtc-avg-button"));
+      return { reset, headlineLeft: headline.paddingLeft, headlineTop: headline.paddingTop };
+    }, cardId);
+    expect(measured.reset, "the button reset must neutralize the UA padding").toBe("0px");
+    expect(measured.headlineLeft, "the headline's own indentation is a project decision").toBe("6px");
+    expect(measured.headlineTop).toBe("1px");
+  });
 });

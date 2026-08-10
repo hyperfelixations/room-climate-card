@@ -21,6 +21,7 @@ let actions;
 let rooms;
 let views;
 let classification;
+let profileParts;
 let normalizeConfigModule;
 
 // Minimal stand-ins for the injected registries. Deliberately not the real ones:
@@ -80,6 +81,7 @@ test.before(async () => {
   rooms = await import("../../src/config/rooms.js");
   views = await import("../../src/config/views.js");
   classification = await import("../../src/config/classification/normalize.js");
+  profileParts = await import("../../src/config/classification/profile-parts.js");
   normalizeConfigModule = await import("../../src/config/normalize-config.js");
 });
 
@@ -463,6 +465,48 @@ test("custom scale switches and headroom are carried through", () => {
   assert.equal(result.headroom, 4);
 });
 
+// anchor_scale decides whether the rendered axis is pinned to `scale` or follows the
+// live data. The built-in outdoor profile has always said the latter; the configuration
+// language had no word for it, so a user-written profile could not describe a
+// measurement whose reference range is seasonal. It is a switch, not a quantity: it
+// says WHETHER the axis is pinned, never where, so it crosses the unit conversion
+// unchanged.
+test("a custom profile can say its axis follows the data instead of the reference scale", () => {
+  const following = classification.normalizeCustomClassification(
+    validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }),
+    COLLABORATORS
+  );
+  assert.equal(following.anchorScale, false);
+  assert.deepEqual(following.scale, { min: 16, max: 28 }, "opting out does not discard the declared range");
+
+  const anchored = classification.normalizeCustomClassification(
+    validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: true } }),
+    COLLABORATORS
+  );
+  assert.equal(anchored.anchorScale, true);
+});
+
+test("an omitted anchor_scale keeps the anchored axis every other built-in profile uses", () => {
+  const result = classification.normalizeCustomClassification(validCustom(), COLLABORATORS);
+  assert.equal(result.anchorScale, true);
+});
+
+// normalizeScale() is the only reader of the scale block, and both switches now leave it
+// already validated and camel-cased. Pinned here because the alternative — the caller
+// reaching back into the raw YAML for one of them — is what this replaced, and it is the
+// kind of thing that grows back.
+test("normalizeScale returns both switches in their resolved form", () => {
+  const comfort = { min: 19, max: 25 };
+  assert.deepEqual(
+    profileParts.normalizeScale({ min: 16, max: 28, step: 2 }, comfort),
+    { scale: { min: 16, max: 28 }, step: 2, headroom: null, oneSided: false, anchorScale: true }
+  );
+  assert.deepEqual(
+    profileParts.normalizeScale({ min: 16, max: 28, step: 2, headroom: 4, one_sided: true, anchor_scale: false }, comfort),
+    { scale: { min: 16, max: 28 }, step: 2, headroom: 4, oneSided: true, anchorScale: false }
+  );
+});
+
 test("a custom valid_range becomes a predicate honouring both inclusivity flags", () => {
   const inclusive = classification.normalizeCustomClassification(
     validCustom({ valid_range: { min: 0, max: 50 } }),
@@ -530,6 +574,8 @@ test("every custom-classification rejection keeps its exact message", () => {
     [validCustom({ scale: { min: 20, max: 24, step: 2 } }), "Invalid configuration: classification.scale must fully contain the comfort and optimal bands."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, headroom: -1 } }), "Invalid configuration: classification.scale.headroom must be zero or greater."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, one_sided: "yes" } }), "Invalid configuration: classification.scale.one_sided must be a boolean."],
+    [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: "no" } }), "Invalid configuration: classification.scale.anchor_scale must be a boolean."],
+    [validCustom({ scale: { min: 16, max: 28, step: 2, anchorScale: false } }), "Invalid configuration: classification.scale.anchorScale is not a supported option."],
     [validCustom({ tiers: [] }), "Invalid configuration: classification.tiers must be a non-empty array."],
     [validCustom({ tiers: ["x"] }), "Invalid configuration: classification.tiers[0] must be an object."],
     [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside", bogus: 1 }] }), "Invalid configuration: classification.tiers[0].bogus is not a supported option."],

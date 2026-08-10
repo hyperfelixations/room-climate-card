@@ -10,7 +10,7 @@
 
 export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
           .rtc-root { padding: 14px; }
-          .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+          .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
           .rtc-avg-value { font-size: 29px; }
           .rtc-room-grid { gap: 5px; }
           .rtc-room-row { gap: 5px; }
@@ -54,7 +54,7 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
 
         @container rtc-card (max-width: 360px) {
           .rtc-main-panel {
-            grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+            grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
           }
           .rtc-rotator,
           .rtc-rotator-solo,
@@ -84,7 +84,7 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
         @supports not (container-type: inline-size) {
           @media (max-width: 600px) {
             .rtc-root { padding: 14px; }
-            .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+            .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
             .rtc-avg-value { font-size: 29px; }
             .rtc-room-grid { gap: 5px; }
             .rtc-room-row { gap: 5px; }
@@ -126,7 +126,7 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
 
           @media (max-width: 380px) {
             .rtc-main-panel {
-              grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+              grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
             }
             .rtc-rotator,
             .rtc-rotator-solo,

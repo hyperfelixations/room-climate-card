@@ -66,9 +66,24 @@ export const HEADER_CSS = `        .rtc-header {
           border: 1px solid var(--tone-border);
         }
 
+        /* The two columns negotiate their own widths. The first is the headline value,
+           the second the view beside it.
+
+           minmax(<floor>, auto) means "as wide as the value needs, never narrower than
+           <floor>". The floor is the width this column used to be capped at, so every
+           reading that fits today produces exactly the column it produces today and the
+           view keeps every pixel it has. Only a value that would have painted across the
+           view — four-digit CO2, three-digit PM2.5, a negative two-digit temperature —
+           makes the column grow, and only by what it is short.
+
+           minmax(40%, 1fr) is the other side of that bargain: the view yields width, but
+           never falls below 40% of the panel. Without that one implausible reading could
+           take the view away altogether. The rotator carries min-width:0, so in the rare
+           container that has no definite width of its own the percentage resolves to zero
+           and the pair behaves exactly as it did before. */
         .rtc-main-panel {
           display: grid;
-          grid-template-columns: minmax(94px, 106px) minmax(0, 1fr);
+          grid-template-columns: minmax(106px, auto) minmax(40%, 1fr);
           gap: 8px;
           align-items: center;
           border-radius: 17px;

@@ -362,7 +362,9 @@ The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
 `14–26 °C`. Its scale has no fixed range: both ends follow whatever your
 sensors currently report, which is what you want outdoors, where summer and
 winter are nowhere near each other. A band that is completely off the current
-scale is hidden until the values reach it.
+scale is hidden until the values reach it. A profile of your own gets the same
+axis behaviour with `scale.anchor_scale: false` (see
+[Classification](#classification)).
 
 Select the built-in fridge profile the same way, for monitoring an appliance
 instead of a room:
@@ -480,6 +482,18 @@ Custom-profile rules:
   contain both. `scale.step` must be greater than zero.
 - Optional `scale.headroom` must be non-negative; `scale.one_sided` is a
   boolean.
+- `scale.anchor_scale` is a boolean and defaults to `true`: the drawn axis
+  always covers `scale.min` to `scale.max`, and grows beyond it when readings
+  go further. Set it to `false` for a measurement whose sensible range moves
+  with the season — the axis then follows the readings themselves, and `scale`
+  serves as the reference range for classification:
+  ```yaml
+  scale:
+    min: 10
+    max: 30
+    step: 1
+    anchor_scale: false
+  ```
 - `icons` is optional; its shape depends on the profile's metric kind.
   Temperature takes an object of descending `fire`, `high`, `normal`, and
   `low` thresholds — without it, temperature derives them from the custom
@@ -581,8 +595,6 @@ views:
 - There is no visual editor — everything is YAML. Start with the
   [Quickstart](#quickstart) and use the [Configuration](#configuration)
   reference from there.
-- In some layouts, four-digit CO₂ values and two-digit PM2.5 values can get
-  clipped. Widening the card usually helps for now.
 - Daily minimum/maximum and trend need their own entities. The card reads what
   Home Assistant reports right now; it does not look at history itself. Those
   entities are usually template sensors — I plan to publish the ones I use.

@@ -494,6 +494,77 @@ test("custom profile is authoritative and drives classification plus scale as on
   env.cleanup(card);
 });
 
+// The card invites users to write their own profiles, so anything a built-in profile can
+// say must be sayable in YAML too. `anchor_scale` was the one exception: outdoor.js
+// declares a reference range as classification metadata while letting the rendered axis
+// follow the season's actual readings, and no configuration key reached that field.
+//
+// Asserted as a COMPARISON against the built-in profile rather than against copied
+// numbers: the claim is "a custom profile can now be outdoor", and a test that restates
+// outdoor's arithmetic would keep passing if the two ever drifted apart.
+const outdoorAsCustomProfile = {
+  source: "custom",
+  unit: "°C",
+  comparison: ">=",
+  bands: {
+    comfort: { min: 14, max: 26 },
+    optimal: { min: 18, max: 22 },
+  },
+  scale: { min: 10, max: 30, step: 1, anchor_scale: false },
+  tiers: [
+    { min: 35, score: 11, level: "Very hot", color: "#B85F67", zone: "outside" },
+    { min: 30, score: 10, level: "Hot", color: "#C67277", zone: "outside" },
+    { min: 28, score: 9, level: "Very warm", color: "#C98A67", zone: "outside" },
+    { min: 26, score: 8, level: "Warm", color: "#C0A752", zone: "outside" },
+    { min: 22, score: 7, level: "Slightly warm", color: "#9DA85A", zone: "comfort" },
+    { min: 18, score: 6, level: "Optimal", color: "#79A86C", zone: "optimal" },
+    { min: 14, score: 5, level: "Slightly cool", color: "#69A78B", zone: "comfort" },
+    { min: 10, score: 4, level: "Fresh", color: "#67A7AE", zone: "outside" },
+    { min: 5, score: 3, level: "Cool", color: "#76A0C0", zone: "outside" },
+    { min: 0, score: 2, level: "Cold", color: "#8192C8", zone: "outside" },
+    { default: true, score: 1, level: "Very cold", color: "#8A88C9", zone: "outside" },
+  ],
+  icons: { fire: 35, high: 30, normal: 14, low: 5 },
+};
+
+test("a custom profile can say anchor_scale: false and then behaves exactly like outdoor", () => {
+  const custom = createTemperatureCard(outdoorAsCustomProfile);
+  const builtIn = createTemperatureCard("outdoor");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+
+  const customScale = internals.scaleConfigFor(custom, "temperature", celsius);
+  const builtInScale = internals.scaleConfigFor(builtIn, "temperature", celsius);
+  assert.equal(customScale.anchorScale, false, "the YAML switch has to survive normalization and projection");
+  assert.equal(customScale.anchorScale, builtInScale.anchorScale);
+
+  // Winter, summer, and a span that straddles the declared reference range: an anchored
+  // axis would answer differently to all three.
+  for (const [low, high] of [[2, 8], [-12, -4], [28, 36], [12, 28]]) {
+    assert.deepEqual(
+      normalize(internals.dynamicScale(custom, low, high, "temperature", celsius)),
+      normalize(internals.dynamicScale(builtIn, low, high, "temperature", celsius)),
+      `a custom outdoor profile must render the same axis as the built-in one for ${low}..${high}`
+    );
+  }
+  env.cleanup(custom);
+  env.cleanup(builtIn);
+});
+
+test("without anchor_scale a custom profile keeps the anchored axis it has always had", () => {
+  const anchored = createTemperatureCard({
+    ...outdoorAsCustomProfile,
+    scale: { min: 10, max: 30, step: 1 },
+  });
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  assert.equal(internals.scaleConfigFor(anchored, "temperature", celsius).anchorScale, true);
+  assert.deepEqual(
+    normalize(internals.dynamicScale(anchored, 2, 8, "temperature", celsius)),
+    { min: 1, max: 30, step: 1 },
+    "the declared reference range still pins the top of the axis when it is not opted out of"
+  );
+  env.cleanup(anchored);
+});
+
 test("custom Fahrenheit thresholds are canonicalized and project back coherently", () => {
   const fahrenheitProfile = {
     source: "custom",

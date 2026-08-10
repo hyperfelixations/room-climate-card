@@ -74,7 +74,13 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   }
 
   const { comfort: sourceComfort, optimal: sourceOptimal } = normalizeBands(value.bands);
-  const { scale: sourceScale, step: sourceStep, headroom: sourceHeadroom } = normalizeScale(value.scale, sourceComfort);
+  const {
+    scale: sourceScale,
+    step: sourceStep,
+    headroom: sourceHeadroom,
+    oneSided,
+    anchorScale,
+  } = normalizeScale(value.scale, sourceComfort);
   const sourceTiers = normalizeTiers(value.tiers, classificationZones);
   const sourceValidRange = normalizeValidRange(value.valid_range);
   const { iconThresholds: sourceIcons, iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind, {
@@ -110,7 +116,12 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     scale: convertBand(sourceScale),
     step: deltaToCanonical(sourceStep),
     headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
-    oneSided: value.scale.one_sided === true,
+    oneSided,
+    // The one field a built-in profile had that YAML could not express. It needs no
+    // conversion — it says whether the axis is pinned to `scale`, not where — and
+    // reaches the axis maths untouched: projectProfileToDisplayUnit() spreads it and
+    // scaleConfigFor() reads it straight off the display profile.
+    anchorScale,
     invalidWhen,
     validRange: canonicalValidRange,
     invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },

@@ -140,9 +140,24 @@
           border: 1px solid var(--tone-border);
         }
 
+        /* The two columns negotiate their own widths. The first is the headline value,
+           the second the view beside it.
+
+           minmax(<floor>, auto) means "as wide as the value needs, never narrower than
+           <floor>". The floor is the width this column used to be capped at, so every
+           reading that fits today produces exactly the column it produces today and the
+           view keeps every pixel it has. Only a value that would have painted across the
+           view — four-digit CO2, three-digit PM2.5, a negative two-digit temperature —
+           makes the column grow, and only by what it is short.
+
+           minmax(40%, 1fr) is the other side of that bargain: the view yields width, but
+           never falls below 40% of the panel. Without that one implausible reading could
+           take the view away altogether. The rotator carries min-width:0, so in the rare
+           container that has no definite width of its own the percentage resolves to zero
+           and the pair behaves exactly as it did before. */
         .rtc-main-panel {
           display: grid;
-          grid-template-columns: minmax(94px, 106px) minmax(0, 1fr);
+          grid-template-columns: minmax(106px, auto) minmax(40%, 1fr);
           gap: 8px;
           align-items: center;
           border-radius: 17px;
@@ -151,6 +166,10 @@
           border: 1px solid var(--rtc-hairline);
         }
 
+        /* padding belongs here for the same reason every other line does: appearance:none
+           removes the widget look, not the UA box. Chrome gives a button 1px 6px, other
+           engines give it something else, and whatever is left over ends up deciding how
+           the card is spaced. Zero here, and every button states its own. */
         button {
           appearance: none;
           -webkit-appearance: none;
@@ -158,14 +177,21 @@
           color: inherit;
           border: 0;
           margin: 0;
+          padding: 0;
           text-align: left;
         }
 
+        /* The headline is a <button> when the value belongs to one entity and a <div>
+           when it is a consensus (see render/primitives/average.js). Both carry THIS
+           class, so stating the indentation here is what makes the two shapes the same
+           box — the card no longer moves when a main entity drops out and the consensus
+           takes over, and it no longer depends on which engine is rendering it. */
         .rtc-avg-button {
           position: relative;
           display: block;
           width: 100%;
           min-width: 0;
+          padding: 1px 6px;
           border-radius: 13px;
           cursor: pointer;
           background: transparent;
@@ -187,11 +213,18 @@
 
         /* Clipped like every other single-line label on the card (see the header
            subtitle, the room-chip label and the extreme cards). The caption sits in a
-           column capped at 106px, so a long one paints straight across the view beside
-           it. Until 2.37.0 the text here was always a short translated constant and the
-           overflow was unreachable; a single-room card now captions itself with the
-           room's own name, which the user writes and which can be any length. */
+           narrow column, so a long one paints straight across the view beside it. Until
+           2.37.0 the text here was always a short translated constant and the overflow
+           was unreachable; a single-room card now captions itself with the room's own
+           name, which the user writes and which can be any length.
+
+           contain:inline-size is what keeps that decision intact now that the column
+           sizes itself to its content: overflow:hidden clips the PAINT but leaves the
+           intrinsic width alone, so a long caption would otherwise drag the column open
+           to its full length and take the space away from the view. The caption is
+           declared not to have a say in how wide its own column is; the value does. */
         .rtc-avg-label {
+          contain: inline-size;
           display: block;
           font-size: 10px;
           font-weight: 850;
@@ -203,6 +236,11 @@
           text-overflow: ellipsis;
         }
 
+        /* The clip is the backstop, not the mechanism: the column grows to fit this text
+           (see .rtc-main-panel), so in normal use there is nothing to clip. It matters
+           once the column has grown as far as the view's own floor permits — a reading
+           past that point is a broken sensor, and an ellipsis on the value is a better
+           answer than paint across the view beside it. */
         .rtc-avg-value {
           display: block;
           margin-top: 4px;
@@ -212,6 +250,8 @@
           color: var(--primary-text-color);
           font-variant-numeric: tabular-nums;
           white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .rtc-avg-unit-wrap {
@@ -734,7 +774,7 @@
 
         @container rtc-card (max-width: 460px) {
           .rtc-root { padding: 14px; }
-          .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+          .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
           .rtc-avg-value { font-size: 29px; }
           .rtc-room-grid { gap: 5px; }
           .rtc-room-row { gap: 5px; }
@@ -778,7 +818,7 @@
 
         @container rtc-card (max-width: 360px) {
           .rtc-main-panel {
-            grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+            grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
           }
           .rtc-rotator,
           .rtc-rotator-solo,
@@ -808,7 +848,7 @@
         @supports not (container-type: inline-size) {
           @media (max-width: 600px) {
             .rtc-root { padding: 14px; }
-            .rtc-main-panel { grid-template-columns: minmax(82px, 96px) minmax(0, 1fr); }
+            .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
             .rtc-avg-value { font-size: 29px; }
             .rtc-room-grid { gap: 5px; }
             .rtc-room-row { gap: 5px; }
@@ -850,7 +890,7 @@
 
           @media (max-width: 380px) {
             .rtc-main-panel {
-              grid-template-columns: minmax(78px, 90px) minmax(0, 1fr);
+              grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
             }
             .rtc-rotator,
             .rtc-rotator-solo,

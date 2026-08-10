@@ -37,12 +37,21 @@ export function normalizeBands(value) {
   return { comfort, optimal };
 }
 
-// classification.scale: the reference axis, its rounding step, and the two
+// Everything `classification.scale` accepts besides the band itself.
+const SCALE_SWITCHES = ["step", "headroom", "one_sided", "anchor_scale"];
+
+// classification.scale: the reference axis, its rounding step, and the three
 // optional switches that change how the axis grows around live values.
+//
+// This is the ONLY reader of the `scale` block, and every switch leaves it
+// already validated and camel-cased rather than for the caller to pick back out of
+// the raw YAML. The caller should not have to know that `anchor_scale` and
+// `anchorScale` are the same thing, and a future change to what `scale` means then
+// has exactly one place to happen.
 export function normalizeScale(value, comfort) {
   if (!isPlainObject(value)) pathError("classification.scale", "must be an object");
-  assertAllowedKeys(value, new Set(["min", "max", "step", "headroom", "one_sided"]), "classification.scale");
-  const scale = normalizeBand(value, "classification.scale", ["step", "headroom", "one_sided"]);
+  assertAllowedKeys(value, new Set(["min", "max", ...SCALE_SWITCHES]), "classification.scale");
+  const scale = normalizeBand(value, "classification.scale", SCALE_SWITCHES);
   const step = numberAtPath(value.step, "classification.scale.step");
   if (step <= 0) pathError("classification.scale.step", "must be greater than zero");
   if (scale.min > comfort.min || scale.max < comfort.max) {
@@ -52,10 +61,15 @@ export function normalizeScale(value, comfort) {
   if (headroom !== null && headroom < 0) {
     pathError("classification.scale.headroom", "must be zero or greater");
   }
-  if (value.one_sided !== undefined && typeof value.one_sided !== "boolean") {
-    pathError("classification.scale.one_sided", "must be a boolean");
+  for (const key of ["one_sided", "anchor_scale"]) {
+    if (value[key] !== undefined && typeof value[key] !== "boolean") {
+      pathError(`classification.scale.${key}`, "must be a boolean");
+    }
   }
-  return { scale, step, headroom };
+  // anchor_scale defaults to true: pinning the axis to the declared reference range is
+  // what every built-in profile except outdoor does, and it is what a profile that says
+  // nothing about it means.
+  return { scale, step, headroom, oneSided: value.one_sided === true, anchorScale: value.anchor_scale !== false };
 }
 
 // classification.tiers, with the per-tier semantic fields.

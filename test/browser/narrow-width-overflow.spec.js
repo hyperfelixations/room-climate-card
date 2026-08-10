@@ -48,7 +48,7 @@ async function overflowingTargetElements(page, cardId) {
   return page.evaluate((cardId) => {
     const el = document.getElementById(cardId);
     const cardRect = el.getBoundingClientRect();
-    const selectors = [".rtc-range-scale-view", ".rtc-extreme-label", ".rtc-room-value", ".rtc-room-value-num"];
+    const selectors = [".rtc-range-scale-view", ".rtc-extreme-label", ".rtc-room-value", ".rtc-room-value-num", ".rtc-avg-value"];
     const bad = [];
     selectors.forEach((sel) => {
       el.shadowRoot.querySelectorAll(sel).forEach((node) => {
@@ -321,4 +321,132 @@ test.describe("every view avoids unintended overflow across widths", () => {
       expect(bad, `carousel at ${width}px: ${JSON.stringify(bad)}`).toHaveLength(0);
     });
   }
+});
+
+// The headline value is the one piece of text on the card that must never be painted
+// over its neighbour: `2252 ppm` and `118.4 µg/m³` used to reach 19-37px past a column
+// hard-capped at 106px and land straight across the scale's axis labels. Negative
+// two-digit temperatures did the same, more quietly, at 3-9px.
+//
+// The column now sizes itself to its content, starting from the old cap as its FLOOR and
+// growing only as far as leaving the view 40% of the panel allows, so the view yields
+// width exactly when the value needs it and never otherwise. These tests hold both halves
+// of that: no overflow anywhere, and no change at all for the values that already fit.
+test.describe(".rtc-avg-value stays inside its column", () => {
+  // Realistic readings, chosen per metric to span the digit counts each one actually
+  // produces in the field. `-12.5 °C` is here because it overflowed too, which the
+  // CO2/PM2.5 framing of this bug missed.
+  const HEADLINE_CASES = [
+    ["temperature", "°C", [22.2, -12.5, -19.9]],
+    ["humidity", "%", [55.4, 100]],
+    ["carbon_dioxide", "ppm", [800, 1273, 2252, 5000]],
+    ["pm25", "µg/m³", [8.2, 23.5, 118.4, 999.9]],
+  ];
+
+  function headlineStates(value, deviceClass, unit, withPrimary) {
+    const attributes = { device_class: deviceClass, unit_of_measurement: unit };
+    const states = {
+      "sensor.r1": mkStateObj("sensor.r1", value, attributes),
+      "sensor.r2": mkStateObj("sensor.r2", value, attributes),
+    };
+    if (withPrimary) states["sensor.avg"] = mkStateObj("sensor.avg", value, attributes);
+    return states;
+  }
+
+  // The panel's own content box, and how the two tracks divide it. Read from the live
+  // grid rather than recomputed from the breakpoint table, so the assertion still means
+  // something if the padding or the gap ever changes.
+  async function panelColumns(page, cardId) {
+    return page.evaluate((cardId) => {
+      const root = document.getElementById(cardId).shadowRoot;
+      const panel = root.querySelector(".rtc-main-panel");
+      const computed = getComputedStyle(panel);
+      const tracks = computed.gridTemplateColumns.split(" ").map(parseFloat);
+      const value = root.querySelector(".rtc-avg-value");
+      return {
+        headline: tracks[0],
+        view: tracks[1],
+        content: panel.clientWidth - parseFloat(computed.paddingLeft) - parseFloat(computed.paddingRight),
+        overflow: value.scrollWidth - value.clientWidth,
+      };
+    }, cardId);
+  }
+
+  for (const [deviceClass, unit, values] of HEADLINE_CASES) {
+    for (const value of values) {
+      // Both headline shapes: the button branch has 12px less usable width than the div
+      // branch did before the shared padding landed, so it is the harder of the two and
+      // the consensus branch must be checked as well, not assumed.
+      for (const withPrimary of [true, false]) {
+        test(`${value} ${unit} never overflows its column (${withPrimary ? "main entity" : "calculated"})`, async ({ page }) => {
+          await gotoHarness(page);
+          for (const width of WIDTHS) {
+            const config = { rooms: ROOMS };
+            if (withPrimary) config.entity = "sensor.avg";
+            const cardId = await createCard(page, config, headlineStates(value, deviceClass, unit, withPrimary));
+            await setCardWidth(page, cardId, width);
+            const measured = await panelColumns(page, cardId);
+            expect(
+              measured.overflow,
+              `${value} ${unit} at ${width}px paints ${measured.overflow}px past its column`
+            ).toBeLessThanOrEqual(0);
+            await page.evaluate((id) => document.getElementById(id).remove(), cardId);
+          }
+        });
+      }
+    }
+  }
+
+  // The other half of the contract, and the one that is easy to lose: a value that fits
+  // today must produce the very same column it produces today. `22.2 °C` is the card's
+  // canonical reading and sits inside the floor at every breakpoint.
+  test("a value that already fits leaves the column at its documented width", async ({ page }) => {
+    await gotoHarness(page);
+    const expected = { 320: 90, 400: 96, 520: 106 };
+    for (const [width, headline] of Object.entries(expected)) {
+      const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS }, headlineStates(22.2, "temperature", "°C", true));
+      await setCardWidth(page, cardId, Number(width));
+      const measured = await panelColumns(page, cardId);
+      expect(measured.headline, `at ${width}px the headline column must stay ${headline}px`).toBeCloseTo(headline, 1);
+      await page.evaluate((id) => document.getElementById(id).remove(), cardId);
+    }
+  });
+
+  // A content-sized column without an upper bound is a column a broken sensor can use to
+  // evict the view entirely. Measured before the floor existed: 53px of view left at
+  // 320px. The value gets clipped instead, which is the honest trade — a nine-digit CO2
+  // reading is not a reading.
+  test("a runaway reading cannot push the view below 40% of the panel", async ({ page }) => {
+    await gotoHarness(page);
+    for (const width of WIDTHS) {
+      const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS }, headlineStates(123456789, "carbon_dioxide", "ppm", true));
+      await setCardWidth(page, cardId, width);
+      const measured = await panelColumns(page, cardId);
+      expect(
+        measured.view,
+        `at ${width}px the view kept only ${Math.round(measured.view)}px of a ${Math.round(measured.content)}px panel`
+      ).toBeGreaterThanOrEqual(measured.content * 0.4 - 0.5);
+      await page.evaluate((id) => document.getElementById(id).remove(), cardId);
+    }
+  });
+
+  // The caption has its own, older contract: it ellipsizes (see the describe above) and
+  // must therefore NOT be allowed to widen the column the value sizes. Without inline-size
+  // containment on .rtc-avg-label a long room name would drag the column open to its full
+  // length and quietly undo that fix.
+  test("an overlong caption does not widen the column the value sizes", async ({ page }) => {
+    await gotoHarness(page);
+    const expected = { 320: 90, 400: 96, 520: 106 };
+    for (const [width, headline] of Object.entries(expected)) {
+      const cardId = await createCard(
+        page,
+        { rooms: [{ entity: "sensor.az", name: "DASISTEINETESTKONFIGURATION" }] },
+        { "sensor.az": mkStateObj("sensor.az", 28.6, { device_class: "temperature", unit_of_measurement: "°C" }) }
+      );
+      await setCardWidth(page, cardId, Number(width));
+      const measured = await panelColumns(page, cardId);
+      expect(measured.headline, `at ${width}px an overlong caption must leave the column at ${headline}px`).toBeCloseTo(headline, 1);
+      await page.evaluate((id) => document.getElementById(id).remove(), cardId);
+    }
+  });
 });
