@@ -34,7 +34,7 @@ const DEFAULT_SEED = 0xc1a6e;
 const ITERATIONS = 500;
 
 const DEVICE_CLASS_BY_METRIC = { temperature: "temperature", humidity: "humidity", co2: "carbon_dioxide", pm25: "pm25" };
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
+const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
 
 // Deliberately extreme value pools per metric, including physically invalid
 // ones (negative humidity/co2, negative pm25) so invalidWhen

@@ -85,7 +85,7 @@ test("_resolveLabelForm: reverts a previously-shortened element back to the long
 
 // ==== TRANSLATIONS content: the actual fixes ====
 
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh", "nb", "sv", "lv"];
+const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
 
 test("every language declares scale.comfortLabelShort/scale.optimalLabelShort/rangeScale.currentLabelShort", () => {
   for (const lang of LANGUAGES) {
