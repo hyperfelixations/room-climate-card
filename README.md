@@ -74,7 +74,14 @@ manually:
 
 ## Quickstart
 
-Pick the shape that matches what you have. You need at least one sensor.
+The card picker knows this card. Start from **Add card**, pick a temperature,
+humidity, CO₂, or PM2.5 entity, and the Room Climate Card appears under
+**Community**, already set to the entity you picked and previewing your own
+reading. Browsing the card list instead works too: the card starts out pointing
+at a climate sensor it finds in your system.
+
+From there the YAML below is what you edit. Pick the shape that matches what you
+have — you need at least one sensor.
 
 ### One sensor
 
@@ -497,16 +504,14 @@ Custom-profile rules:
   `scale.one_sided` is a boolean for measurements with no "too little" end,
   such as CO₂; it holds the axis at `scale.min` and therefore needs the
   anchored shape.
-- A temperature profile that gives no `icons` derives its `fire` and `low`
-  thresholds from `scale.min` and `scale.max`, so a profile whose axis follows
-  the readings has to list its `icons`.
 - Bands are drawn as far as the axis reaches. A comfort band wider than the
   current axis fills the bar, and the rest of it appears as readings move and
   the axis grows.
 - `icons` is optional; its shape depends on the profile's metric kind.
   Temperature takes an object of descending `fire`, `high`, `normal`, and
   `low` thresholds — without it, temperature derives them from the custom
-  scale and comfort bounds. Humidity, CO₂, and PM2.5 instead take a
+  scale and comfort bounds, which a profile whose axis follows the readings has
+  none of, so that one has to list them. Humidity, CO₂, and PM2.5 instead take a
   descending list of `{min, icon}` tiers with a final `{default: true,
   icon: ...}` entry, the same shape as `tiers` without the color/level/zone
   fields, for example:
@@ -519,7 +524,8 @@ Custom-profile rules:
     - default: true
       icon: mdi:water-minus
   ```
-  Without it, these three metrics keep their fixed default header icon.
+  Without it, these three keep their measurement's own header icon, the same one
+  for every reading.
 - Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
   `max_inclusive`.
 - A mistake inside `classification` stops the card with an error naming the
