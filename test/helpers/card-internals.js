@@ -97,9 +97,6 @@ async function loadCardInternals() {
       m.classification.resolveProfileIcon(policyOf(el), metricType, unitProfile, value) ||
       m.metricMeta.metricMetaFor(metricType).icon,
 
-    temperatureIcon: (el, temperature, unitProfile) =>
-      m.icons.temperatureIconForProfile(temperature, displayProfileOf(el, "temperature", unitProfile)),
-
     // The tone a value carries when nothing entity-specific overrides it: the numeric
     // tier, labelled by its own level.
     fallbackTone(el, value, metricType, unitProfile) {

@@ -375,7 +375,7 @@ test("projecting to Fahrenheit rounds every boundary to a whole number", () => {
     if (Number.isFinite(tier.min)) assert.equal(Number.isInteger(tier.min), true, `tier ${tier.min}`);
   }
   assert.equal(projected.tiers[projected.tiers.length - 1].min, -Infinity);
-  assert.deepEqual(projected.iconThresholds, { fire: 82, high: 79, normal: 68, low: 64 });
+  assert.deepEqual(projected.iconTiers.map((t) => t.min), [82, 79, 68, 64, -Infinity]);
 });
 
 test("projecting to Fahrenheit converts the step as a delta, not an absolute", () => {
@@ -467,43 +467,57 @@ test("the built-in profiles survive projection into every temperature unit", () 
 
 // ----------------------------------------------------------------- icons --
 
-test("temperature icons follow the profile's own thresholds", () => {
+test("temperature icons come from the same descending tiers every other measurement uses", () => {
   const indoor = temperatureRegistry().profiles.indoor;
-  assert.equal(icons.temperatureIconForProfile(30, indoor), "mdi:fire-alert");
-  assert.equal(icons.temperatureIconForProfile(27, indoor), "mdi:thermometer-high");
-  assert.equal(icons.temperatureIconForProfile(22, indoor), "mdi:thermometer");
-  assert.equal(icons.temperatureIconForProfile(19, indoor), "mdi:thermometer-low");
-  assert.equal(icons.temperatureIconForProfile(5, indoor), "mdi:snowflake");
-  // Boundaries are inclusive.
-  assert.equal(icons.temperatureIconForProfile(28, indoor), "mdi:fire-alert");
-  assert.equal(icons.temperatureIconForProfile(26, indoor), "mdi:thermometer-high");
+  assert.equal(icons.profileIconForValue(30, indoor), "mdi:fire-alert");
+  assert.equal(icons.profileIconForValue(27, indoor), "mdi:thermometer-high");
+  assert.equal(icons.profileIconForValue(22, indoor), "mdi:thermometer");
+  assert.equal(icons.profileIconForValue(19, indoor), "mdi:thermometer-low");
+  assert.equal(icons.profileIconForValue(5, indoor), "mdi:snowflake");
+  // Boundaries follow the profile's own comparison operator, which is ">=" here.
+  assert.equal(icons.profileIconForValue(28, indoor), "mdi:fire-alert");
+  assert.equal(icons.profileIconForValue(26, indoor), "mdi:thermometer-high");
 });
 
 test("the same reading gets a different icon per temperature profile", () => {
   const { indoor, outdoor, fridge } = temperatureRegistry().profiles;
-  assert.equal(icons.temperatureIconForProfile(12, indoor), "mdi:snowflake");
-  assert.equal(icons.temperatureIconForProfile(12, outdoor), "mdi:thermometer-low");
-  assert.equal(icons.temperatureIconForProfile(12, fridge), "mdi:fire-alert");
+  assert.equal(icons.profileIconForValue(12, indoor), "mdi:snowflake");
+  assert.equal(icons.profileIconForValue(12, outdoor), "mdi:thermometer-low");
+  assert.equal(icons.profileIconForValue(12, fridge), "mdi:fire-alert");
+});
+
+// The icon list is read with the profile's own comparison operator, exactly like the
+// classification tiers — so a profile whose boundaries are exclusive has exclusive icon
+// boundaries too, and the two can never disagree about the value ON a threshold.
+test("icon boundaries follow the profile's comparison operator", () => {
+  const inclusive = temperatureRegistry().profiles.indoor;
+  const exclusive = { ...inclusive, comparison: ">" };
+  assert.equal(icons.profileIconForValue(28, inclusive), "mdi:fire-alert");
+  assert.equal(icons.profileIconForValue(28, exclusive), "mdi:thermometer-high");
 });
 
 test("non-temperature icons come from the descending icon tiers", () => {
   const humidity = registry.CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor;
-  assert.equal(icons.profileIconForValue(80, "humidity", humidity), "mdi:water-percent-alert");
-  assert.equal(icons.profileIconForValue(65, "humidity", humidity), "mdi:water-plus");
-  assert.equal(icons.profileIconForValue(50, "humidity", humidity), "mdi:water-percent");
-  assert.equal(icons.profileIconForValue(20, "humidity", humidity), "mdi:water-minus");
+  assert.equal(icons.profileIconForValue(80, humidity), "mdi:water-percent-alert");
+  assert.equal(icons.profileIconForValue(65, humidity), "mdi:water-plus");
+  assert.equal(icons.profileIconForValue(50, humidity), "mdi:water-percent");
+  assert.equal(icons.profileIconForValue(20, humidity), "mdi:water-minus");
 });
 
+// The measurement is not an argument, so "no icon tiers" cannot mean one thing for
+// temperature and another for the rest: the function has no way to tell them apart.
 test("profileIconForValue() returns null when a profile declares no icon tiers", () => {
-  const withoutTiers = { comparison: ">=", tiers: [] };
-  assert.equal(icons.profileIconForValue(50, "humidity", withoutTiers), null);
+  assert.equal(icons.profileIconForValue.length, 2, "value and profile, nothing about the metric");
+  for (const withoutTiers of [{ comparison: ">=", tiers: [] }, { comparison: ">=", tiers: [], iconTiers: null }]) {
+    assert.equal(icons.profileIconForValue(50, withoutTiers), null);
+  }
 });
 
 test("icon tiers honour the profile's comparison operator", () => {
   const pm25 = registry.CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor;
   assert.equal(pm25.comparison, ">");
-  assert.equal(icons.profileIconForValue(5, "pm25", pm25), "mdi:molecule", "exactly 5 does not pass an exclusive boundary");
-  assert.equal(icons.profileIconForValue(5.1, "pm25", pm25), "mdi:weather-hazy");
+  assert.equal(icons.profileIconForValue(5, pm25), "mdi:molecule", "exactly 5 does not pass an exclusive boundary");
+  assert.equal(icons.profileIconForValue(5.1, pm25), "mdi:weather-hazy");
 });
 
 // ----------------------------------------------------------- scale config --

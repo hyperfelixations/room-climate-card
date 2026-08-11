@@ -83,10 +83,7 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   } = normalizeScale(value.scale);
   const sourceTiers = normalizeTiers(value.tiers, classificationZones);
   const sourceValidRange = normalizeValidRange(value.valid_range);
-  const { iconThresholds: sourceIcons, iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind, {
-    scale: sourceScale,
-    comfort: sourceComfort,
-  });
+  const { iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind);
 
   // Everything above is in the user's own unit. From here on it is canonical:
   // absolute readings via toCanonical(), the rounding step and the headroom via
@@ -128,9 +125,6 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     invalidWhen,
     validRange: canonicalValidRange,
     invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-    iconThresholds: sourceIcons && Object.fromEntries(
-      Object.entries(sourceIcons).map(([key, threshold]) => [key, toCanonical(threshold)])
-    ),
-    iconTiers: sourceIconTiers?.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
+    iconTiers: sourceIconTiers && sourceIconTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
   };
 }

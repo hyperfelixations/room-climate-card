@@ -436,10 +436,16 @@ classification:
     step: 1
 
   icons:
-    fire: 35
-    high: 30
-    normal: 14
-    low: 5
+    - min: 35
+      icon: mdi:fire-alert
+    - min: 30
+      icon: mdi:thermometer-high
+    - min: 14
+      icon: mdi:thermometer
+    - min: 5
+      icon: mdi:thermometer-low
+    - default: true
+      icon: mdi:snowflake
 
   tiers:
     - min: 30
@@ -507,14 +513,11 @@ Custom-profile rules:
 - Bands are drawn as far as the axis reaches. A comfort band wider than the
   current axis fills the bar, and the rest of it appears as readings move and
   the axis grows.
-- `icons` is optional; its shape depends on the profile's metric kind.
-  Temperature takes an object of descending `fire`, `high`, `normal`, and
-  `low` thresholds — without it, temperature derives them from the custom
-  scale and comfort bounds, which a profile whose axis follows the readings has
-  none of, so that one has to list them. Humidity, CO₂, and PM2.5 instead take a
+- `icons` is optional and has the same shape for every measurement: a
   descending list of `{min, icon}` tiers with a final `{default: true,
-  icon: ...}` entry, the same shape as `tiers` without the color/level/zone
-  fields, for example:
+  icon: ...}` entry, which is `tiers` without the color, level, and zone
+  fields. You choose the thresholds and the icons, and they follow the profile's
+  `comparison` just like the tiers do:
   ```yaml
   icons:
     - min: 60
@@ -524,8 +527,8 @@ Custom-profile rules:
     - default: true
       icon: mdi:water-minus
   ```
-  Without it, these three keep their measurement's own header icon, the same one
-  for every reading.
+  Leave `icons` out and the card shows the measurement's own header icon for
+  every reading.
 - Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
   `max_inclusive`.
 - A mistake inside `classification` stops the card with an error naming the

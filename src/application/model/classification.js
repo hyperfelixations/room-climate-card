@@ -98,5 +98,5 @@ export function classificationColorOf(policy, metricKind, unitProfile, value, at
 // The profile's own icon token, or null when the profile declares none — the
 // presentation layer then falls back to the metric's stable default icon.
 export function resolveProfileIcon(policy, metricKind, unitProfile, value) {
-  return profileIconForValue(value, metricKind, resolveDisplayProfile(policy, metricKind, unitProfile));
+  return profileIconForValue(value, resolveDisplayProfile(policy, metricKind, unitProfile));
 }

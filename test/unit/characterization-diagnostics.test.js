@@ -42,6 +42,10 @@ const VALID_HASS = hassWith({
 
 const FAHRENHEIT_HASS = hassWith({ "sensor.avg": st("sensor.avg", 72.5, F) });
 
+const VALID_HASS_HUMIDITY = hassWith({
+  "sensor.avg": st("sensor.avg", 48, { device_class: "humidity", unit_of_measurement: "%" }),
+});
+
 // A structurally valid custom profile, cloned and then broken one field at a
 // time below, so each case isolates exactly one validation rule.
 function validCustom() {
@@ -114,16 +118,7 @@ const INVALID_CONFIGS = [
       classification: { ...validCustom(), bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } },
     },
   ],
-  // A scale narrower than the comfort band is no longer refused for its own sake — the
-  // bar clips bands into the axis it draws. It is still refused here, but for the reason
-  // that actually bites: a temperature profile with no icons of its own derives them
-  // from exactly these two, and this pair does not descend.
-  [
-    "custom-derived-icon-thresholds-do-not-descend",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 20, max: 24, step: 2 } } },
-  ],
-  // The two shapes of `scale`, and the three ways of asking for neither.
+  // The two shapes of `scale`, and the two ways of asking for neither.
   [
     "custom-scale-without-a-range",
     VALID_HASS,
@@ -142,14 +137,8 @@ const INVALID_CONFIGS = [
       classification: {
         ...validCustom(),
         scale: { step: 2, anchor_scale: false, one_sided: true },
-        icons: { fire: 30, high: 26, normal: 19, low: 14 },
       },
     },
-  ],
-  [
-    "custom-data-following-temperature-without-icons",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2, anchor_scale: false } } },
   ],
   [
     "custom-scale-step-not-positive",
@@ -238,11 +227,42 @@ const INVALID_CONFIGS = [
     { entity: "sensor.avg", classification: { ...validCustom(), valid_range: {} } },
   ],
   [
-    "custom-icons-not-descending",
+    "custom-icons-threshold-object-not-descending",
     VALID_HASS,
     {
       entity: "sensor.avg",
       classification: { ...validCustom(), icons: { fire: 20, high: 26, normal: 19, low: 15 } },
+    },
+  ],
+  [
+    "custom-icons-not-a-list",
+    VALID_HASS,
+    { entity: "sensor.avg", classification: { ...validCustom(), icons: "mdi:thermometer" } },
+  ],
+  [
+    "custom-icons-threshold-object-on-a-non-temperature-profile",
+    VALID_HASS_HUMIDITY,
+    {
+      entity: "sensor.avg",
+      classification: {
+        source: "custom",
+        unit: "%",
+        bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
+        scale: { min: 30, max: 70, step: 5 },
+        tiers: [
+          { min: 60, score: 2, level: "Humid", color: "#4488cc", zone: "outside" },
+          { default: true, score: 1, level: "Dry", color: "#cc8844", zone: "outside" },
+        ],
+        icons: { fire: 90, high: 75, normal: 40, low: 20 },
+      },
+    },
+  ],
+  [
+    "custom-icons-list-without-a-default-tier",
+    VALID_HASS,
+    {
+      entity: "sensor.avg",
+      classification: { ...validCustom(), icons: [{ min: 28, icon: "mdi:fire-alert" }] },
     },
   ],
   [

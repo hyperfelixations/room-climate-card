@@ -149,55 +149,45 @@ export function normalizeValidRange(value) {
   return validRange;
 }
 
-// classification.icons has two distinct shapes, chosen by metric kind, mirroring
-// the built-in profiles: temperature uses a fixed fire/high/normal/low threshold
-// object, the other kinds use a descending {min, icon} list. Omitted for
-// temperature, the thresholds are derived from the scale and comfort bands.
-//
-// The derivation has two preconditions, and both are checked here rather than assumed:
-// there has to BE a reference range to take fire and low from, and the four thresholds
-// it produces have to descend. temperatureIconForProfile() reads them as a fixed
-// >=-cascade — fire, then high, then normal, then low — so a fire that is not above
-// high makes the first branch swallow everything below it and leaves
-// mdi:thermometer-high unreachable. That is a silently wrong icon, which is worse than
-// a profile the card refuses to load.
-export function normalizeIcons(value, metricKind, { scale, comfort }) {
-  if (value === undefined) {
-    if (metricKind !== "temperature") return { iconThresholds: null, iconTiers: null };
-    if (!scale) {
-      pathError(
-        "classification.icons",
-        "must be listed explicitly when the axis follows the data, because the fire and low thresholds are otherwise derived from classification.scale"
-      );
-    }
-    const derived = { fire: scale.max, high: comfort.max, normal: comfort.min, low: scale.min };
-    if (!(derived.fire > derived.high && derived.high > derived.normal && derived.normal > derived.low)) {
-      pathError(
-        "classification.icons",
-        "must be listed explicitly, because the thresholds derived from classification.scale and classification.bands do not descend"
-      );
-    }
-    return { iconThresholds: derived, iconTiers: null };
-  }
+// The five icons a temperature profile used to select with a fire/high/normal/low
+// threshold object, in the order that object implied. Kept only to translate that
+// spelling into the one shape everything downstream now uses.
+const LEGACY_TEMPERATURE_ICONS = ["mdi:fire-alert", "mdi:thermometer-high", "mdi:thermometer", "mdi:thermometer-low"];
+const LEGACY_TEMPERATURE_DEFAULT_ICON = "mdi:snowflake";
 
-  if (metricKind === "temperature") {
-    if (!isPlainObject(value)) {
-      pathError("classification.icons", "must be an object with fire/high/normal/low thresholds for a temperature profile");
+// classification.icons: ONE shape for every measurement — a descending list of
+// {min, icon} tiers ending in a {default: true, icon} entry, the same shape as
+// classification.tiers without the fields that carry meaning.
+//
+// Omitting it means the same thing for every measurement too: the profile declares no
+// icons, and the presentation layer applies the measurement's own stable icon. There is
+// no derivation and no per-kind fallback.
+//
+// The fire/high/normal/low object a temperature profile could give instead is accepted
+// for backwards compatibility and translated here, at the configuration boundary, into
+// exactly the list that spelling always meant. Nothing downstream sees two shapes.
+export function normalizeIcons(value, metricKind) {
+  if (value === undefined) return { iconTiers: null };
+
+  if (isPlainObject(value)) {
+    if (metricKind !== "temperature") {
+      pathError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry");
     }
     assertAllowedKeys(value, new Set(["fire", "high", "normal", "low"]), "classification.icons");
-    const iconThresholds = {};
+    const iconTiers = [];
     let previous = Infinity;
-    for (const key of ["fire", "high", "normal", "low"]) {
+    ["fire", "high", "normal", "low"].forEach((key, index) => {
       const threshold = numberAtPath(value[key], `classification.icons.${key}`);
       if (threshold >= previous) pathError("classification.icons", "must descend from fire to low");
       previous = threshold;
-      iconThresholds[key] = threshold;
-    }
-    return { iconThresholds, iconTiers: null };
+      iconTiers.push({ min: threshold, icon: LEGACY_TEMPERATURE_ICONS[index] });
+    });
+    iconTiers.push({ min: -Infinity, icon: LEGACY_TEMPERATURE_DEFAULT_ICON });
+    return { iconTiers };
   }
 
   if (!Array.isArray(value)) {
-    pathError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry for a non-temperature profile");
+    pathError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry");
   }
   const iconTiers = normalizeDescendingTierList(value, "classification.icons", ["icon"], (item, path) => {
     if (typeof item.icon !== "string" || !item.icon.trim()) {
@@ -205,5 +195,5 @@ export function normalizeIcons(value, metricKind, { scale, comfort }) {
     }
     return { icon: item.icon.trim() };
   });
-  return { iconThresholds: null, iconTiers };
+  return { iconTiers };
 }

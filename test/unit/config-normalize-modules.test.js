@@ -535,34 +535,6 @@ test("normalizeScale returns the range and every switch in its resolved form", (
   );
 });
 
-// The four thresholds a temperature profile falls back on are derived from the reference
-// range and the comfort band, and temperatureIconForProfile() reads them as a fixed
-// >=-cascade: fire, then high, then normal, then low. If fire is not above high the
-// first branch swallows everything and mdi:thermometer-high becomes unreachable — a
-// silently wrong icon rather than a rejected profile. The containment rule used to make
-// that impossible as a side effect; now it is checked where it belongs.
-test("derived temperature icon thresholds must descend, or the profile has to state them", () => {
-  const derived = classification.normalizeCustomClassification(
-    validCustom({ bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } }, scale: { min: 16, max: 28, step: 2 } }),
-    COLLABORATORS
-  );
-  assert.deepEqual(
-    derived.iconThresholds,
-    { fire: 28, high: 25, normal: 19, low: 16 },
-    "a scale wider than the comfort band still derives its four thresholds"
-  );
-
-  const stated = classification.normalizeCustomClassification(
-    validCustom({
-      bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } },
-      scale: { min: 20, max: 24, step: 2 },
-      icons: { fire: 30, high: 26, normal: 20, low: 14 },
-    }),
-    COLLABORATORS
-  );
-  assert.deepEqual(stated.iconThresholds, { fire: 30, high: 26, normal: 20, low: 14 });
-});
-
 test("a custom valid_range becomes a predicate honouring both inclusivity flags", () => {
   const inclusive = classification.normalizeCustomClassification(
     validCustom({ valid_range: { min: 0, max: 50 } }),
@@ -589,13 +561,77 @@ test("a custom valid_range becomes a predicate honouring both inclusivity flags"
   assert.equal(onlyMin.invalidWhen(-1), true);
 });
 
-test("temperature icons default to the scale and comfort bands when omitted", () => {
-  const result = classification.normalizeCustomClassification(validCustom(), COLLABORATORS);
-  assert.deepEqual(result.iconThresholds, { fire: 28, high: 25, normal: 19, low: 16 });
-  assert.equal(result.iconTiers, undefined);
+// One meaning of "no icons", for every measurement: none. The temperature-only
+// derivation from the scale and comfort bands is gone, and with it the one place where
+// omitting a field meant something different depending on what was being measured.
+test("omitting icons declares none, whatever the profile measures", () => {
+  for (const overrides of [
+    {},
+    { unit: "%", bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } }, scale: { min: 30, max: 70, step: 5 } },
+  ]) {
+    const result = classification.normalizeCustomClassification(validCustom(overrides), COLLABORATORS);
+    assert.equal(result.iconTiers, null, JSON.stringify(overrides));
+  }
 });
 
-test("a non-temperature custom profile uses icon tiers and no thresholds", () => {
+// The fire/high/normal/low object is the spelling released profiles use. It survives as
+// an INPUT only: what comes out is the same list every other profile carries, with the
+// five icons that spelling always implied.
+test("the temperature threshold object normalizes into the shared icon list", () => {
+  const result = classification.normalizeCustomClassification(
+    validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
+    COLLABORATORS
+  );
+  assert.deepEqual(result.iconTiers, [
+    { min: 30, icon: "mdi:fire-alert" },
+    { min: 26, icon: "mdi:thermometer-high" },
+    { min: 20, icon: "mdi:thermometer" },
+    { min: 14, icon: "mdi:thermometer-low" },
+    { min: -Infinity, icon: "mdi:snowflake" },
+  ]);
+});
+
+// And the same profile written in the list form has to come out identical, or the two
+// spellings would not be two spellings of one thing.
+test("both spellings of the same temperature icons produce the same profile", () => {
+  const asObject = classification.normalizeCustomClassification(
+    validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
+    COLLABORATORS
+  );
+  const asList = classification.normalizeCustomClassification(
+    validCustom({
+      icons: [
+        { min: 30, icon: "mdi:fire-alert" },
+        { min: 26, icon: "mdi:thermometer-high" },
+        { min: 20, icon: "mdi:thermometer" },
+        { min: 14, icon: "mdi:thermometer-low" },
+        { default: true, icon: "mdi:snowflake" },
+      ],
+    }),
+    COLLABORATORS
+  );
+  assert.deepEqual(asList.iconTiers, asObject.iconTiers);
+});
+
+// A temperature profile may now choose its own icons, which the threshold object never
+// allowed — the card no longer owns that decision for one measurement and not the others.
+test("a temperature profile can choose icons of its own", () => {
+  const result = classification.normalizeCustomClassification(
+    validCustom({
+      icons: [
+        { min: 30, icon: "mdi:sun-thermometer" },
+        { default: true, icon: "mdi:home-thermometer" },
+      ],
+    }),
+    COLLABORATORS
+  );
+  assert.deepEqual(result.iconTiers, [
+    { min: 30, icon: "mdi:sun-thermometer" },
+    { min: -Infinity, icon: "mdi:home-thermometer" },
+  ]);
+});
+
+test("a non-temperature custom profile uses the shared icon list", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({
       unit: "%",
@@ -609,7 +645,6 @@ test("a non-temperature custom profile uses icon tiers and no thresholds", () =>
     COLLABORATORS
   );
   assert.equal(result.metricKind, "humidity");
-  assert.equal(result.iconThresholds, null);
   assert.deepEqual(result.iconTiers, [
     { min: 60, icon: "mdi:water-plus" },
     { min: -Infinity, icon: "mdi:water-minus" },
@@ -637,8 +672,6 @@ test("every custom-classification rejection keeps its exact message", () => {
     [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
     [validCustom({ scale: { max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
     [validCustom({ scale: { step: 2, anchor_scale: false, one_sided: true }, icons: { fire: 30, high: 26, normal: 19, low: 14 } }), "Invalid configuration: classification.scale.one_sided requires an anchored axis, because it keeps the lower bound at classification.scale.min."],
-    [validCustom({ scale: { step: 2, anchor_scale: false } }), "Invalid configuration: classification.icons must be listed explicitly when the axis follows the data, because the fire and low thresholds are otherwise derived from classification.scale."],
-    [validCustom({ bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } }, scale: { min: 20, max: 24, step: 2 } }), "Invalid configuration: classification.icons must be listed explicitly, because the thresholds derived from classification.scale and classification.bands do not descend."],
     [validCustom({ tiers: [] }), "Invalid configuration: classification.tiers must be a non-empty array."],
     [validCustom({ tiers: ["x"] }), "Invalid configuration: classification.tiers[0] must be an object."],
     [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside", bogus: 1 }] }), "Invalid configuration: classification.tiers[0].bogus is not a supported option."],
@@ -655,7 +688,7 @@ test("every custom-classification rejection keeps its exact message", () => {
     [validCustom({ valid_range: { min: 0, max: 50, min_inclusive: "yes" } }), "Invalid configuration: classification.valid_range.min_inclusive must be a boolean."],
     [validCustom({ valid_range: { min: 50, max: 0 } }), "Invalid configuration: classification.valid_range must have min < max."],
     [validCustom({ valid_range: 5 }), "Invalid configuration: classification.valid_range must be an object."],
-    [validCustom({ icons: 5 }), "Invalid configuration: classification.icons must be an object with fire/high/normal/low thresholds for a temperature profile."],
+    [validCustom({ icons: 5 }), "Invalid configuration: classification.icons must be a list of {min, icon} tiers with a final {default: true, icon} entry."],
     [validCustom({ icons: { fire: 20, high: 26, normal: 19, low: 15 } }), "Invalid configuration: classification.icons must descend from fire to low."],
     [validCustom({ bogus: 1 }), "Invalid configuration: classification.bogus is not a supported option."],
   ];
@@ -668,7 +701,9 @@ test("every custom-classification rejection keeps its exact message", () => {
   }
 });
 
-test("a non-temperature profile rejects the temperature icon shape", () => {
+// The threshold object is a temperature-only compatibility spelling; anything else has
+// to use the one shape.
+test("only a temperature profile may use the legacy threshold object", () => {
   assert.throws(
     () =>
       classification.normalizeCustomClassification(
@@ -680,7 +715,7 @@ test("a non-temperature profile rejects the temperature icon shape", () => {
         }),
         COLLABORATORS
       ),
-    { message: "Invalid configuration: classification.icons must be a list of {min, icon} tiers with a final {default: true, icon} entry for a non-temperature profile." }
+    { message: "Invalid configuration: classification.icons must be a list of {min, icon} tiers with a final {default: true, icon} entry." }
   );
 });
 

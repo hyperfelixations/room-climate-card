@@ -729,7 +729,7 @@ test("all four classification sources reach the domain model", () => {
           comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 }, scale: { min: 16, max: 28 }, step: 2,
           invalidWhen: null, validRange: null,
           invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
-          iconThresholds: { fire: 30, high: 26, normal: 19, low: 15 },
+          iconTiers: [{ min: 30, icon: "mdi:fire-alert" }, { min: -Infinity, icon: "mdi:snowflake" }],
         },
       },
     }),

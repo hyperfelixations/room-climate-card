@@ -52,9 +52,6 @@ export function projectProfileToDisplayUnit(canonical, definition, unitProfile, 
     headroom: canonical.headroom === undefined ? undefined : displayProfile.deltaFromCanonical(canonical.headroom),
     invalidWhen,
     validRange: projectedValidRange,
-    iconThresholds: canonical.iconThresholds && Object.fromEntries(
-      Object.entries(canonical.iconThresholds).map(([key, threshold]) => [key, projectAbsolute(threshold)])
-    ),
     iconTiers: canonical.iconTiers?.map((tier) => ({
       ...tier,
       min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,

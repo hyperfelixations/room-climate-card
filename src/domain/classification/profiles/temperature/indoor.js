@@ -30,5 +30,12 @@ export const indoor = {
   optimal: { min: 21, max: 23 },
   scale: { min: 19, max: 25 },
   step: 1,
-  iconThresholds: { fire: 28, high: 26, normal: 20, low: 18 },
+  // The same descending {min, icon} list every profile uses, whatever it measures.
+  iconTiers: [
+    { min: 28, icon: "mdi:fire-alert" },
+    { min: 26, icon: "mdi:thermometer-high" },
+    { min: 20, icon: "mdi:thermometer" },
+    { min: 18, icon: "mdi:thermometer-low" },
+    { min: -Infinity, icon: "mdi:snowflake" },
+  ],
 };

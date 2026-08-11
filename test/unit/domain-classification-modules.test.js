@@ -19,6 +19,7 @@ const assert = require("node:assert/strict");
 
 let registry;
 let zones;
+let icons;
 
 const KINDS = ["temperature", "humidity", "co2", "pm25"];
 const EXPECTED_PROFILE_IDS = {
@@ -31,6 +32,7 @@ const EXPECTED_PROFILE_IDS = {
 test.before(async () => {
   registry = await import("../../src/domain/classification/registry.js");
   zones = await import("../../src/domain/classification/zones.js");
+  icons = await import("../../src/domain/classification/icons.js");
 });
 
 function allProfiles() {
@@ -277,8 +279,7 @@ test("temperature/indoor keeps its documented bands, tiers and icons", () => {
   assert.equal(p.step, 1);
   assert.equal(p.anchorScale, undefined, "indoor uses the anchored default");
   assert.deepEqual(p.tiers.map((t) => t.min), [28, 26, 25, 24, 23, 21, 20, 19, 18, 16, -Infinity]);
-  assert.deepEqual(p.iconThresholds, { fire: 28, high: 26, normal: 20, low: 18 });
-  assert.equal(p.iconTiers, undefined);
+  assert.deepEqual(p.iconTiers.map((t) => t.min), [28, 26, 20, 18, -Infinity]);
   assert.equal(selectTier(p, 22).levelKey, "level.optimal");
   assert.equal(selectTier(p, 24).zone, "outside", "24 °C is already outside comfort by tier");
 });
@@ -291,7 +292,7 @@ test("temperature/outdoor follows live data instead of a fixed axis", () => {
   assert.equal(p.scale, null, "the one profile that declares no reference range");
   assert.equal(p.step, 1);
   assert.deepEqual(p.tiers.map((t) => t.min), [35, 30, 28, 26, 22, 18, 14, 10, 5, 0, -Infinity]);
-  assert.deepEqual(p.iconThresholds, { fire: 35, high: 30, normal: 14, low: 5 });
+  assert.deepEqual(p.iconTiers.map((t) => t.min), [35, 30, 14, 5, -Infinity]);
   assert.equal(selectTier(p, 20).levelKey, "level.optimal");
   assert.equal(selectTier(p, -3).levelKey, "level.veryCold");
 });
@@ -304,7 +305,7 @@ test("temperature/fridge keeps its food-safety band and its anchored axis", () =
   assert.equal(p.step, 1);
   assert.equal(p.anchorScale, undefined, "a fridge has a well-defined operating band, so the axis stays fixed");
   assert.deepEqual(p.tiers.map((t) => t.min), [12, 10, 8, 6, 5, 3, 1, 0, -2, -4, -Infinity]);
-  assert.deepEqual(p.iconThresholds, { fire: 12, high: 10, normal: 1, low: -2 });
+  assert.deepEqual(p.iconTiers.map((t) => t.min), [12, 10, 1, -2, -Infinity]);
   assert.equal(selectTier(p, 4).levelKey, "level.optimal");
   assert.equal(selectTier(p, 8).zone, "outside", "8 °C is the start of the cited danger zone");
 });
@@ -330,7 +331,6 @@ test("humidity/indoor keeps its symmetric band and icon tiers", () => {
   assert.equal(p.oneSided, undefined, "humidity has both a too-dry and a too-humid side");
   assert.deepEqual(p.tiers.map((t) => t.min), [75, 70, 65, 60, 58, 42, 40, 35, 30, 25, -Infinity]);
   assert.deepEqual(p.iconTiers.map((t) => t.min), [75, 60, 40, -Infinity]);
-  assert.equal(p.iconThresholds, undefined);
   assert.equal(selectTier(p, 50).levelKey, "level.optimal");
 });
 
@@ -367,22 +367,98 @@ test("pm25/indoor uses the exclusive comparison so a value on a boundary stays l
 
 // ------------------------------------------------------------ icon tables --
 
-test("temperature icon thresholds descend from fire to low", () => {
-  for (const id of EXPECTED_PROFILE_IDS.temperature) {
-    const t = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles[id].iconThresholds;
-    assert.ok(t.fire > t.high, `temperature/${id}: fire > high`);
-    assert.ok(t.high > t.normal, `temperature/${id}: high > normal`);
-    assert.ok(t.normal > t.low, `temperature/${id}: normal > low`);
+// The icon every built-in profile shows, for every threshold it has and for the two
+// readings on either side of it. The values were read out of the card as shipped, before
+// the profiles were rewritten, and are therefore evidence rather than a restatement of
+// the data below them: any profile whose icons move shows up here, and only here does a
+// wrong boundary have nowhere to hide.
+const SHIPPED_ICONS = {
+  "temperature/indoor": [
+    [[-100, 0, 15, 15.99, 16, 16.01, 17, 17.99], "mdi:snowflake"],
+    [[18, 18.01, 18.99, 19, 19.01, 19.99], "mdi:thermometer-low"],
+    [[
+      20, 20.01, 20.99, 21, 21.01, 22, 22.99, 23, 23.01, 23.99, 24, 24.01, 24.99, 25,
+      25.01, 25.99,
+    ], "mdi:thermometer"],
+    [[26, 26.01, 27, 27.99], "mdi:thermometer-high"],
+    [[28, 28.01, 29, 1000], "mdi:fire-alert"],
+  ],
+  "temperature/outdoor": [
+    [[-100, -1, -0.01, 0, 0.01, 1, 4, 4.99], "mdi:snowflake"],
+    [[5, 5.01, 6, 9, 9.99, 10, 10.01, 11, 13, 13.99], "mdi:thermometer-low"],
+    [[
+      14, 14.01, 15, 17, 17.99, 18, 18.01, 19, 21, 21.99, 22, 22.01, 23, 25, 25.99, 26,
+      26.01, 27, 27.99, 28, 28.01, 29, 29.99,
+    ], "mdi:thermometer"],
+    [[30, 30.01, 31, 34, 34.99], "mdi:thermometer-high"],
+    [[35, 35.01, 36, 1000], "mdi:fire-alert"],
+  ],
+  "temperature/fridge": [
+    [[-100, -5, -4.01, -4, -3.99, -3, -2.01], "mdi:snowflake"],
+    [[-2, -1.99, -1, -0.01, 0, 0.01, 0.99], "mdi:thermometer-low"],
+    [[
+      1, 1.01, 2, 2.99, 3, 3.01, 4, 4.99, 5, 5.01, 5.99, 6, 6.01, 7, 7.99, 8, 8.01, 9,
+      9.99,
+    ], "mdi:thermometer"],
+    [[10, 10.01, 11, 11.99], "mdi:thermometer-high"],
+    [[12, 12.01, 13, 1000], "mdi:fire-alert"],
+  ],
+  "humidity/indoor": [
+    [[
+      -100, 0, 24, 24.99, 25, 25.01, 26, 29, 29.99, 30, 30.01, 31, 34, 34.99, 35, 35.01,
+      36, 39, 39.99,
+    ], "mdi:water-minus"],
+    [[40, 40.01, 41, 41.99, 42, 42.01, 43, 57, 57.99, 58, 58.01, 59, 59.99], "mdi:water-percent"],
+    [[
+      60, 60.01, 61, 64, 64.99, 65, 65.01, 66, 69, 69.99, 70, 70.01, 71, 74, 74.99,
+    ], "mdi:water-plus"],
+    [[75, 75.01, 76, 1000], "mdi:water-percent-alert"],
+  ],
+  "co2/indoor": [
+    [[
+      -100, -1, -0.01, 0, 0.01, 1, 799, 799.99, 800, 800.01, 801, 999, 999.99, 1000,
+      1000.01, 1001, 1199, 1199.99, 1200, 1200.01, 1201, 1599, 1599.99, 1600, 1600.01,
+      1601, 1999, 1999.99,
+    ], "mdi:molecule-co2"],
+    [[2000, 2000.01, 2001], "mdi:alert-circle-outline"],
+  ],
+  "pm25/indoor": [
+    [[-100, -1, -0.01, 0, 0.01, 1, 4, 4.99, 5], "mdi:molecule"],
+    [[
+      5.01, 6, 14, 14.99, 15, 15.01, 16, 19, 19.99, 20, 20.01, 21, 24, 24.99, 25,
+    ], "mdi:weather-hazy"],
+    [[25.01, 26, 34, 34.99, 35, 35.01, 36, 49, 49.99, 50], "mdi:weather-dust"],
+    [[50.01, 51, 1000], "mdi:alert-circle-outline"],
+  ],
+};
+
+test("every built-in profile shows the icons it has always shown", () => {
+  let probes = 0;
+  for (const { kind, id, profile } of allProfiles()) {
+    const runs = SHIPPED_ICONS[`${kind}/${id}`];
+    assert.ok(runs, `${kind}/${id}: has a recorded icon table`);
+    for (const [values, icon] of runs) {
+      for (const value of values) {
+        assert.equal(icons.profileIconForValue(value, profile), icon, `${kind}/${id} @ ${value}`);
+        probes++;
+      }
+    }
   }
+  assert.equal(probes, 248, "the whole recorded table was replayed");
 });
 
-test("non-temperature icon tiers descend and end open-ended", () => {
-  for (const kind of ["humidity", "co2", "pm25"]) {
-    const tiers = registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles.indoor.iconTiers;
+// One shape for every measurement, so this holds for every profile rather than for
+// three of them under one rule and three under another.
+test("every profile's icon tiers descend and end open-ended", () => {
+  for (const { kind, id, profile } of allProfiles()) {
+    const tiers = profile.iconTiers;
+    assert.ok(Array.isArray(tiers) && tiers.length > 0, `${kind}/${id}: icon tiers`);
     for (let i = 1; i < tiers.length; i++) {
-      assert.ok(tiers[i].min < tiers[i - 1].min, `${kind}: icon tier ${i} must be below ${i - 1}`);
+      assert.ok(tiers[i].min < tiers[i - 1].min, `${kind}/${id}: icon tier ${i} descends`);
     }
-    assert.equal(tiers[tiers.length - 1].min, -Infinity, `${kind}: final icon tier is open-ended`);
-    for (const tier of tiers) assert.match(tier.icon, /^mdi:/, `${kind}: icon name`);
+    assert.equal(tiers[tiers.length - 1].min, -Infinity, `${kind}/${id}: the last icon tier is open-ended`);
+    for (const tier of tiers) {
+      assert.ok(typeof tier.icon === "string" && tier.icon.startsWith("mdi:"), `${kind}/${id}: ${tier.icon}`);
+    }
   }
 });

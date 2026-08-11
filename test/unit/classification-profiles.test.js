@@ -165,11 +165,11 @@ test("outdoor off-axis bands reappear through the partial-update path when live 
 test("outdoor temperature icons follow outdoor thresholds instead of indoor thresholds", () => {
   const card = createTemperatureCard("outdoor");
   const celsius = access.getUnitProfile("temperature", "celsius");
-  assert.equal(internals.temperatureIcon(card, 35, celsius), "mdi:fire-alert");
-  assert.equal(internals.temperatureIcon(card, 30, celsius), "mdi:thermometer-high");
-  assert.equal(internals.temperatureIcon(card, 14, celsius), "mdi:thermometer");
-  assert.equal(internals.temperatureIcon(card, 5, celsius), "mdi:thermometer-low");
-  assert.equal(internals.temperatureIcon(card, 4.99, celsius), "mdi:snowflake");
+  assert.equal(internals.profileIcon(card, 35, "temperature", celsius), "mdi:fire-alert");
+  assert.equal(internals.profileIcon(card, 30, "temperature", celsius), "mdi:thermometer-high");
+  assert.equal(internals.profileIcon(card, 14, "temperature", celsius), "mdi:thermometer");
+  assert.equal(internals.profileIcon(card, 5, "temperature", celsius), "mdi:thermometer-low");
+  assert.equal(internals.profileIcon(card, 4.99, "temperature", celsius), "mdi:snowflake");
   env.cleanup(card);
 });
 
@@ -217,11 +217,11 @@ test("fridge classification tiers follow food-safety-appropriate boundaries", ()
 test("fridge temperature icons follow fridge-specific thresholds, not room thresholds", () => {
   const card = createTemperatureCard("fridge");
   const celsius = access.getUnitProfile("temperature", "celsius");
-  assert.equal(internals.temperatureIcon(card, 12, celsius), "mdi:fire-alert");
-  assert.equal(internals.temperatureIcon(card, 10, celsius), "mdi:thermometer-high");
-  assert.equal(internals.temperatureIcon(card, 4, celsius), "mdi:thermometer");
-  assert.equal(internals.temperatureIcon(card, -2, celsius), "mdi:thermometer-low");
-  assert.equal(internals.temperatureIcon(card, -2.01, celsius), "mdi:snowflake");
+  assert.equal(internals.profileIcon(card, 12, "temperature", celsius), "mdi:fire-alert");
+  assert.equal(internals.profileIcon(card, 10, "temperature", celsius), "mdi:thermometer-high");
+  assert.equal(internals.profileIcon(card, 4, "temperature", celsius), "mdi:thermometer");
+  assert.equal(internals.profileIcon(card, -2, "temperature", celsius), "mdi:thermometer-low");
+  assert.equal(internals.profileIcon(card, -2.01, "temperature", celsius), "mdi:snowflake");
   env.cleanup(card);
 });
 
@@ -236,8 +236,8 @@ test("fridge profile is projected atomically into Fahrenheit without collapsing 
   const table = internals.displayProfile(card, "temperature", fahrenheit);
   const warmTier = table.tiers.find((tier) => tier.score === 8);
   assert.equal(warmTier.min, 43, "6 °C must become the rounded 43 °F tier boundary");
-  assert.equal(internals.temperatureIcon(card, 54, fahrenheit), "mdi:fire-alert");
-  assert.equal(internals.temperatureIcon(card, 28, fahrenheit), "mdi:thermometer-low");
+  assert.equal(internals.profileIcon(card, 54, "temperature", fahrenheit), "mdi:fire-alert");
+  assert.equal(internals.profileIcon(card, 28, "temperature", fahrenheit), "mdi:thermometer-low");
   env.cleanup(card);
 });
 
@@ -338,10 +338,36 @@ test("a custom non-temperature profile can configure icons as a descending {min,
   env.cleanup(low);
 });
 
-test("a custom non-temperature profile without icons: keeps the metric's static default icon", () => {
-  const card = humidityCardWithIcons(65, { ...customHumidityWithIcons, icons: undefined });
-  assert.equal(card._computeViewModel().tone.icon, "mdi:water-percent");
-  env.cleanup(card);
+// Omitting `icons` means one thing, and it means it for every measurement: the profile
+// declares none, so the card shows the icon that measurement always carries. Temperature
+// is in this list like the rest — it has no derivation of its own to fall back on.
+test("a custom profile without icons shows the metric's static icon, for every measurement", () => {
+  const cases = [
+    ["temperature", "°C", 22, { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } }, { min: 16, max: 28, step: 2 }, 24, "mdi:thermometer"],
+    ["humidity", "%", 48, { comfort: { min: 30, max: 70 }, optimal: { min: 40, max: 60 } }, { min: 0, max: 100, step: 10 }, 70, "mdi:water-percent"],
+    ["carbon_dioxide", "ppm", 700, { comfort: { min: 400, max: 1000 }, optimal: { min: 400, max: 800 } }, { min: 400, max: 2000, step: 100 }, 1000, "mdi:molecule-co2"],
+    ["pm25", "µg/m³", 8, { comfort: { min: 0, max: 25 }, optimal: { min: 0, max: 10 } }, { min: 0, max: 75, step: 5 }, 25, "mdi:molecule"],
+  ];
+  for (const [deviceClass, unit, value, bands, scale, warmMin, expected] of cases) {
+    const card = env.createCard(
+      {
+        entity: "sensor.avg",
+        classification: {
+          source: "custom",
+          unit,
+          bands,
+          scale,
+          tiers: [
+            { min: warmMin, score: 2, level: "High", color: "#3388FF", zone: "outside" },
+            { default: true, score: 1, level: "Normal", color: "#33AA33", zone: "comfort" },
+          ],
+        },
+      },
+      mkHass({ "sensor.avg": mkState("sensor.avg", value, { device_class: deviceClass, unit_of_measurement: unit }) })
+    );
+    assert.equal(card._computeViewModel().tone.icon, expected, deviceClass);
+    env.cleanup(card);
+  }
 });
 
 test("custom non-temperature icons: validation reuses the shared tiers list contract", () => {
@@ -350,7 +376,9 @@ test("custom non-temperature icons: validation reuses the shared tiers list cont
     [{ ...customHumidityWithIcons, icons: [{ min: 30, icon: "mdi:a" }, { min: 60, icon: "mdi:b" }, { default: true, icon: "mdi:c" }] }, /descending/],
     [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: 42 }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.icon/],
     [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:a", bogus: true }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.bogus/],
-    [{ ...customHumidityWithIcons, icons: { fire: 90, high: 75, normal: 40, low: 20 } }, /classification\.icons.*non-temperature profile/],
+    // The threshold object is a temperature-only input spelling; every other metric has
+    // only the shared list.
+    [{ ...customHumidityWithIcons, icons: { fire: 90, high: 75, normal: 40, low: 20 } }, /classification\.icons must be a list/],
   ];
   for (const [classification, expected] of cases) {
     assert.throws(() => humidityCardWithIcons(65, classification), expected);
@@ -368,8 +396,8 @@ test("outdoor profile is projected atomically into Fahrenheit", () => {
   const table = internals.displayProfile(card, "temperature", fahrenheit);
   const warmTier = table.tiers.find((tier) => tier.score === 8);
   assert.equal(warmTier.min, 79, "26 °C must become the rounded 79 °F tier boundary");
-  assert.equal(internals.temperatureIcon(card, 95, fahrenheit), "mdi:fire-alert");
-  assert.equal(internals.temperatureIcon(card, 86, fahrenheit), "mdi:thermometer-high");
+  assert.equal(internals.profileIcon(card, 95, "temperature", fahrenheit), "mdi:fire-alert");
+  assert.equal(internals.profileIcon(card, 86, "temperature", fahrenheit), "mdi:thermometer-high");
   env.cleanup(card);
 });
 
@@ -646,7 +674,7 @@ test("custom profile validation fails fast with path-specific errors", () => {
     [{ ...customProfile, unexpected: true }, /classification\.unexpected/],
     [{ ...customProfile, unit: "hPa" }, /classification\.unit/],
     [{ ...customProfile, bands: { ...customProfile.bands, optimal: { min: 5, max: 22 } } }, /classification\.bands\.optimal/],
-    [{ ...customProfile, scale: { min: 12, max: 40, step: 2 } }, /classification\.scale/],
+    [{ ...customProfile, scale: { min: 40, max: 0, step: 2 } }, /classification\.scale/],
     [{ ...customProfile, tiers: customProfile.tiers.slice(0, 2) }, /default tier/],
     [{ ...customProfile, tiers: [customProfile.tiers[1], customProfile.tiers[0], customProfile.tiers[2]] }, /descending/],
     [{
@@ -660,13 +688,25 @@ test("custom profile validation fails fast with path-specific errors", () => {
       ...customProfile,
       unit: "%",
       icons: { fire: 90, high: 75, normal: 40, low: 20 },
-    }, /classification\.icons.*non-temperature profile/],
-    [{ ...customProfile, icons: [{ min: 30, icon: "mdi:fire" }, { default: true, icon: "mdi:snowflake" }] }, /classification\.icons.*temperature profile/],
+    }, /classification\.icons must be a list/],
+    [{ ...customProfile, icons: { fire: 30, high: 26, normal: 20, low: 24 } }, /classification\.icons.*descend/],
   ];
 
   for (const [classification, expected] of cases) {
     assert.throws(() => createTemperatureCard(classification), expected);
   }
+});
+
+// The reference axis is a window, not an outer bound: it says which part of the range
+// the bar draws, and the bands are clipped into it. A window narrower than the comfort
+// band is therefore a legitimate choice, not a contradiction.
+test("a reference axis narrower than the comfort band is accepted and clipped", () => {
+  const card = createTemperatureCard({ ...customProfile, scale: { min: 12, max: 40, step: 2 } }, 25);
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const scale = internals.scaleConfigFor(card, "temperature", celsius);
+  assert.deepEqual(normalize(scale.scale), { min: 12, max: 40 });
+  assert.deepEqual(normalize(scale.comfort), { min: 10, max: 30 }, "the band keeps its own values");
+  env.cleanup(card);
 });
 
 test("a built-in profile cannot be applied to the wrong metric kind", () => {

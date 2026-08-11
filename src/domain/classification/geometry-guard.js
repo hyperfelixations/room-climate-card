@@ -36,17 +36,6 @@ export function assertProjectedGeometry(canonical, projected, metricKind, displa
       fail(`tier thresholds collapse near ${projected.tiers[i].min}${unitLabel}`);
     }
   }
-  if (projected.iconThresholds) {
-    const order = ["fire", "high", "normal", "low"];
-    for (let i = 1; i < order.length; i++) {
-      const prevKey = order[i - 1];
-      const curKey = order[i];
-      if (!(canonical.iconThresholds[curKey] < canonical.iconThresholds[prevKey])) continue;
-      if (!(projected.iconThresholds[curKey] < projected.iconThresholds[prevKey])) {
-        fail(`icon thresholds collapse near ${projected.iconThresholds[curKey]}${unitLabel}`);
-      }
-    }
-  }
   if (projected.iconTiers) {
     for (let i = 1; i < canonical.iconTiers.length; i++) {
       const wasDescending = Number.isFinite(canonical.iconTiers[i - 1].min) && Number.isFinite(canonical.iconTiers[i].min)

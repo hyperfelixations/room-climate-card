@@ -36,5 +36,11 @@ export const outdoor = {
   scale: null,
   step: 1,
   anchorScale: false,
-  iconThresholds: { fire: 35, high: 30, normal: 14, low: 5 },
+  iconTiers: [
+    { min: 35, icon: "mdi:fire-alert" },
+    { min: 30, icon: "mdi:thermometer-high" },
+    { min: 14, icon: "mdi:thermometer" },
+    { min: 5, icon: "mdi:thermometer-low" },
+    { min: -Infinity, icon: "mdi:snowflake" },
+  ],
 };

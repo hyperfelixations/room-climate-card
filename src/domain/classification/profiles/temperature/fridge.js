@@ -39,5 +39,11 @@ export const fridge = {
   optimal: { min: 3, max: 5 },
   scale: { min: 0, max: 8 },
   step: 1,
-  iconThresholds: { fire: 12, high: 10, normal: 1, low: -2 },
+  iconTiers: [
+    { min: 12, icon: "mdi:fire-alert" },
+    { min: 10, icon: "mdi:thermometer-high" },
+    { min: 1, icon: "mdi:thermometer" },
+    { min: -2, icon: "mdi:thermometer-low" },
+    { min: -Infinity, icon: "mdi:snowflake" },
+  ],
 };
