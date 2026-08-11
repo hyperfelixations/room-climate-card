@@ -1,7 +1,7 @@
 # Room Climate Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
-[![HA Forum](https://img.shields.io/badge/Home%20Assistant-Community-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
+[![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
 
 [![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
 
@@ -26,7 +26,8 @@ below. The card follows your dashboard's light or dark theme.
 - Daily minimum/maximum views and a rate-of-change segment, when you have
   entities for them
 - Colors and labels from a built-in profile — temperature comes with `indoor`,
-  `outdoor`, and `fridge` — or from your own profile in YAML
+  `outdoor`, and `fridge` — or from your own profile in YAML, in the color
+  palette of your choice
 - Rooms whose sensor is briefly unavailable stay on the card as `--` chips you
   can still tap
 - Translated into 15 languages, following your Home Assistant language setting
@@ -38,6 +39,17 @@ below. The card follows your dashboard's light or dark theme.
 With more than one view enabled (here: the scale and room-comparison views), the card automatically rotates between them — swiping and tapping still work at any time:
 
 ![Card automatically rotating between the scale and room-comparison views](demo-auto-slide.gif)
+
+## Follow the developer
+
+Questions about your own setup are best asked in the
+[Home Assistant forum thread](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037),
+where this card is discussed. The rest is where I share what I am building next.
+
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?logo=github&logoColor=white)](https://github.com/hyperfelixations)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
+[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@hyperfelixations)
+[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?logo=instagram&logoColor=white)](https://www.instagram.com/hyperfelixations/)
 
 ## What you need
 
@@ -740,3 +752,9 @@ If none of this helps, please open a
   version, with its notes and its download
 - [Issues](https://github.com/hyperfelixations/room-climate-card/issues)
 - [License](LICENSE) (MIT)
+- [Home Assistant forum thread](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
+  — questions and discussion about this card
+- Elsewhere: [GitHub](https://github.com/hyperfelixations),
+  [Discord](https://discord.gg/zfGKCVEvwe),
+  [YouTube](https://www.youtube.com/@hyperfelixations), and
+  [Instagram](https://www.instagram.com/hyperfelixations/)
