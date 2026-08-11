@@ -47,6 +47,7 @@ import { normalizeUnitToken } from "../domain/units/unit-token.js";
 import { resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
 import { chipsWouldDuplicateHeadline, resolveSourceTopology } from "../application/model/source-topology.js";
+import { stubConfigFor } from "../application/model/card-suggestions.js";
 import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
 import {
@@ -259,20 +260,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return this._interaction.isDragging;
     }
 
-    static getStubConfig() {
-      // Example config for the Home Assistant card editor; entity/rooms are generic
-      // editor placeholders only (matching the README's own Quickstart examples) — the
-      // card never falls back to default entities at runtime (see _normalizeConfig()).
-      // Both a primary and rooms are offered because that is the richest starting
-      // point to edit down from; either one alone would also be a valid card.
-      return {
-        entity: "sensor.house_temperature",
-        rooms: [
-          { name: "Kitchen", short: "KI", entity: "sensor.kitchen_temperature" },
-          { name: "Bedroom", short: "BE", entity: "sensor.bedroom_temperature" },
-          { name: "Living Room", short: "LR", entity: "sensor.living_room_temperature" },
-        ],
-      };
+    // The configuration the card starts out as in the picker.
+    //
+    // Home Assistant passes the entities the current view already uses and a broader
+    // fallback list, exactly as it does to its own cards, so the start configuration can
+    // name a real sensor and the picker's preview can show the user's own reading. The
+    // three arguments are all optional: an older frontend calls this with none, and the
+    // documented placeholder template comes back — which is also what happens when
+    // nothing in the system is a climate entity this card can read.
+    static getStubConfig(hass, entities, entitiesFallback) {
+      return stubConfigFor(hass?.states, entities, entitiesFallback);
     }
 
     // STRONG EXCEPTION SAFETY. Either the whole configuration change happens, or

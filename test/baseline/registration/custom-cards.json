@@ -2,8 +2,9 @@
   {
     "description": "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
     "documentationURL": "https://github.com/hyperfelixations/room-climate-card",
+    "getEntitySuggestion": "[Function]",
     "name": "Room Climate Card",
-    "preview": false,
+    "preview": true,
     "type": "room-climate-card"
   }
 ]

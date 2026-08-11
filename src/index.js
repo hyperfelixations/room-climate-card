@@ -16,6 +16,7 @@
 // else in the tree reaches the browser through controllers/runtime/browser-platform.js.
 
 import { CARD_NAME, CARD_TYPE, CARD_VERSION } from "./core/card-metadata.js";
+import { suggestionsForEntity } from "./application/model/card-suggestions.js";
 import { RoomClimateCard } from "./element/room-climate-card.js";
 
 // ==== Registration ====
@@ -29,9 +30,16 @@ const existingCard = window.customCards.find((card) => card.type === CARD_TYPE);
 const cardMetadata = {
   type: CARD_TYPE,
   name: CARD_NAME,
-  preview: false,
+  // The picker renders a live preview from getStubConfig(), which names a real climate
+  // sensor from the user's own system whenever there is one (see card-suggestions.js).
+  preview: true,
   description: "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
   documentationURL: "https://github.com/hyperfelixations/room-climate-card",
+  // Home Assistant 2026.6 asks the card picker "what do you want to show" first; a card
+  // that answers this appears under Community for the entities it suits, already
+  // configured for the one the user picked. The decision itself is a pure function over
+  // hass.states and is total — see card-suggestions.js — so nothing here needs a guard.
+  getEntitySuggestion: (hass, entityId) => suggestionsForEntity(hass?.states, entityId),
 };
 
 if (existingCard) {

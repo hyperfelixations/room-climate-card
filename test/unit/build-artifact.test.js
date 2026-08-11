@@ -81,11 +81,56 @@ test("evaluating the artifact registers exactly one Home Assistant card-picker e
   assert.deepEqual(Object.keys(entries[0]).sort(), [
     "description",
     "documentationURL",
+    "getEntitySuggestion",
     "name",
     "preview",
     "type",
   ]);
   assert.equal(entries[0].name, "Room Climate Card");
+  assert.equal(entries[0].preview, true);
+  // The registration baseline records this one as the string "[Function]", which pins
+  // that SOMETHING is there but not that it is callable. The type is asserted here, and
+  // what it answers two tests below.
+  assert.equal(typeof entries[0].getEntitySuggestion, "function");
+});
+
+// The whole point of the suggestion hook is that it survives bundling and runs against
+// the real registry, so it is exercised through the built artifact rather than through
+// the module: a tree-shaken or reordered registration block would pass every unit test
+// of card-suggestions.js and still leave the picker with nothing.
+test("the artifact's suggestion hook answers for climate entities and declines everything else", () => {
+  const window = evaluateInBareRealm();
+  const entry = window.customCards.find((card) => card.type === CARD_TAG);
+  const hass = {
+    states: {
+      "sensor.co2": { entity_id: "sensor.co2", state: "700", attributes: { device_class: "carbon_dioxide", unit_of_measurement: "ppm" } },
+      "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: {} },
+    },
+  };
+  // Compared field by field rather than with deepEqual: the returned object is built
+  // inside the bare realm and carries that realm's prototype, which a strict deep-equal
+  // rejects before it ever looks at the values.
+  const suggestion = entry.getEntitySuggestion(hass, "sensor.co2");
+  assert.equal(suggestion.config.type, `custom:${CARD_TAG}`);
+  assert.equal(suggestion.config.entity, "sensor.co2");
+  assert.equal(entry.getEntitySuggestion(hass, "light.kitchen"), null);
+  assert.equal(entry.getEntitySuggestion(undefined, undefined), null, "the picker may call it before hass exists");
+});
+
+// The other half of the picker surface: with real candidates the start configuration
+// names one of them, so the preview shows the user's own reading instead of an error.
+test("the artifact's stub configuration prefers a real climate entity over the placeholder template", () => {
+  const window = evaluateInBareRealm();
+  const ctor = window.customElements.get(CARD_TAG);
+  const hass = {
+    states: {
+      "sensor.hall": { entity_id: "sensor.hall", state: "21.4", attributes: { device_class: "temperature", unit_of_measurement: "°C" } },
+    },
+  };
+  const stub = ctor.getStubConfig(hass, ["sensor.hall"], []);
+  assert.equal(stub.entity, "sensor.hall");
+  assert.equal(stub.rooms, undefined, "a real entity is offered on its own, without invented rooms beside it");
+  assert.equal(ctor.getStubConfig().entity, "sensor.house_temperature", "with no arguments the documented template still comes back");
 });
 
 test("the artifact exposes its version global, matching package.json", () => {
