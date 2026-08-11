@@ -25,7 +25,9 @@ export function assertProjectedGeometry(canonical, projected, metricKind, displa
   };
   if (!(projected.comfort.min < projected.comfort.max)) fail("comfort band collapses");
   if (!(projected.optimal.min < projected.optimal.max)) fail("optimal band collapses");
-  if (!(projected.scale.min < projected.scale.max)) fail("scale collapses");
+  // Only a declared reference range can collapse; a profile whose axis follows the data
+  // has none to round in the first place.
+  if (projected.scale && !(projected.scale.min < projected.scale.max)) fail("scale collapses");
   for (let i = 1; i < canonical.tiers.length; i++) {
     const wasDescending = Number.isFinite(canonical.tiers[i - 1].min) && Number.isFinite(canonical.tiers[i].min)
       && canonical.tiers[i].min < canonical.tiers[i - 1].min;

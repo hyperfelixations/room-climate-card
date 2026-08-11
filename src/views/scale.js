@@ -11,6 +11,7 @@
 import { escapeHtml } from "../core/text.js";
 import { patchMarker, renderMarker } from "../render/primitives/marker.js";
 import { patchScaleBar, renderScaleBar } from "../render/primitives/scale-bar.js";
+import { resolveComfortLabelPosition } from "../render/layout/comfort-label.js";
 import { resolveOptimalLabelPosition } from "../render/layout/optimal-label.js";
 
 const VIEW_CLASS = "rtc-scale-view";
@@ -123,12 +124,16 @@ export const scaleView = {
     resolveOptimalLabelPosition(containerEl, content);
     if (!containerEl) return;
 
+    // Text and visibility only. Where the label sits belongs to the layout pass, the
+    // same division of labour the optimal label has (see patchScaleBar()): the position
+    // depends on the rendered width of exactly this text, so it has to be decided after
+    // the text is in place and in one place only.
     const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
     if (comfortLabelEl && content.comfortLabel) {
-      comfortLabelEl.style.left = `${content.comfortLabel.center}%`;
       comfortLabelEl.textContent = content.comfortLabel.text;
       comfortLabelEl.hidden = !content.comfortLabel.visible;
     }
+    resolveComfortLabelPosition(containerEl, content);
 
     // The extrema markers only exist in room mode; the guards simply no-op otherwise.
     if (content.markers.extremes) {
@@ -143,9 +148,13 @@ export const scaleView = {
     }
   },
 
+  // Two measured labels, one above the bar and one below it, both re-derived from the
+  // rendered geometry on every render, resize and fonts-ready.
   resolveLayout(context, root, viewModel) {
     const content = viewModel.views.byKey.scale;
     if (!content) return;
-    resolveOptimalLabelPosition(root.querySelector(CONTAINER_SELECTOR), content);
+    const containerEl = root.querySelector(CONTAINER_SELECTOR);
+    resolveComfortLabelPosition(containerEl, content);
+    resolveOptimalLabelPosition(containerEl, content);
   },
 };

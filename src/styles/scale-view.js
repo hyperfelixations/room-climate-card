@@ -26,10 +26,17 @@ export const SCALE_VIEW_CSS = `        .rtc-scale-view {
           white-space: nowrap;
         }
 
+        /* The left offset here is a starting approximation only: the layout pass
+           replaces it with a measured pixel value that keeps the label inside this row
+           (see render/layout/comfort-label.js). The clip is what that pass falls back on
+           when even the whole row is narrower than the text — the same convention every
+           other single-line label on the card uses. */
         .rtc-scale-comfort-label {
           position: absolute;
           top: 0;
           transform: translateX(-50%);
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
 `;

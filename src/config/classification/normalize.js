@@ -80,7 +80,7 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     headroom: sourceHeadroom,
     oneSided,
     anchorScale,
-  } = normalizeScale(value.scale, sourceComfort);
+  } = normalizeScale(value.scale);
   const sourceTiers = normalizeTiers(value.tiers, classificationZones);
   const sourceValidRange = normalizeValidRange(value.valid_range);
   const { iconThresholds: sourceIcons, iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind, {
@@ -113,7 +113,10 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     tiers: sourceTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
     comfort: convertBand(sourceComfort),
     optimal: convertBand(sourceOptimal),
-    scale: convertBand(sourceScale),
+    // null all the way through when the profile declares no reference range: there is
+    // nothing to convert, and an invented range would be indistinguishable from a
+    // declared one everywhere downstream.
+    scale: sourceScale && convertBand(sourceScale),
     step: deltaToCanonical(sourceStep),
     headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
     oneSided,

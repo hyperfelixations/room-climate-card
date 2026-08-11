@@ -37,26 +37,34 @@ export function normalizeBands(value) {
   return { comfort, optimal };
 }
 
-// Everything `classification.scale` accepts besides the band itself.
+// Everything `classification.scale` accepts besides the range itself.
 const SCALE_SWITCHES = ["step", "headroom", "one_sided", "anchor_scale"];
 
-// classification.scale: the reference axis, its rounding step, and the three
+// classification.scale: the profile's reference axis, its rounding step, and the three
 // optional switches that change how the axis grows around live values.
 //
-// This is the ONLY reader of the `scale` block, and every switch leaves it
-// already validated and camel-cased rather than for the caller to pick back out of
-// the raw YAML. The caller should not have to know that `anchor_scale` and
-// `anchorScale` are the same thing, and a future change to what `scale` means then
-// has exactly one place to happen.
-export function normalizeScale(value, comfort) {
+// The reference axis has exactly TWO shapes, and they are alternatives rather than
+// settings that combine:
+//
+//   min + max              the drawn axis always covers this range and grows outwards
+//                          when readings go further. Every built-in profile but one.
+//   anchor_scale: false    no range at all; the drawn axis comes from the readings.
+//                          What outdoor temperature needs, where a range that is right
+//                          in January is wrong in July.
+//
+// Declaring both is a contradiction, not a preference, so it is refused as one — and
+// `null` rather than an invented range is what "this profile has no reference axis"
+// looks like from here on.
+//
+// This is the ONLY reader of the `scale` block, and every switch leaves it already
+// validated and camel-cased rather than for the caller to pick back out of the raw
+// YAML. The caller should not have to know that `anchor_scale` and `anchorScale` are
+// the same thing, and what `scale` means has exactly one place to change.
+export function normalizeScale(value) {
   if (!isPlainObject(value)) pathError("classification.scale", "must be an object");
   assertAllowedKeys(value, new Set(["min", "max", ...SCALE_SWITCHES]), "classification.scale");
-  const scale = normalizeBand(value, "classification.scale", SCALE_SWITCHES);
   const step = numberAtPath(value.step, "classification.scale.step");
   if (step <= 0) pathError("classification.scale.step", "must be greater than zero");
-  if (scale.min > comfort.min || scale.max < comfort.max) {
-    pathError("classification.scale", "must fully contain the comfort and optimal bands");
-  }
   const headroom = value.headroom === undefined ? null : numberAtPath(value.headroom, "classification.scale.headroom");
   if (headroom !== null && headroom < 0) {
     pathError("classification.scale.headroom", "must be zero or greater");
@@ -66,10 +74,33 @@ export function normalizeScale(value, comfort) {
       pathError(`classification.scale.${key}`, "must be a boolean");
     }
   }
-  // anchor_scale defaults to true: pinning the axis to the declared reference range is
-  // what every built-in profile except outdoor does, and it is what a profile that says
-  // nothing about it means.
-  return { scale, step, headroom, oneSided: value.one_sided === true, anchorScale: value.anchor_scale !== false };
+
+  // anchor_scale defaults to true: pinning the axis to a declared range is what every
+  // built-in profile except outdoor does, and it is what a profile that says nothing
+  // about it means.
+  const anchorScale = value.anchor_scale !== false;
+  const oneSided = value.one_sided === true;
+  const declaresRange = value.min !== undefined || value.max !== undefined;
+
+  if (anchorScale) {
+    if (!declaresRange) {
+      pathError("classification.scale", "must define min and max, or set anchor_scale: false to let the axis follow the data");
+    }
+    return { scale: normalizeBand(value, "classification.scale", SCALE_SWITCHES), step, headroom, oneSided, anchorScale };
+  }
+
+  if (declaresRange) {
+    pathError(
+      "classification.scale",
+      "must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data"
+    );
+  }
+  // one_sided says "the lower edge stays at the reference minimum" — which is an anchor,
+  // and there is none to stay at.
+  if (oneSided) {
+    pathError("classification.scale.one_sided", "requires an anchored axis, because it keeps the lower bound at classification.scale.min");
+  }
+  return { scale: null, step, headroom, oneSided, anchorScale };
 }
 
 // classification.tiers, with the per-tier semantic fields.
@@ -122,18 +153,31 @@ export function normalizeValidRange(value) {
 // the built-in profiles: temperature uses a fixed fire/high/normal/low threshold
 // object, the other kinds use a descending {min, icon} list. Omitted for
 // temperature, the thresholds are derived from the scale and comfort bands.
+//
+// The derivation has two preconditions, and both are checked here rather than assumed:
+// there has to BE a reference range to take fire and low from, and the four thresholds
+// it produces have to descend. temperatureIconForProfile() reads them as a fixed
+// >=-cascade — fire, then high, then normal, then low — so a fire that is not above
+// high makes the first branch swallow everything below it and leaves
+// mdi:thermometer-high unreachable. That is a silently wrong icon, which is worse than
+// a profile the card refuses to load.
 export function normalizeIcons(value, metricKind, { scale, comfort }) {
   if (value === undefined) {
     if (metricKind !== "temperature") return { iconThresholds: null, iconTiers: null };
-    return {
-      iconThresholds: {
-        fire: scale.max,
-        high: comfort.max,
-        normal: comfort.min,
-        low: scale.min,
-      },
-      iconTiers: null,
-    };
+    if (!scale) {
+      pathError(
+        "classification.icons",
+        "must be listed explicitly when the axis follows the data, because the fire and low thresholds are otherwise derived from classification.scale"
+      );
+    }
+    const derived = { fire: scale.max, high: comfort.max, normal: comfort.min, low: scale.min };
+    if (!(derived.fire > derived.high && derived.high > derived.normal && derived.normal > derived.low)) {
+      pathError(
+        "classification.icons",
+        "must be listed explicitly, because the thresholds derived from classification.scale and classification.bands do not descend"
+      );
+    }
+    return { iconThresholds: derived, iconTiers: null };
   }
 
   if (metricKind === "temperature") {

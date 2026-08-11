@@ -478,22 +478,31 @@ Custom-profile rules:
 - Every tier requires a finite numeric `score`, a non-empty `level`, a safe
   3/4/6/8-digit hex `color`, and `zone: optimal | comfort | outside |
   invalid`.
-- The optimal band must be inside the comfort band; the base scale must
-  contain both. `scale.step` must be greater than zero.
-- Optional `scale.headroom` must be non-negative; `scale.one_sided` is a
-  boolean.
-- `scale.anchor_scale` is a boolean and defaults to `true`: the drawn axis
-  always covers `scale.min` to `scale.max`, and grows beyond it when readings
-  go further. Set it to `false` for a measurement whose sensible range moves
-  with the season — the axis then follows the readings themselves, and `scale`
-  serves as the reference range for classification:
+- The optimal band must be inside the comfort band. `scale.step` must be
+  greater than zero.
+- `scale` describes the axis the card draws, and it comes in two shapes. Give
+  it a `min` and a `max` for an axis that always covers that range and grows
+  outwards when readings go further — that is what `indoor` and `fridge` do.
+  Or leave both out and add `anchor_scale: false` for an axis that follows the
+  readings themselves, which suits a measurement whose sensible range moves
+  with the season — that is what `outdoor` does:
   ```yaml
   scale:
-    min: 10
-    max: 30
     step: 1
     anchor_scale: false
   ```
+  The two are alternatives: a `min` or `max` alongside `anchor_scale: false`
+  is an error.
+- Optional `scale.headroom` must be non-negative and applies to both shapes.
+  `scale.one_sided` is a boolean for measurements with no "too little" end,
+  such as CO₂; it holds the axis at `scale.min` and therefore needs the
+  anchored shape.
+- A temperature profile that gives no `icons` derives its `fire` and `low`
+  thresholds from `scale.min` and `scale.max`, so a profile whose axis follows
+  the readings has to list its `icons`.
+- Bands are drawn as far as the axis reaches. A comfort band wider than the
+  current axis fills the bar, and the rest of it appears as readings move and
+  the axis grows.
 - `icons` is optional; its shape depends on the profile's metric kind.
   Temperature takes an object of descending `fire`, `high`, `normal`, and
   `low` thresholds — without it, temperature derives them from the custom

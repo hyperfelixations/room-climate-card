@@ -10,12 +10,16 @@
 //                out: its readings are seasonal, so the axis follows the live
 //                data instead of being pinned to a reference range that would be
 //                wrong for most of the year.
+//
+// `scale` is null for exactly the profiles that opt out — they declare no reference
+// range at all, and normalising it here means the axis maths sees one shape of "there
+// is none" whether the profile came from YAML or from src/domain/classification/.
 
 export function scaleConfigFor(displayProfile) {
   return {
     comfort: displayProfile.comfort,
     optimal: displayProfile.optimal,
-    scale: displayProfile.scale,
+    scale: displayProfile.scale ?? null,
     step: displayProfile.step,
     oneSided: displayProfile.oneSided === true,
     headroom: displayProfile.headroom,

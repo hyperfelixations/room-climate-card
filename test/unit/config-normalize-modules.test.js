@@ -465,25 +465,32 @@ test("custom scale switches and headroom are carried through", () => {
   assert.equal(result.headroom, 4);
 });
 
-// anchor_scale decides whether the rendered axis is pinned to `scale` or follows the
-// live data. The built-in outdoor profile has always said the latter; the configuration
-// language had no word for it, so a user-written profile could not describe a
-// measurement whose reference range is seasonal. It is a switch, not a quantity: it
-// says WHETHER the axis is pinned, never where, so it crosses the unit conversion
-// unchanged.
-test("a custom profile can say its axis follows the data instead of the reference scale", () => {
+// `classification.scale` describes the profile's reference axis, and it has exactly two
+// shapes: a declared range the drawn axis always covers, or no range at all and an axis
+// that follows the readings — which is what the built-in outdoor profile does, because
+// an outdoor range that is right in January is wrong in July. The two are alternatives,
+// not settings that combine, so declaring both is a contradiction rather than a
+// preference and is refused as one.
+test("a custom profile can hand the axis to the data by declaring no range at all", () => {
   const following = classification.normalizeCustomClassification(
-    validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }),
+    validCustom({
+      scale: { step: 2, anchor_scale: false },
+      // A temperature profile derives its fire/low icon thresholds from the reference
+      // range; with none, it has to say them itself.
+      icons: { fire: 30, high: 26, normal: 19, low: 14 },
+    }),
     COLLABORATORS
   );
   assert.equal(following.anchorScale, false);
-  assert.deepEqual(following.scale, { min: 16, max: 28 }, "opting out does not discard the declared range");
+  assert.equal(following.scale, null, "no declared range means none is carried, not an invented one");
+  assert.equal(following.step, 2, "the rounding step is still needed for the axis labels");
 
   const anchored = classification.normalizeCustomClassification(
     validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: true } }),
     COLLABORATORS
   );
   assert.equal(anchored.anchorScale, true);
+  assert.deepEqual(anchored.scale, { min: 16, max: 28 });
 });
 
 test("an omitted anchor_scale keeps the anchored axis every other built-in profile uses", () => {
@@ -491,20 +498,69 @@ test("an omitted anchor_scale keeps the anchored axis every other built-in profi
   assert.equal(result.anchorScale, true);
 });
 
-// normalizeScale() is the only reader of the scale block, and both switches now leave it
+// The rule this replaces refused any scale that did not fully contain the bands. The
+// bar is a window onto the value range and bands are clipped into that window, so a
+// band reaching past the declared range is drawn as far as the axis goes and no
+// further — the same thing that already happens whenever an anchored axis has not yet
+// grown to meet a band. Nothing about it is untrue, so nothing about it is refused.
+test("a scale narrower than the comfort band is accepted and carried through unchanged", () => {
+  const result = classification.normalizeCustomClassification(
+    validCustom({
+      bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } },
+      scale: { min: 20, max: 24, step: 2 },
+      icons: { fire: 30, high: 26, normal: 20, low: 14 },
+    }),
+    COLLABORATORS
+  );
+  assert.deepEqual(result.scale, { min: 20, max: 24 }, "the declared range is not silently widened either");
+  assert.deepEqual(result.comfort, { min: 18, max: 26 });
+});
+
+// normalizeScale() is the only reader of the scale block, and every switch leaves it
 // already validated and camel-cased. Pinned here because the alternative — the caller
 // reaching back into the raw YAML for one of them — is what this replaced, and it is the
 // kind of thing that grows back.
-test("normalizeScale returns both switches in their resolved form", () => {
-  const comfort = { min: 19, max: 25 };
+test("normalizeScale returns the range and every switch in its resolved form", () => {
   assert.deepEqual(
-    profileParts.normalizeScale({ min: 16, max: 28, step: 2 }, comfort),
+    profileParts.normalizeScale({ min: 16, max: 28, step: 2 }),
     { scale: { min: 16, max: 28 }, step: 2, headroom: null, oneSided: false, anchorScale: true }
   );
   assert.deepEqual(
-    profileParts.normalizeScale({ min: 16, max: 28, step: 2, headroom: 4, one_sided: true, anchor_scale: false }, comfort),
-    { scale: { min: 16, max: 28 }, step: 2, headroom: 4, oneSided: true, anchorScale: false }
+    profileParts.normalizeScale({ min: 16, max: 28, step: 2, headroom: 4, one_sided: true }),
+    { scale: { min: 16, max: 28 }, step: 2, headroom: 4, oneSided: true, anchorScale: true }
   );
+  assert.deepEqual(
+    profileParts.normalizeScale({ step: 2, headroom: 4, anchor_scale: false }),
+    { scale: null, step: 2, headroom: 4, oneSided: false, anchorScale: false }
+  );
+});
+
+// The four thresholds a temperature profile falls back on are derived from the reference
+// range and the comfort band, and temperatureIconForProfile() reads them as a fixed
+// >=-cascade: fire, then high, then normal, then low. If fire is not above high the
+// first branch swallows everything and mdi:thermometer-high becomes unreachable — a
+// silently wrong icon rather than a rejected profile. The containment rule used to make
+// that impossible as a side effect; now it is checked where it belongs.
+test("derived temperature icon thresholds must descend, or the profile has to state them", () => {
+  const derived = classification.normalizeCustomClassification(
+    validCustom({ bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } }, scale: { min: 16, max: 28, step: 2 } }),
+    COLLABORATORS
+  );
+  assert.deepEqual(
+    derived.iconThresholds,
+    { fire: 28, high: 25, normal: 19, low: 16 },
+    "a scale wider than the comfort band still derives its four thresholds"
+  );
+
+  const stated = classification.normalizeCustomClassification(
+    validCustom({
+      bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } },
+      scale: { min: 20, max: 24, step: 2 },
+      icons: { fire: 30, high: 26, normal: 20, low: 14 },
+    }),
+    COLLABORATORS
+  );
+  assert.deepEqual(stated.iconThresholds, { fire: 30, high: 26, normal: 20, low: 14 });
 });
 
 test("a custom valid_range becomes a predicate honouring both inclusivity flags", () => {
@@ -571,11 +627,18 @@ test("every custom-classification rejection keeps its exact message", () => {
     [validCustom({ bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } }), "Invalid configuration: classification.bands.optimal must be fully contained in classification.bands.comfort."],
     [validCustom({ scale: undefined }), "Invalid configuration: classification.scale must be an object."],
     [validCustom({ scale: { min: 16, max: 28, step: 0 } }), "Invalid configuration: classification.scale.step must be greater than zero."],
-    [validCustom({ scale: { min: 20, max: 24, step: 2 } }), "Invalid configuration: classification.scale must fully contain the comfort and optimal bands."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, headroom: -1 } }), "Invalid configuration: classification.scale.headroom must be zero or greater."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, one_sided: "yes" } }), "Invalid configuration: classification.scale.one_sided must be a boolean."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: "no" } }), "Invalid configuration: classification.scale.anchor_scale must be a boolean."],
     [validCustom({ scale: { min: 16, max: 28, step: 2, anchorScale: false } }), "Invalid configuration: classification.scale.anchorScale is not a supported option."],
+    // The two shapes of `scale`, and the four ways of asking for neither of them.
+    [validCustom({ scale: { step: 2 } }), "Invalid configuration: classification.scale must define min and max, or set anchor_scale: false to let the axis follow the data."],
+    [validCustom({ scale: { min: 16, step: 2 } }), "Invalid configuration: classification.scale.max must be a finite number."],
+    [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
+    [validCustom({ scale: { max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
+    [validCustom({ scale: { step: 2, anchor_scale: false, one_sided: true }, icons: { fire: 30, high: 26, normal: 19, low: 14 } }), "Invalid configuration: classification.scale.one_sided requires an anchored axis, because it keeps the lower bound at classification.scale.min."],
+    [validCustom({ scale: { step: 2, anchor_scale: false } }), "Invalid configuration: classification.icons must be listed explicitly when the axis follows the data, because the fire and low thresholds are otherwise derived from classification.scale."],
+    [validCustom({ bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } }, scale: { min: 20, max: 24, step: 2 } }), "Invalid configuration: classification.icons must be listed explicitly, because the thresholds derived from classification.scale and classification.bands do not descend."],
     [validCustom({ tiers: [] }), "Invalid configuration: classification.tiers must be a non-empty array."],
     [validCustom({ tiers: ["x"] }), "Invalid configuration: classification.tiers[0] must be an object."],
     [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside", bogus: 1 }] }), "Invalid configuration: classification.tiers[0].bogus is not a supported option."],

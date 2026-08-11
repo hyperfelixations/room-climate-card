@@ -65,13 +65,13 @@ test("classification: outdoor is the shorthand for auto + outdoor", () => {
   env.cleanup(card);
 });
 
-test("outdoor profile owns tiers and bands but explicitly opts out of the retained 10-30 reference-scale anchor", () => {
+test("outdoor profile owns tiers and bands but declares no reference range at all", () => {
   const card = createTemperatureCard("outdoor");
   const celsius = access.getUnitProfile("temperature", "celsius");
   const scale = internals.scaleConfigFor(card, "temperature", celsius);
   assert.deepEqual(normalize(scale.comfort), { min: 14, max: 26 });
   assert.deepEqual(normalize(scale.optimal), { min: 18, max: 22 });
-  assert.deepEqual(normalize(scale.scale), { min: 10, max: 30 });
+  assert.equal(scale.scale, null, "an axis that follows the data has no reference range to declare");
   assert.equal(scale.step, 1);
   assert.equal(scale.anchorScale, false);
 
@@ -363,7 +363,7 @@ test("outdoor profile is projected atomically into Fahrenheit", () => {
   const scale = internals.scaleConfigFor(card, "temperature", fahrenheit);
   assert.deepEqual(normalize(scale.comfort), { min: 57, max: 79 });
   assert.deepEqual(normalize(scale.optimal), { min: 64, max: 72 });
-  assert.deepEqual(normalize(scale.scale), { min: 50, max: 86 });
+  assert.equal(scale.scale, null, "there is no reference range to re-express in another unit");
 
   const table = internals.displayProfile(card, "temperature", fahrenheit);
   const warmTier = table.tiers.find((tier) => tier.score === 8);
@@ -495,9 +495,9 @@ test("custom profile is authoritative and drives classification plus scale as on
 });
 
 // The card invites users to write their own profiles, so anything a built-in profile can
-// say must be sayable in YAML too. `anchor_scale` was the one exception: outdoor.js
-// declares a reference range as classification metadata while letting the rendered axis
-// follow the season's actual readings, and no configuration key reached that field.
+// say must be sayable in YAML too. `anchor_scale` was the one exception: outdoor.js lets
+// the rendered axis follow the season's actual readings rather than a declared range,
+// and no configuration key reached that field.
 //
 // Asserted as a COMPARISON against the built-in profile rather than against copied
 // numbers: the claim is "a custom profile can now be outdoor", and a test that restates
@@ -510,7 +510,9 @@ const outdoorAsCustomProfile = {
     comfort: { min: 14, max: 26 },
     optimal: { min: 18, max: 22 },
   },
-  scale: { min: 10, max: 30, step: 1, anchor_scale: false },
+  // No min/max: this is the whole point of anchor_scale, and declaring both would be a
+  // contradiction the normalizer refuses.
+  scale: { step: 1, anchor_scale: false },
   tiers: [
     { min: 35, score: 11, level: "Very hot", color: "#B85F67", zone: "outside" },
     { min: 30, score: 10, level: "Hot", color: "#C67277", zone: "outside" },
@@ -527,7 +529,7 @@ const outdoorAsCustomProfile = {
   icons: { fire: 35, high: 30, normal: 14, low: 5 },
 };
 
-test("a custom profile can say anchor_scale: false and then behaves exactly like outdoor", () => {
+test("a custom profile that declares no reference range behaves exactly like outdoor", () => {
   const custom = createTemperatureCard(outdoorAsCustomProfile);
   const builtIn = createTemperatureCard("outdoor");
   const celsius = access.getUnitProfile("temperature", "celsius");
@@ -536,6 +538,8 @@ test("a custom profile can say anchor_scale: false and then behaves exactly like
   const builtInScale = internals.scaleConfigFor(builtIn, "temperature", celsius);
   assert.equal(customScale.anchorScale, false, "the YAML switch has to survive normalization and projection");
   assert.equal(customScale.anchorScale, builtInScale.anchorScale);
+  assert.equal(customScale.scale, null, "and so does the absence of a reference range");
+  assert.equal(builtInScale.scale, null);
 
   // Winter, summer, and a span that straddles the declared reference range: an anchored
   // axis would answer differently to all three.
@@ -550,7 +554,7 @@ test("a custom profile can say anchor_scale: false and then behaves exactly like
   env.cleanup(builtIn);
 });
 
-test("without anchor_scale a custom profile keeps the anchored axis it has always had", () => {
+test("declaring a range instead keeps the anchored axis a profile has by default", () => {
   const anchored = createTemperatureCard({
     ...outdoorAsCustomProfile,
     scale: { min: 10, max: 30, step: 1 },
@@ -563,6 +567,36 @@ test("without anchor_scale a custom profile keeps the anchored axis it has alway
     "the declared reference range still pins the top of the axis when it is not opted out of"
   );
   env.cleanup(anchored);
+});
+
+// The bar is a window onto the value range and bands are clipped into it, so a comfort
+// band reaching past the declared axis is drawn as far as the axis goes — the same thing
+// that happens to any anchored profile before its axis has grown to meet a band. The
+// configuration used to be refused for it; this is the whole of what that removal means
+// in the rendered card.
+test("a comfort band wider than the declared axis is clipped into it, not rejected", () => {
+  const card = createTemperatureCard(
+    {
+      source: "custom",
+      unit: "°C",
+      bands: { comfort: { min: 10, max: 30 }, optimal: { min: 20, max: 22 } },
+      scale: { min: 20, max: 24, step: 2 },
+      icons: { fire: 30, high: 26, normal: 20, low: 14 },
+      tiers: [
+        { min: 22, score: 3, level: "Warm", color: "#AA0000", zone: "outside" },
+        { min: 20, score: 2, level: "Ideal", color: "#00AA00", zone: "optimal" },
+        { default: true, score: 1, level: "Cool", color: "#0000AA", zone: "outside" },
+      ],
+    },
+    21
+  );
+  const data = card._computeViewModel();
+  assert.deepEqual([data.scale.scaleMin, data.scale.scaleMax], [18, 24], "the axis is the declared range, grown by one step towards the reading");
+  assert.equal(data.scale.comfortVisible, true);
+  assert.equal(data.scale.comfortLeft, 0, "the part of the band below the axis is clipped away, not drawn off the edge");
+  assert.equal(data.scale.comfortWidth, 100, "and the rest of it fills the bar");
+  assert.equal(data.scale.optimalLeft, (20 - 18) / (24 - 18) * 100);
+  env.cleanup(card);
 });
 
 test("custom Fahrenheit thresholds are canonicalized and project back coherently", () => {

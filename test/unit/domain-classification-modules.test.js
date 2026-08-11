@@ -137,17 +137,36 @@ test("tier scores descend together with the thresholds", () => {
   }
 });
 
-test("optimal is contained in comfort, and comfort in the base scale", () => {
+// `optimal ⊆ comfort` is semantic and holds for every profile: "optimal" is by
+// definition a narrowing of "comfortable". The reference range is a different kind of
+// statement — it is where the AXIS starts, not what the reading means — so it is
+// asserted only for the profiles that declare one, and its relation to the bands is a
+// property of the built-ins rather than a rule (a configured profile may declare a
+// narrower one, and the bar clips the bands into whatever axis it draws).
+test("optimal is contained in comfort, and every declared reference range is ordered", () => {
   for (const { kind, id, profile } of allProfiles()) {
     const label = `${kind}/${id}`;
     assert.ok(profile.comfort.min < profile.comfort.max, `${label}: comfort band width`);
     assert.ok(profile.optimal.min < profile.optimal.max, `${label}: optimal band width`);
-    assert.ok(profile.scale.min < profile.scale.max, `${label}: scale width`);
     assert.ok(profile.optimal.min >= profile.comfort.min, `${label}: optimal.min inside comfort`);
     assert.ok(profile.optimal.max <= profile.comfort.max, `${label}: optimal.max inside comfort`);
+    assert.ok(profile.step > 0, `${label}: step must be positive`);
+    if (profile.scale === null) {
+      assert.equal(profile.anchorScale, false, `${label}: only an unanchored profile may declare no reference range`);
+      continue;
+    }
+    assert.ok(profile.scale.min < profile.scale.max, `${label}: scale width`);
     assert.ok(profile.scale.min <= profile.comfort.min, `${label}: scale covers comfort.min`);
     assert.ok(profile.scale.max >= profile.comfort.max, `${label}: scale covers comfort.max`);
-    assert.ok(profile.step > 0, `${label}: step must be positive`);
+  }
+});
+
+// The other direction of the same rule, and the one that would otherwise go unstated:
+// an anchored profile has to have something to anchor to.
+test("every anchored built-in profile declares a reference range", () => {
+  for (const { kind, id, profile } of allProfiles()) {
+    if (profile.anchorScale === false) continue;
+    assert.ok(profile.scale, `${kind}/${id}: an anchored axis needs a reference range`);
   }
 });
 
@@ -269,7 +288,7 @@ test("temperature/outdoor follows live data instead of a fixed axis", () => {
   assert.equal(p.anchorScale, false, "the rendered axis must not be pinned to the reference scale");
   assert.deepEqual(p.comfort, { min: 14, max: 26 });
   assert.deepEqual(p.optimal, { min: 18, max: 22 });
-  assert.deepEqual(p.scale, { min: 10, max: 30 });
+  assert.equal(p.scale, null, "the one profile that declares no reference range");
   assert.equal(p.step, 1);
   assert.deepEqual(p.tiers.map((t) => t.min), [35, 30, 28, 26, 22, 18, 14, 10, 5, 0, -Infinity]);
   assert.deepEqual(p.iconThresholds, { fire: 35, high: 30, normal: 14, low: 5 });

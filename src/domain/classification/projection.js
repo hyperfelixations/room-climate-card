@@ -45,7 +45,9 @@ export function projectProfileToDisplayUnit(canonical, definition, unitProfile, 
     })),
     comfort: projectBand(canonical.comfort),
     optimal: projectBand(canonical.optimal),
-    scale: projectBand(canonical.scale),
+    // A profile whose axis follows the data declares no reference range; there is
+    // nothing to re-express in another unit, and null stays null.
+    scale: canonical.scale ? projectBand(canonical.scale) : canonical.scale,
     step: displayProfile.deltaFromCanonical(canonical.step),
     headroom: canonical.headroom === undefined ? undefined : displayProfile.deltaFromCanonical(canonical.headroom),
     invalidWhen,

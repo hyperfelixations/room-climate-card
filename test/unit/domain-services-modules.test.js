@@ -518,6 +518,12 @@ test("scaleConfigFor() makes the two defaults explicit", () => {
 
   const outdoor = scaleConfig.scaleConfigFor(temperatureRegistry().profiles.outdoor);
   assert.equal(outdoor.anchorScale, false, "outdoor opts out of the anchored axis");
+  assert.equal(outdoor.scale, null, "and therefore declares no reference range to anchor to");
+  assert.equal(
+    scaleConfig.scaleConfigFor({ ...temperatureRegistry().profiles.indoor, scale: undefined }).scale,
+    null,
+    "an absent range normalizes to the same null the config layer produces"
+  );
 
   const co2 = scaleConfig.scaleConfigFor(registry.CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor);
   assert.equal(co2.oneSided, true);
@@ -539,8 +545,27 @@ test("an anchored axis grows outwards with a one-step buffer", () => {
 });
 
 test("an unanchored axis follows the data only", () => {
-  const outdoor = { ...INDOOR_C, scale: { min: 10, max: 30 }, anchorScale: false };
+  const outdoor = { ...INDOOR_C, scale: null, anchorScale: false };
   assert.deepEqual(dynamicScaleModule.dynamicScale(-3, 9, outdoor, undefined), { min: -4, max: 10, step: 1 });
+  assert.deepEqual(
+    dynamicScaleModule.dynamicScale(20, 20, outdoor, undefined),
+    { min: 19, max: 21, step: 1 },
+    "a single reading gives the narrow axis around it that following the data means"
+  );
+});
+
+// The reference range is the only thing an unanchored profile does not have, and both
+// remaining readers of it — the anchoring clamp and the non-finite fallback — have to
+// cope. Every call site feeds finite values (see buildScaleAxis()), so this covers the
+// defensive path rather than a reachable one: it must still produce an axis that can be
+// divided by, because every marker position does exactly that.
+test("an unanchored axis stays finite and ordered even without usable readings", () => {
+  const unanchored = { ...INDOOR_C, scale: null, anchorScale: false };
+  for (const bad of [NaN, Infinity, -Infinity, null, undefined, "x"]) {
+    const result = dynamicScaleModule.dynamicScale(bad, bad, unanchored, undefined);
+    assert.ok(Number.isFinite(result.min) && Number.isFinite(result.max), JSON.stringify(String(bad)));
+    assert.ok(result.min < result.max, JSON.stringify(String(bad)));
+  }
 });
 
 test("a one-sided axis keeps its lower bound rooted", () => {

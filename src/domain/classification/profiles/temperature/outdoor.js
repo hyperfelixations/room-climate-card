@@ -1,4 +1,4 @@
-// Outdoor temperature. Seasonal readings, so the reference scale stays classification metadata and is not forced onto the rendered axis (anchorScale:false).
+// Outdoor temperature. Seasonal readings, so the profile declares no reference range at all and the rendered axis follows the data (anchorScale:false).
 //
 // A classification profile is one atomic semantic unit: tiers with their
 // thresholds, score and zone, the comfort/optimal/scale bands, physical
@@ -28,12 +28,13 @@ export const outdoor = {
   ],
   comfort: { min: 14, max: 26 },
   optimal: { min: 18, max: 22 },
-  scale: { min: 10, max: 30 },
+  // No reference range, deliberately: outdoor readings are seasonal, so any fixed one
+  // would be wrong for most of the year. dynamicScale() derives both edges from the live
+  // values plus its normal one-step headroom, and the two things a range is otherwise
+  // read for do not apply here — this profile is not one-sided, and it states its icon
+  // thresholds itself rather than deriving them.
+  scale: null,
   step: 1,
-  // Outdoor readings are seasonal. Keep the reference scale as
-  // classification metadata, but do not force it into the rendered
-  // axis: _dynamicScale() derives both edges from the live values
-  // plus its normal one-step headroom.
   anchorScale: false,
   iconThresholds: { fire: 35, high: 30, normal: 14, low: 5 },
 };

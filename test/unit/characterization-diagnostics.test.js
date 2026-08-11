@@ -114,10 +114,42 @@ const INVALID_CONFIGS = [
       classification: { ...validCustom(), bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } },
     },
   ],
+  // A scale narrower than the comfort band is no longer refused for its own sake — the
+  // bar clips bands into the axis it draws. It is still refused here, but for the reason
+  // that actually bites: a temperature profile with no icons of its own derives them
+  // from exactly these two, and this pair does not descend.
   [
-    "custom-scale-does-not-contain-comfort",
+    "custom-derived-icon-thresholds-do-not-descend",
     VALID_HASS,
     { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 20, max: 24, step: 2 } } },
+  ],
+  // The two shapes of `scale`, and the three ways of asking for neither.
+  [
+    "custom-scale-without-a-range",
+    VALID_HASS,
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2 } } },
+  ],
+  [
+    "custom-scale-range-with-anchor-scale-false",
+    VALID_HASS,
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 16, max: 28, step: 2, anchor_scale: false } } },
+  ],
+  [
+    "custom-one-sided-without-an-anchor",
+    VALID_HASS,
+    {
+      entity: "sensor.avg",
+      classification: {
+        ...validCustom(),
+        scale: { step: 2, anchor_scale: false, one_sided: true },
+        icons: { fire: 30, high: 26, normal: 19, low: 14 },
+      },
+    },
+  ],
+  [
+    "custom-data-following-temperature-without-icons",
+    VALID_HASS,
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2, anchor_scale: false } } },
   ],
   [
     "custom-scale-step-not-positive",
