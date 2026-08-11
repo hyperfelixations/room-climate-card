@@ -11,6 +11,9 @@
 // Injected collaborators, because the configuration layer must not import the
 // domain, i18n or view registries:
 //   classificationZones   the accepted zone vocabulary
+//   paletteForName        a palette by name, or the default for null
+//   paletteNames          the names a palette error message may offer
+//   assertPalette         what makes a written-out palette usable
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
 //   metricKindForUnit     a unit string -> metric kind
@@ -21,6 +24,7 @@ import { normalizeAction } from "./actions.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
+import { normalizePalette } from "./classification/palette.js";
 import {
   decimalsOverride,
   isPlainObject,
@@ -86,6 +90,7 @@ export function normalizeConfig(config, collaborators) {
 
   const { views, diagnostics: viewsDiagnostics } = normalizeViewsConfig(userConfig.views, { optionSchemaForView });
   const classification = normalizeClassificationConfig(userConfig.classification, collaborators);
+  const palette = normalizePalette(userConfig.palette, collaborators);
 
   return {
     entity,
@@ -147,6 +152,9 @@ export function normalizeConfig(config, collaborators) {
     _viewsDiagnostics: viewsDiagnostics,
     start_view: optionalString(userConfig.start_view),
     classification,
+    // The resolved palette object, not its name: everything downstream needs the colours,
+    // and resolving once here is what keeps the domain registry out of the render path.
+    palette,
     rooms,
     range_entity: rangeEntity,
     trend_entity: trendEntity,

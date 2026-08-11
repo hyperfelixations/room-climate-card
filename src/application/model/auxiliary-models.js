@@ -44,7 +44,7 @@ export function buildTrendModel(metricKind, canonicalValue, displayValue, displa
   };
 }
 
-export function buildRangeModel({ states, config, policy, metricKind, displayUnitProfile, toDisplay, toDisplayDelta }) {
+export function buildRangeModel({ states, config, policy, palette, metricKind, displayUnitProfile, toDisplay, toDisplayDelta }) {
   const definition = METRIC_DEFINITIONS[metricKind];
   const profileKey = resolveAuxiliaryUnitProfileKey(states, config.range_entity, metricKind);
 
@@ -86,8 +86,8 @@ export function buildRangeModel({ states, config, policy, metricKind, displayUni
   // readings taken from attributes, not the entity's current state — letting them
   // see range_entity's own live value_color/value_level would make both inherit
   // one current classification instead of their own numeric tier.
-  const minColor = min !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, min, null) : null;
-  const maxColor = max !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, max, null) : null;
+  const minColor = min !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, min, null, palette) : null;
+  const maxColor = max !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, max, null, palette) : null;
 
   return {
     hasRange,

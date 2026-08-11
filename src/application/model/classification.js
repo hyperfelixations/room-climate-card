@@ -16,6 +16,8 @@ import { classifyNumericValue } from "../../domain/classification/classify.js";
 import { profileIconForValue } from "../../domain/classification/icons.js";
 import { projectProfileToDisplayUnit } from "../../domain/classification/projection.js";
 import { resolveClassificationProfile, resolveValueClassification } from "../../domain/classification/resolve.js";
+import { resolveClassificationColor } from "../../domain/classification/palette-color.js";
+import { DEFAULT_PALETTE } from "../../domain/classification/palettes/registry.js";
 import { isPhysicallyValid } from "../../domain/classification/validity.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { scaleConfigFor } from "../../domain/scale/scale-config.js";
@@ -25,6 +27,13 @@ export const DEFAULT_CLASSIFICATION_POLICY = { source: "auto", profile: null, cu
 
 export function classificationPolicyOf(config) {
   return config?.classification || DEFAULT_CLASSIFICATION_POLICY;
+}
+
+// The palette a card classifies with. A normalized configuration always carries one;
+// the fallback is for the call sites that build a model from a hand-written config
+// object, so that a missing palette is the card's own ramp rather than a crash.
+export function paletteOf(config) {
+  return config?.palette || DEFAULT_PALETTE;
 }
 
 // The profile in its authored (canonical) unit.
@@ -74,8 +83,8 @@ export function classifyNumericTier(policy, metricKind, unitProfile, value) {
 // The numeric branch stays lazy: projecting the profile can throw on a degenerate
 // custom profile, and a card in forced `entity` mode must not start failing on a
 // profile it never looks at.
-export function classifyValue(policy, metricKind, unitProfile, value, attributes) {
-  return resolveValueClassification({
+export function classifyValue(policy, metricKind, unitProfile, value, attributes, palette) {
+  const classification = resolveValueClassification({
     policy,
     attributes,
     numericFallback: () => {
@@ -88,11 +97,18 @@ export function classifyValue(policy, metricKind, unitProfile, value, attributes
       };
     },
   });
+  // The one place a classification turns into a colour. Everything downstream reads
+  // `color` and needs to know nothing about palettes, ramps or provenance; everything
+  // upstream produces tokens and needs to know nothing about hex values.
+  return {
+    ...classification,
+    color: resolveClassificationColor(classification, palette, `the "${metricKind}" classification`),
+  };
 }
 
 // Just the colour, for the many places that only tint something.
-export function classificationColorOf(policy, metricKind, unitProfile, value, attributes) {
-  return classifyValue(policy, metricKind, unitProfile, value, attributes).color;
+export function classificationColorOf(policy, metricKind, unitProfile, value, attributes, palette) {
+  return classifyValue(policy, metricKind, unitProfile, value, attributes, palette).color;
 }
 
 // The profile's own icon token, or null when the profile declares none — the

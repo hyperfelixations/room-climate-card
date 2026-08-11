@@ -115,16 +115,22 @@ test("every profile has a well-formed, strictly descending tier list", () => {
   }
 });
 
-test("every tier carries a score, a level key, a hex colour and a known zone", () => {
+// No colours. A built-in tier says WHERE it sits on the ramp and lets the palette say
+// what that looks like — so a hard-coded hex anywhere in here would be a colour that
+// silently ignores the configured palette.
+test("every tier carries a ramp position, a level key and a known zone, and no colour", () => {
   for (const { kind, id, profile } of allProfiles()) {
     for (const [i, tier] of profile.tiers.entries()) {
       const label = `${kind}/${id} tier ${i}`;
-      assert.equal(typeof tier.score, "number", `${label}: score`);
+      assert.ok(Number.isInteger(tier.score) && tier.score >= 1, `${label}: score ${tier.score} must be a ramp position`);
       assert.equal(typeof tier.levelKey, "string", `${label}: levelKey`);
       assert.match(tier.levelKey, /^level\./, `${label}: levelKey namespace`);
-      assert.match(tier.color, /^#[0-9A-Fa-f]{6}$/, `${label}: colour`);
+      assert.equal(tier.color, undefined, `${label}: must name no colour of its own`);
       assert.ok(zones.CLASSIFICATION_ZONES.includes(tier.zone), `${label}: zone "${tier.zone}"`);
     }
+    // Identity mapping is what every built-in relies on, so its positions have to be
+    // ones the shipped ramp actually has.
+    assert.equal(profile.positions, undefined, `${kind}/${id}: built-ins map position to colour one-to-one`);
   }
 });
 
@@ -255,7 +261,7 @@ test("humidity, co2 and pm25 declare physical validity limits with an invalid cl
     for (const value of valid) assert.equal(profile.invalidWhen(value), false, `${kind}: ${value} must be valid`);
     assert.equal(profile.invalidClassification.zone, "invalid", `${kind}: invalid zone`);
     assert.equal(profile.invalidClassification.levelKey, "level.invalidReading", `${kind}: invalid level key`);
-    assert.match(profile.invalidClassification.color, /^#[0-9A-Fa-f]{6}$/, `${kind}: invalid colour`);
+    assert.equal(profile.invalidClassification.color, undefined, `${kind}: the palette owns the invalid colour`);
   }
 });
 

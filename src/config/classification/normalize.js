@@ -14,7 +14,7 @@
 
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
 import { pathError } from "../errors.js";
-import { normalizeBands, normalizeIcons, normalizeScale, normalizeTiers, normalizeValidRange } from "./profile-parts.js";
+import { normalizeBands, normalizeIcons, normalizePositions, normalizeScale, normalizeTiers, normalizeValidRange } from "./profile-parts.js";
 
 const AUTO_POLICY = { source: "auto", profile: null, custom: null };
 
@@ -57,7 +57,7 @@ export function normalizeClassificationConfig(value, collaborators) {
 }
 
 export function normalizeCustomClassification(value, { metricKindForUnit, unitProfileForUnit, classificationZones }) {
-  const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"]);
+  const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons", "positions"]);
   assertAllowedKeys(value, allowed, "classification");
 
   if (typeof value.unit !== "string" || !value.unit.trim()) {
@@ -83,6 +83,7 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   } = normalizeScale(value.scale);
   const sourceTiers = normalizeTiers(value.tiers, classificationZones);
   const sourceValidRange = normalizeValidRange(value.valid_range);
+  const positions = normalizePositions(value.positions);
   const { iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind);
 
   // Everything above is in the user's own unit. From here on it is canonical:
@@ -124,7 +125,11 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     anchorScale,
     invalidWhen,
     validRange: canonicalValidRange,
-    invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
+    positions,
+    // Colourless: a custom profile that named no colours takes them from the palette,
+    // and an invalid reading takes the palette's own invalid colour rather than a fixed
+    // one that would clash with every palette but the default.
+    invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
     iconTiers: sourceIconTiers && sourceIconTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
   };
 }

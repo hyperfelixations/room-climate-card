@@ -845,3 +845,132 @@ test("custom profile with gaps just wide enough to survive Fahrenheit rounding d
   assert.equal(card._computeViewModel().empty, false);
   env.cleanup(card);
 });
+
+// ---------------------------------------------------------------- palettes --
+
+// End to end through a real card: the palette option is what decides the colour a value
+// is shown in, and the profile decides only where on the ramp that value sits.
+function paletteCard(palette, value = 22) {
+  return env.createCard({ entity: "sensor.avg", palette }, temperatureHass(value));
+}
+
+test("a card shows its configured palette's colour for the same reading", () => {
+  const soft = paletteCard(undefined);
+  const bold = paletteCard("vivid");
+  const softColor = soft._computeViewModel().tone.color;
+  const boldColor = bold._computeViewModel().tone.color;
+  assert.equal(softColor, "#79A86C", "the default palette is the card's own ramp, unchanged");
+  assert.notEqual(boldColor, softColor);
+  assert.match(boldColor, /^#[0-9A-Fa-f]{6}$/);
+  env.cleanup(soft);
+  env.cleanup(bold);
+});
+
+test("a palette written out in YAML colours the card from its own ramp", () => {
+  // Eleven colours, because that is what the indoor profile's positions need; the first
+  // and the last are distinctive so the mapping is visible.
+  const ramp = ["#010101", "#020202", "#030303", "#040404", "#050505", "#060606", "#070707", "#080808", "#090909", "#0A0A0A", "#0B0B0B"];
+  const card = paletteCard({ ramp, invalid: "#FFFFFF" });
+  assert.equal(card._computeViewModel().tone.color, "#060606", "22 °C is position 6 of the indoor profile");
+  env.cleanup(card);
+});
+
+// The refusal to guess, through a real card: a profile whose positions the palette does
+// not have stops with a message naming both numbers and both ways out.
+test("a palette too short for the profile stops the card instead of guessing", () => {
+  assert.throws(
+    () => paletteCard({ ramp: ["#010101", "#020202", "#030303"], invalid: "#040404" }),
+    /ramp position 6, but the palette has 3 colors — give the profile a matching palette, or declare classification\.positions/
+  );
+});
+
+test("an unknown palette name stops the card with a message naming the known ones", () => {
+  assert.throws(
+    () => env.createCard({ entity: "sensor.avg", palette: "neon" }, temperatureHass()),
+    /Invalid configuration: palette "neon" is not a known palette — available: "pastel", "vivid"/
+  );
+});
+
+test("a custom profile without tier colours takes them from the palette", () => {
+  const colourless = {
+    source: "custom",
+    unit: "°C",
+    bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } },
+    scale: { min: 16, max: 28, step: 2 },
+    tiers: [
+      { min: 24, score: 3, level: "Warm", zone: "outside" },
+      { min: 20, score: 2, level: "Ok", zone: "optimal" },
+      { default: true, score: 1, level: "Cold", zone: "outside" },
+    ],
+  };
+  const card = env.createCard({ entity: "sensor.avg", classification: colourless }, temperatureHass(22));
+  assert.equal(card._computeViewModel().tone.color, "#8192C8", "position 2 of the default ramp");
+  env.cleanup(card);
+
+  // And the same profile under the other palette moves with it.
+  const bold = env.createCard({ entity: "sensor.avg", classification: colourless, palette: "vivid" }, temperatureHass(22));
+  assert.equal(bold._computeViewModel().tone.color, "#1F6FD6");
+  env.cleanup(bold);
+
+  // A tier that names its own colour keeps it, whatever the palette is.
+  const painted = env.createCard(
+    {
+      entity: "sensor.avg",
+      palette: "vivid",
+      classification: { ...colourless, tiers: colourless.tiers.map((tier) => ({ ...tier, color: "#ABCDEF" })) },
+    },
+    temperatureHass(22)
+  );
+  assert.equal(painted._computeViewModel().tone.color, "#ABCDEF");
+  env.cleanup(painted);
+});
+
+// The two traps, through a real card rather than through the resolver alone.
+test("entity mode without a value_color stays neutral, and never borrows a ramp colour", () => {
+  const card = env.createCard(
+    { entity: "sensor.avg", classification: "entity", palette: "vivid" },
+    temperatureHass(22, { value_score: 1, value_level: "From the integration" })
+  );
+  assert.equal(card._computeViewModel().tone.color, "#B4B2A9");
+  env.cleanup(card);
+});
+
+// A physically impossible reading never reaches the classifier from a rendered card —
+// it is filtered upstream and shown as no data, in either palette. Pinned here because
+// the alternative reading of the palette work would be that such a value now takes a
+// ramp colour, and it must not: the classifier's own invalid branch is covered in
+// classification-palettes.test.js.
+test("a physically impossible reading is no data, not a colour from the ramp", () => {
+  const hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 120, { device_class: "humidity", unit_of_measurement: "%" }),
+  });
+  for (const palette of [undefined, "vivid"]) {
+    const card = env.createCard({ entity: "sensor.avg", palette }, hass);
+    assert.equal(card._computeViewModel().tone.color, "#7F8792", String(palette));
+    env.cleanup(card);
+  }
+});
+
+// A profile with more steps than the palette has colours, made deterministic by saying
+// so — the alternative would be the card guessing which five of eleven were meant.
+test("classification.positions stretches a longer scale across the ramp", () => {
+  const twenty = {
+    source: "custom",
+    unit: "°C",
+    positions: 20,
+    bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } },
+    scale: { min: 16, max: 28, step: 2 },
+    tiers: [
+      { min: 24, score: 20, level: "Top", zone: "outside" },
+      { min: 20, score: 10, level: "Middle", zone: "optimal" },
+      { default: true, score: 1, level: "Bottom", zone: "outside" },
+    ],
+  };
+  const top = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(26));
+  const middle = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(22));
+  const bottom = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(10));
+  assert.equal(top._computeViewModel().tone.color, "#B85F67", "position 20 of 20 is the ramp's last colour");
+  assert.equal(middle._computeViewModel().tone.color, "#79A86C", "position 10 of 20 lands mid-ramp");
+  assert.equal(bottom._computeViewModel().tone.color, "#8A88C9", "position 1 of 20 is the ramp's first colour");
+  for (const card of [top, middle, bottom]) env.cleanup(card);
+});

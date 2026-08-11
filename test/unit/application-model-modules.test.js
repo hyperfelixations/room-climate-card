@@ -28,6 +28,8 @@ const RH = { device_class: "humidity", unit_of_measurement: "%" };
 const CO2 = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
 
 const AUTO_POLICY = { source: "auto", profile: null, custom: null };
+// The card's own ramp, so these models stay comparable to the colours everywhere else.
+let PASTEL;
 
 function st(state, attributes) {
   return { state: String(state), attributes: attributes || {} };
@@ -67,6 +69,7 @@ test.before(async () => {
   aggregates = await import("../../src/application/model/aggregates.js");
   cardDomainModel = await import("../../src/application/model/card-domain-model.js");
   viewState = await import("../../src/presentation/view-model/view-state.js");
+  ({ pastel: PASTEL } = await import("../../src/domain/classification/palettes/pastel.js"));
 });
 
 // ------------------------------------------------------------ EntityModel --
@@ -355,6 +358,7 @@ test("the range state is a DELTA and its min/max are ABSOLUTE", () => {
     states,
     config: cfg({ range_entity: "sensor.range" }),
     policy: AUTO_POLICY,
+    palette: PASTEL,
     metricKind: "temperature",
     displayUnitProfile: null,
     toDisplay: identity,
@@ -374,6 +378,7 @@ test("a negative range width is invalid, and takes min/max down with it", () => 
     states: { "sensor.range": st(-1, { ...C, minimum: 18, maximum: 25 }) },
     config: cfg({ range_entity: "sensor.range" }),
     policy: AUTO_POLICY,
+    palette: PASTEL,
     metricKind: "temperature",
     displayUnitProfile: null,
     toDisplay: (v) => v,
@@ -390,6 +395,7 @@ test("an inverted min/max pair blocks the range-scale view but not the range vie
     states: { "sensor.range": st(5, { ...C, minimum: 25, maximum: 18 }) },
     config: cfg({ range_entity: "sensor.range" }),
     policy: AUTO_POLICY,
+    palette: PASTEL,
     metricKind: "temperature",
     displayUnitProfile: null,
     toDisplay: (v) => v,
@@ -420,6 +426,7 @@ test("range timestamps are returned raw, not formatted", () => {
     states: { "sensor.range": st(5, { ...C, minimum: 18, maximum: 25, minimum_zeitpunkt: "2026-07-24T06:12:00Z" }) },
     config: cfg({ range_entity: "sensor.range" }),
     policy: AUTO_POLICY,
+    palette: PASTEL,
     metricKind: "temperature",
     displayUnitProfile: null,
     toDisplay: (v) => v,
@@ -435,6 +442,7 @@ test("historical range extremes classify numerically, never from the entity's co
     states: { "sensor.range": st(5, { ...C, minimum: 18, maximum: 25, value_color: "#ff0000", value_level: "Live" }) },
     config: cfg({ range_entity: "sensor.range" }),
     policy: AUTO_POLICY,
+    palette: PASTEL,
     metricKind: "temperature",
     displayUnitProfile: null,
     toDisplay: (v) => v,

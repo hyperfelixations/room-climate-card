@@ -744,3 +744,36 @@ test.describe("visual golden: headline shapes and headline widths", () => {
     }
   }
 });
+
+// A palette changes every classification colour on the card at once — the headline, the
+// scale bands, the room chips and the extremes. One picture per palette is what proves
+// that, in a way no per-colour assertion can: it also catches a colour that reached
+// somewhere the palette was never threaded through.
+test.describe("visual golden: the shipped palettes", () => {
+  for (const palette of ["pastel", "vivid"]) {
+    test(palette, async ({ page }) => {
+      await gotoHarness(page);
+      const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+      const states = {
+        "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+        "sensor.range": mkStateObj("sensor.range", 6, { ...attributes, minimum: 18, maximum: 27 }),
+        "sensor.r1": mkStateObj("sensor.r1", 18.4, attributes),
+        "sensor.r2": mkStateObj("sensor.r2", 22.1, attributes),
+        "sensor.r3": mkStateObj("sensor.r3", 26.8, attributes),
+      };
+      const cardId = await createCard(
+        page,
+        {
+          entity: "sensor.avg",
+          range_entity: "sensor.range",
+          palette,
+          auto_slide: false,
+          rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }],
+          views: [{ type: "scale" }],
+        },
+        states
+      );
+      await shot(page, cardId, `palette-${palette}.png`, 400);
+    });
+  }
+});

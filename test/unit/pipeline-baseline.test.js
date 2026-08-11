@@ -45,6 +45,7 @@ let METRIC_TYPE_BY_UNIT;
 let METRIC_DEFINITIONS;
 let resolveUnitProfileKey;
 let normalizeUnitToken;
+let palettes;
 
 test.before(async () => {
   ({ resolveMeasurementContext } = await import("../../src/application/model/measurement-context.js"));
@@ -62,6 +63,7 @@ test.before(async () => {
   ({ METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
   ({ normalizeUnitToken } = await import("../../src/domain/units/unit-token.js"));
+  palettes = await import("../../src/domain/classification/palettes/registry.js");
 });
 
 // The same collaborators the composition root injects, assembled here by hand so
@@ -76,6 +78,9 @@ function configCollaborators() {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
+    paletteForName: (name) => (name === null ? palettes.DEFAULT_PALETTE : palettes.paletteForName(name)),
+    paletteNames: () => Object.keys(palettes.CLASSIFICATION_PALETTE_REGISTRY),
+    assertPalette: palettes.assertPalette,
   };
 }
 

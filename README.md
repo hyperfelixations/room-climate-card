@@ -166,6 +166,7 @@ default.
 | `range_entity` | none | A sensor holding todays range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_zeitpunkt` and `maximum_zeitpunkt` attributes if you also want the times. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |
 | `classification` | `auto` + metric default | Decides where the colors and level names come from. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
+| `palette` | `pastel` | The colors the card classifies with. `pastel` is the card's own soft ramp, `vivid` a saturated one. You can also write out a palette of your own. See [Palettes](#palettes). |
 
 Small changes count as stable rather than as a trend, so the arrow does not
 flicker — for temperature, anything within about `±0.1 °C/h`. The arrow appears
@@ -488,9 +489,20 @@ Custom-profile rules:
 - `comparison` is `>=` by default and may be `>`.
 - Tier `min` values must be unique and strictly descending. Exactly one final
   `{default: true}` tier is required.
-- Every tier requires a finite numeric `score`, a non-empty `level`, a safe
-  3/4/6/8-digit hex `color`, and `zone: optimal | comfort | outside |
-  invalid`.
+- Every tier requires a non-empty `level`, a numeric `score`, and
+  `zone: optimal | comfort | outside | invalid`.
+- `color` is optional, and what you do with it decides what `score` means.
+  Give a tier a safe 3/4/6/8-digit hex `color` and it uses that color, with
+  `score` free to be any number you like. Leave `color` out and the tier takes
+  its color from the palette, with `score` naming which position on the palette
+  it sits at: a whole number of 1 or more, used only once in the profile, and
+  descending along with the thresholds. You can mix the two — paint the ends by
+  hand and let the palette fill in the middle.
+- `positions` is optional and belongs with a profile that has more steps than
+  the palette has colors. `positions: 20` says "my positions run 1 to 20", and
+  the palette is spread evenly across them. Without it, position 5 means the
+  palette's fifth color, and a position the palette does not have stops the
+  card rather than picking a color for you.
 - The optimal band must be inside the comfort band. `scale.step` must be
   greater than zero.
 - `scale` describes the axis the card draws, and it comes in two shapes. Give
@@ -533,6 +545,52 @@ Custom-profile rules:
   `max_inclusive`.
 - A mistake inside `classification` stops the card with an error naming the
   exact option, so a typo never quietly changes what a color means.
+
+### Palettes
+
+A profile decides *where* a reading sits — the coldest tier, the optimal band,
+the critical end — and the palette decides what those places look like. The two
+are separate, so you can keep the built-in profiles and still change every
+color on the card with one line:
+
+```yaml
+palette: vivid
+```
+
+Two palettes ship with the card. `pastel` is the default, a soft ramp of eleven
+colors running from blue through green to red. `vivid` uses the same eleven
+places with saturated colors, which reads better on a bright wall panel or
+beside strongly colored cards.
+
+You can also write out a palette yourself. `ramp` lists the colors from the
+lowest position upwards, and `invalid` is the color for a reading that is
+physically impossible, which has no place on the ramp at all:
+
+```yaml
+palette:
+  ramp:
+    - "#3B5BA5"
+    - "#4A8FC4"
+    - "#4FB3A5"
+    - "#5FBF77"
+    - "#8CC65A"
+    - "#C7C24E"
+    - "#D9A648"
+    - "#DE8544"
+    - "#D96449"
+    - "#C94A4A"
+    - "#B33A3A"
+  invalid: "#8A8A8A"
+```
+
+The built-in profiles use eleven positions, so a palette for them needs eleven
+colors. A palette of a different length works with a profile of your own that
+either uses positions the palette has, or declares `classification.positions`
+so the ramp is spread across its scale.
+
+A value the entity classifies itself keeps its own `value_color`, and shows the
+neutral color when it supplies none — the palette applies to the card's own
+classification, never to one an integration provided.
 
 ### What the card checks, and what it decides for you
 

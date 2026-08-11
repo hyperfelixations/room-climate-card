@@ -104,23 +104,73 @@ export function normalizeScale(value) {
 }
 
 // classification.tiers, with the per-tier semantic fields.
+//
+// `color` is OPTIONAL, and which of the two things a tier is decides what its `score`
+// has to be:
+//
+//   with a color     the tier paints itself. `score` keeps the only rule it has ever
+//                    had — any finite number — because every profile written before
+//                    palettes existed named a colour on every tier, and all of them
+//                    stay valid unchanged.
+//   without a color  the tier takes its colour from the palette, and `score` IS the
+//                    position it takes: a whole number of 1 or more, unique within the
+//                    profile, and descending in tier order like the thresholds. Those
+//                    three rules are what make "position" mean something; without them
+//                    `palette.ramp[score]` would be reading an arbitrary number as an
+//                    index.
+//
+// Mixing the two in one profile is allowed and the rules apply per tier — a profile can
+// paint the two ends by hand and let the palette fill in the middle.
 export function normalizeTiers(value, classificationZones) {
   const zones = new Set(classificationZones);
-  return normalizeDescendingTierList(value, "classification.tiers", ["score", "level", "color", "zone"], (tier, path) => {
+  const positions = [];
+  const tiers = normalizeDescendingTierList(value, "classification.tiers", ["score", "level", "color", "zone"], (tier, path) => {
     const score = numberAtPath(tier.score, `${path}.score`);
     if (typeof tier.level !== "string" || !tier.level.trim()) {
       pathError(`${path}.level`, "must be a non-empty string");
     }
-    if (typeof tier.color !== "string" || !isHexColor(tier.color.trim())) {
+    const hasColor = tier.color !== undefined;
+    if (hasColor && (typeof tier.color !== "string" || !isHexColor(tier.color.trim()))) {
       pathError(`${path}.color`, "must be a 3/4/6/8-digit hex color");
+    }
+    if (!hasColor) {
+      if (!Number.isInteger(score) || score < 1) {
+        pathError(`${path}.score`, `must be a whole number of 1 or more to name a palette position, but is ${score}`);
+      }
+      positions.push({ score, path });
     }
     if (!zones.has(tier.zone)) {
       const quoted = classificationZones.map((zone) => `"${zone}"`);
       const list = `${quoted.slice(0, -1).join(", ")}, or ${quoted[quoted.length - 1]}`;
       pathError(`${path}.zone`, `must be one of ${list}`);
     }
-    return { score, level: tier.level.trim(), color: tier.color.trim(), zone: tier.zone };
+    return { score, level: tier.level.trim(), color: hasColor ? tier.color.trim() : null, zone: tier.zone };
   });
+
+  // Checked across the profile rather than per tier, because both rules are about how
+  // the positions relate to each other. Descending is asserted only among the tiers that
+  // HAVE a position: a painted tier in between says nothing about the ramp.
+  for (let i = 1; i < positions.length; i++) {
+    if (positions[i].score >= positions[i - 1].score) {
+      pathError(
+        `${positions[i].path}.score`,
+        `must be below ${positions[i - 1].score}, because palette positions descend with the tiers they belong to`
+      );
+    }
+  }
+  return tiers;
+}
+
+// classification.positions: "my positions run 1..N", which lets a profile with a
+// different number of steps than the palette has colours be stretched across it
+// deterministically instead of guessed at. See rampIndexFor() in the domain.
+export function normalizePositions(value) {
+  if (value === undefined) return null;
+  const positions = numberAtPath(value, "classification.positions");
+  if (!Number.isInteger(positions) || positions < 2) {
+    pathError("classification.positions", "must be a whole number of 2 or more");
+  }
+  return positions;
 }
 
 // classification.valid_range: the optional physical-validity window. Either

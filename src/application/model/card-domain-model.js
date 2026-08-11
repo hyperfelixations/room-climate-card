@@ -34,6 +34,7 @@
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import {
   classificationPolicyOf,
+  paletteOf,
   classificationColorOf,
   classifyValue,
   resolveProfileIcon,
@@ -53,6 +54,7 @@ import {
 
 export function buildCardDomainModel({ states, config, context, language }) {
   const policy = classificationPolicyOf(config);
+  const palette = paletteOf(config);
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
   // Resolved once here and carried out on the model. It stopped being a pure function
@@ -154,7 +156,7 @@ export function buildCardDomainModel({ states, config, context, language }) {
   // to appear among several rooms.
   const averageRoomIndex = averageSourceKind === "room" ? topology.roomIndex : null;
 
-  const range = buildRangeModel({ states, config, policy, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
+  const range = buildRangeModel({ states, config, policy, palette, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
   const trend = buildTrendContext({ states, config, metricKind, unit: context.unit, toDisplayDelta });
 
   const counts = computeComfortCounts(roomsByValue, comfort, roomsComparable);
@@ -185,7 +187,8 @@ export function buildCardDomainModel({ states, config, context, language }) {
       metricKind,
       displayProfile,
       room.value,
-      states?.[room.entity]?.attributes ?? null
+      states?.[room.entity]?.attributes ?? null,
+      palette
     );
   }
 
@@ -194,7 +197,8 @@ export function buildCardDomainModel({ states, config, context, language }) {
     metricKind,
     displayProfile,
     average,
-    averageEntity ? states?.[averageEntity]?.attributes ?? null : null
+    averageEntity ? states?.[averageEntity]?.attributes ?? null : null,
+    palette
   );
 
   return {

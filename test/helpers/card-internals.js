@@ -43,6 +43,9 @@ async function loadCardInternals() {
   // classification policy from the configuration and its display profile from that
   // policy; the view model owns both production compositions.
   const policyOf = (el) => m.classification.classificationPolicyOf(el._config);
+  // Read off the card, exactly like the render path does, so a helper can never colour a
+  // value with a different palette than the card it was taken from.
+  const paletteOf = (el) => m.classification.paletteOf(el._config);
   const displayProfileOf = (el, metricType, unitProfile) =>
     m.classification.resolveDisplayProfile(policyOf(el), metricType, unitProfile);
 
@@ -88,7 +91,8 @@ async function loadCardInternals() {
         metricType,
         unitProfile,
         value,
-        entityId ? el._hass?.states?.[entityId]?.attributes ?? null : null
+        entityId ? el._hass?.states?.[entityId]?.attributes ?? null : null,
+        paletteOf(el)
       ),
 
     // A metric kind without icon tiers keeps its stable presentation icon, so adding

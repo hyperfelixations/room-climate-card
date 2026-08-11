@@ -120,11 +120,18 @@ test("forced entity mode uses the entity's own metadata, even partial", () => {
     attributes: { value_level: "Server level", value_score: 7 },
     numericFallback: () => assert.fail("the numeric path must not run in entity mode"),
   });
+  // No colour is decided here. The integration supplied none, and the resolver turns
+  // that into the neutral colour later — what matters at this seam is that the entity's
+  // own value_score produced NO ramp position, so it can never be read as one.
   assert.deepEqual(result, {
-    color: "#B4B2A9",
     level: "Server level",
+    levelKey: null,
     score: 7,
     zone: null,
+    explicitColor: null,
+    rampPosition: null,
+    declaredPositions: null,
+    invalid: false,
     source: "entity",
     profileId: null,
   });
@@ -136,7 +143,7 @@ test("forced entity mode degrades visibly rather than inventing a classification
     attributes: null,
     numericFallback: () => assert.fail("the numeric path must not run in entity mode"),
   });
-  assert.equal(result.color, "#B4B2A9");
+  assert.equal(result.explicitColor, null);
   assert.equal(result.level, "—");
   assert.equal(result.score, null);
   assert.equal(result.zone, null);
@@ -149,7 +156,7 @@ test("automatic mode prefers a COMPLETE entity classification", () => {
     numericFallback: () => assert.fail("a complete entity pair must win"),
   });
   assert.equal(result.source, "entity");
-  assert.equal(result.color, "#123456");
+  assert.equal(result.explicitColor, "#123456");
   assert.equal(result.level, "Server level");
 });
 
@@ -273,7 +280,13 @@ test("classifyNumericValue() returns tokens, not translated text", () => {
   assert.equal(result.levelKey, "level.optimal");
   assert.equal(result.zone, "optimal");
   assert.equal(result.score, 6);
-  assert.match(result.color, /^#[0-9A-Fa-f]{6}$/);
+  // No colour, and no colour to be had here: what comes out is the POSITION the palette
+  // is later asked about.
+  assert.equal(result.color, undefined);
+  assert.equal(result.explicitColor, null);
+  assert.equal(result.rampPosition, 6);
+  assert.equal(result.declaredPositions, null, "a built-in maps position to colour one-to-one");
+  assert.equal(result.invalid, false);
 });
 
 test("classifyNumericValue() keeps a custom profile's own level string", () => {
@@ -313,9 +326,27 @@ test("a profile without an explicit invalid classification uses the neutral fall
   };
   const result = classify.classifyNumericValue(profile, -1);
   assert.equal(result.levelKey, "level.invalidReading");
-  assert.equal(result.color, "#B4B2A9");
+  assert.equal(result.explicitColor, null, "the palette's invalid colour, decided later");
   assert.equal(result.zone, "invalid");
   assert.equal(result.score, null);
+  assert.equal(result.invalid, true);
+  assert.equal(result.rampPosition, null, "off the scale, not at the bottom of it");
+});
+
+// The trap this guards: humidity, CO2 and PM2.5 all carry score 1 on their invalid
+// classification, which is also the ramp's first position. Reading that score as a
+// position would paint an impossible reading in the ramp's own colour.
+test("an invalid reading takes no ramp position, whatever score it carries", () => {
+  const profile = {
+    comparison: ">=",
+    invalidWhen: (v) => v < 0,
+    invalidClassification: { score: 1, levelKey: "level.invalidReading", zone: "invalid" },
+    tiers: [{ min: -Infinity, levelKey: "x", zone: "outside", score: 1 }],
+  };
+  const result = classify.classifyNumericValue(profile, -1);
+  assert.equal(result.score, 1, "the score itself is untouched, it is simply not a position");
+  assert.equal(result.rampPosition, null);
+  assert.equal(result.invalid, true);
 });
 
 // -------------------------------------------------------------- validity --

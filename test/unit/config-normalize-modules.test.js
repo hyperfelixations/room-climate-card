@@ -23,6 +23,7 @@ let views;
 let classification;
 let profileParts;
 let normalizeConfigModule;
+let paletteModule;
 
 // Minimal stand-ins for the injected registries. Deliberately not the real ones:
 // if a test only passes with the production registry, the injection boundary is
@@ -40,8 +41,22 @@ const FAHRENHEIT = {
   deltaToCanonical: (v) => (v * 5) / 9,
 };
 
+// The palette collaborators, deliberately tiny: a three-colour ramp makes the rank
+// mapping's edges visible in a way eleven never would, and proves the layer never
+// assumes the shipped palette's size.
+const TINY_PALETTE = { id: "tiny", ramp: ["#111111", "#222222", "#333333"], invalid: "#999999" };
+const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", ramp: ["#abcdef"], invalid: "#000000" } };
+
 const COLLABORATORS = {
   classificationZones: ZONES,
+  paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
+  paletteNames: () => Object.keys(PALETTES),
+  assertPalette: (palette, path) => {
+    if (!Array.isArray(palette.ramp) || palette.ramp.length === 0) {
+      throw new Error(`Invalid configuration: ${path}.ramp must be a non-empty list of colors.`);
+    }
+    return palette;
+  },
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   optionSchemaForView: (type) =>
     type === "scale"
@@ -83,6 +98,7 @@ test.before(async () => {
   classification = await import("../../src/config/classification/normalize.js");
   profileParts = await import("../../src/config/classification/profile-parts.js");
   normalizeConfigModule = await import("../../src/config/normalize-config.js");
+  paletteModule = await import("../../src/config/classification/palette.js");
 });
 
 // ------------------------------------------------------------- primitives --
@@ -428,10 +444,12 @@ test("a valid custom profile is converted into the canonical unit", () => {
   assert.equal(result.oneSided, false);
   assert.equal(result.invalidWhen, null, "no valid_range means no validity predicate");
   assert.equal(result.validRange, null);
+  // Colourless, like every other part of a profile: what an unusable reading looks like
+  // is the palette's answer, so a custom profile does not carry a fixed hex that would
+  // clash with every palette but the default.
   assert.deepEqual(result.invalidClassification, {
     score: null,
     levelKey: "level.invalidReading",
-    color: "#B4B2A9",
     zone: "invalid",
   });
 });
@@ -868,4 +886,131 @@ test("normalizeConfig() reaches the injected collaborators, not a real registry"
   // proving the predicate is actually consulted.
   assert.equal(normalizeConfigModule.normalizeConfig({ entity: "sensor.a", language: "fr" }, COLLABORATORS).language, "fr");
   assert.equal(normalizeConfigModule.normalizeConfig({ entity: "sensor.a", language: "it" }, COLLABORATORS).language, "auto");
+});
+
+// ------------------------------------------------------------- palette ----
+
+test("the palette option resolves a name, a written-out palette, or the default", () => {
+  const { normalizePalette } = paletteModule;
+  assert.equal(normalizePalette(undefined, COLLABORATORS), TINY_PALETTE, "omitted means the card's own ramp");
+  for (const absent of [null, "", "   "]) {
+    assert.equal(normalizePalette(absent, COLLABORATORS), TINY_PALETTE, JSON.stringify(absent));
+  }
+  assert.equal(normalizePalette("other", COLLABORATORS).id, "other");
+  assert.equal(normalizePalette("  OTHER  ", COLLABORATORS).id, "other", "a name is matched case-insensitively");
+
+  const written = normalizePalette({ ramp: ["#111", "#222"], invalid: "#333" }, COLLABORATORS);
+  assert.deepEqual(written.ramp, ["#111", "#222"]);
+  assert.equal(written.invalid, "#333");
+});
+
+// A name the card does not know is a hard error, not a silent fallback: a user who
+// typed it meant it, and a dashboard that quietly ignored them would look like a bug
+// in the palette rather than a typo.
+test("an unknown palette name is refused, and the message says which ones exist", () => {
+  assert.throws(
+    () => paletteModule.normalizePalette("neon", COLLABORATORS),
+    /Invalid configuration: palette "neon" is not a known palette — available: "tiny", "other", or write one out as \{ramp, invalid\}\./
+  );
+});
+
+test("a written-out palette is refused for the same reasons a shipped one would be", () => {
+  assert.throws(() => paletteModule.normalizePalette(5, COLLABORATORS), /palette must be a palette name or an object/);
+  assert.throws(() => paletteModule.normalizePalette([], COLLABORATORS), /palette must be a palette name or an object/);
+  assert.throws(() => paletteModule.normalizePalette({ ramp: ["#111"], invalid: "#222", extra: 1 }, COLLABORATORS), /palette\.extra/);
+  assert.throws(() => paletteModule.normalizePalette({ ramp: [], invalid: "#222" }, COLLABORATORS), /palette\.ramp must be a non-empty list/);
+});
+
+// -------------------------------------------------- tier colour contract ---
+
+// The rule that keeps every profile released before palettes existed valid: a tier that
+// names a colour paints itself and is held to no position rules at all.
+test("a tier with a colour may carry any finite score, as it always could", () => {
+  for (const score of [2.5, 0, -3, 1e9]) {
+    const result = classification.normalizeCustomClassification(
+      validCustom({
+        tiers: [
+          { min: 24, score, level: "Warm", color: "#cc4444", zone: "outside" },
+          { default: true, score, level: "Cold", color: "#4488cc", zone: "outside" },
+        ],
+      }),
+      COLLABORATORS
+    );
+    assert.deepEqual(result.tiers.map((tier) => tier.score), [score, score], String(score));
+  }
+});
+
+// And the rule that makes "position" mean something for a tier that has no colour.
+test("a tier without a colour needs a whole position of 1 or more", () => {
+  for (const score of [2.5, 0, -1, 0.5]) {
+    assert.throws(
+      () =>
+        classification.normalizeCustomClassification(
+          validCustom({
+            tiers: [
+              { min: 24, score: 9, level: "Warm", zone: "outside" },
+              { default: true, score, level: "Cold", zone: "outside" },
+            ],
+          }),
+          COLLABORATORS
+        ),
+      {
+        message: `Invalid configuration: classification.tiers[1].score must be a whole number of 1 or more to name a palette position, but is ${score}.`,
+      },
+      String(score)
+    );
+  }
+});
+
+test("positions descend with the tiers they belong to, and may not repeat", () => {
+  const withScores = (a, b) =>
+    validCustom({
+      tiers: [
+        { min: 24, score: a, level: "Warm", zone: "outside" },
+        { default: true, score: b, level: "Cold", zone: "outside" },
+      ],
+    });
+  assert.throws(
+    () => classification.normalizeCustomClassification(withScores(3, 3), COLLABORATORS),
+    /classification\.tiers\[1\]\.score must be below 3, because palette positions descend/
+  );
+  assert.throws(
+    () => classification.normalizeCustomClassification(withScores(2, 5), COLLABORATORS),
+    /classification\.tiers\[1\]\.score must be below 2/
+  );
+  // Sparse is fine — a profile may use positions 11 and 1 and nothing between.
+  const sparse = classification.normalizeCustomClassification(withScores(11, 1), COLLABORATORS);
+  assert.deepEqual(sparse.tiers.map((tier) => tier.score), [11, 1]);
+});
+
+// A painted tier between two positioned ones says nothing about the ramp, so it must
+// not break their ordering.
+test("a mixed profile applies the position rules only to the tiers that have positions", () => {
+  const result = classification.normalizeCustomClassification(
+    validCustom({
+      tiers: [
+        { min: 26, score: 9, level: "Hot", zone: "outside" },
+        { min: 24, score: 0.5, level: "Painted", color: "#cc4444", zone: "outside" },
+        { default: true, score: 3, level: "Cold", zone: "outside" },
+      ],
+    }),
+    COLLABORATORS
+  );
+  assert.deepEqual(result.tiers.map((tier) => tier.color), [null, "#cc4444", null]);
+  assert.deepEqual(result.tiers.map((tier) => tier.score), [9, 0.5, 3]);
+});
+
+test("classification.positions declares the scale the ramp is stretched across", () => {
+  assert.equal(classification.normalizeCustomClassification(validCustom(), COLLABORATORS).positions, null);
+  assert.equal(
+    classification.normalizeCustomClassification(validCustom({ positions: 20 }), COLLABORATORS).positions,
+    20
+  );
+  for (const invalid of [1, 0, -2, 2.5, "many", null]) {
+    assert.throws(
+      () => classification.normalizeCustomClassification(validCustom({ positions: invalid }), COLLABORATORS),
+      /classification\.positions must be (a whole number of 2 or more|a finite number)/,
+      JSON.stringify(String(invalid))
+    );
+  }
 });

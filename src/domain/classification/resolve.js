@@ -18,8 +18,27 @@
 
 import { readEntityClassification } from "./entity-attributes.js";
 
-const NEUTRAL_COLOR = "#B4B2A9";
 const NO_LEVEL = "—";
+
+// An entity-provided classification in the shape the colour resolver reads. Its colour
+// is EXPLICIT — whatever the integration supplied, or nothing — and it carries no ramp
+// position at all: the integration's `value_score` is a number on the integration's own
+// scale, and reading it as a position in the card's palette would invent a relationship
+// that does not exist.
+function fromEntityAttributes(entity, level) {
+  return {
+    level,
+    levelKey: null,
+    score: entity?.score ?? null,
+    zone: entity?.zone ?? null,
+    explicitColor: entity?.color || null,
+    rampPosition: null,
+    declaredPositions: null,
+    invalid: false,
+    source: "entity",
+    profileId: null,
+  };
+}
 
 // lenient: an entity's OWN metric kind has to be probed before kind-based
 // filtering has run, so at that point a card-wide profile scoped to a DIFFERENT
@@ -60,18 +79,11 @@ export function resolveClassificationProfile(registryForKind, policy, metricKind
 export function resolveValueClassification({ policy, attributes, numericFallback }) {
   if (policy.source === "entity") {
     const entity = readEntityClassification(attributes, { allowPartial: true });
-    return {
-      color: entity?.color || NEUTRAL_COLOR,
-      level: entity?.level || NO_LEVEL,
-      score: entity?.score ?? null,
-      zone: entity?.zone ?? null,
-      source: "entity",
-      profileId: null,
-    };
+    return fromEntityAttributes(entity, entity?.level || NO_LEVEL);
   }
   if (policy.source === "auto") {
     const entity = readEntityClassification(attributes);
-    if (entity) return entity;
+    if (entity) return fromEntityAttributes(entity, entity.level);
   }
   return numericFallback();
 }
