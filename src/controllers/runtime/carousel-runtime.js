@@ -190,25 +190,51 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     return animation.phaseMs;
   }
 
+  // ONE reading of the situation, and everything the accessibility pass derives from it.
+  //
+  // "Which view is accessible now" and "how long until that stops being true" are two
+  // answers about a single instant, and they have to come from a single reading of the
+  // phase. The sync timer is armed to fire exactly ON a flip, so whenever it runs the
+  // boundary is at most a hair away in either direction — and the phase is extrapolated
+  // to *now* on every read, so two reads a few hundred microseconds apart can land on
+  // opposite sides of it. A pass that read twice could therefore write the OUTGOING view
+  // and then arm as though the flip were already behind it, leaving the wrong view
+  // announced to assistive technology for a full hold. Measured in Chromium: in every
+  // captured occurrence the last attribute write landed 0.7–2.3 ms before its own flip
+  // and nothing followed for the rest of the segment.
+  //
+  // The phase is read only where it can mean anything: the moment anything takes manual
+  // control, the JS index IS the visible position and there is no flip to wait for.
+  function accessibilitySnapshot() {
+    const track = getTrack();
+    const current = timing();
+    const autoEngaged = Boolean(current.enabled && track && !track.classList.contains("rtc-manual"));
+    const phaseMs = autoEngaged ? visiblePhaseMs(track, current) : null;
+    return {
+      autoEngaged,
+      timing: current,
+      phaseMs,
+      visibleIndex: autoEngaged ? accessibleViewIndexAt(phaseMs, current) : activeIndex,
+    };
+  }
+
   // The single shared answer, used both by the accessibility sync and by the
   // active-view preservation across a structural rebuild, so the two can never quietly
   // disagree. While the synchronized animation drives the track, the JS index is stale
-  // between discrete updates and the phase is authoritative; the moment anything takes
-  // manual control, the JS index IS the visible position.
+  // between discrete updates and the phase is authoritative.
   function currentVisualIndex() {
-    const track = getTrack();
-    const current = timing();
-    const autoEngaged = current.enabled && track && !track.classList.contains("rtc-manual");
-    return autoEngaged ? accessibleViewIndexAt(visiblePhaseMs(track, current), current) : activeIndex;
+    return accessibilitySnapshot().visibleIndex;
   }
 
   // Keeps offscreen views out of the tab order and hidden from assistive technology.
   // Every view stays permanently mounted, so without this a keyboard user could tab
   // into a card that is not on screen.
-  function updateViewAccessibility() {
+  //
+  // The index is a parameter so that a caller who has already read the phase applies
+  // THAT reading rather than taking a second one of its own.
+  function updateViewAccessibility(visibleIndex = currentVisualIndex()) {
     const views = getViewElements();
     if (!views) return;
-    const visibleIndex = currentVisualIndex();
     views.forEach((view, index) => {
       const isActive = index === visibleIndex;
       if (isActive) view.removeAttribute("aria-hidden");
@@ -223,14 +249,14 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   // timer anyway.
   function scheduleAccessibilitySync() {
     clearA11yTimer();
-    updateViewAccessibility();
+    const snapshot = accessibilitySnapshot();
+    updateViewAccessibility(snapshot.visibleIndex);
     if (platform.isDocumentHidden()) return;
-    const track = getTrack();
-    const current = timing();
-    if (!(current.enabled && track && !track.classList.contains("rtc-manual"))) return;
-    // Armed against the same phase updateViewAccessibility() reads, so the timer fires
-    // when the FLIP is due on screen rather than when the wall clock says it is.
-    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(visiblePhaseMs(track, current), current));
+    if (!snapshot.autoEngaged) return;
+    // Armed against the same phase the attributes were just written from, so the timer
+    // fires when the FLIP is due on screen rather than when the wall clock says it is —
+    // and so that it can never arm past a flip it has not yet applied.
+    const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(snapshot.phaseMs, snapshot.timing));
     a11yTimer = platform.setTimeout(() => {
       a11yTimer = null;
       scheduleAccessibilitySync();

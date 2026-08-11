@@ -139,6 +139,17 @@ function createFakePlatform(options = {}) {
 
     // ---- inspection ----------------------------------------------------------
     pendingTimerCount: () => timers.size,
+    // How long the soonest pending timer still has to wait. A test that cares WHEN a
+    // chain re-armed itself, not just that it did, needs the number rather than the
+    // count — "it armed one timer" and "it armed it for the right moment" are different
+    // claims, and only the second catches a chain that skipped a flip.
+    nextTimerDelay() {
+      let soonest = null;
+      for (const timer of timers.values()) {
+        if (soonest === null || timer.dueAt < soonest) soonest = timer.dueAt;
+      }
+      return soonest === null ? null : soonest - now;
+    },
     pendingFrameCount: () => frames.size,
     visibilityListenerCount: () => visibilityListeners.size,
     observers,

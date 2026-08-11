@@ -248,6 +248,52 @@ test("the accessibility timer re-arms itself once per flip, and only once", () =
   assert.equal(platform.pendingTimerCount(), 1, "still exactly one pending timer after a whole cycle");
 });
 
+// The timer is armed to fire AT its own flip, so the moment it runs, the flip is at most
+// a hair away in either direction — and scheduleAccessibilitySync() answers two
+// questions from the phase in that moment: which view is accessible NOW, and how long
+// until that answer changes. If those two questions are asked from two separate reads
+// and the boundary falls between them, the pass writes the OUTGOING view and then arms
+// as though the flip had already been handled. Nothing reconsiders until the next
+// segment, so the card announces the wrong view for a full hold.
+//
+// Measured in Chromium as a ~2% failure of the live carousel spec: in 16 of 16 captured
+// failures the last attribute write landed 0.7–2.3 ms BEFORE its own flip and no write
+// followed for the rest of the segment. The phase is extrapolated to "now" on every
+// read, so the few hundred microseconds the attribute writes themselves take are enough
+// for the second read to land on the other side.
+test("a sync that runs a hair before its own flip re-arms for that flip, not past it", () => {
+  const platform = createFakePlatform({ now: 0 });
+  const { controller, track, jsdom } = makeController({ platform, viewCount: 3, rotationSeconds: 3, slideSeconds: 1 });
+  controller.applyAutoSlideStyles();
+  const at = controller.timing();
+  const flipMs = at.holdMs + at.slideMs * 0.354;
+  const outgoing = timing.accessibleViewIndexAt(flipMs - 0.4, at);
+  const incoming = timing.accessibleViewIndexAt(flipMs + 0.4, at);
+  assert.notEqual(outgoing, incoming, "the two phases must straddle a real flip, otherwise this test proves nothing");
+
+  // The phase is extrapolated to "now" on every read, so time passing between two reads
+  // moves it. Here it crosses the boundary exactly once, between the first read and
+  // every one after it — which is what a pass that fired a hair early sees.
+  let reads = 0;
+  Object.defineProperty(track, "__animationPhase", {
+    configurable: true,
+    get: () => ({ phaseMs: reads++ === 0 ? flipMs - 0.4 : flipMs + 0.4, cycleMs: at.cycleMs }),
+  });
+
+  controller.scheduleAccessibilitySync();
+  const inertRow = () => [...jsdom.window.document.querySelectorAll(".rtc-view")].map((view) => (view.hasAttribute("inert") ? 0 : 1)).indexOf(1);
+  assert.equal(inertRow(), outgoing, "the pass decided on the phase it read first");
+
+  // And that decision has to be reconsidered at the flip it was made just before — not
+  // a whole segment later, which is what leaves the wrong view announced.
+  assert.ok(
+    platform.nextTimerDelay() <= at.slideMs,
+    `re-armed for ${platform.nextTimerDelay()}ms, which skips the flip it just wrote across`
+  );
+  platform.advance(at.slideMs);
+  assert.equal(inertRow(), incoming, "the flip is applied on the next wake-up");
+});
+
 test("a hidden document stops the accessibility chain, and becoming visible restarts it", () => {
   const { controller, platform } = makeController();
   platform.setHidden(true);

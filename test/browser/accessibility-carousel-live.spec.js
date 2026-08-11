@@ -44,10 +44,55 @@
 // currentVisualIndex() was correct. The card was never wrong; it had not
 // been given a turn.
 //
+// ── WHY CLAIM 2 NEEDS A PROOF, NOT A MARGIN ─────────────────────────────
+// Waiting a fixed number of turns is still an ASSUMPTION that the main thread
+// was free during them. Measured on this machine, over six 12-second runs at
+// six different cycle start phases, with every aria-hidden/inert write recorded
+// by a MutationObserver and compared against the moment its flip fell due:
+//
+//   one Chromium, free main thread   0–13 ms late, 65 of 65 writes
+//   two competing Chromium workers   individual writes past 198 ms
+//
+// Two genuine failures were caught that way in 96 runs; in both the model was
+// CORRECT and the attributes were one segment stale. The card cannot write an
+// attribute without a main-thread task, so under starvation the assertion was
+// testing the machine. Note what this also disproves: the accuracy did not
+// vary with the cycle's start phase, so the wall clock is not involved.
+//
+// Claim 2 therefore no longer assumes the precondition, it MEASURES it. A
+// chained setTimeout(0) heartbeat records, for its most recently completed
+// tick, when that tick was armed and when it ran. A sample is compared only if
+// a tick was armed AFTER the flip governing this hold fell due and finished
+// BEFORE the sample was read. Timers are delivered in due order, so such a tick
+// cannot have overtaken an accessibility timer that was already overdue: the
+// card demonstrably had its turn, and a mismatch is then a real defect.
+//
+// The naive version of this — "some heartbeat ran after the flip" — proves
+// nothing: a tick armed BEFORE the flip and delayed along with it would be
+// delivered FIRST, precisely because its due time is earlier. Only the arming
+// time can order the two.
+//
+// ── AND THE OPPOSITE FAILURE, WHICH THE HEARTBEAT DOES NOT COVER ────────
+// A heartbeat proof caught the remaining failure red-handed rather than
+// explaining it: the proof was present (a tick armed 72 ms into the hold had
+// completed), the model was correct, and the attributes named the PREVIOUS
+// hold's view. They were not stale — the TRANSFORM was. `settled` reads the
+// attributes as of now but the transform as of the last produced frame, and
+// when the renderer produces no frame for a segment or more, "which view is
+// parked in front" is answered about the past while the DOM answers about the
+// present. Comparing them then fails on a card that is doing everything right.
+//
+// Measured on an unloaded machine over ~650 samples, the settled reading's
+// frame age is p50 1.0 ms, p90 1.7 ms, max 2.6 ms, and not once above one
+// frame — so requiring it to be under ONE_FRAME_MS, exactly as Claim 1 already
+// does for its own reading, costs nothing and removes the whole failure mode.
+//
 // None of this can hide a real defect: the model claim is checked against
 // the compositor's own frame, and a card that froze the state on its
 // discrete active-view index (the original A11Y-01 bug) stays wrong for
-// whole rotations. Reinstating that bug fails the model claim immediately.
+// whole rotations. Reinstating that bug fails the model claim immediately,
+// and the skipped-sample count plus the sample floors keep the heartbeat gate
+// from quietly emptying the run.
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
@@ -63,7 +108,9 @@ const ONE_FRAME_MS = 17;
 const HOLD_MS = 1000;
 const SLIDE_MS = 150;
 const SEG_MS = HOLD_MS + SLIDE_MS;
-const TRACK_ANIMATION_NAME = "rtc-track-slide";
+// The track animation's name is spelled inline in the two page functions below rather
+// than shared from here: an evaluate() body runs in the page and cannot close over
+// anything in this file.
 
 // How far inside a hold a sample has to sit before Claim 2 will look at it.
 //
@@ -83,6 +130,84 @@ function threeViewStates() {
     "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
   };
+}
+
+// The main-thread heartbeat behind Claim 2's gate.
+//
+// A chained setTimeout(0) that keeps only its LAST completed tick, which is all the gate
+// can use: ticks are armed in order, so if the most recent one was armed too early, no
+// other one qualifies either. O(1) state, and no growing array to perturb what it
+// measures.
+//
+// `generation` ties the proof to the situation it was taken in. It counts changes to a
+// signature covering everything that would make an older tick meaningless — the document
+// becoming hidden, the track being handed back to manual control, the animation being
+// restarted or re-timed, and the accessibility timer chain stopping. A sample whose
+// generation differs from its proof's is not compared.
+async function startMainThreadHeartbeat(page, cardId) {
+  await page.evaluate((cardId) => {
+    const el = document.getElementById(cardId);
+    const track = el.shadowRoot.querySelector(".rtc-track");
+    const signature = () => {
+      const animation = track.getAnimations?.().find((candidate) => candidate.animationName === "rtc-track-slide");
+      const timing = animation?.effect?.getComputedTiming?.();
+      return [
+        document.visibilityState,
+        track.classList.contains("rtc-manual"),
+        animation ? String(animation.startTime) : "none",
+        timing ? Math.round(Number(timing.duration)) : "none",
+        el._carousel.accessibilityTimerHandle !== null,
+      ].join("|");
+    };
+
+    const state = {
+      generation: 0,
+      signature: signature(),
+      signatureNow: signature,
+      armedAt: null,
+      ranAt: null,
+      pendingArmedAt: performance.now(),
+      ticks: 0,
+      stopped: false,
+    };
+    window.__rccHeartbeat = state;
+
+    const tick = () => {
+      if (state.stopped) return;
+      const ranAt = performance.now();
+      const current = signature();
+      if (current !== state.signature) {
+        state.signature = current;
+        state.generation++;
+      }
+      state.armedAt = state.pendingArmedAt;
+      state.ranAt = ranAt;
+      state.ticks++;
+      state.pendingArmedAt = performance.now();
+      setTimeout(tick, 0);
+    };
+    setTimeout(tick, 0);
+
+    // Every aria-hidden/inert write, with the moment it landed. A mismatch is only
+    // diagnosable if it can say whether the card wrote the wrong thing or did not write
+    // at all — and the difference between those two is what turned the last remaining
+    // failure of this file from "flaky" into a located defect. Capped, because the run
+    // produces thousands and only the last handful before a mismatch mean anything.
+    state.writes = [];
+    const root = el.shadowRoot;
+    new MutationObserver((records) => {
+      const views = Array.from(root.querySelectorAll(".rtc-view"));
+      for (const record of records) {
+        state.writes.push({
+          at: performance.now(),
+          attr: record.attributeName,
+          index: views.indexOf(record.target),
+          row: views.map((view) => (view.hasAttribute("inert") ? 1 : 0)).join(""),
+        });
+      }
+      if (state.writes.length > 40) state.writes.splice(0, state.writes.length - 40);
+    }).observe(root, { subtree: true, attributes: true, attributeFilter: ["inert", "aria-hidden"] });
+  }, cardId);
 }
 
 // One round-trip, two readings of the same card.
@@ -112,12 +237,26 @@ async function sample(page, cardId) {
       const animationCycleMs = Number(animationTiming?.duration);
       const animationProgress = animationTiming?.progress;
       const readable = typeof animationProgress === "number" && Number.isFinite(animationCycleMs) && animationCycleMs > 0;
+      // The heartbeat's last completed tick, and the generation this reading itself
+      // belongs to. Recomputing the signature here rather than trusting the tick's
+      // closes the up-to-one-tick window in which the situation could have changed
+      // since the heartbeat last looked.
+      const heartbeat = window.__rccHeartbeat;
+      const generationNow = heartbeat.signatureNow() === heartbeat.signature ? heartbeat.generation : heartbeat.generation + 1;
       return {
         positionIndex: -matrix.m41 / viewWidthPx,
         modelIndex: el._carousel.currentVisualIndex(),
         animationPhaseMs: readable ? animationProgress * animationCycleMs : null,
         animationCycleMs: readable ? animationCycleMs : null,
         frameStalenessMs: performance.now() - Number(document.timeline.currentTime),
+        // Claim 2's precondition, on ONE monotonic clock: readAt, proofArmedAt and
+        // proofRanAt are all performance.now() in this window, and the phase they are
+        // compared against is read in this same synchronous block.
+        readAt: performance.now(),
+        proofArmedAt: heartbeat.armedAt,
+        proofRanAt: heartbeat.ranAt,
+        proofGeneration: heartbeat.generation,
+        generationNow,
         states: views.map((v) => ({ ariaHidden: v.getAttribute("aria-hidden"), inert: v.hasAttribute("inert") })),
         // Diagnostics. A mismatch below is only actionable if it also says WHY the
         // card was in the state it was in: whether the track had been handed back to
@@ -127,6 +266,9 @@ async function sample(page, cardId) {
         timerArmed: el._carousel.accessibilityTimerHandle !== null,
         activeIndex: el._carousel.activeIndex,
         visibility: document.visibilityState,
+        writes: heartbeat.writes
+          .slice(-8)
+          .map((write) => `${(performance.now() - write.at).toFixed(0)}ms:${write.attr}@${write.index}=${write.row}`),
       };
     };
 
@@ -198,6 +340,27 @@ function inSteadyHold({ animationPhaseMs }) {
   return subPhaseMs >= HOLD_MARGIN_MS && subPhaseMs <= HOLD_MS - HOLD_MARGIN_MS;
 }
 
+// Whether the card demonstrably got a main-thread task after the flip that decided this
+// hold fell due — the precondition Claim 2 used to assume.
+//
+// The flip actually falls due ~97 ms BEFORE the hold starts (at
+// holdMs + slideMs * A11Y_FLIP_TIME_FRACTION into the previous segment). This uses the
+// start of the hold instead, which is the LATEST the flip could possibly have been due,
+// so the requirement it places on the heartbeat is strictly the stronger one and needs
+// no second copy of the card's easing constants to state.
+//
+// The phase is read from the last produced frame and is therefore slightly stale, which
+// puts the computed hold start slightly late — again in the strict direction. Under real
+// starvation that staleness grows, the window shrinks, and the sample is skipped rather
+// than compared against a machine that was busy elsewhere.
+function hadMainThreadTurnSinceFlip(sample) {
+  if (typeof sample.animationPhaseMs !== "number") return false;
+  if (sample.proofArmedAt === null) return false;
+  if (sample.proofGeneration !== sample.generationNow) return false;
+  const holdStartedAt = sample.readAt - (sample.animationPhaseMs % SEG_MS);
+  return sample.proofArmedAt > holdStartedAt && sample.proofRanAt <= sample.readAt;
+}
+
 test("aria-hidden/inert follow the live CSS auto-slide position throughout a cycle, not just the active view index", async ({ page }) => {
   await gotoHarness(page);
   // Fast-ish cycle (holdMs=1000, slideMs=150 for 3 views -> 4 hold-sequence
@@ -218,6 +381,7 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
   await page.evaluate((id) => {
     document.getElementById(id).style.width = "400px";
   }, cardId);
+  await startMainThreadHeartbeat(page, cardId);
 
   // inSteadyHold() reduces the phase modulo one segment, which is only the position
   // within a segment while the cycle is a whole number of them. Stated here so a
@@ -229,6 +393,8 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
 
   let modelSamples = 0;
   let domSamples = 0;
+  let starvedSamples = 0;
+  let staleFrameSamples = 0;
   const deadline = Date.now() + 9000; // ~2 full cycles at ~4.6s each
   while (Date.now() < deadline) {
     const { framed, settled } = await sample(page, cardId);
@@ -245,31 +411,58 @@ test("aria-hidden/inert follow the live CSS auto-slide position throughout a cyc
 
     // Claim 2 — the attributes the card actually wrote agree with it.
     //
-    // Two gates, and they answer different questions. inSteadyHold() asks WHEN, on the
-    // animation's clock: is this a moment at which a hold is being held, far enough from
-    // both flips that a main-thread write has plainly had its turn. heldIndex() then
+    // Four gates, and they answer different questions. inSteadyHold() asks WHEN, on the
+    // animation's clock: is this a moment at which a hold is being held, clear of both
+    // flips. The staleness check asks whether the transform is still a statement about
+    // NOW, since the attributes certainly are. hadMainThreadTurnSinceFlip() asks WHETHER
+    // the card could have acted on the flip — measured, not assumed. heldIndex() then
     // asks WHAT, from the compositor's own transform: which view is parked in front.
-    // Only the second decides what is correct — the phase never gets a vote on that.
+    // Only the last decides what is correct — neither the phase nor the heartbeat gets
+    // a vote on that.
+    //
+    // The two middle gates guard opposite failures, which is why neither replaces the
+    // other: an old frame lets the DOM be AHEAD of the transform it is compared with, a
+    // starved thread leaves it BEHIND.
     const settledIndex = heldIndex(settled);
     if (settledIndex !== null && inSteadyHold(settled)) {
-      domSamples++;
-      const where =
-        `positionIndex=${settled.positionIndex} model=${settled.modelIndex} activeIndex=${settled.activeIndex} ` +
-        `subPhase=${(settled.animationPhaseMs % SEG_MS).toFixed(1)}ms ` +
-        `manual=${settled.manual} timerArmed=${settled.timerArmed} visibility=${settled.visibility} ` +
-        // The whole row, not just the view whose assertion trips first: "all three
-        // inert" and "the wrong one active" are different defects with different causes.
-        `inert=[${settled.states.map((s) => (s.inert ? 1 : 0)).join(",")}] ` +
-        `framedPos=${framed.positionIndex} framedSub=${(framed.animationPhaseMs % SEG_MS).toFixed(1)}ms`;
-      settled.states.forEach((s, i) => {
-        const shouldBeActive = i === settledIndex;
-        expect(s.inert, `view ${i} inert at ${where}`).toBe(!shouldBeActive);
-        expect(s.ariaHidden, `view ${i} aria-hidden at ${where}`).toBe(shouldBeActive ? null : "true");
-      });
+      if (settled.frameStalenessMs > ONE_FRAME_MS) staleFrameSamples++;
+      else if (!hadMainThreadTurnSinceFlip(settled)) starvedSamples++;
+      else {
+        domSamples++;
+        const where =
+          `positionIndex=${settled.positionIndex} model=${settled.modelIndex} activeIndex=${settled.activeIndex} ` +
+          `subPhase=${(settled.animationPhaseMs % SEG_MS).toFixed(1)}ms ` +
+          `manual=${settled.manual} timerArmed=${settled.timerArmed} visibility=${settled.visibility} ` +
+          `frameAge=${settled.frameStalenessMs.toFixed(1)}ms ` +
+          `turnAfterFlip=${(settled.proofArmedAt - (settled.readAt - (settled.animationPhaseMs % SEG_MS))).toFixed(1)}ms ` +
+          // The whole row, not just the view whose assertion trips first: "all three
+          // inert" and "the wrong one active" are different defects with different causes.
+          `inert=[${settled.states.map((s) => (s.inert ? 1 : 0)).join(",")}] ` +
+          `framedPos=${framed.positionIndex} framedSub=${(framed.animationPhaseMs % SEG_MS).toFixed(1)}ms ` +
+          `writes=[${settled.writes.join(" | ")}]`;
+        settled.states.forEach((s, i) => {
+          const shouldBeActive = i === settledIndex;
+          expect(s.inert, `view ${i} inert at ${where}`).toBe(!shouldBeActive);
+          expect(s.ariaHidden, `view ${i} aria-hidden at ${where}`).toBe(shouldBeActive ? null : "true");
+        });
+      }
     }
 
     await page.waitForTimeout(60);
   }
+  await page.evaluate(() => {
+    window.__rccHeartbeat.stopped = true;
+  });
+
+  // The floors are what keep the gates honest: a gate that stopped admitting anything
+  // would empty the run instead of failing it. The two skip counts are reported rather
+  // than bounded — they are properties of the machine, not of the card — but a run in
+  // which they swallowed everything cannot reach the DOM floor. On an unloaded machine
+  // both are typically 0 out of ~110 samples.
   expect(modelSamples, "must have captured at least a few coherent hold-position model samples").toBeGreaterThan(3);
-  expect(domSamples, "must have captured at least a few clean hold-position DOM samples").toBeGreaterThan(3);
+  expect(
+    domSamples,
+    `must have captured at least a few clean hold-position DOM samples ` +
+      `(${staleFrameSamples} skipped for a stale frame, ${starvedSamples} for a starved main thread)`
+  ).toBeGreaterThan(3);
 });
