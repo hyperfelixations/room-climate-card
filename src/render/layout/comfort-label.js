@@ -8,8 +8,8 @@
 // carousel slide, so it then paints across the view beside it.
 //
 // The label is never lifted onto a second line the way the daily-range labels are: in
-// the worst case it sits flush against one end of the row, and if even the whole row is
-// too narrow it truncates. It stays above the bar in every case.
+// the worst case it sits flush against one end of the row, and if even the short form
+// fills the whole row it truncates. It stays above the bar in every case.
 //
 // The desired position is derived fresh from the geometry each time and never read back
 // from this function's own previous output, so repeated calls converge instead of
@@ -17,6 +17,7 @@
 
 import { clamp } from "../../core/numbers.js";
 import { measuredWidth } from "../primitives/dom.js";
+import { resolveLabelForm } from "./label-form.js";
 
 export function resolveComfortLabelPosition(containerEl, content) {
   if (!containerEl || !content?.comfortLabel) return;
@@ -37,7 +38,11 @@ export function resolveComfortLabelPosition(containerEl, content) {
   const rowWidth = measuredWidth(row);
   if (!rowWidth) return;
 
-  const naturalWidth = measuredWidth(label);
+  // Three steps, in order of how much they cost the reader: the long form if it fits at
+  // all, the short form if it does not, and only then the clamp and the ellipsis. Which
+  // form is showing is decided here rather than in patch(), because it depends on the
+  // rendered width of exactly this text — the same ownership the optimal label has.
+  const naturalWidth = resolveLabelForm(label, content.comfortLabel.long, content.comfortLabel.short, (width) => width <= rowWidth);
   if (naturalWidth > rowWidth) label.style.maxWidth = `${rowWidth}px`;
   const width = Math.min(naturalWidth, rowWidth);
 

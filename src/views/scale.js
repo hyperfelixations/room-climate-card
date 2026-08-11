@@ -44,8 +44,11 @@ function renderMarkers(content) {
 }
 
 function renderTopRow(content) {
+  // The long form and the percentage are the honest approximation until the layout pass
+  // can measure; both are then replaced with measured values (see renderScaleBar()'s
+  // note on the optimal label, which works exactly the same way).
   const comfortLabelHtml = content.comfortLabel
-    ? `<span class="rtc-scale-comfort-label" style="left:${content.comfortLabel.center}%"${content.comfortLabel.visible ? "" : " hidden"}>${escapeHtml(content.comfortLabel.text)}</span>`
+    ? `<span class="rtc-scale-comfort-label" style="left:${content.comfortLabel.center}%"${content.comfortLabel.visible ? "" : " hidden"}>${escapeHtml(content.comfortLabel.long)}</span>`
     : "";
   return `
           <div class="rtc-scale-comfort-row">
@@ -124,13 +127,13 @@ export const scaleView = {
     resolveOptimalLabelPosition(containerEl, content);
     if (!containerEl) return;
 
-    // Text and visibility only. Where the label sits belongs to the layout pass, the
-    // same division of labour the optimal label has (see patchScaleBar()): the position
-    // depends on the rendered width of exactly this text, so it has to be decided after
-    // the text is in place and in one place only.
+    // Visibility only. Both the text and the position belong to the layout pass, the
+    // same division of labour the optimal label has (see patchScaleBar()): which of the
+    // two forms shows and where it sits are one decision about rendered width, and one
+    // decision belongs in one place. Visibility is set FIRST, because a hidden label has
+    // no box the layout pass could measure.
     const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
     if (comfortLabelEl && content.comfortLabel) {
-      comfortLabelEl.textContent = content.comfortLabel.text;
       comfortLabelEl.hidden = !content.comfortLabel.visible;
     }
     resolveComfortLabelPosition(containerEl, content);

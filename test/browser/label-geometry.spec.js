@@ -681,6 +681,49 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     }
   });
 
+  // Before the clamp and long before the ellipsis, the label may swap to its own short
+  // form — the same intermediate step the optimal label takes, because a real word beats
+  // a truncated one whenever a real word fits.
+  //
+  // Every one of the fifteen languages currently declares a short form identical to its
+  // long one, so nothing in the shipped card exercises this. Substituting a genuinely
+  // shorter pair on the live content model is therefore the only way to tell "the short
+  // form is chosen when it has to be" apart from "the key is still never read".
+  test("a comfort label that does not fit falls back to its short form before being clamped", async ({ page }) => {
+    await gotoHarnessWithBlockCard(page);
+    const cardId = await scaleOnlyCard(page, 22, "temperature", "°C");
+    await setCardWidth(page, cardId, 320);
+    const measured = await page.evaluate((cardId) => {
+      const card = document.getElementById(cardId);
+      const view = card.shadowRoot.querySelector(".rtc-scale-view");
+      const label = view.querySelector(".rtc-scale-comfort-label");
+      const row = view.querySelector(".rtc-scale-comfort-row");
+      const model = card._renderController.lastViewModel;
+      const content = model.views.byKey.scale;
+      const read = () => {
+        card._resolveViewLayouts(model);
+        const labelRect = label.getBoundingClientRect();
+        return {
+          text: label.textContent,
+          overLeftEdge: row.getBoundingClientRect().left - labelRect.left,
+          clipped: label.scrollWidth > label.clientWidth + 0.5,
+        };
+      };
+      // A long form far too wide for the row, and a short form that fits it comfortably.
+      content.comfortLabel.long = "Ein sehr langer Komfortbereich der hier niemals hineinpasst";
+      content.comfortLabel.short = "20–24°C Komf.";
+      const shortened = read();
+      // And the other direction: a long form that fits must not be shortened.
+      content.comfortLabel.long = "20–24°C Komfort";
+      const kept = read();
+      return { shortened, kept };
+    }, cardId);
+    expect(measured.shortened.text, "the short form has to be chosen when the long one cannot fit").toBe("20–24°C Komf.");
+    expect(measured.shortened.clipped, "and it must fit without being truncated on top of that").toBe(false);
+    expect(measured.shortened.overLeftEdge, "the shortened label still has to be inside the row").toBeLessThanOrEqual(0.5);
+    expect(measured.kept.text, "a long form that fits must not be shortened").toBe("20–24°C Komfort");
+  });
+
   // The last resort, below which there is nothing left to move: a row narrower than the
   // label itself. Clipping with an ellipsis is the answer every other single-line label
   // on this card gives.
@@ -693,10 +736,16 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
       const view = card.shadowRoot.querySelector(".rtc-scale-view");
       const label = view.querySelector(".rtc-scale-comfort-label");
       const row = view.querySelector(".rtc-scale-comfort-row");
-      label.textContent = "Ein garantiert viel zu langer Komfortbereich der niemals in diese Zeile passt";
-      // The layout pass runs on render, on resize and on fonts.ready; a text change made
-      // from a test is none of those, so it is invoked the way the card would invoke it.
-      card._resolveViewLayouts(card._renderController.lastViewModel);
+      // Substituted on the content model rather than on the node: the layout pass owns
+      // the text and would overwrite anything written straight into the DOM. BOTH forms
+      // are overlong, so this is the case where there is nothing left to fall back to.
+      const model = card._renderController.lastViewModel;
+      const overlong = "Ein garantiert viel zu langer Komfortbereich der niemals in diese Zeile passt";
+      model.views.byKey.scale.comfortLabel.long = overlong;
+      model.views.byKey.scale.comfortLabel.short = overlong;
+      // The layout pass runs on render, on resize and on fonts.ready; a change made from
+      // a test is none of those, so it is invoked the way the card would invoke it.
+      card._resolveViewLayouts(model);
       const labelRect = label.getBoundingClientRect();
       const rowRect = row.getBoundingClientRect();
       const style = getComputedStyle(label);

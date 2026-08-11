@@ -201,7 +201,7 @@ function viewModel(overrides = {}) {
         range_scale: null,
         scale: {
           ...scaleBarContent(),
-          comfortLabel: { text: "Comfort 20–24 °C", center: 50, visible: true },
+          comfortLabel: { long: "Comfort 20–24 °C", short: "Comfort 20–24 °C", center: 50, visible: true },
           emphasizeAverage: false,
           markers: { extremes: null, rooms: [], average: marker() },
         },
@@ -612,6 +612,14 @@ test("each view renders its own container and patches it without touching the ot
   realm.root.innerHTML = scaleView.scaleView.render(realm.context, scaleModel);
   assert.match(realm.root.innerHTML, /rtc-scale-view/);
   assert.match(realm.root.innerHTML, /rtc-marker-avg/);
+  // The comfort label's initial text comes from the content model's LONG form. Asserted
+  // because the alternative is silent: a fixture that still carried the pre-pair shape
+  // rendered the string "undefined" here and nothing in this file noticed.
+  assert.equal(
+    realm.root.querySelector(".rtc-scale-comfort-label").textContent,
+    "Comfort 20–24 °C",
+    "the rendered comfort label must be the long form, not an undefined field"
+  );
 
   // A patch with changed content updates the mounted nodes in place.
   const changed = viewModel();

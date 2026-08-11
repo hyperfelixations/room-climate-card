@@ -45,14 +45,19 @@ export function buildScaleViewContent(shared, options) {
       // ANDed with it.
       footerText: rooms.comparable && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
     }),
+    // A PAIR of texts, not one, for the same reason the optimal label is a pair (see
+    // view-content/scale-bar.js): which of the two fits is a question about rendered
+    // width, and only the layout pass can measure that.
     comfortLabel: options.show_comfort_band
-      ? {
-          text: texts.t("scale.comfortLabel", {
-            range: `${texts.fmt(comfort.min, 0)}–${texts.fmtWithUnit(comfort.max, 0, false)}`,
-          }),
-          center: scale.comfortCenter,
-          visible: scale.comfortVisible,
-        }
+      ? (() => {
+          const range = `${texts.fmt(comfort.min, 0)}–${texts.fmtWithUnit(comfort.max, 0, false)}`;
+          return {
+            long: texts.t("scale.comfortLabel", { range }),
+            short: texts.t("scale.comfortLabelShort", { range }),
+            center: scale.comfortCenter,
+            visible: scale.comfortVisible,
+          };
+        })()
       : null,
     emphasizeAverage,
     markers: {
