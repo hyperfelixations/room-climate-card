@@ -129,8 +129,8 @@ test("forced entity mode uses the entity's own metadata, even partial", () => {
     score: 7,
     zone: null,
     explicitColor: null,
-    rampPosition: null,
-    declaredPositions: null,
+    deviation: null,
+    deviationSpan: null,
     invalid: false,
     source: "entity",
     profileId: null,
@@ -279,13 +279,13 @@ test("classifyNumericValue() returns tokens, not translated text", () => {
   assert.equal(result.level, null, "a built-in tier has no literal level");
   assert.equal(result.levelKey, "level.optimal");
   assert.equal(result.zone, "optimal");
-  assert.equal(result.score, 6);
-  // No colour, and no colour to be had here: what comes out is the POSITION the palette
-  // is later asked about.
+  assert.equal(result.score, 0, "optimal is zero steps from optimal");
+  // No colour, and no colour to be had here: what comes out is the DISTANCE the palette
+  // is later asked about, plus how far this profile reaches.
   assert.equal(result.color, undefined);
   assert.equal(result.explicitColor, null);
-  assert.equal(result.rampPosition, 6);
-  assert.equal(result.declaredPositions, null, "a built-in maps position to colour one-to-one");
+  assert.equal(result.deviation, 0);
+  assert.deepEqual(result.deviationSpan, { above: 5, below: 5 });
   assert.equal(result.invalid, false);
 });
 
@@ -315,7 +315,7 @@ test("an invalid reading short-circuits to the invalid classification", () => {
   const result = classify.classifyNumericValue(profile, 150);
   assert.equal(result.zone, "invalid");
   assert.equal(result.levelKey, "level.invalidReading");
-  assert.equal(result.score, 1);
+  assert.equal(result.score, null, "an unusable reading has no distance from optimal to report");
 });
 
 test("a profile without an explicit invalid classification uses the neutral fallback", () => {
@@ -330,22 +330,22 @@ test("a profile without an explicit invalid classification uses the neutral fall
   assert.equal(result.zone, "invalid");
   assert.equal(result.score, null);
   assert.equal(result.invalid, true);
-  assert.equal(result.rampPosition, null, "off the scale, not at the bottom of it");
+  assert.equal(result.deviation, null, "off the scale, not at one end of it");
+  assert.equal(result.deviationSpan, null);
 });
 
-// The trap this guards: humidity, CO2 and PM2.5 all carry score 1 on their invalid
-// classification, which is also the ramp's first position. Reading that score as a
-// position would paint an impossible reading in the ramp's own colour.
-test("an invalid reading takes no ramp position, whatever score it carries", () => {
+// The trap this guards: a profile may carry a score on its invalid classification, and
+// reading that score as a distance would paint an impossible reading in a ramp colour.
+test("an invalid reading takes no distance, whatever score it carries", () => {
   const profile = {
     comparison: ">=",
     invalidWhen: (v) => v < 0,
     invalidClassification: { score: 1, levelKey: "level.invalidReading", zone: "invalid" },
-    tiers: [{ min: -Infinity, levelKey: "x", zone: "outside", score: 1 }],
+    tiers: [{ min: -Infinity, levelKey: "x", zone: "outside", score: 0 }],
   };
   const result = classify.classifyNumericValue(profile, -1);
-  assert.equal(result.score, 1, "the score itself is untouched, it is simply not a position");
-  assert.equal(result.rampPosition, null);
+  assert.equal(result.score, 1, "the score itself is untouched, it is simply not a distance");
+  assert.equal(result.deviation, null);
   assert.equal(result.invalid, true);
 });
 

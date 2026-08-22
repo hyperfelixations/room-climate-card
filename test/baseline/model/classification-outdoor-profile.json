@@ -75,7 +75,7 @@
     "icon": "mdi:thermometer-low",
     "label": "Fresh",
     "profileId": "outdoor",
-    "score": 4,
+    "score": -2,
     "soft": "rgba(103,167,174,0.2)",
     "source": "builtin",
     "zone": "outside"

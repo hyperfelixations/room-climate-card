@@ -6,10 +6,11 @@
 // coherent for a reading to be judged consistently lives here together;
 // unit conversion is deliberately separate (see ../../../metrics/definitions.js).
 //
-// It names no colours. `score` IS the tier's position on the card's colour ramp, and
-// which colours sit at those positions is the palette's decision, not the profile's --
-// which is what lets the same profile be shown in any palette without restating itself.
-// See ../../palettes/registry.js.
+// It names no colours. `score` is the tier's distance from OPTIMAL -- 0 is the right
+// value, positive is too much, negative is too little -- and which colour sits at that
+// distance is the palette's decision, not the profile's. That is what lets the same
+// profile be shown in any palette without restating itself, and it is why a profile with
+// only one direction to go wrong needs no special case. See ../../palettes/registry.js.
 //
 // Values are product decisions, not implementation details. Do not round,
 // reorder or "tidy" them without a documented reason.
@@ -19,19 +20,19 @@ export const indoor = {
   metricKind: "humidity",
   comparison: ">=",
   invalidWhen: (value) => value < 0 || value > 100,
-  invalidClassification: { score: 1, levelKey: "level.invalidReading", zone: "invalid" },
+  invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
   tiers: [
-    { min: 75, score: 11, levelKey: "level.criticallyHumid", zone: "outside" },
-    { min: 70, score: 10, levelKey: "level.tooHumid", zone: "outside" },
-    { min: 65, score: 9, levelKey: "level.veryHumid", zone: "outside" },
-    { min: 60, score: 8, levelKey: "level.humid", zone: "outside" },
-    { min: 58, score: 7, levelKey: "level.slightlyHumid", zone: "comfort" },
-    { min: 42, score: 6, levelKey: "level.optimal", zone: "optimal" },
-    { min: 40, score: 5, levelKey: "level.slightlyDry", zone: "comfort" },
-    { min: 35, score: 4, levelKey: "level.dry", zone: "outside" },
-    { min: 30, score: 3, levelKey: "level.veryDry", zone: "outside" },
-    { min: 25, score: 2, levelKey: "level.tooDry", zone: "outside" },
-    { min: -Infinity, score: 1, levelKey: "level.criticallyDry", zone: "outside" },
+    { min: 75, score: 5, levelKey: "level.criticallyHumid", zone: "outside" },
+    { min: 70, score: 4, levelKey: "level.tooHumid", zone: "outside" },
+    { min: 65, score: 3, levelKey: "level.veryHumid", zone: "outside" },
+    { min: 60, score: 2, levelKey: "level.humid", zone: "outside" },
+    { min: 58, score: 1, levelKey: "level.slightlyHumid", zone: "comfort" },
+    { min: 42, score: 0, levelKey: "level.optimal", zone: "optimal" },
+    { min: 40, score: -1, levelKey: "level.slightlyDry", zone: "comfort" },
+    { min: 35, score: -2, levelKey: "level.dry", zone: "outside" },
+    { min: 30, score: -3, levelKey: "level.veryDry", zone: "outside" },
+    { min: 25, score: -4, levelKey: "level.tooDry", zone: "outside" },
+    { min: -Infinity, score: -5, levelKey: "level.criticallyDry", zone: "outside" },
   ],
   comfort: { min: 40, max: 60 },
   optimal: { min: 42, max: 58 },

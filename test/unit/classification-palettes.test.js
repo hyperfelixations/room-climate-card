@@ -1,16 +1,18 @@
 "use strict";
 
-// The colour layer: which palettes exist, how a tier's position becomes a colour, and
-// in what ORDER a classification is asked for one.
+// The colour layer: which palettes exist, how a tier's distance from optimal becomes a
+// colour, and in what ORDER a classification is asked for one.
 //
-// The order is the part worth testing hardest. Two of its steps exist because getting
-// them wrong is invisible — an entity-classified value quietly taking a ramp colour it
-// has no relation to, an impossible reading quietly taking the ramp's first colour
-// because it happens to carry score 1 — and both would look like a working card.
+// Two things are worth testing hardest. The ORDER, because two of its four steps exist
+// only because getting them wrong is invisible — an entity-classified value quietly
+// taking a ramp colour it has no relation to, an impossible reading quietly taking one
+// because it happens to carry a score — and both would look like a working card. And the
+// ANCHORING, because that is what lets a profile and a palette of different reach fit
+// together without an option, an error case or a guess.
 //
-// The characterization at the bottom is the regression proof for the whole change: every
-// tier of every built-in profile, against the hex values the card shipped before it had
-// palettes at all.
+// The characterization at the bottom is the regression proof for the whole colour layer:
+// every tier of every built-in profile, against the hex values the card shipped before it
+// had palettes at all.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -38,10 +40,14 @@ test("every shipped palette is complete, and the registry is frozen", () => {
   assert.deepEqual(ids.sort(), ["pastel", "vivid"]);
   for (const id of ids) {
     const palette = palettes.CLASSIFICATION_PALETTE_REGISTRY[id];
-    assert.ok(palette.ramp.length > 0, `${id}: non-empty ramp`);
-    for (const [index, color] of palette.ramp.entries()) {
-      assert.match(color, /^#[0-9A-Fa-f]{6}$/, `${id}: ramp position ${index + 1}`);
+    for (const [wing, colors] of [["above", palette.above], ["below", palette.below]]) {
+      assert.ok(colors.length > 0, `${id}: ${wing} is non-empty`);
+      for (const [index, color] of colors.entries()) {
+        assert.match(color, /^#[0-9A-Fa-f]{6}$/, `${id}: ${wing} step ${index + 1}`);
+      }
+      assert.equal(Object.isFrozen(colors), true, `${id}: ${wing} frozen`);
     }
+    assert.match(palette.optimal, /^#[0-9A-Fa-f]{6}$/, `${id}: optimal`);
     assert.match(palette.invalid, /^#[0-9A-Fa-f]{6}$/, `${id}: invalid`);
     assert.equal(Object.isFrozen(palette), true, `${id}: frozen`);
   }
@@ -51,9 +57,11 @@ test("every shipped palette is complete, and the registry is frozen", () => {
 
 // Both shipped palettes have to be usable by the same profile, or "the profile means the
 // same thing under either" is not true.
-test("the two shipped palettes have the same number of positions", () => {
-  assert.equal(pastel.ramp.length, 11);
-  assert.equal(vivid.ramp.length, pastel.ramp.length);
+test("the two shipped palettes reach equally far in both directions", () => {
+  assert.equal(pastel.above.length, 5);
+  assert.equal(pastel.below.length, 5);
+  assert.equal(vivid.above.length, pastel.above.length);
+  assert.equal(vivid.below.length, pastel.below.length);
 });
 
 test("an unknown palette name resolves to nothing rather than to a default", () => {
@@ -63,90 +71,132 @@ test("an unknown palette name resolves to nothing rather than to a default", () 
 });
 
 test("assertPalette() refuses every incomplete shape, naming the path it was given", () => {
+  const ok = { below: ["#111111"], optimal: "#222222", above: ["#333333"] };
   const cases = [
     [null, /my_palette must be an object/],
-    [{ ramp: [], invalid: "#ffffff" }, /my_palette\.ramp must be a non-empty list/],
-    [{ invalid: "#ffffff" }, /my_palette\.ramp must be a non-empty list/],
-    [{ ramp: ["#ffffff", "nope"], invalid: "#ffffff" }, /my_palette\.ramp\[2\] must be a 3\/4\/6\/8-digit hex color/],
-    [{ ramp: ["#ffffff"] }, /my_palette\.invalid must be a 3\/4\/6\/8-digit hex color/],
-    [{ ramp: ["#ffffff"], invalid: "red" }, /my_palette\.invalid must be a 3\/4\/6\/8-digit hex color/],
+    [["#111111"], /my_palette must be an object/],
+    [{ ...ok, optimal: undefined }, /my_palette\.optimal must be a 3\/4\/6\/8-digit hex color/],
+    [{ ...ok, optimal: "red" }, /my_palette\.optimal must be a 3\/4\/6\/8-digit hex color/],
+    [{ ...ok, above: [] }, /my_palette\.above must be a non-empty list of colors, running outwards from the middle/],
+    [{ ...ok, below: undefined }, /my_palette\.below must be a non-empty list/],
+    [{ ...ok, above: ["#111111", "nope"] }, /my_palette\.above\[2\] must be a 3\/4\/6\/8-digit hex color/],
+    [{ ...ok, invalid: "red" }, /my_palette\.invalid must be a 3\/4\/6\/8-digit hex color/],
   ];
   for (const [palette, expected] of cases) {
     assert.throws(() => palettes.assertPalette(palette, "my_palette"), expected, JSON.stringify(palette));
   }
-  // The position in the message is 1-based, because a ramp is addressed by position
+  // A wing step is named 1-based, because a wing is addressed by "steps from optimal"
   // everywhere else and an off-by-one here would send a user to the wrong colour.
-  assert.throws(
-    () => palettes.assertPalette({ ramp: ["bad", "#ffffff"], invalid: "#ffffff" }, "palette"),
-    /palette\.ramp\[1\]/
-  );
+  assert.throws(() => palettes.assertPalette({ ...ok, below: ["bad"] }, "palette"), /palette\.below\[1\]/);
 });
 
-// -------------------------------------------------------- rank mapping ----
+// The one field a palette may leave out. Nobody should have to invent a colour for a
+// state they never see.
+test("invalid is optional and completes to a neutral grey", () => {
+  const bare = { below: ["#111111"], optimal: "#222222", above: ["#333333"] };
+  assert.equal(palettes.completePalette(palettes.assertPalette(bare)).invalid, palettes.NEUTRAL_INVALID_COLOR);
+  assert.equal(palettes.completePalette(palettes.assertPalette({ ...bare, invalid: "#abcdef" })).invalid, "#abcdef");
+});
 
-const RAMP3 = { id: "three", ramp: ["#000001", "#000002", "#000003"], invalid: "#999999" };
+// --------------------------------------------------- the profile's reach ---
 
-test("without a declared scale, a position is taken literally", () => {
-  for (const [position, expected] of [[1, "#000001"], [2, "#000002"], [3, "#000003"]]) {
-    assert.equal(paletteColor.rampIndexFor({ rampPosition: position, declaredPositions: null }, RAMP3), position - 1);
+test("a profile's reach counts only the tiers that take a palette colour", () => {
+  const { deviationSpanOf } = classify;
+  assert.deepEqual(deviationSpanOf({ tiers: [{ score: 2 }, { score: 0 }, { score: -3 }] }), { above: 2, below: 3 });
+  // One-sided: nothing ever asks the palette's `below` wing for a colour.
+  assert.deepEqual(deviationSpanOf({ tiers: [{ score: 5 }, { score: 1 }, { score: 0 }] }), { above: 5, below: 0 });
+  // A painted tier is not on the ramp, so its score is not a distance and does not count.
+  assert.deepEqual(
+    deviationSpanOf({ tiers: [{ score: 99, color: "#ffffff" }, { score: 1 }, { score: 0 }] }),
+    { above: 1, below: 0 }
+  );
+  assert.deepEqual(deviationSpanOf({ tiers: [{ score: 2.5 }] }), { above: 0, below: 0 }, "a non-distance is ignored");
+});
+
+// ------------------------------------------------------------- anchoring ---
+
+const WIDE = { below: ["#b1", "#b2", "#b3", "#b4", "#b5"], optimal: "#opt", above: ["#a1", "#a2", "#a3", "#a4", "#a5"] };
+const NARROW = { below: ["#lo"], optimal: "#mid", above: ["#hi"] };
+
+test("optimal is the middle, always, whatever the palette or the profile", () => {
+  for (const palette of [WIDE, NARROW, pastel, vivid]) {
+    assert.equal(paletteColor.rampColorFor(0, { above: 5, below: 5 }, palette), palette.optimal);
+    assert.equal(paletteColor.rampColorFor(0, { above: 0, below: 0 }, palette), palette.optimal);
   }
 });
 
-// The refusal to guess. A profile with positions 1..5 could mean the lowest five colours
-// or five spread over the whole ramp, and nothing in the profile says which — so the
-// card says so instead of picking one.
-test("a position the palette does not have is an error naming both numbers", () => {
-  assert.throws(
-    () => paletteColor.rampIndexFor({ rampPosition: 7, declaredPositions: null }, RAMP3, "the profile"),
-    /the profile sits at ramp position 7, but the palette has 3 colors/
-  );
-  assert.throws(
-    () => paletteColor.rampIndexFor({ rampPosition: 2, declaredPositions: null }, { ramp: ["#abcdef"], invalid: "#000000" }),
-    /palette has 1 color —/,
-  );
+test("a profile and a palette of equal reach map one to one", () => {
+  const span = { above: 5, below: 5 };
+  assert.deepEqual([1, 2, 3, 4, 5].map((k) => paletteColor.rampColorFor(k, span, WIDE)), ["#a1", "#a2", "#a3", "#a4", "#a5"]);
+  assert.deepEqual([1, 2, 3, 4, 5].map((k) => paletteColor.rampColorFor(-k, span, WIDE)), ["#b1", "#b2", "#b3", "#b4", "#b5"]);
 });
 
-test("a position that is not a whole number of 1 or more is refused, not rounded", () => {
-  for (const position of [0, -1, 2.5, null, undefined, NaN, "3"]) {
+// The case the earlier design could not express at all. A short palette is not a
+// configuration error; it is a palette with less resolution.
+test("a palette shorter than the profile collapses onto what it has", () => {
+  const span = { above: 5, below: 5 };
+  for (const k of [1, 2, 3, 4, 5]) {
+    assert.equal(paletteColor.rampColorFor(k, span, NARROW), "#hi", `+${k}`);
+    assert.equal(paletteColor.rampColorFor(-k, span, NARROW), "#lo", `-${k}`);
+  }
+});
+
+// And the other direction: three tiers on an eleven-colour ramp should reach that ramp's
+// ENDS, not pick three neighbours out of its middle.
+test("a profile shorter than the palette reaches the palette's ends", () => {
+  const span = { above: 1, below: 1 };
+  assert.equal(paletteColor.rampColorFor(1, span, WIDE), "#a5");
+  assert.equal(paletteColor.rampColorFor(-1, span, WIDE), "#b5");
+  assert.equal(paletteColor.rampColorFor(0, span, WIDE), "#opt");
+});
+
+// The rule that makes the first step off optimal visible at every resolution.
+test("the first step away from optimal always leaves the middle colour", () => {
+  for (const reach of [1, 2, 3, 5, 10, 20]) {
+    for (const palette of [WIDE, NARROW, pastel, vivid]) {
+      assert.notEqual(paletteColor.rampColorFor(1, { above: reach, below: reach }, palette), palette.optimal, `reach ${reach}`);
+      assert.notEqual(paletteColor.rampColorFor(-1, { above: reach, below: reach }, palette), palette.optimal, `reach ${reach}`);
+    }
+  }
+});
+
+test("a long profile is spread monotonically over a shorter palette", () => {
+  const span = { above: 10, below: 10 };
+  const seen = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => paletteColor.rampColorFor(k, span, WIDE));
+  assert.deepEqual(seen, ["#a1", "#a1", "#a2", "#a2", "#a3", "#a3", "#a4", "#a4", "#a5", "#a5"]);
+  assert.equal(seen[seen.length - 1], "#a5", "the profile's extreme reaches the palette's extreme");
+});
+
+// Wings are scaled on their own, so a palette may be finer in one direction than the
+// other without that leaking into the opposite side.
+test("the two wings are scaled independently", () => {
+  const lopsided = { below: ["#b1"], optimal: "#opt", above: ["#a1", "#a2", "#a3"] };
+  const span = { above: 3, below: 3 };
+  assert.deepEqual([1, 2, 3].map((k) => paletteColor.rampColorFor(k, span, lopsided)), ["#a1", "#a2", "#a3"]);
+  assert.deepEqual([1, 2, 3].map((k) => paletteColor.rampColorFor(-k, span, lopsided)), ["#b1", "#b1", "#b1"]);
+});
+
+test("a distance that is not a whole number is refused, not rounded", () => {
+  for (const deviation of [2.5, -0.5, NaN, null, undefined, "3"]) {
     assert.throws(
-      () => paletteColor.rampIndexFor({ rampPosition: position, declaredPositions: null }, RAMP3),
-      /needs a whole ramp position of 1 or more/,
-      JSON.stringify(String(position))
+      () => paletteColor.rampColorFor(deviation, { above: 5, below: 5 }, WIDE),
+      /needs a whole number of steps from optimal/,
+      JSON.stringify(String(deviation))
     );
   }
 });
 
-test("a declared scale stretches the ramp across it, deterministically", () => {
-  // 20 positions over 11 colours: both ends pinned, the rest spread evenly.
-  const table = [
-    [1, 1], [2, 2], [3, 2], [4, 3], [5, 3], [6, 4], [7, 4], [8, 5], [9, 5], [10, 6],
-    [11, 6], [12, 7], [13, 7], [14, 8], [15, 8], [16, 9], [17, 9], [18, 10], [19, 10], [20, 11],
-  ];
-  for (const [position, expectedRank] of table) {
-    assert.equal(
-      paletteColor.rampIndexFor({ rampPosition: position, declaredPositions: 20 }, pastel) + 1,
-      expectedRank,
-      `position ${position} of 20`
-    );
-  }
-  // Six positions over eleven colours: still both ends, still even.
-  assert.deepEqual(
-    [1, 2, 3, 4, 5, 6].map((p) => paletteColor.rampIndexFor({ rampPosition: p, declaredPositions: 6 }, pastel) + 1),
-    [1, 3, 5, 7, 9, 11]
+// Cannot arise from a validated profile, because the reach IS that profile's extreme.
+// Guarded anyway, because reading past the end of a wing would yield `undefined`.
+test("a distance beyond the profile's own reach is refused rather than silently clamped", () => {
+  assert.throws(
+    () => paletteColor.rampColorFor(6, { above: 5, below: 5 }, WIDE, "the profile"),
+    /the profile is 6 steps above optimal, which is outside the profile's own range/
   );
-  // And the identity case has to survive being declared explicitly.
-  assert.deepEqual(
-    [1, 6, 11].map((p) => paletteColor.rampIndexFor({ rampPosition: p, declaredPositions: 11 }, pastel) + 1),
-    [1, 6, 11]
+  assert.throws(
+    () => paletteColor.rampColorFor(-1, { above: 5, below: 0 }, WIDE),
+    /1 step below optimal, which is outside the profile's own range/
   );
-});
-
-test("a declared scale clamps rather than throwing, and a one-colour palette collapses", () => {
-  assert.equal(paletteColor.rampIndexFor({ rampPosition: 99, declaredPositions: 20 }, RAMP3), 2);
-  const single = { ramp: ["#abcdef"], invalid: "#000000" };
-  for (const position of [1, 4, 9]) {
-    assert.equal(paletteColor.rampIndexFor({ rampPosition: position, declaredPositions: 9 }, single), 0);
-  }
 });
 
 // ---------------------------------------------------- resolution order ----
@@ -156,8 +206,8 @@ function classification(overrides) {
     source: "builtin",
     invalid: false,
     explicitColor: null,
-    rampPosition: 2,
-    declaredPositions: null,
+    deviation: 1,
+    deviationSpan: { above: 5, below: 5 },
     ...overrides,
   };
 }
@@ -165,63 +215,49 @@ function classification(overrides) {
 test("an entity-classified value never takes a ramp colour, whatever score it carries", () => {
   // The trap: an integration supplies value_score but no value_color. That score is a
   // number on the integration's own scale and means nothing in the card's palette.
+  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity", deviation: null }), WIDE), "#B4B2A9");
+  // Even if something upstream did hand it a distance, the entity branch comes first.
+  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity" }), WIDE), "#B4B2A9");
   assert.equal(
-    paletteColor.resolveClassificationColor(
-      classification({ source: "entity", rampPosition: null, explicitColor: null }),
-      RAMP3
-    ),
-    "#B4B2A9"
-  );
-  // Even if something upstream did hand it a position, the entity branch comes first.
-  assert.equal(
-    paletteColor.resolveClassificationColor(classification({ source: "entity", rampPosition: 1 }), RAMP3),
-    "#B4B2A9"
-  );
-  assert.equal(
-    paletteColor.resolveClassificationColor(classification({ source: "entity", explicitColor: "#123456" }), RAMP3),
+    paletteColor.resolveClassificationColor(classification({ source: "entity", explicitColor: "#123456" }), WIDE),
     "#123456"
   );
 });
 
 test("an invalid reading takes the palette's invalid colour, never the ramp", () => {
-  assert.equal(
-    paletteColor.resolveClassificationColor(classification({ invalid: true, rampPosition: null }), RAMP3),
-    "#999999"
-  );
-  // Position 1 present AND invalid: invalid still wins, which is the whole point.
-  assert.equal(
-    paletteColor.resolveClassificationColor(classification({ invalid: true, rampPosition: 1 }), RAMP3),
-    "#999999"
-  );
+  const palette = { ...WIDE, invalid: "#999999" };
+  assert.equal(paletteColor.resolveClassificationColor(classification({ invalid: true, deviation: null }), palette), "#999999");
+  // A distance present AND invalid: invalid still wins, which is the whole point.
+  assert.equal(paletteColor.resolveClassificationColor(classification({ invalid: true }), palette), "#999999");
   // A profile that names its own invalid colour keeps it.
   assert.equal(
-    paletteColor.resolveClassificationColor(classification({ invalid: true, explicitColor: "#abcabc" }), RAMP3),
+    paletteColor.resolveClassificationColor(classification({ invalid: true, explicitColor: "#abcabc" }), palette),
     "#abcabc"
   );
 });
 
 test("an explicit tier colour beats the palette, and only then does the ramp apply", () => {
-  assert.equal(paletteColor.resolveClassificationColor(classification({ explicitColor: "#fedcba" }), RAMP3), "#fedcba");
-  assert.equal(paletteColor.resolveClassificationColor(classification({ rampPosition: 3 }), RAMP3), "#000003");
+  assert.equal(paletteColor.resolveClassificationColor(classification({ explicitColor: "#fedcba" }), WIDE), "#fedcba");
+  assert.equal(paletteColor.resolveClassificationColor(classification({ deviation: 3 }), WIDE), "#a3");
 });
 
 // ---------------------------------------------- built-in characterization --
 
-// The colours the card shipped before palettes existed, by ramp position. Recorded from
-// the profile sources as they were, so this is evidence rather than a restatement of the
-// ramp it checks.
-const SHIPPED_BY_POSITION = {
-  1: "#8A88C9",
-  2: "#8192C8",
-  3: "#76A0C0",
-  4: "#67A7AE",
-  5: "#69A78B",
-  6: "#79A86C",
-  7: "#9DA85A",
-  8: "#C0A752",
-  9: "#C98A67",
-  10: "#C67277",
-  11: "#B85F67",
+// The colours the card shipped before palettes existed, keyed by distance from optimal.
+// Recorded from the profile sources as they were, so this is evidence rather than a
+// restatement of the palette it checks.
+const SHIPPED_BY_DEVIATION = {
+  [-5]: "#8A88C9",
+  [-4]: "#8192C8",
+  [-3]: "#76A0C0",
+  [-2]: "#67A7AE",
+  [-1]: "#69A78B",
+  [0]: "#79A86C",
+  [1]: "#9DA85A",
+  [2]: "#C0A752",
+  [3]: "#C98A67",
+  [4]: "#C67277",
+  [5]: "#B85F67",
 };
 const SHIPPED_INVALID = "#B4B2A9";
 
@@ -248,8 +284,8 @@ test("every built-in tier keeps exactly the colour it always had", () => {
         assert.equal(result.levelKey, tier.levelKey, `${kind}/${id}: probe ${probe} selects its own tier`);
         assert.equal(
           paletteColor.resolveClassificationColor({ ...result, source: "builtin" }, pastel),
-          SHIPPED_BY_POSITION[tier.score],
-          `${kind}/${id} ${tier.levelKey} (position ${tier.score})`
+          SHIPPED_BY_DEVIATION[tier.score],
+          `${kind}/${id} ${tier.levelKey} (${tier.score} from optimal)`
         );
         tiers++;
       }
@@ -276,7 +312,7 @@ test("the same profiles under the second palette differ everywhere and stay cohe
     const result = classify.classifyNumericValue(profile, Number.isFinite(tier.min) ? tier.min : -1e6);
     const bold = paletteColor.resolveClassificationColor({ ...result, source: "builtin" }, vivid);
     const soft = paletteColor.resolveClassificationColor({ ...result, source: "builtin" }, pastel);
-    assert.notEqual(bold, soft, `position ${tier.score} must actually change`);
+    assert.notEqual(bold, soft, `${tier.score} from optimal must actually change`);
     assert.match(bold, /^#[0-9A-Fa-f]{6}$/);
     seen.add(bold);
   }

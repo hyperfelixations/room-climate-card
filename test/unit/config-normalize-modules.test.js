@@ -41,22 +41,25 @@ const FAHRENHEIT = {
   deltaToCanonical: (v) => (v * 5) / 9,
 };
 
-// The palette collaborators, deliberately tiny: a three-colour ramp makes the rank
-// mapping's edges visible in a way eleven never would, and proves the layer never
-// assumes the shipped palette's size.
-const TINY_PALETTE = { id: "tiny", ramp: ["#111111", "#222222", "#333333"], invalid: "#999999" };
-const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", ramp: ["#abcdef"], invalid: "#000000" } };
+// The palette collaborators, deliberately tiny: one colour per wing makes the anchoring
+// visible in a way five would not, and proves the layer never assumes the shipped
+// palette's reach.
+const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
+const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", below: ["#abcdef"], optimal: "#fedcba", above: ["#123456"] } };
 
 const COLLABORATORS = {
   classificationZones: ZONES,
   paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
   paletteNames: () => Object.keys(PALETTES),
   assertPalette: (palette, path) => {
-    if (!Array.isArray(palette.ramp) || palette.ramp.length === 0) {
-      throw new Error(`Invalid configuration: ${path}.ramp must be a non-empty list of colors.`);
+    for (const wing of ["below", "above"]) {
+      if (!Array.isArray(palette[wing]) || palette[wing].length === 0) {
+        throw new Error(`Invalid configuration: ${path}.${wing} must be a non-empty list of colors.`);
+      }
     }
     return palette;
   },
+  completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#8A8A8A" }),
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   optionSchemaForView: (type) =>
     type === "scale"
@@ -899,9 +902,12 @@ test("the palette option resolves a name, a written-out palette, or the default"
   assert.equal(normalizePalette("other", COLLABORATORS).id, "other");
   assert.equal(normalizePalette("  OTHER  ", COLLABORATORS).id, "other", "a name is matched case-insensitively");
 
-  const written = normalizePalette({ ramp: ["#111", "#222"], invalid: "#333" }, COLLABORATORS);
-  assert.deepEqual(written.ramp, ["#111", "#222"]);
-  assert.equal(written.invalid, "#333");
+  const written = normalizePalette({ below: ["#111"], optimal: "#222", above: ["#333"] }, COLLABORATORS);
+  assert.deepEqual(written.below, ["#111"]);
+  assert.equal(written.optimal, "#222");
+  // The one field a palette may leave out: nobody has to invent a colour for a state
+  // they never see.
+  assert.equal(written.invalid, "#8A8A8A");
 });
 
 // A name the card does not know is a hard error, not a silent fallback: a user who
@@ -910,15 +916,16 @@ test("the palette option resolves a name, a written-out palette, or the default"
 test("an unknown palette name is refused, and the message says which ones exist", () => {
   assert.throws(
     () => paletteModule.normalizePalette("neon", COLLABORATORS),
-    /Invalid configuration: palette "neon" is not a known palette — available: "tiny", "other", or write one out as \{ramp, invalid\}\./
+    /Invalid configuration: palette "neon" is not a known palette — available: "tiny", "other", or write one out as \{below, optimal, above\}\./
   );
 });
 
 test("a written-out palette is refused for the same reasons a shipped one would be", () => {
+  const ok = { below: ["#111"], optimal: "#222", above: ["#333"] };
   assert.throws(() => paletteModule.normalizePalette(5, COLLABORATORS), /palette must be a palette name or an object/);
   assert.throws(() => paletteModule.normalizePalette([], COLLABORATORS), /palette must be a palette name or an object/);
-  assert.throws(() => paletteModule.normalizePalette({ ramp: ["#111"], invalid: "#222", extra: 1 }, COLLABORATORS), /palette\.extra/);
-  assert.throws(() => paletteModule.normalizePalette({ ramp: [], invalid: "#222" }, COLLABORATORS), /palette\.ramp must be a non-empty list/);
+  assert.throws(() => paletteModule.normalizePalette({ ...ok, extra: 1 }, COLLABORATORS), /palette\.extra/);
+  assert.throws(() => paletteModule.normalizePalette({ ...ok, above: [] }, COLLABORATORS), /palette\.above must be a non-empty list/);
 });
 
 // -------------------------------------------------- tier colour contract ---
@@ -940,9 +947,9 @@ test("a tier with a colour may carry any finite score, as it always could", () =
   }
 });
 
-// And the rule that makes "position" mean something for a tier that has no colour.
-test("a tier without a colour needs a whole position of 1 or more", () => {
-  for (const score of [2.5, 0, -1, 0.5]) {
+// And the rule that makes a distance mean something for a tier that has no colour.
+test("a tier without a colour needs a whole number of steps from optimal", () => {
+  for (const score of [2.5, 0.5, -1.5]) {
     assert.throws(
       () =>
         classification.normalizeCustomClassification(
@@ -955,62 +962,26 @@ test("a tier without a colour needs a whole position of 1 or more", () => {
           COLLABORATORS
         ),
       {
-        message: `Invalid configuration: classification.tiers[1].score must be a whole number of 1 or more to name a palette position, but is ${score}.`,
+        message: `Invalid configuration: classification.tiers[1].score must be a whole number of steps from optimal to take a color from the palette, but is ${score}.`,
       },
       String(score)
     );
   }
 });
 
-test("positions descend with the tiers they belong to, and may not repeat", () => {
-  const withScores = (a, b) =>
-    validCustom({
-      tiers: [
-        { min: 24, score: a, level: "Warm", zone: "outside" },
-        { default: true, score: b, level: "Cold", zone: "outside" },
-      ],
-    });
-  assert.throws(
-    () => classification.normalizeCustomClassification(withScores(3, 3), COLLABORATORS),
-    /classification\.tiers\[1\]\.score must be below 3, because palette positions descend/
-  );
-  assert.throws(
-    () => classification.normalizeCustomClassification(withScores(2, 5), COLLABORATORS),
-    /classification\.tiers\[1\]\.score must be below 2/
-  );
-  // Sparse is fine — a profile may use positions 11 and 1 and nothing between.
-  const sparse = classification.normalizeCustomClassification(withScores(11, 1), COLLABORATORS);
-  assert.deepEqual(sparse.tiers.map((tier) => tier.score), [11, 1]);
-});
-
-// A painted tier between two positioned ones says nothing about the ramp, so it must
-// not break their ordering.
-test("a mixed profile applies the position rules only to the tiers that have positions", () => {
+// A painted tier is not on the ramp at all, so its score is under no obligation to be a
+// distance -- which is what keeps every profile written before palettes existed valid.
+test("a mixed profile applies the distance rule only to the tiers that take a palette colour", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({
       tiers: [
-        { min: 26, score: 9, level: "Hot", zone: "outside" },
+        { min: 26, score: 2, level: "Hot", zone: "outside" },
         { min: 24, score: 0.5, level: "Painted", color: "#cc4444", zone: "outside" },
-        { default: true, score: 3, level: "Cold", zone: "outside" },
+        { default: true, score: -3, level: "Cold", zone: "outside" },
       ],
     }),
     COLLABORATORS
   );
   assert.deepEqual(result.tiers.map((tier) => tier.color), [null, "#cc4444", null]);
-  assert.deepEqual(result.tiers.map((tier) => tier.score), [9, 0.5, 3]);
-});
-
-test("classification.positions declares the scale the ramp is stretched across", () => {
-  assert.equal(classification.normalizeCustomClassification(validCustom(), COLLABORATORS).positions, null);
-  assert.equal(
-    classification.normalizeCustomClassification(validCustom({ positions: 20 }), COLLABORATORS).positions,
-    20
-  );
-  for (const invalid of [1, 0, -2, 2.5, "many", null]) {
-    assert.throws(
-      () => classification.normalizeCustomClassification(validCustom({ positions: invalid }), COLLABORATORS),
-      /classification\.positions must be (a whole number of 2 or more|a finite number)/,
-      JSON.stringify(String(invalid))
-    );
-  }
+  assert.deepEqual(result.tiers.map((tier) => tier.score), [2, 0.5, -3]);
 });

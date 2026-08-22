@@ -45,6 +45,7 @@ import {
   CLASSIFICATION_PALETTE_REGISTRY,
   DEFAULT_PALETTE,
   assertPalette,
+  completePalette,
   paletteForName,
 } from "../domain/classification/palettes/registry.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
@@ -111,6 +112,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
     paletteNames: () => Object.keys(CLASSIFICATION_PALETTE_REGISTRY),
     assertPalette,
+    completePalette,
   };
 
   // ==== Card class: lifecycle, configuration, rendering ====
@@ -129,6 +131,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // rendering, slider position, and pointer interaction.
       this._config = null;
       this._hass = null;
+      // True only for the duration of _assertRenderable(), which runs the real render
+      // path against a configuration that is not installed yet.
+      this._rehearsing = false;
 
       // The only route to the outside world: a clock, timers, animation frames, the
       // reduced-motion preference, visibility, a ResizeObserver, the fonts promise,
@@ -304,6 +309,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     setConfig(config) {
       // ---- validate: no observable state may change in here --------------------
       const normalized = this._normalizeConfig(config);
+      this._assertRenderable(normalized);
 
       // ---- commit: from here on nothing throws ---------------------------------
       // The view visible "before" must be read while the OLD configuration and view
@@ -644,7 +650,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       }
       const value = resolveMeasurementContext(this._hass?.states, this._config);
       const mixed = value.diagnostics.find((diagnostic) => diagnostic.code === 'mixed_metric_kinds');
-      if (mixed) this._warnMixedMetricKindsOnce(mixed);
+      // A rehearsal is not a render. Warnings describe what the user is looking at, and
+      // during _assertRenderable() they are not looking at this configuration yet — it
+      // may never be installed at all.
+      if (mixed && !this._rehearsing) this._warnMixedMetricKindsOnce(mixed);
       this._metricContextCacheHass = this._hass;
       this._metricContextCacheConfig = this._config;
       this._metricContextCacheValue = value;
@@ -696,6 +705,48 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // The production entry point. Domain logic lives in application/model
     // (numbers and semantic tokens) and presentation/view-model (titles, formatting,
     // geometry, colours); this method only supplies the inputs.
+    // Would this configuration survive being rendered?
+    //
+    // Not everything a configuration can get wrong is visible in the configuration alone.
+    // A profile is scoped to a measurement, and which measurement a card shows comes from
+    // the ENTITIES — so "this custom profile is written in %, but your sensor reads °C"
+    // cannot be decided until both are present. Checks like that therefore live in the
+    // model builders, and they throw.
+    //
+    // Which is fine, except that setConfig() promises all-or-nothing. Without this, a
+    // running card handed such a configuration would commit it, throw from the render
+    // that follows, and be left holding a configuration every later render throws on too
+    // — permanently broken by one rejected keystroke in the editor.
+    //
+    // So the render is REHEARSED here, before the commit. The candidate is installed for
+    // the duration of one synchronous call and then removed again, which is what makes
+    // this faithful: it exercises the real path rather than a reconstruction of it that
+    // could drift. Everything the rehearsal can write is memoization and one deduplicated
+    // warning, and all of it is put back — a rejected configuration leaves no trace at
+    // all, and an accepted one leaves the caches cold rather than warm for a
+    // configuration that was about to be installed anyway.
+    //
+    // With no hass there is nothing to rehearse against and nothing to render either; the
+    // first hass update does both.
+    _assertRenderable(candidate) {
+      if (!this._hass) return;
+      const saved = {
+        config: this._config,
+        metricContext: [this._metricContextCacheHass, this._metricContextCacheConfig, this._metricContextCacheValue],
+        language: [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue],
+      };
+      this._config = candidate;
+      this._rehearsing = true;
+      try {
+        this._computeViewModel();
+      } finally {
+        this._rehearsing = false;
+        this._config = saved.config;
+        [this._metricContextCacheHass, this._metricContextCacheConfig, this._metricContextCacheValue] = saved.metricContext;
+        [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue] = saved.language;
+      }
+    }
+
     _computeViewModel() {
       const context = this._resolveMetricContext();
       const domainModel = buildCardDomainModel({

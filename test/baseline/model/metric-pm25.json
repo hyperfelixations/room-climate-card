@@ -132,7 +132,7 @@
     "icon": "mdi:weather-hazy",
     "label": "Slightly elevated",
     "profileId": "indoor",
-    "score": 7,
+    "score": 1,
     "soft": "rgba(157,168,90,0.2)",
     "source": "builtin",
     "zone": "comfort"

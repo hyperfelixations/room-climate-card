@@ -7,10 +7,10 @@
 // the domain entirely.
 //
 // It returns no finished COLOUR either, for the same reason. What a tier knows is
-// where it sits — an explicit colour the profile named, or a position on a ramp
-// whose colours the card's palette owns. Turning that into a hex value is
-// palette-color.js's job, and keeping the two apart is what lets one profile be
-// shown in two palettes without saying anything twice.
+// where it sits — an explicit colour the profile named, or how far it is from optimal
+// on a scale the profile owns. Turning that into a hex value is palette-color.js's job,
+// and keeping the two apart is what lets one profile be shown in any palette without
+// saying anything twice.
 //
 // The profile handed in must already be projected into the unit the value is
 // expressed in; comparing a Fahrenheit reading against Celsius thresholds is the
@@ -33,6 +33,26 @@ export function selectTier(profile, value) {
   return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
 }
 
+// How far this profile reaches in each direction, counted in tiers away from optimal.
+//
+// Only tiers that take their colour from the palette count. A tier that named its own
+// colour is not on the ramp at all, and its `score` is under no obligation to be a
+// distance — that freedom is what keeps every profile written before palettes existed
+// valid. A one-sided profile such as CO2 simply reaches 0 downwards, which is not a
+// special case anywhere: nothing ever asks its `below` wing for a colour.
+export function deviationSpanOf(profile) {
+  let above = 0;
+  let below = 0;
+  for (const tier of profile.tiers) {
+    if (tier.color) continue;
+    const score = tier.score;
+    if (!Number.isInteger(score)) continue;
+    if (score > above) above = score;
+    if (-score > below) below = -score;
+  }
+  return { above, below };
+}
+
 export function classifyNumericValue(profile, value) {
   if (profile.invalidWhen?.(value)) {
     const invalid = profile.invalidClassification || FALLBACK_INVALID;
@@ -42,12 +62,11 @@ export function classifyNumericValue(profile, value) {
       score: invalid.score ?? null,
       zone: invalid.zone ?? "invalid",
       explicitColor: invalid.color || null,
-      // An impossible reading has no place ON the scale, so it gets no position on the
-      // ramp — whatever score it happens to carry. Reading position 1 out of a score
-      // that only ever meant "lowest tier" would paint an unusable value in the ramp's
-      // own colour, which is precisely the wrong impression.
-      rampPosition: null,
-      declaredPositions: null,
+      // An impossible reading is not a distance from optimal — it is off the scale
+      // entirely. Reading its score as a distance would paint an unusable value in a
+      // ramp colour, which is precisely the wrong impression.
+      deviation: null,
+      deviationSpan: null,
       invalid: true,
     };
   }
@@ -59,11 +78,10 @@ export function classifyNumericValue(profile, value) {
     score: tier.score ?? null,
     zone: tier.zone ?? null,
     explicitColor,
-    // A tier that named its own colour needs no position, and is therefore not held to
-    // the position rules either — that is what keeps every custom profile written before
-    // palettes existed valid unchanged.
-    rampPosition: explicitColor ? null : tier.score ?? null,
-    declaredPositions: explicitColor ? null : profile.positions ?? null,
+    // A tier that named its own colour needs no distance, and is therefore not held to
+    // the distance rules either.
+    deviation: explicitColor ? null : tier.score ?? null,
+    deviationSpan: explicitColor ? null : deviationSpanOf(profile),
     invalid: false,
   };
 }

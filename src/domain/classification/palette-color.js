@@ -10,51 +10,61 @@
 //                    stays NEUTRAL. It must never be coloured from the ramp via a
 //                    value_score the integration also supplied, because that score is
 //                    the integration's own scale and has no relation to the card's.
-//   invalid          an impossible reading is off the scale, not at the bottom of it.
+//   invalid          an impossible reading is off the scale, not at one end of it.
 //                    It gets the palette's invalid colour even though built-in profiles
-//                    historically carry score 1 on it.
+//                    historically carry a score on it.
 //   explicit colour  a profile that named a colour gets that colour. This is what keeps
 //                    every custom profile written before palettes existed unchanged.
-//   otherwise        the ramp, at the tier's own position.
+//   otherwise        the ramp, at the tier's own distance from optimal.
 
 const NEUTRAL_COLOR = "#B4B2A9";
 
-// Where a tier's position lands in a palette that may have a different number of colours
-// than the profile has tiers.
+// Where a tier lands in a palette that need not have the same number of steps the
+// profile has.
 //
-// The default is IDENTITY: position P takes ramp[P], and a position the palette does not
-// have is a hard error rather than a guess. Guessing is not available here — a profile
-// with positions 1..5 could mean the lowest five colours or five spread across the whole
-// ramp, and nothing in the profile says which. Taking Math.max(score) as the domain
-// would silently pick one of those readings and be wrong half the time.
+// Both are anchored at the SAME place — optimal — and each wing is scaled on its own.
+// That anchoring is what makes this total and unambiguous, and it is why no option and
+// no error case are needed:
 //
-// A profile that wants the other reading says so: `positions: N` declares "my positions
-// run 1..N", and the ramp is then stretched across them. That is the only stretching
-// that happens, and it happens because the profile asked.
-export function rampIndexFor({ rampPosition, declaredPositions }, palette, describe = "classification") {
-  const size = palette.ramp.length;
-  if (!Number.isInteger(rampPosition) || rampPosition < 1) {
+//   deviation 0        the middle, always
+//   deviation +-k      k of the profile's own `span` steps out, mapped onto that many
+//                      of the palette's steps
+//
+// `ceil` rather than `round` is deliberate: the FIRST step away from optimal must
+// already leave the middle colour. A reading that is no longer optimal has to look like
+// it, even on a palette with a single colour per wing.
+//
+// The consequences fall out rather than being arranged. A profile and a palette of equal
+// reach map one to one — every built-in profile on the card's own ramp keeps exactly the
+// colours it always had. A three-tier profile on an eleven-colour ramp reaches that
+// ramp's ends instead of picking three neighbours out of its middle. An eleven-tier
+// profile on a three-colour palette collapses onto that palette's three colours instead
+// of failing. None of those is a special case in the code.
+export function rampColorFor(deviation, span, palette, describe = "classification") {
+  if (deviation === 0) return palette.optimal;
+  if (!Number.isInteger(deviation)) {
     throw new Error(
-      `Invalid configuration: ${describe} needs a whole ramp position of 1 or more to take a color from the palette, but got ${rampPosition}.`
+      `Invalid configuration: ${describe} needs a whole number of steps from optimal to take a color from the palette, but got ${deviation}.`
     );
   }
-  if (declaredPositions === null || declaredPositions === undefined) {
-    if (rampPosition > size) {
-      throw new Error(
-        `Invalid configuration: ${describe} sits at ramp position ${rampPosition}, but the palette has ${size} color${size === 1 ? "" : "s"} — give the profile a matching palette, or declare classification.positions so the ramp is stretched across its own scale.`
-      );
-    }
-    return rampPosition - 1;
+  const towardsTooMuch = deviation > 0;
+  const wing = towardsTooMuch ? palette.above : palette.below;
+  const reach = towardsTooMuch ? span?.above : span?.below;
+  const steps = Math.abs(deviation);
+  // Cannot happen from a validated profile — `span` is that profile's own extreme, so a
+  // deviation can never exceed it. Stated anyway, because silently reading past the end
+  // of a wing would produce `undefined` as a colour.
+  if (!Number.isInteger(reach) || reach < steps) {
+    throw new Error(
+      `Invalid configuration: ${describe} is ${steps} step${steps === 1 ? "" : "s"} ${towardsTooMuch ? "above" : "below"} optimal, which is outside the profile's own range.`
+    );
   }
-  // One position maps to one end of the ramp and `declaredPositions` to the other, with
-  // everything between spread evenly. A single-colour palette collapses to that colour.
-  const stretched = size === 1 ? 1 : 1 + Math.round(((rampPosition - 1) * (size - 1)) / (declaredPositions - 1));
-  return Math.min(size, Math.max(1, stretched)) - 1;
+  return wing[Math.ceil((steps / reach) * wing.length) - 1];
 }
 
 export function resolveClassificationColor(classification, palette, describe = "classification") {
   if (classification.source === "entity") return classification.explicitColor || NEUTRAL_COLOR;
   if (classification.invalid) return classification.explicitColor || palette.invalid;
   if (classification.explicitColor) return classification.explicitColor;
-  return palette.ramp[rampIndexFor(classification, palette, describe)];
+  return rampColorFor(classification.deviation, classification.deviationSpan, palette, describe);
 }

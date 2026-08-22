@@ -40,17 +40,6 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ![Card automatically rotating between the scale and room-comparison views](demo-auto-slide.gif)
 
-## Follow the developer
-
-Questions about your own setup are best asked in the
-[Home Assistant forum thread](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037),
-where this card is discussed. The rest is where I share what I am building next.
-
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?logo=github&logoColor=white)](https://github.com/hyperfelixations)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
-[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@hyperfelixations)
-[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?logo=instagram&logoColor=white)](https://www.instagram.com/hyperfelixations/)
-
 ## What you need
 
 - **At least one sensor**: a main `entity`, one or more `rooms`, or both. The
@@ -161,6 +150,22 @@ coldest/warmest comparison, and the scale markers. If your main sensor drops
 out for a while, the card averages the rooms instead.
 
 See [Configuration](#configuration) below for every available option.
+
+## Join the community
+
+Got the card running? There is a place to talk about it. The Home Assistant
+forum thread is where setups, questions and ideas for this card are discussed,
+and the Discord is where that happens as a conversation. Everything else is for
+following along as new things are built.
+
+[![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?logo=github&logoColor=white)](https://github.com/hyperfelixations)
+[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@hyperfelixations)
+[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?logo=instagram&logoColor=white)](https://www.instagram.com/hyperfelixations/)
+
+Ideas and bug reports are welcome as
+[issues](https://github.com/hyperfelixations/room-climate-card/issues) too.
 
 ## Configuration
 
@@ -427,7 +432,7 @@ temperature; `indoor` is the default profile for temperature, humidity,
 CO₂, and PM2.5.
 
 A custom profile is authoritative: it ignores entity classification and owns
-tiers, bands, base scale, and temperature icon thresholds together.
+tiers, bands, base scale, and icons together.
 
 ```yaml
 classification:
@@ -506,15 +511,14 @@ Custom-profile rules:
 - `color` is optional, and what you do with it decides what `score` means.
   Give a tier a safe 3/4/6/8-digit hex `color` and it uses that color, with
   `score` free to be any number you like. Leave `color` out and the tier takes
-  its color from the palette, with `score` naming which position on the palette
-  it sits at: a whole number of 1 or more, used only once in the profile, and
-  descending along with the thresholds. You can mix the two — paint the ends by
-  hand and let the palette fill in the middle.
-- `positions` is optional and belongs with a profile that has more steps than
-  the palette has colors. `positions: 20` says "my positions run 1 to 20", and
-  the palette is spread evenly across them. Without it, position 5 means the
-  palette's fifth color, and a position the palette does not have stops the
-  card rather than picking a color for you.
+  its color from the [palette](#palettes), with `score` saying how far the tier
+  is from the right value: `0` is optimal, positive is too much, negative is too
+  little. A whole number, descending along with the thresholds. You can mix the
+  two — paint the ends by hand and let the palette fill in the middle.
+- How far a profile reaches is simply its own furthest tier, so a profile with
+  only one direction to go wrong — CO₂ has no "too little" — just stops at `0`,
+  and a profile with twenty steps needs no extra option to be shown in a palette
+  with five.
 - The optimal band must be inside the comfort band. `scale.step` must be
   greater than zero.
 - `scale` describes the axis the card draws, and it comes in two shapes. Give
@@ -560,45 +564,43 @@ Custom-profile rules:
 
 ### Palettes
 
-A profile decides *where* a reading sits — the coldest tier, the optimal band,
-the critical end — and the palette decides what those places look like. The two
-are separate, so you can keep the built-in profiles and still change every
-color on the card with one line:
+A profile decides *where* a reading sits — how far it is from the right value,
+and in which direction — and the palette decides what those places look like.
+The two are separate, so you can keep the built-in profiles and still change
+every color on the card with one line:
 
 ```yaml
 palette: vivid
 ```
 
-Two palettes ship with the card. `pastel` is the default, a soft ramp of eleven
-colors running from blue through green to red. `vivid` uses the same eleven
-places with saturated colors, which reads better on a bright wall panel or
-beside strongly colored cards.
+Two palettes ship with the card. `pastel` is the default, a soft ramp running
+from blue through green to red. `vivid` takes the same journey with saturated
+colors, which reads better on a bright wall panel or beside strongly colored
+cards.
 
-You can also write out a palette yourself. `ramp` lists the colors from the
-lowest position upwards, and `invalid` is the color for a reading that is
-physically impossible, which has no place on the ramp at all:
+A palette is written as a middle and two wings. `optimal` is the color for a
+reading that is where it should be; `above` runs outwards from there towards
+"too much" and `below` outwards towards "too little", so the first entry of each
+is one step off optimal:
 
 ```yaml
 palette:
-  ramp:
-    - "#3B5BA5"
-    - "#4A8FC4"
-    - "#4FB3A5"
-    - "#5FBF77"
-    - "#8CC65A"
-    - "#C7C24E"
-    - "#D9A648"
-    - "#DE8544"
-    - "#D96449"
-    - "#C94A4A"
-    - "#B33A3A"
-  invalid: "#8A8A8A"
+  optimal: "#5FBF77"
+  above: ["#8CC65A", "#C7C24E", "#D9A648", "#DE8544", "#C94A4A"]
+  below: ["#4FB3A5", "#4A8FC4", "#3B5BA5", "#34479A", "#2E3A8C"]
 ```
 
-The built-in profiles use eleven positions, so a palette for them needs eleven
-colors. A palette of a different length works with a profile of your own that
-either uses positions the palette has, or declares `classification.positions`
-so the ramp is spread across its scale.
+The wings do not have to be five long, or even the same length as each other —
+more resolution towards "too much" than towards "too little" is a perfectly good
+thing to want. Nor do they have to match the profile. Both are anchored at the
+middle, so a palette with fewer steps than the profile collapses onto the colors
+it has, and one with more spreads the profile across it; either way the first
+step away from optimal already leaves the middle color, and the profile's
+furthest tier reaches the palette's furthest color.
+
+`invalid` is optional. It belongs to a reading the card considers physically
+impossible; the card currently filters those out before they are colored, so
+leaving it out is the normal thing to do and a neutral grey fills in.
 
 A value the entity classifies itself keeps its own `value_color`, and shows the
 neutral color when it supplies none — the palette applies to the card's own
@@ -618,9 +620,10 @@ Three things the card decides on its own:
 - converting a profile written in one unit to the unit your sensors use;
 - how far the scale stretches beyond a profile's range to fit your values.
 
-Colors, levels, and bands come from one place: the `classification` option
-above. A profile owns all of them together, so you switch profiles rather than
-overriding single pieces.
+Levels and bands come from one place: the `classification` option above. A
+profile owns them together, so you switch profiles rather than overriding
+single pieces. Colors come from the [palette](#palettes), unless a tier names
+one for itself.
 
 ### Full example
 
@@ -754,7 +757,7 @@ If none of this helps, please open a
 - [License](LICENSE) (MIT)
 - [Home Assistant forum thread](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
   — questions and discussion about this card
+- [Discord](https://discord.gg/zfGKCVEvwe) — the same, as a conversation
 - Elsewhere: [GitHub](https://github.com/hyperfelixations),
-  [Discord](https://discord.gg/zfGKCVEvwe),
   [YouTube](https://www.youtube.com/@hyperfelixations), and
   [Instagram](https://www.instagram.com/hyperfelixations/)

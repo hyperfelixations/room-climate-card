@@ -75,12 +75,12 @@ test("outdoor profile owns tiers and bands but declares no reference range at al
   assert.equal(scale.step, 1);
   assert.equal(scale.anchorScale, false);
 
-  assert.equal(internals.fallbackTone(card, 25.99, "temperature", celsius).score, 7);
+  assert.equal(internals.fallbackTone(card, 25.99, "temperature", celsius).score, 1);
   assert.equal(internals.fallbackTone(card, 25.99, "temperature", celsius).zone, "comfort");
-  assert.equal(internals.fallbackTone(card, 26, "temperature", celsius).score, 8);
-  assert.equal(internals.fallbackTone(card, 18, "temperature", celsius).score, 6);
-  assert.equal(internals.fallbackTone(card, 14, "temperature", celsius).score, 5);
-  assert.equal(internals.fallbackTone(card, 10, "temperature", celsius).score, 4);
+  assert.equal(internals.fallbackTone(card, 26, "temperature", celsius).score, 2);
+  assert.equal(internals.fallbackTone(card, 18, "temperature", celsius).score, 0);
+  assert.equal(internals.fallbackTone(card, 14, "temperature", celsius).score, -1);
+  assert.equal(internals.fallbackTone(card, 10, "temperature", celsius).score, -2);
   env.cleanup(card);
 });
 
@@ -195,22 +195,22 @@ test("fridge classification tiers follow food-safety-appropriate boundaries", ()
   const card = createTemperatureCard("fridge");
   const celsius = access.getUnitProfile("temperature", "celsius");
   const at = (value) => internals.fallbackTone(card, value, "temperature", celsius);
-  assert.equal(at(12).score, 11);
+  assert.equal(at(12).score, 5);
   assert.equal(at(12).zone, "outside");
-  assert.equal(at(6).score, 8);
+  assert.equal(at(6).score, 2);
   assert.equal(at(6).zone, "outside");
-  assert.equal(at(5).score, 7);
+  assert.equal(at(5).score, 1);
   assert.equal(at(5).zone, "comfort");
-  assert.equal(at(4).score, 6);
+  assert.equal(at(4).score, 0);
   assert.equal(at(4).zone, "optimal");
-  assert.equal(at(3).score, 6);
+  assert.equal(at(3).score, 0);
   assert.equal(at(3).zone, "optimal");
-  assert.equal(at(1).score, 5);
+  assert.equal(at(1).score, -1);
   assert.equal(at(1).zone, "comfort");
-  assert.equal(at(0).score, 4);
+  assert.equal(at(0).score, -2);
   assert.equal(at(0).zone, "outside");
-  assert.equal(at(-4).score, 2);
-  assert.equal(at(-5).score, 1);
+  assert.equal(at(-4).score, -4);
+  assert.equal(at(-5).score, -5);
   env.cleanup(card);
 });
 
@@ -234,7 +234,7 @@ test("fridge profile is projected atomically into Fahrenheit without collapsing 
   assert.deepEqual(normalize(scale.scale), { min: 32, max: 46 });
 
   const table = internals.displayProfile(card, "temperature", fahrenheit);
-  const warmTier = table.tiers.find((tier) => tier.score === 8);
+  const warmTier = table.tiers.find((tier) => tier.score === 2);
   assert.equal(warmTier.min, 43, "6 °C must become the rounded 43 °F tier boundary");
   assert.equal(internals.profileIcon(card, 54, "temperature", fahrenheit), "mdi:fire-alert");
   assert.equal(internals.profileIcon(card, 28, "temperature", fahrenheit), "mdi:thermometer-low");
@@ -394,7 +394,7 @@ test("outdoor profile is projected atomically into Fahrenheit", () => {
   assert.equal(scale.scale, null, "there is no reference range to re-express in another unit");
 
   const table = internals.displayProfile(card, "temperature", fahrenheit);
-  const warmTier = table.tiers.find((tier) => tier.score === 8);
+  const warmTier = table.tiers.find((tier) => tier.score === 2);
   assert.equal(warmTier.min, 79, "26 °C must become the rounded 79 °F tier boundary");
   assert.equal(internals.profileIcon(card, 95, "temperature", fahrenheit), "mdi:fire-alert");
   assert.equal(internals.profileIcon(card, 86, "temperature", fahrenheit), "mdi:thermometer-high");
@@ -464,7 +464,7 @@ test("source profile ignores even a complete entity classification", () => {
   const tone = card._computeViewModel().tone;
   assert.equal(tone.color, "#9DA85A");
   assert.equal(tone.label, "Slightly warm");
-  assert.equal(tone.score, 7);
+  assert.equal(tone.score, 1);
   assert.equal(tone.zone, "comfort");
   assert.equal(tone.source, "builtin");
   env.cleanup(card);
@@ -744,7 +744,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
   );
   const data = card._computeViewModel();
   assert.equal(data.empty, false);
-  assert.equal(data.tone.score, 7); // 25°C falls in the outdoor profile's [22,26) "slightlyWarm" tier
+  assert.equal(data.tone.score, 1); // 25°C falls in the outdoor profile's [22,26) "slightlyWarm" tier
   assert.equal(data.tone.zone, "comfort");
   env.cleanup(card);
 });
@@ -867,21 +867,33 @@ test("a card shows its configured palette's colour for the same reading", () => 
 });
 
 test("a palette written out in YAML colours the card from its own ramp", () => {
-  // Eleven colours, because that is what the indoor profile's positions need; the first
-  // and the last are distinctive so the mapping is visible.
-  const ramp = ["#010101", "#020202", "#030303", "#040404", "#050505", "#060606", "#070707", "#080808", "#090909", "#0A0A0A", "#0B0B0B"];
-  const card = paletteCard({ ramp, invalid: "#FFFFFF" });
-  assert.equal(card._computeViewModel().tone.color, "#060606", "22 °C is position 6 of the indoor profile");
-  env.cleanup(card);
+  // Five colours per wing, matching the indoor profile's reach, so the mapping is one
+  // to one and visible.
+  const written = {
+    below: ["#0B0B0B", "#0C0C0C", "#0D0D0D", "#0E0E0E", "#0F0F0F"],
+    optimal: "#060606",
+    above: ["#010101", "#020202", "#030303", "#040404", "#050505"],
+  };
+  const optimal = paletteCard(written, 22);
+  assert.equal(optimal._computeViewModel().tone.color, "#060606", "22 °C is optimal for the indoor profile");
+  env.cleanup(optimal);
+  const warm = paletteCard(written, 23.5);
+  assert.equal(warm._computeViewModel().tone.color, "#010101", "one step above optimal");
+  env.cleanup(warm);
+  const cold = paletteCard(written, 10);
+  assert.equal(cold._computeViewModel().tone.color, "#0F0F0F", "as far below as the profile goes");
+  env.cleanup(cold);
 });
 
-// The refusal to guess, through a real card: a profile whose positions the palette does
-// not have stops with a message naming both numbers and both ways out.
-test("a palette too short for the profile stops the card instead of guessing", () => {
-  assert.throws(
-    () => paletteCard({ ramp: ["#010101", "#020202", "#030303"], invalid: "#040404" }),
-    /ramp position 6, but the palette has 3 colors — give the profile a matching palette, or declare classification\.positions/
-  );
+// A palette with less resolution than the profile is a legitimate choice, not an error:
+// it simply says "three colours is all I want to distinguish".
+test("a palette shorter than the profile collapses onto what it has", () => {
+  const tiny = { below: ["#0000FF"], optimal: "#00FF00", above: ["#FF0000"] };
+  for (const [value, expected] of [[30, "#FF0000"], [23.5, "#FF0000"], [22, "#00FF00"], [20.5, "#0000FF"], [10, "#0000FF"]]) {
+    const card = paletteCard(tiny, value);
+    assert.equal(card._computeViewModel().tone.color, expected, `${value} °C`);
+    env.cleanup(card);
+  }
 });
 
 test("an unknown palette name stops the card with a message naming the known ones", () => {
@@ -898,18 +910,22 @@ test("a custom profile without tier colours takes them from the palette", () => 
     bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } },
     scale: { min: 16, max: 28, step: 2 },
     tiers: [
-      { min: 24, score: 3, level: "Warm", zone: "outside" },
-      { min: 20, score: 2, level: "Ok", zone: "optimal" },
-      { default: true, score: 1, level: "Cold", zone: "outside" },
+      { min: 24, score: 1, level: "Warm", zone: "outside" },
+      { min: 20, score: 0, level: "Ok", zone: "optimal" },
+      { default: true, score: -1, level: "Cold", zone: "outside" },
     ],
   };
-  const card = env.createCard({ entity: "sensor.avg", classification: colourless }, temperatureHass(22));
-  assert.equal(card._computeViewModel().tone.color, "#8192C8", "position 2 of the default ramp");
-  env.cleanup(card);
+  // Three tiers on an eleven-colour ramp: the two ends reach the ramp's ends rather than
+  // picking neighbours out of its middle, and optimal is its middle.
+  for (const [value, expected] of [[25, "#B85F67"], [22, "#79A86C"], [10, "#8A88C9"]]) {
+    const card = env.createCard({ entity: "sensor.avg", classification: colourless }, temperatureHass(value));
+    assert.equal(card._computeViewModel().tone.color, expected, `${value} °C`);
+    env.cleanup(card);
+  }
 
   // And the same profile under the other palette moves with it.
-  const bold = env.createCard({ entity: "sensor.avg", classification: colourless, palette: "vivid" }, temperatureHass(22));
-  assert.equal(bold._computeViewModel().tone.color, "#1F6FD6");
+  const bold = env.createCard({ entity: "sensor.avg", classification: colourless, palette: "vivid" }, temperatureHass(25));
+  assert.equal(bold._computeViewModel().tone.color, "#CC2B2B");
   env.cleanup(bold);
 
   // A tier that names its own colour keeps it, whatever the palette is.
@@ -951,26 +967,24 @@ test("a physically impossible reading is no data, not a colour from the ramp", (
   }
 });
 
-// A profile with more steps than the palette has colours, made deterministic by saying
-// so — the alternative would be the card guessing which five of eleven were meant.
-test("classification.positions stretches a longer scale across the ramp", () => {
+// A profile that reaches further than the palette does needs no declaration: both are
+// anchored at optimal, so the wings simply scale.
+test("a profile reaching further than the palette is spread across it", () => {
   const twenty = {
     source: "custom",
     unit: "°C",
-    positions: 20,
     bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } },
     scale: { min: 16, max: 28, step: 2 },
     tiers: [
-      { min: 24, score: 20, level: "Top", zone: "outside" },
-      { min: 20, score: 10, level: "Middle", zone: "optimal" },
-      { default: true, score: 1, level: "Bottom", zone: "outside" },
+      { min: 24, score: 10, level: "Top", zone: "outside" },
+      { min: 20, score: 0, level: "Middle", zone: "optimal" },
+      { default: true, score: -10, level: "Bottom", zone: "outside" },
     ],
   };
-  const top = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(26));
-  const middle = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(22));
-  const bottom = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(10));
-  assert.equal(top._computeViewModel().tone.color, "#B85F67", "position 20 of 20 is the ramp's last colour");
-  assert.equal(middle._computeViewModel().tone.color, "#79A86C", "position 10 of 20 lands mid-ramp");
-  assert.equal(bottom._computeViewModel().tone.color, "#8A88C9", "position 1 of 20 is the ramp's first colour");
-  for (const card of [top, middle, bottom]) env.cleanup(card);
+  const cases = [[26, "#B85F67"], [22, "#79A86C"], [10, "#8A88C9"]];
+  for (const [value, expected] of cases) {
+    const card = env.createCard({ entity: "sensor.avg", classification: twenty }, temperatureHass(value));
+    assert.equal(card._computeViewModel().tone.color, expected, `${value} °C`);
+    env.cleanup(card);
+  }
 });

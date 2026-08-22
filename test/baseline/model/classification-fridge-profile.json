@@ -75,7 +75,7 @@
     "icon": "mdi:thermometer",
     "label": "Optimal",
     "profileId": "fridge",
-    "score": 6,
+    "score": 0,
     "soft": "rgba(121,168,108,0.2)",
     "source": "builtin",
     "zone": "optimal"

@@ -115,22 +115,25 @@ test("every profile has a well-formed, strictly descending tier list", () => {
   }
 });
 
-// No colours. A built-in tier says WHERE it sits on the ramp and lets the palette say
+// No colours. A built-in tier says HOW FAR IT IS FROM OPTIMAL and lets the palette say
 // what that looks like — so a hard-coded hex anywhere in here would be a colour that
 // silently ignores the configured palette.
-test("every tier carries a ramp position, a level key and a known zone, and no colour", () => {
+test("every tier carries a distance from optimal, a level key and a known zone, and no colour", () => {
   for (const { kind, id, profile } of allProfiles()) {
     for (const [i, tier] of profile.tiers.entries()) {
       const label = `${kind}/${id} tier ${i}`;
-      assert.ok(Number.isInteger(tier.score) && tier.score >= 1, `${label}: score ${tier.score} must be a ramp position`);
+      assert.ok(Number.isInteger(tier.score), `${label}: score ${tier.score} must be a whole distance from optimal`);
       assert.equal(typeof tier.levelKey, "string", `${label}: levelKey`);
       assert.match(tier.levelKey, /^level\./, `${label}: levelKey namespace`);
       assert.equal(tier.color, undefined, `${label}: must name no colour of its own`);
       assert.ok(zones.CLASSIFICATION_ZONES.includes(tier.zone), `${label}: zone "${tier.zone}"`);
     }
-    // Identity mapping is what every built-in relies on, so its positions have to be
-    // ones the shipped ramp actually has.
-    assert.equal(profile.positions, undefined, `${kind}/${id}: built-ins map position to colour one-to-one`);
+    // Every built-in has an optimal tier and reaches at most as far as the shipped
+    // palette's wings, so its colours come out one to one.
+    const scores = profile.tiers.map((tier) => tier.score);
+    assert.ok(scores.includes(0), `${kind}/${id}: has an optimal tier`);
+    assert.ok(Math.max(...scores) <= 5, `${kind}/${id}: reaches at most 5 above optimal`);
+    assert.ok(Math.min(...scores) >= -5, `${kind}/${id}: reaches at most 5 below optimal`);
   }
 });
 

@@ -152,7 +152,7 @@
     "icon": "mdi:water-percent",
     "label": "Optimal",
     "profileId": "indoor",
-    "score": 6,
+    "score": 0,
     "soft": "rgba(121,168,108,0.2)",
     "source": "builtin",
     "zone": "optimal"
