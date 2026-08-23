@@ -925,12 +925,16 @@ test("a colour may be written the way a person writes it", () => {
   assert.equal(optimalOf("  1DB85D  "), "#1DB85D", "surrounded by spaces");
   assert.equal(optimalOf("#0F8"), "#00FF88", "three digits, expanded the way CSS defines them");
   assert.equal(optimalOf("teal"), "#008080", "a CSS colour name");
-  // YAML turns an all-digit hex into a NUMBER. Its decimal spelling is the six digits the
-  // user typed, so they are recoverable — and anything that does not come back as exactly
-  // six digits is refused rather than guessed at.
-  assert.equal(optimalOf(123456), "#123456", "a number YAML made of six digits");
-  assert.throws(() => optimalOf(12345), /palette\.optimal/, "five digits is not a colour");
-  assert.throws(() => optimalOf(1.5), /palette\.optimal/, "and neither is a fraction");
+  // YAML turns an all-digit hex into a NUMBER and drops any leading zero on the way. The
+  // digits are recovered from the decimal spelling and padded back to six — which is what
+  // makes `080808` work at all. See core-modules.test.js for the whole table.
+  assert.equal(optimalOf(123456), "#123456", "six digits");
+  assert.equal(optimalOf(80808), "#080808", "what YAML delivers for 080808");
+  assert.equal(optimalOf(8000), "#008000", "and for 008000");
+  assert.equal(optimalOf(0), "#000000");
+  assert.throws(() => optimalOf(80), /palette\.optimal.*only in digits has to be six/s, "too short to tell from a shorthand");
+  assert.throws(() => optimalOf(1234567), /palette\.optimal.*only in digits has to be six/s, "too long to be a colour");
+  assert.throws(() => optimalOf(1.5), /palette\.optimal/, "and a fraction is not one either");
 });
 
 // The wings are the other half of the same idea: a list is fine, one colour is fine, and

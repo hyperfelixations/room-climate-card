@@ -223,18 +223,34 @@ export const CSS_COLOR_NAMES = Object.freeze({
 //   teal        a name, for the far more common case of not having a hex at hand
 //   123456      what YAML hands over when every digit of a hex happens to be numeric
 //
-// The numeric road is the only subtle one. A YAML parser turns `123456` into the NUMBER
-// 123456, and the six hex digits the user typed are recoverable from its decimal
-// spelling — the digits are their own hex digits. Anything that does not come back as
-// exactly six digits is refused rather than guessed at, so a float, a leading zero or a
-// seven-digit number produces an error naming the fix instead of a wrong colour. The one
-// spelling this cannot see through is a three-digit shorthand of the form `1E5`, which
-// YAML reads as 100000; that is what quotes are for, and the README says so.
+// THE NUMERIC ROAD IS THE SUBTLE ONE, and it is worth spelling out because the trap is in
+// YAML rather than here. A value made only of digits is a NUMBER to a YAML parser, so
+// `080808` reaches this function as 80808 — the leading zero is gone before the card sees
+// anything. That is why the digits are read back from the decimal spelling and padded
+// left to six: the digits a user typed are their own hex digits, and the padding restores
+// exactly what YAML dropped.
+//
+//   080808  ->  80808 -> "080808"      008000 -> 8000   -> "008000"
+//   123456  -> 123456 -> "123456"      0      -> 0      -> "000000"
+//
+// TWO REFUSALS, both because guessing would be worse than an error:
+//
+//   fewer than four digits   80 could be the six-digit #000080 or the shorthand #080,
+//                            which are different colours. Quoting says which.
+//   more than six digits     1234567 is not a colour in any reading.
+//
+// AND ONE CASE THAT CANNOT BE CAUGHT: `0808080` also arrives as 808080, indistinguishable
+// from `808080`, because the leading zero was removed upstream. Seven digits starting with
+// a zero is therefore read as six. Nothing in this file can see the difference; the readme
+// says to quote anything longer than six digits.
 export function parseColorToken(value) {
   if (typeof value === "number") {
-    if (!Number.isInteger(value) || value < 0) return null;
+    if (!Number.isInteger(value) || value < 0 || value > 999999) return null;
     const digits = String(value);
-    return digits.length === 6 ? `#${digits}` : null;
+    // Exactly `0` is the one short spelling with nothing to guess about: every reading of
+    // it is black. Everything else needs four digits before padding is unambiguous.
+    if (digits !== "0" && digits.length < 4) return null;
+    return `#${digits.padStart(6, "0")}`;
   }
   if (typeof value !== "string") return null;
   const token = value.trim().toLowerCase();

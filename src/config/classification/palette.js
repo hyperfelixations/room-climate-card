@@ -38,15 +38,19 @@ const COMMENT_HINT =
 
 const COLOR_FORMS = 'a hex color such as 1DB85D or "#1DB85D", or a CSS color name such as teal';
 
+// The advice for a value YAML turned into a number is different from the advice for a
+// misspelt word, so the two get different sentences. A number arrives here only when the
+// user wrote nothing but digits, and then exactly two things can be wrong with it: too
+// few digits to tell a colour from a shorthand, or too many to be a colour at all.
+const NUMBER_HINT =
+  'a color written only in digits has to be six of them — put shorter or longer values in quotes, for example "080" or "#0808080"';
+
 // One written colour, in any of the spellings a person uses.
 function normalizeColor(value, path) {
   if (value === undefined || value === null || value === "") pathError(path, COMMENT_HINT);
   const color = parseColorToken(value);
   if (!color) {
-    pathError(
-      path,
-      `"${value}" is not a color — write ${COLOR_FORMS}. A hex made only of digits has to be quoted, or written as its six digits.`
-    );
+    pathError(path, typeof value === "number" ? `${value} is not a color — ${NUMBER_HINT}` : `"${value}" is not a color — write ${COLOR_FORMS}`);
   }
   return color;
 }

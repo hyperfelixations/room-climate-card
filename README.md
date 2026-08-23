@@ -187,7 +187,7 @@ default.
 | `rooms` | `[]` | Your room sensors. From two rooms with values on, you get the comparison features and the `extremes` view. Each room needs its own `entity` — see [Room entries](#room-entries). |
 | `range_entity` | none | A sensor holding today's range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_timestamp` and `maximum_timestamp` if you also want the times — `minimum_zeitpunkt` and `maximum_zeitpunkt` work too. Only `minimum` and `maximum` are needed; where a time is missing, the card just shows the value. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |
-| `classification` | `auto` + metric default | Decides where the colors and level names come from. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
+| `classification` | `auto` + metric default | Decides the level names and where each reading sits on the scale; the [palette](#palettes) turns that into a colour. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
 | `palette` | `pastel` | The colors the card classifies with. `pastel` is the card's own soft ramp, `vivid` a saturated one. You can also name any color, or write out a palette of your own. See [Palettes](#palettes). |
 
 Small changes count as stable rather than as a trend, so the arrow does not
@@ -646,9 +646,15 @@ single color, or several separated by commas.
 > in quotes. If you do hit it, the card says so rather than just calling the
 > value invalid.
 >
-> One more corner: a hex made only of digits, such as `123456`, is fine
-> unquoted, but a three-digit shorthand of the form `1E5` is read by YAML as a
-> number. Quote that one, or write it out in six digits.
+> **A colour written only in digits needs all six.** YAML reads `123456`,
+> `080808` and `008000` as numbers, and the card restores the leading zeros — all
+> three work unquoted. Shorter and longer ones do not: `080` could mean `#000080`
+> or the shorthand `#008800`, and nothing after YAML can tell which, so it is
+> refused rather than guessed at. Put those in quotes: `"080"`, `"#0808080"`.
+>
+> One value slips through this rule and it is worth knowing about: YAML removes
+> the leading zero from `0808080` before the card sees anything, so it arrives as
+> `808080` and is read as that colour. Quote anything longer than six digits.
 
 The wings do not have to be the same length as each other, or the same length as
 the profile. Both are anchored at the middle, so a palette with fewer steps than

@@ -166,6 +166,107 @@ test("isHexColor() accepts all four CSS hex lengths and nothing else", () => {
   }
 });
 
+// --------------------------------------------------- parseColorToken() ----
+
+// EVERY SPELLING A USER CAN PRODUCE, in one table, because the last gap here was found by
+// a person and not by this suite: `080808` was refused while `808080` worked, and nothing
+// in the tests had ever passed a value with a leading zero.
+//
+// The rows are grouped by the road they take, and the numeric rows carry the value YAML
+// would actually hand over — that is the whole difficulty, and writing the string instead
+// would test something the card never sees.
+test("parseColorToken() reads every spelling a dashboard editor can produce", () => {
+  const { parseColorToken } = color;
+  const accepted = [
+    // quoted, the strict form
+    ['"#1DB85D"', "#1DB85D", "#1DB85D"],
+    ['"#1db85d"', "#1db85d", "#1DB85D"],
+    // unquoted, because `optimal: #1DB85D` is a YAML comment
+    ["1DB85D", "1DB85D", "#1DB85D"],
+    ["  1DB85D  ", "  1DB85D  ", "#1DB85D"],
+    // shorthand, expanded the way CSS defines it
+    ["#0F8", "#0F8", "#00FF88"],
+    ["0F8", "0F8", "#00FF88"],
+    ["#0F8A", "#0F8A", "#00FF88AA"],
+    ["#1DB85D80", "#1DB85D80", "#1DB85D80"],
+    // names
+    ["teal", "teal", "#008080"],
+    ["TEAL", "TEAL", "#008080"],
+    ["rebeccapurple", "rebeccapurple", "#663399"],
+    // numbers, which is what YAML makes of an all-digit value
+    ["123456", 123456, "#123456"],
+    ["080808", 80808, "#080808"],
+    ["008000", 8000, "#008000"],
+    ["001000", 1000, "#001000"],
+    ["000000", 0, "#000000"],
+    ["999999", 999999, "#999999"],
+  ];
+  for (const [written, value, expected] of accepted) {
+    assert.equal(parseColorToken(value), expected, `${written} arrives as ${JSON.stringify(value)}`);
+  }
+
+  const refused = [
+    // too short to tell a six-digit colour from a three-digit shorthand
+    ["080", 80],
+    ["008", 8],
+    ["999", 999],
+    // not a colour in any reading
+    ["1234567", 1234567],
+    ["1000000", 1000000],
+    ["-1", -1],
+    ["1.5", 1.5],
+    ["1e7", 1e7],
+    [String(NaN), NaN],
+    [String(Infinity), Infinity],
+    // strings that are not colours
+    ["nonsense", "nonsense"],
+    ["#12345", "#12345"],
+    ["#1234567", "#1234567"],
+    ["", ""],
+    ["   ", "   "],
+    ["#GGGGGG", "#GGGGGG"],
+    ["rgb(1,2,3)", "rgb(1,2,3)"],
+    ["null", null],
+    ["undefined", undefined],
+    ["true", true],
+    ["array", ["#123456"]],
+    ["object", { hex: "#123456" }],
+  ];
+  for (const [written, value] of refused) {
+    assert.equal(parseColorToken(value), null, `${written} must not be read as a colour`);
+  }
+});
+
+// The one input this cannot see through, pinned so it is a known limit rather than a
+// surprise: YAML strips the leading zero from `0808080` before the card is handed
+// anything, so it arrives as the same 808080 that `808080` does.
+test("parseColorToken() cannot distinguish a leading-zero seven-digit value from six", () => {
+  const { parseColorToken } = color;
+  assert.equal(parseColorToken(808080), "#808080");
+  assert.equal(parseColorToken(Number("0808080")), "#808080", "which is what YAML delivers for both");
+  // Seven digits that do NOT start with a zero are refused, because they survive as a
+  // number too large to be a colour.
+  assert.equal(parseColorToken(1808080), null);
+});
+
+// Whatever comes out has to be something the strict check would also accept — the lenient
+// road may widen what a user may WRITE, never what may reach a stylesheet.
+test("everything parseColorToken() accepts also passes the strict check", () => {
+  const { parseColorToken, isHexColor, CSS_COLOR_NAMES } = color;
+  for (let value = 0; value <= 0xfff; value += 1) {
+    const written = value.toString(16).padStart(3, "0");
+    const parsed = parseColorToken(written);
+    assert.equal(isHexColor(parsed), true, `#${written} -> ${parsed}`);
+    assert.match(parsed, /^#[0-9A-F]{6}$/, written);
+  }
+  for (const name of Object.keys(CSS_COLOR_NAMES)) {
+    assert.equal(isHexColor(parseColorToken(name)), true, name);
+  }
+  for (let value = 1000; value <= 999999; value += 997) {
+    assert.equal(isHexColor(parseColorToken(value)), true, String(value));
+  }
+});
+
 test("isHexColor() is stateless across repeated calls", () => {
   const { isHexColor } = color;
   for (let i = 0; i < 5; i++) assert.equal(isHexColor("#aabbcc"), true, `call ${i + 1}`);
