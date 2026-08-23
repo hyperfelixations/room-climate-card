@@ -1005,3 +1005,31 @@ test("a profile reaching further than the palette is spread across it", () => {
     env.cleanup(card);
   }
 });
+
+// A semantically broken ramp must stop the card, not render a misleading colour. The
+// distance is checked at the configuration boundary, so this arrives as a setConfig()
+// error with the exact path — the same treatment every other meaning-changing mistake in
+// a classification block gets.
+test("a profile whose scores contradict its thresholds is refused by the card", () => {
+  const broken = {
+    source: "custom",
+    unit: "°C",
+    bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } },
+    scale: { min: 16, max: 28, step: 2 },
+    tiers: [
+      { min: 24, score: 1, level: "Warm", zone: "outside" },
+      { min: 20, score: 5, level: "Ok", zone: "optimal" },
+      { default: true, score: -1, level: "Cold", zone: "outside" },
+    ],
+  };
+  assert.throws(
+    () => env.createCard({ entity: "sensor.avg", classification: broken }, temperatureHass(22)),
+    /classification\.tiers\[1\]\.score is 5, which is not below the 1 of classification\.tiers\[0\]/
+  );
+
+  // The same profile with a coherent ramp renders, and renders the middle colour.
+  const fixed = { ...broken, tiers: [{ ...broken.tiers[0] }, { ...broken.tiers[1], score: 0 }, { ...broken.tiers[2] }] };
+  const card = env.createCard({ entity: "sensor.avg", classification: fixed, palette: "pastel" }, temperatureHass(22));
+  assert.equal(card._computeViewModel().tone.color, "#79A86C");
+  env.cleanup(card);
+});

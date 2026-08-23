@@ -507,3 +507,24 @@ test("a wing with no colours in it answers with the middle", () => {
   // Still not a place where a malformed deviation goes unnoticed.
   assert.throws(() => paletteColor.rampColorFor(1.5, { above: 5, below: 5 }, single), /whole number of steps/);
 });
+
+// The rule the configuration layer enforces on user profiles, turned on the card's own.
+// A built-in profile is not normalized through that layer, so nothing else would notice
+// if a future one broke the contract every custom profile is held to.
+test("every built-in profile obeys the ramp contract it imposes on custom ones", () => {
+  for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
+    for (const [id, profile] of Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
+      let previous = null;
+      for (const [index, tier] of profile.tiers.entries()) {
+        if (tier.color) continue;
+        assert.ok(Number.isInteger(tier.score), `${kind}/${id}[${index}]: ${tier.score} is not a whole number`);
+        if (previous !== null) {
+          assert.ok(tier.score < previous, `${kind}/${id}[${index}]: ${tier.score} does not fall below ${previous}`);
+        }
+        previous = tier.score;
+        if (tier.zone === "optimal") assert.equal(tier.score, 0, `${kind}/${id}[${index}]: the optimal tier must sit at 0`);
+      }
+      assert.notEqual(previous, null, `${kind}/${id}: a profile with no palette-driven tier would colour nothing`);
+    }
+  }
+});

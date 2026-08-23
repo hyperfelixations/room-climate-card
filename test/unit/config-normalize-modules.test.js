@@ -1025,6 +1025,86 @@ test("a tier with a colour may carry any finite score, as it always could", () =
   }
 });
 
+// THE RULE THE DOCUMENTATION PROMISED AND NOTHING ENFORCED. `[1, 5, -1]` normalized
+// without complaint, and the middle tier — the one marked `zone: optimal` — then took the
+// palette's most extreme colour. Valid YAML, a card that says the opposite of what it
+// means, and no way for the user to see why.
+test("palette-driven scores must descend with the thresholds", () => {
+  const ramp = (scores) =>
+    validCustom({
+      tiers: [
+        { min: 24, score: scores[0], level: "Warm", zone: "outside" },
+        { min: 20, score: scores[1], level: "Ok", zone: "optimal" },
+        { default: true, score: scores[2], level: "Cold", zone: "outside" },
+      ],
+    });
+  assert.doesNotThrow(() => classification.normalizeCustomClassification(ramp([1, 0, -1]), COLLABORATORS));
+  // The reviewer's example, and the reason this test exists.
+  assert.throws(
+    () => classification.normalizeCustomClassification(ramp([1, 5, -1]), COLLABORATORS),
+    /classification\.tiers\[1\]\.score is 5, which is not below the 1 of classification\.tiers\[0\]/
+  );
+  // Equal is not descending either: two tiers cannot occupy one place on the ramp.
+  assert.throws(
+    () => classification.normalizeCustomClassification(ramp([1, 1, -1]), COLLABORATORS),
+    /classification\.tiers\[1\]\.score/
+  );
+  assert.throws(
+    () => classification.normalizeCustomClassification(ramp([1, 0, 2]), COLLABORATORS),
+    /classification\.tiers\[2\]\.score/
+  );
+});
+
+// The anchor, and only in the direction that can go wrong.
+test("a tier that calls itself optimal must sit at the middle of the ramp", () => {
+  const withOptimalScore = (score) =>
+    validCustom({
+      tiers: [
+        { min: 24, score: 2, level: "Warm", zone: "outside" },
+        { min: 20, score, level: "Ok", zone: "optimal" },
+        { default: true, score: -2, level: "Cold", zone: "outside" },
+      ],
+    });
+  assert.doesNotThrow(() => classification.normalizeCustomClassification(withOptimalScore(0), COLLABORATORS));
+  assert.throws(
+    () => classification.normalizeCustomClassification(withOptimalScore(1), COLLABORATORS),
+    /classification\.tiers\[1\]\.score is 1, but a tier in the optimal zone is the middle of the ramp/
+  );
+
+  // The converse is NOT required: a profile that only tells comfortable from outside is a
+  // legitimate thing to write, and its middle carries 0 without claiming to be optimal.
+  assert.doesNotThrow(() =>
+    classification.normalizeCustomClassification(
+      validCustom({
+        tiers: [
+          { min: 24, score: 1, level: "Warm", zone: "outside" },
+          { default: true, score: 0, level: "Normal", zone: "comfort" },
+        ],
+      }),
+      COLLABORATORS
+    )
+  );
+});
+
+// A painted tier answers to none of it, which is what keeps every profile written before
+// palettes existed valid — and a mixed profile is read as its colourless tiers alone.
+test("tiers that name their own colour are stepped over by the ramp rules", () => {
+  assert.doesNotThrow(() =>
+    classification.normalizeCustomClassification(
+      validCustom({
+        tiers: [
+          { min: 26, score: 99, level: "Painted high", color: "#cc4444", zone: "outside" },
+          { min: 24, score: 1, level: "Warm", zone: "outside" },
+          { min: 20, score: 0, level: "Ok", zone: "optimal" },
+          { min: 18, score: -1, level: "Cool", zone: "outside" },
+          { default: true, score: -99, level: "Painted low", color: "#4488cc", zone: "outside" },
+        ],
+      }),
+      COLLABORATORS
+    )
+  );
+});
+
 // And the rule that makes a distance mean something for a tier that has no colour.
 test("a tier without a colour needs a whole number of steps from optimal", () => {
   for (const score of [2.5, 0.5, -1.5]) {

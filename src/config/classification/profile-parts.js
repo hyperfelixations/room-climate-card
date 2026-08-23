@@ -117,15 +117,59 @@ export function normalizeScale(value) {
 //                    negative is too little. A whole number, and descending with the
 //                    thresholds like every other tier field.
 //
-// Those two rules are all a distance needs. Strict descent already makes 0 unique, so
-// there is no third rule saying so, and no upper bound: how far a profile reaches is
-// simply its own extreme, which is what the palette is scaled against.
+// Two of those words are properties of the LIST, not of a tier, and are checked as such
+// in assertRampOrder() below: the colourless scores descend with the thresholds, and the
+// optimal zone is the one carrying 0. There is no upper bound -- how far a profile
+// reaches is simply its own extreme, which is what the palette is scaled against.
 //
-// Mixing the two in one profile is allowed and the rules apply per tier -- a profile can
-// paint the two ends by hand and let the palette fill in the middle.
+// Mixing the two in one profile is allowed -- a profile can paint the two ends by hand
+// and let the palette fill in the middle. The painted tiers are then stepped over
+// entirely: their colour does not come from their score, so their score answers to
+// nothing.
+// The two rules that make a set of palette-driven scores mean what the comment above says
+// it means. Checked over the WHOLE list, because neither is a property a single tier has.
+//
+// Only colourless tiers take part. A tier that names its own colour is not on the ramp,
+// its score is free by contract, and a mixed profile is simply the colourless ones read
+// in order with the painted ones stepped over.
+//
+// Without this, `[1, 5, -1]` with `zone: optimal` in the middle was accepted and rendered
+// the optimum in the palette's most extreme colour — valid YAML, silently wrong card.
+function assertRampOrder(tiers) {
+  let previous = null;
+  tiers.forEach((tier, index) => {
+    if (tier.color) return;
+    const path = `classification.tiers[${index}]`;
+    // Thresholds already descend, so scores must too: a tier that admits lower readings
+    // is further below optimal than the one above it, never nearer.
+    if (previous && tier.score >= previous.score) {
+      pathError(
+        `${path}.score`,
+        `is ${tier.score}, which is not below the ${previous.score} of ${previous.path} — a tier for lower readings is further from optimal, so its distance must be smaller`
+      );
+    }
+    previous = { score: tier.score, path };
+
+    // The anchor, in one direction only. A tier that CALLS itself optimal has to sit at
+    // the middle of the ramp, or the card paints "exactly right" in the palette's most
+    // extreme colour. The converse is deliberately not required: a profile may have no
+    // optimal zone at all — one that only tells comfortable from outside is a legitimate
+    // thing to write — and its middle tier then carries 0 while calling itself comfort.
+    //
+    // Two optimal tiers cannot arise: this rule pins each of them to 0, and strict
+    // descent above allows the value 0 exactly once.
+    if (tier.zone === "optimal" && tier.score !== 0) {
+      pathError(
+        `${path}.score`,
+        `is ${tier.score}, but a tier in the optimal zone is the middle of the ramp and its distance from optimal is 0`
+      );
+    }
+  });
+}
+
 export function normalizeTiers(value, classificationZones) {
   const zones = new Set(classificationZones);
-  return normalizeDescendingTierList(value, "classification.tiers", ["score", "level", "color", "zone"], (tier, path) => {
+  const tiers = normalizeDescendingTierList(value, "classification.tiers", ["score", "level", "color", "zone"], (tier, path) => {
     const score = numberAtPath(tier.score, `${path}.score`);
     if (typeof tier.level !== "string" || !tier.level.trim()) {
       pathError(`${path}.level`, "must be a non-empty string");
@@ -144,6 +188,8 @@ export function normalizeTiers(value, classificationZones) {
     }
     return { score, level: tier.level.trim(), color: hasColor ? tier.color.trim() : null, zone: tier.zone };
   });
+  assertRampOrder(tiers);
+  return tiers;
 }
 
 // classification.valid_range: the optional physical-validity window. Either
