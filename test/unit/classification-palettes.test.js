@@ -403,7 +403,11 @@ test("the same profiles under the second palette differ everywhere and stay cohe
 // steps are individually distinguishable. With one hue axis gone and 25 L* to work in —
 // the colours are foreground on a light card and a dark one — that is not reachable, and
 // the level text is what carries the fine detail.
-const CVD_LIMITS = { wing: 30, ends: 55 };
+// Measured with the Brettel 1997 simulation, under every way of seeing, and written as
+// floors just under what the palette actually reaches. The neighbour gap is here because
+// reach alone does not make a ramp readable: `pastel` spans a long distance under
+// deuteranopia and still has two adjacent steps dE00 1,9 apart.
+const CVD_LIMITS = { wing: 30, ends: 48, step: 4 };
 
 // ONE palette for all three deficiencies, and that is a measurement rather than a
 // convenience. Protan and deutan were always going to share a design — they confuse the
@@ -416,9 +420,10 @@ test("the colour-vision palette works for all three deficiencies, not only one",
   for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
     const seen = measure(palette, deficiency);
     assert.equal(seen.monotone, true, `${deficiency}: every step out is further from the middle`);
-    assert.ok(seen.lowWing >= CVD_LIMITS.wing, `${deficiency}: middle to coldest is ${seen.lowWing.toFixed(0)}`);
-    assert.ok(seen.highWing >= CVD_LIMITS.wing, `${deficiency}: middle to hottest is ${seen.highWing.toFixed(0)}`);
-    assert.ok(seen.ends >= CVD_LIMITS.ends, `${deficiency}: end to end is ${seen.ends.toFixed(0)}`);
+    assert.ok(seen.lowWing >= CVD_LIMITS.wing, `${deficiency}: middle to coldest is ${seen.lowWing.toFixed(1)}`);
+    assert.ok(seen.highWing >= CVD_LIMITS.wing, `${deficiency}: middle to hottest is ${seen.highWing.toFixed(1)}`);
+    assert.ok(seen.ends >= CVD_LIMITS.ends, `${deficiency}: end to end is ${seen.ends.toFixed(1)}`);
+    assert.ok(seen.minStep >= CVD_LIMITS.step, `${deficiency}: nearest neighbours are ${seen.minStep.toFixed(1)} apart`);
   }
 });
 
@@ -426,14 +431,11 @@ test("the colour-vision palette works for all three deficiencies, not only one",
 // for people who see colour differently that was only ever checked against normal vision
 // would be checking the one case it is not for.
 test("the colour-vision palette stays readable under the simulation, not just on paper", () => {
-  const { asRamp, simulate, contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
   const palette = palettes.paletteForName("color-vision");
   for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
-    const seen = asRamp(palette).map((hex) => simulate(hex, deficiency));
-    const onLight = Math.min(...seen.map((hex) => contrastRatio(hex, LIGHT_CARD)));
-    const onDark = Math.min(...seen.map((hex) => contrastRatio(hex, DARK_CARD)));
-    assert.ok(onLight >= 2.0, `${deficiency}: ${onLight.toFixed(2)}:1 on a light card`);
-    assert.ok(onDark >= 2.6, `${deficiency}: ${onDark.toFixed(2)}:1 on a dark card`);
+    const seen = measure(palette, deficiency);
+    assert.ok(seen.onLight >= 2.4, `${deficiency}: ${seen.onLight.toFixed(2)}:1 on a light card`);
+    assert.ok(seen.onDark >= 2.6, `${deficiency}: ${seen.onDark.toFixed(2)}:1 on a dark card`);
   }
 });
 

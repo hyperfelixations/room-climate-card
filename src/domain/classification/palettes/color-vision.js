@@ -8,34 +8,33 @@
 // of all colour blindness — deutan ≈ 2,96 %, protan ≈ 1,05 % of the population, roughly
 // one man in twelve — and tritan, the rarer blue-yellow form, ≈ 0,03 %.
 //
-// WHAT REPLACES IT: blue against olive-gold, with a near-neutral middle. The middle has to
-// sit between the two poles of whichever axis survives, and anything more colourful there
-// would lean towards one end and shrink the distance to it.
+// WHAT REPLACES IT: blue-violet against amber, with a near-neutral middle. The middle has
+// to sit between the two poles of whichever axis survives, and anything more colourful
+// there would lean towards one end and shrink the distance to it.
 //
 // ONE PALETTE FOR ALL THREE, and that is a measurement rather than a convenience. Protan
 // and deutan confuse the same colours and differ only in how bright they perceive long
 // wavelengths, so they were always going to share a design. Tritan was expected to need
-// its own — and does not. A search over 36 hue pairs crossed with lightness and chroma
-// schedules, about three thousand candidates that cleared every acceptance criterion,
-// picked the SAME winner for both targets independently: blue 260° against olive 104° in
-// Oklch. In hindsight it is not surprising. This axis avoids red and green, which is what
-// protan and deutan need, and it is not the yellow-blue axis either, which is what tritan
-// needs; there is not much room left, and this is what is in it.
+// its own; a search over hue pairs crossed with lightness and chroma schedules, scored
+// against all three at once, found this axis serves every one of them. In hindsight the
+// room is narrow: it has to avoid red against green, which protan and deutan need, while
+// not being the yellow-blue axis, which tritan needs.
 //
-// Measured under every way of seeing (classification-palettes.test.js pins these):
+// Measured under every way of seeing, with the Brettel 1997 simulation
+// (classification-palettes.test.js pins these):
 //
-//                middle -> coldest   middle -> hottest   end to end
-//   normal              41                  34              62
-//   protanope           41                  34              65
-//   deuteranope         43                  33              67
-//   tritanope           45                  33              70
+//                middle -> coldest   middle -> hottest   end to end   nearest neighbours
+//   normal              37                  33              52               5,5
+//   protanope           37                  34              58               5,6
+//   deuteranope         34                  31              58               4,0
+//   tritanope           31                  32              50               4,5
 //
-// Contrast holds at 2,48 : 1 on a light card and 2,61 : 1 on a dark one, in every one of
+// Contrast holds at 2,47 : 1 on a light card and 2,61 : 1 on a dark one, in every one of
 // those simulations rather than only for normal vision — a palette for people who see
 // colour differently has to be measured as they see it.
 //
 // NOT CLAIMED: that all eleven steps are individually distinguishable. With one hue axis
-// gone and a lightness band of L* 40-68 to work in — these colours are foreground on a
+// gone and a lightness band of L* 40-70 to work in — these colours are foreground on a
 // light card AND a dark one — that is not reachable. The level text carries the fine
 // detail; the colour carries the judgement.
 
@@ -46,7 +45,7 @@ export const colorVision = {
   // diagnosis and not by ours. `tritan` resolving here is deliberate and measured (above),
   // not a leftover.
   aliases: ["protan-deutan", "protan", "deutan", "tritan"],
-  optimal: "#A5A59E",
-  above: ["#9A9878", "#8F8A51", "#847C1B", "#766E00", "#676000"],
-  below: ["#8699B9", "#6A8DC5", "#4E7FD0", "#2E6FDB", "#005DE0"],
+  optimal: "#A7A4A1",
+  above: ["#A89485", "#A88469", "#A7734B", "#A56227", "#9C5300"],
+  below: ["#9098B5", "#7D8CC2", "#6A7ECD", "#596ED7", "#4A5CE0"],
 };

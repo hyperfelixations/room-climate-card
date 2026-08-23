@@ -2,56 +2,52 @@
 
 // Colour-vision-deficiency simulation, and the perceptual distance it is measured with.
 //
-// This is a MEASURING INSTRUMENT, and it lives in the test suite rather than in a
-// scratch file for one reason: a palette that claims to work for colour-blind users has
-// to keep claiming it. Every future edit to a palette is checked against this.
+// This is a MEASURING INSTRUMENT. It lives in the test suite rather than in a scratch
+// file because a palette that claims to work for colour-blind users has to keep claiming
+// it: every future edit to a palette is checked against this.
 //
-// METHOD. Viénot, Brettel & Mollon (1999): convert to the LMS cone space, project onto
-// the plane the dichromat can still see, convert back. The published plane coefficients
-// below belong to the SMITH-POKORNY LMS space and only to it — pairing them with a
-// different LMS matrix silently breaks the one invariant that makes the whole thing a
-// simulation rather than a colour shift, which is why assertNeutralAxisPreserved() below
-// exists and why the tool's own tests run before any palette is measured against it.
+// METHOD: Brettel, Viénot & Mollon (1997). A dichromat's reduced gamut is not one plane
+// but TWO half-planes hinged on the neutral axis, and which half a colour falls into is
+// decided by the sign of its dot product with a separating plane. The widely used Viénot
+// 1999 simplification replaces the pair with a single plane; its own authors limit that
+// to protanopia and deuteranopia, and for tritanopia it is materially wrong — which is
+// exactly the mistake this file used to make.
 //
-// The inverse matrix is COMPUTED, not copied. Transcribing nine more numbers is exactly
-// the kind of thing that goes wrong quietly.
+// The twelve matrices and three normals below are the published linear-RGB form from
+// libDaltonLens, transcribed verbatim. Two things make the transcription checkable:
+// every matrix row sums to 1, which is what keeps the neutral axis fixed, and the fixed
+// reference vectors in color-vision-tool.test.js pin the whole pipeline — linearisation,
+// half-plane choice, matrix, clipping — against values that did not come from this code.
 //
-// Sources: Viénot, Brettel & Mollon (1999), "Digital video colourmaps for checking the
-// legibility of displays by dichromats"; matrix as tabulated in DaltonLens's write-up
-// "Understanding LMS-based Color Blindness Simulations".
+// GAMUT: the reference clips each channel to [0, 1], and so does this. Desaturating
+// instead would distort distances less, but it would also make the instrument agree with
+// no published implementation, and for an accessibility claim being independently
+// reproducible is worth more than the last fraction of a delta.
+//
+// Sources: Brettel, Viénot & Mollon (1997), "Computerized simulation of color appearance
+// for dichromats"; DaltonLens, "Understanding LMS-based Color Blindness Simulations";
+// libDaltonLens reference implementation.
 
 const DEFICIENCIES = ["protan", "deutan", "tritan"];
 
-// linear sRGB -> Smith-Pokorny LMS.
-const RGB_TO_LMS = [
-  [17.8824041, 43.5161087, 4.1193531],
-  [3.4556423, 27.1554478, 3.8671123],
-  [0.02996581, 0.18430022, 1.46708614],
-];
-
-// The plane each dichromat's vision collapses onto. Each rebuilds the missing cone's
-// response from the two that remain.
-const PROJECTIONS = {
-  protan: (lms) => [2.02344 * lms[1] - 2.52581 * lms[2], lms[1], lms[2]],
-  deutan: (lms) => [lms[0], 0.494207 * lms[0] + 1.24827 * lms[2], lms[2]],
-  tritan: (lms) => [lms[0], lms[1], -0.395913 * lms[0] + 0.801109 * lms[1]],
+// Two projections and one separating plane per deficiency, all in LINEAR sRGB.
+const BRETTEL = {
+  protan: {
+    first: [0.14980, 1.19548, -0.34528, 0.10764, 0.84864, 0.04372, 0.00384, -0.00540, 1.00156],
+    second: [0.14570, 1.16172, -0.30742, 0.10816, 0.85291, 0.03892, 0.00386, -0.00524, 1.00139],
+    normal: [0.00048, 0.00393, -0.00441],
+  },
+  deutan: {
+    first: [0.36477, 0.86381, -0.22858, 0.26294, 0.64245, 0.09462, -0.02006, 0.02728, 0.99278],
+    second: [0.37298, 0.88166, -0.25464, 0.25954, 0.63506, 0.10540, -0.01980, 0.02784, 0.99196],
+    normal: [-0.00281, -0.00611, 0.00892],
+  },
+  tritan: {
+    first: [1.01277, 0.13548, -0.14826, -0.01243, 0.86812, 0.14431, 0.07589, 0.80500, 0.11911],
+    second: [0.93678, 0.18979, -0.12657, 0.06154, 0.81526, 0.12320, -0.37562, 1.12767, 0.24796],
+    normal: [0.03901, -0.02788, -0.01113],
+  },
 };
-
-// ---- small linear algebra, so no second copy of any matrix exists -----------
-
-function invert3(m) {
-  const [[a, b, c], [d, e, f], [g, h, i]] = m;
-  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
-  if (!Number.isFinite(det) || det === 0) throw new Error("matrix is not invertible");
-  return [
-    [(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det],
-    [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det],
-    [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det],
-  ];
-}
-
-const LMS_TO_RGB = invert3(RGB_TO_LMS);
-const apply = (m, v) => m.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
 
 // ---- sRGB ------------------------------------------------------------------
 
@@ -66,39 +62,26 @@ function hexToLinear(hex) {
 }
 
 function linearToHex(linear) {
-  return `#${linear.map((c) => Math.round(clamp01(toEncoded(c)) * 255).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  return `#${linear.map((c) => Math.round(clamp01(toEncoded(clamp01(c))) * 255).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
 }
 
-// Projecting onto a dichromat plane routinely lands OUTSIDE sRGB, most often for
-// saturated blues. Clamping each channel on its own is what a quick implementation does,
-// and it is wrong for measurement: it moves the colour sideways in hue and so inflates
-// or deflates the very distances this file exists to compute. Desaturating towards the
-// colour's own luminance instead keeps both its luminance and its direction, and gives
-// up only the chroma a display could not have shown anyway.
-function intoGamut(linear) {
-  const luminance = clamp01(0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]);
-  const fits = (t) => linear.every((c) => {
-    const v = luminance + (c - luminance) * t;
-    return v >= -1e-9 && v <= 1 + 1e-9;
-  });
-  if (fits(1)) return linear;
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) lo = mid;
-    else hi = mid;
-  }
-  return linear.map((c) => luminance + (c - luminance) * lo);
-}
+// ---- the simulation --------------------------------------------------------
+
+const project = (m, v) => [
+  m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+  m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+  m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
+];
 
 // What someone with the given deficiency sees. "normal" is the identity, so a caller can
 // sweep all four without a special case.
 function simulate(hex, deficiency) {
   if (deficiency === "normal") return typeof hex === "string" ? hex.toUpperCase() : hex;
-  const project = PROJECTIONS[deficiency];
-  if (!project) throw new Error(`unknown deficiency "${deficiency}"`);
-  return linearToHex(intoGamut(apply(LMS_TO_RGB, project(apply(RGB_TO_LMS, hexToLinear(hex))))));
+  const params = BRETTEL[deficiency];
+  if (!params) throw new Error(`unknown deficiency "${deficiency}"`);
+  const linear = hexToLinear(hex);
+  const side = linear[0] * params.normal[0] + linear[1] * params.normal[1] + linear[2] * params.normal[2];
+  return linearToHex(project(side >= 0 ? params.first : params.second, linear));
 }
 
 // ---- CIELAB and CIEDE2000 --------------------------------------------------
@@ -194,6 +177,11 @@ function measure(palette, deficiency) {
   let monotone = true;
   for (let i = middle + 1; i < seen.length; i++) if (fromMiddle[i] <= fromMiddle[i - 1]) monotone = false;
   for (let i = middle - 1; i >= 0; i--) if (fromMiddle[i] <= fromMiddle[i + 1]) monotone = false;
+  // The smallest gap between NEIGHBOURS, which is a different question from how far the
+  // ends reach and the one a reader actually runs into: a ramp can span a huge distance
+  // and still have two adjacent steps nobody can tell apart.
+  let minStep = Infinity;
+  for (let i = 1; i < seen.length; i++) minStep = Math.min(minStep, deltaE(seen[i - 1], seen[i]));
   const lightness = ramp.map((hex) => lab(hex)[0]);
   return {
     deficiency,
@@ -202,28 +190,33 @@ function measure(palette, deficiency) {
     highWing: fromMiddle[seen.length - 1],
     ends: deltaE(seen[0], seen[seen.length - 1]),
     monotone,
-    onLight: Math.min(...ramp.map((hex) => contrastRatio(hex, LIGHT_CARD))),
-    onDark: Math.min(...ramp.map((hex) => contrastRatio(hex, DARK_CARD))),
+    minStep,
+    // Measured on the colours AS SEEN, not as written. A palette for people who see
+    // colour differently that was only ever checked against normal vision would be
+    // checking the one case it is not for. Under "normal" the two are the same thing.
+    onLight: Math.min(...seen.map((hex) => contrastRatio(hex, LIGHT_CARD))),
+    onDark: Math.min(...seen.map((hex) => contrastRatio(hex, DARK_CARD))),
     lightnessRange: [Math.min(...lightness), Math.max(...lightness)],
   };
 }
 
 // The invariant that separates a simulation from an arbitrary colour transform: a colour
-// on the neutral axis has no hue to lose, so every dichromat sees it unchanged. Exported
-// because it is the check that would have caught the broken matrix pairing immediately.
+// on the neutral axis has no hue to lose, so every dichromat sees it unchanged. It holds
+// here because every matrix row sums to 1 — which is also the cheapest way to verify the
+// transcription, and is asserted directly in the tool's own tests.
 function neutralAxisError(deficiency) {
   let worst = 0;
   for (const grey of [0.02, 0.1, 0.25, 0.5, 0.75, 1]) {
-    const lms = apply(RGB_TO_LMS, [grey, grey, grey]);
-    const projected = PROJECTIONS[deficiency](lms);
-    for (const [i, value] of projected.entries()) {
-      worst = Math.max(worst, Math.abs(value - lms[i]) / Math.max(1e-12, Math.abs(lms[i])));
-    }
+    const params = BRETTEL[deficiency];
+    const side = grey * (params.normal[0] + params.normal[1] + params.normal[2]);
+    const seen = project(side >= 0 ? params.first : params.second, [grey, grey, grey]);
+    for (const value of seen) worst = Math.max(worst, Math.abs(value - grey) / grey);
   }
   return worst;
 }
 
 module.exports = {
+  BRETTEL,
   DEFICIENCIES,
   asRamp,
   contrastRatio,
