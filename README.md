@@ -585,7 +585,7 @@ Four palettes ship with the card:
 | --- | --- |
 | `pastel` | The default: a soft ramp running from blue through green to red. |
 | `vivid` | The same journey in saturated colors — easier to read on a bright wall panel, or beside strongly colored cards. |
-| `color-vision` | For color vision deficiency, of any kind. Its ends are blue and gold, a pair that stays apart for protanopes, deuteranopes and tritanopes alike, instead of green and red, the pair that does not. Also answers to `protan-deutan`, `protan`, `deutan` and `tritan`. |
+| `color-vision` | For color vision deficiency, of any kind. Its ends are blue-violet and amber, a pair that stays apart for protanopes, deuteranopes and tritanopes alike, instead of green and red, the pair that does not. Also answers to `protan-deutan`, `protan`, `deutan` and `tritan`. |
 | `signal` | Green, amber, red — a traffic light rather than a gradient, for a dashboard you read from across the room. Both directions use the same pair, so it says how far a reading is from where it should be rather than which way. It is built from green and red, so `color-vision` is the better choice if that pair is hard for you. |
 
 You can also ask for a ramp in a single color, by name or as a hex:
