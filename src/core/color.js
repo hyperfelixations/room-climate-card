@@ -25,6 +25,20 @@ export function isHexColor(value) {
   return HEX_COLOR_PATTERN.test(value);
 }
 
+// How bright a colour is to the eye, on the 0..1 scale WCAG's contrast ratio is built on.
+// Not the same as any of the lightness values elsewhere in the card: this one answers
+// "can text in this colour be read on that background", which is a question about light,
+// not about appearance.
+export function relativeLuminance(hex) {
+  const value = String(hex).replace("#", "").trim();
+  const full = value.length <= 4 ? value.slice(0, 3).split("").map((digit) => digit + digit).join("") : value.slice(0, 6);
+  const [r, g, b] = [0, 2, 4].map((index) => {
+    const channel = parseInt(full.slice(index, index + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 // Builds a semi-transparent colour from a hex, rgb(), or CSS variable input.
 // Accepts all four valid CSS hex lengths (3/4/6/8, matching isHexColor); for
 // the two with an embedded alpha channel (4/8), only the RGB part is used —
@@ -212,6 +226,29 @@ export const CSS_COLOR_NAMES = Object.freeze({
   yellow: "#FFFF00",
   yellowgreen: "#9ACD32",
 });
+
+// A colour as the CSSOM hands it back, reduced to its relative luminance — or null when
+// it is nothing this can read.
+//
+// getComputedStyle always returns `rgb()`/`rgba()` for a resolved background-color, so
+// that form is the one that matters; a custom property, however, comes back exactly as
+// the theme author wrote it, which is why hex and names are accepted too. A fully
+// transparent colour is not an answer: nothing is painted, so the background is whatever
+// is behind it and this cannot say.
+export function luminanceOfCssColor(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  const rgb = text.match(/^rgba?\(([^)]*)\)$/i);
+  if (rgb) {
+    const parts = rgb[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if (parts.length < 3 || parts.slice(0, 3).some((part) => !Number.isFinite(part))) return null;
+    if (parts.length > 3 && Number.isFinite(parts[3]) && parts[3] === 0) return null;
+    const hex = `#${parts.slice(0, 3).map((part) => Math.round(Math.min(255, Math.max(0, part))).toString(16).padStart(2, "0")).join("")}`;
+    return relativeLuminance(hex);
+  }
+  const parsed = parseColorToken(text);
+  return parsed ? relativeLuminance(parsed) : null;
+}
 
 // The colour spellings a human writes in YAML, normalized to hex — or null.
 //

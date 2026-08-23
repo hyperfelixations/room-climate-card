@@ -14,7 +14,7 @@
 // last_updated rather than last_changed is deliberate: an attribute-only update (a
 // thermostat's target temperature moving while its state stays "heat") leaves
 // last_changed untouched, and the card reads attributes.
-export function entityDataSignature({ config, states, language, activeViewIndex }) {
+export function entityDataSignature({ config, states, language, activeViewIndex, surface }) {
   const relevantEntities = [
     config.entity,
     config.range_entity,
@@ -32,6 +32,10 @@ export function entityDataSignature({ config, states, language, activeViewIndex 
   return [
     relevantStates,
     `lang:${language}`,
+    // Which background the card is painted on. Nothing about the entities changes when a
+    // user switches theme, so this is the only thing that can bring the card back for a
+    // repaint — see adaptPaletteToSurface().
+    `surface:${surface}`,
     `rotation:${config.rotation_seconds}`,
     `slide:${config.slide_seconds}`,
     `view:${activeViewIndex}`,

@@ -30,13 +30,12 @@ export const DEFAULT_PALETTE_ID = "pastel";
 // own warm grey wired in where no palette should have had a say.)
 export const NEUTRAL_COLOR = "#7D7D7D";
 
-// Which card background a palette was designed against, for the palettes that were
-// designed against a particular one at all.
+// Which card background a palette was designed against. A shipped palette states it in
+// its own module, a generated one derives it from its base colour (see tuningForColor in
+// ../surface.js), and a palette written in YAML says nothing and gets "any" — the card has
+// measured nothing about it and will not claim otherwise.
 //
-// Nothing reads this yet, and that is deliberate: it is the fact an eventual
-// theme-adaptation pass would need, recorded now while the palettes are being designed
-// and the answer is known, rather than reconstructed later by guesswork. Recording it
-// costs one validated field; reconstructing it would cost the measurements again.
+// Read by adaptPaletteToSurface() below.
 export const PALETTE_TUNINGS = Object.freeze(["light", "dark", "any"]);
 const DEFAULT_TUNING = "any";
 
@@ -140,6 +139,36 @@ export function paletteForColor(value) {
   // A written-out palette still takes an 8-digit colour per step, where the user chose
   // each one deliberately.
   return completePalette(monochromePalette(hex.length > 7 ? hex.slice(0, 7) : hex, id));
+}
+
+// WHETHER A PALETTE SUITS THE BACKGROUND IT IS ABOUT TO BE PAINTED ON, and what to do
+// when it does not.
+//
+// One rule for every palette, which is the point: a palette declares (or derives) the
+// surface it was designed against, the card knows the surface it is actually on, and the
+// two either agree or the palette goes through one transformation. No palette gets its
+// own special handling, and adding a palette adds nothing here.
+//
+// `"any"` passes through because it means "measured on both and good on both" — for the
+// shipped palettes that is a fact recorded in their own modules, for a generated one it
+// is what tuningForColor() found.
+export function adaptPaletteToSurface(palette, surface) {
+  if (!palette || palette.tunedFor === "any" || palette.tunedFor === surface) return palette;
+  return transformPaletteForSurface(palette, surface);
+}
+
+// The seam, and it is deliberately empty.
+//
+// Everything around it is in place and tested: the card knows its surface, every palette
+// knows what it was made for, and the decision above runs on every render. What is not
+// here yet is the transformation itself — the monotone, hue-preserving move into the
+// lightness band that the other surface can read. It is left for its own round so that
+// this one changes no pixel, which is exactly what the golden screenshots then prove.
+//
+// Returning the palette unchanged is the honest identity for that: a palette on the wrong
+// background is today still the palette the user asked for.
+export function transformPaletteForSurface(palette, _surface) {
+  return palette;
 }
 
 // Every word a `palette:` option may be, for the message a user sees when theirs was none

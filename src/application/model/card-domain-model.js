@@ -32,6 +32,7 @@
 //   state         empty / configuration state
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
+import { adaptPaletteToSurface } from "../../domain/classification/palettes/registry.js";
 import {
   classificationPolicyOf,
   paletteOf,
@@ -52,9 +53,12 @@ import {
   sortRoomsByValue,
 } from "./aggregates.js";
 
-export function buildCardDomainModel({ states, config, context, language }) {
+export function buildCardDomainModel({ states, config, context, language, surface }) {
   const policy = classificationPolicyOf(config);
-  const palette = paletteOf(config);
+  // The palette the user asked for, then the one background question asked of it: does it
+  // suit what it is about to be painted on. One rule for every palette, applied in one
+  // place — see adaptPaletteToSurface() in the palette registry.
+  const palette = adaptPaletteToSurface(paletteOf(config), surface);
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
   // Resolved once here and carried out on the model. It stopped being a pure function

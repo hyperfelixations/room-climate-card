@@ -140,6 +140,45 @@ function readAnimationPhase(element, animationName) {
   }
 }
 
+// The colour the card is actually painted on, as an `rgb()`/`rgba()` string, or null.
+//
+// It is READ rather than assumed, and that is the whole reason this exists. `hass.themes
+// .darkMode` describes the THEME; it does not describe this card. card-mod and its
+// relatives restyle individual cards, a custom theme is not classified anywhere, and a
+// dashboard may put one card on a surface nothing else shares. The browser is the only
+// thing that knows, so the browser is asked.
+//
+// Three sources, in the order of how specific they are:
+//
+//   1. the element's own computed background-color — non-transparent as soon as anything
+//      has set one on it, which is exactly the card-mod case, and always handed back by
+//      the browser in rgb()/rgba() form;
+//   2. the theme's card background custom properties, resolved on this element, which is
+//      what the stock themes set;
+//   3. nothing, and the caller falls back to what hass says.
+//
+// Realm-correct throughout: getComputedStyle comes from the element's OWN view, never
+// from an ambient global, so a card adopted into another document still measures itself.
+function readBackgroundColor(element) {
+  try {
+    const view = element?.ownerDocument?.defaultView;
+    if (!view || typeof view.getComputedStyle !== "function") return null;
+    const style = view.getComputedStyle(element);
+    if (!style) return null;
+    const own = style.backgroundColor;
+    if (own && !/^(transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))$/i.test(own.trim())) return own.trim();
+    for (const property of ["--ha-card-background", "--card-background-color"]) {
+      const value = style.getPropertyValue(property);
+      if (value && value.trim()) return value.trim();
+    }
+    return null;
+  } catch (_error) {
+    // A realm without a usable CSSOM. The caller has a fallback; a card that cannot
+    // measure its background must still render.
+    return null;
+  }
+}
+
 export function createBrowserPlatform(getDocument) {
   const documentOf = () => getDocument() || null;
   const viewOf = () => documentOf()?.defaultView || null;
@@ -208,5 +247,6 @@ export function createBrowserPlatform(getDocument) {
 
     readTranslateXPx,
     readAnimationPhase,
+    readBackgroundColor,
   };
 }
