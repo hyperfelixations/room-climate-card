@@ -263,9 +263,10 @@ test("the device_class map covers Home Assistant's four sensor classes", () => {
 });
 
 test("METRIC_TYPE_BY_UNIT is derived from every registered unit alias", () => {
-  // The index must not be hand-maintained: every alias in every unitProfile
-  // has to be resolvable, which is what the earlier hand-written table got
-  // wrong for "c"/"celsius"/"f"/"fahrenheit".
+  // The index must not be hand-maintained: every alias in every unitProfile has to be
+  // resolvable, which is what the earlier hand-written table got wrong for
+  // "c"/"celsius"/"f"/"fahrenheit". This answers WHICH measurement uses a unit; whether
+  // that is enough to identify a sensor is the separate question tested below.
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
     for (const profile of Object.values(definition.unitProfiles)) {
       for (const unit of profile.units) {
@@ -288,6 +289,60 @@ test("the derived index contains no entries beyond the registered aliases", () =
     }
   }
   assert.deepEqual(Object.keys(resolution.METRIC_TYPE_BY_UNIT).sort(), [...expected].sort());
+});
+
+// -------------------------------------- when a unit may stand in for a device class ---
+
+// device_class is Home Assistant's own declaration and is what the card asks for first.
+// The unit is a courtesy for hand-built template sensors that never got one — but a
+// courtesy that guesses is worse than none, because a wrong guess shows a real number
+// against the wrong scale, the wrong thresholds and the wrong colour, and says nothing.
+//
+// So the fallback applies exactly where the unit belongs to ONE measurement.
+test("a unit stands in for a device class only when one measurement uses it", () => {
+  for (const unit of ["°C", "°F", "K", "celsius", "kelvin", "%"]) {
+    assert.equal(resolution.unitPredictsMetricKind(unit), true, unit);
+  }
+  // Home Assistant defines five sensor device classes reporting ppm and eleven reporting
+  // µg/m³, so neither says what is being measured.
+  for (const unit of ["ppm", "µg/m³", "ug/m3", "μg/m³"]) {
+    assert.equal(resolution.unitPredictsMetricKind(unit), false, unit);
+  }
+  for (const nothing of [null, undefined, ""]) {
+    assert.equal(resolution.unitPredictsMetricKind(nothing), false, JSON.stringify(nothing));
+  }
+});
+
+// The rule is written as data, so a shared unit loses its fallback by itself rather than
+// by anybody remembering to remove it.
+test("the ambiguity table is what decides, not a list of exceptions", () => {
+  for (const [unit, deviceClasses] of Object.entries(resolution.DEVICE_CLASSES_BY_UNIT)) {
+    assert.ok(deviceClasses.length >= 1, unit);
+    assert.equal(
+      resolution.unitPredictsMetricKind(unit),
+      deviceClasses.length === 1,
+      `${unit} is claimed by ${deviceClasses.length} device class(es)`
+    );
+  }
+  // And the two the card itself measures in a shared unit are genuinely in there.
+  assert.ok(resolution.DEVICE_CLASSES_BY_UNIT.ppm.includes("carbon_dioxide"));
+  assert.ok(resolution.DEVICE_CLASSES_BY_UNIT["µg/m³"].includes("pm25"));
+
+  // The two questions must not be answered by one table. A profile WRITTEN in ppm is a
+  // CO2 profile — there is only one — while a SENSOR reporting ppm is a guess.
+  assert.equal(resolution.METRIC_TYPE_BY_UNIT.ppm, "co2", "which measurement uses ppm");
+  assert.equal(resolution.metricKindFromUnitAlone("ppm"), null, "but a sensor reporting it is not identified");
+  assert.equal(resolution.metricKindFromUnitAlone("°C"), "temperature");
+  assert.equal(resolution.metricKindFromUnitAlone("parsecs"), null);
+});
+
+// A declared device_class always wins, so nothing changes for a sensor that has one.
+test("a declared device class is unaffected by the unit rule", () => {
+  assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS.carbon_dioxide, "co2");
+  assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS.pm25, "pm25");
+  // And the unit still resolves to its profile once the kind is settled.
+  assert.equal(resolution.resolveUnitProfileKey("co2", "ppm"), "ppm");
+  assert.equal(resolution.resolveUnitProfileKey("pm25", "µg/m³"), "microgram_per_m3");
 });
 
 test("temperature word and bare-letter aliases all resolve", () => {

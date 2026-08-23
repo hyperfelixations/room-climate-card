@@ -64,6 +64,14 @@ function renderViewArea(context, viewModel, viewRenderers) {
 // routine data change would cost a full rebuild and reset the carousel.
 //
 // A view without a structureSignature() is declaring that it reconciles everything.
+// Emitted only when it is not the default, so the ordinary card's markup is byte for byte
+// what it has always been — the wrapping rule in styles/header.js hangs off this attribute
+// and does nothing without it. Patched rather than made structural: it changes how one
+// element behaves, not which elements exist.
+function subtitleOverflowAttribute(viewModel) {
+  return viewModel.header.subtitleOverflow === "wrap" ? ` data-subtitle="wrap"` : "";
+}
+
 export function cardStructureSignature(viewModel, viewRenderers) {
   const parts = [
     `state:${viewModel.empty ? "no-data" : "data"}`,
@@ -72,6 +80,9 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     // renderAverage()). A patch can change its text; it cannot create or delete it, so
     // its presence has to force a rebuild.
     `avgLabel:${viewModel.average.hasLabel ? 1 : 0}`,
+    // Same reason as avgLabel: a patch can change the subtitle's text, it cannot create
+    // or delete the node.
+    `subtitle:${viewModel.header.hasSubtitle ? 1 : 0}`,
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];
@@ -99,11 +110,19 @@ export function renderCardBody(context, viewModel, viewRenderers) {
         `
     : "";
 
+  // `subtitle: ""` asks for no line, and no line means no NODE: an empty div still takes
+  // its margin and its line box, which is not what "remove it" looks like. Its presence is
+  // therefore structural and appears in cardStructureSignature() below, exactly like the
+  // headline's caption.
+  const subtitle = viewModel.header.hasSubtitle
+    ? `<div class="rtc-subtitle">${escapeHtml(viewModel.header.subtitle)}</div>`
+    : "";
+
   // tabindex="-1": out of the normal tab order, but focusable programmatically — the
   // last-resort focus fallback target when a focused element disappears and no average
   // button exists to fall back to instead.
   return `
-        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}" style="${viewModel.toneStyle}" tabindex="-1">
+        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${subtitleOverflowAttribute(viewModel)} style="${viewModel.toneStyle}" tabindex="-1">
           <div class="rtc-top-line"></div>
 
           <div class="rtc-header">
@@ -113,7 +132,7 @@ export function renderCardBody(context, viewModel, viewRenderers) {
 
             <div class="rtc-title-block">
               <div class="rtc-title">${escapeHtml(viewModel.header.title)}</div>
-              <div class="rtc-subtitle">${escapeHtml(viewModel.header.subtitle)}</div>
+              ${subtitle}
             </div>
 
             <div class="rtc-status-pill">${escapeHtml(viewModel.header.statusLabel)}</div>
@@ -141,6 +160,8 @@ function patchShell(context, root, viewModel) {
     contentRoot.setAttribute("style", viewModel.toneStyle);
     contentRoot.setAttribute("data-state", viewModel.empty ? "no-data" : "data");
     contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
+    if (viewModel.header.subtitleOverflow === "wrap") contentRoot.setAttribute("data-subtitle", "wrap");
+    else contentRoot.removeAttribute("data-subtitle");
   }
 
   const iconEl = root.querySelector(".rtc-icon-badge ha-icon");

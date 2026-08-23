@@ -62,6 +62,11 @@ export const uk = {
   "availability.valueUnavailable": "Значення наразі недоступне.",
   "availability.noUsableRooms": "Наразі немає доступних значень для налаштованих кімнат.",
   "availability.incompatible": "Налаштовані джерела використовують несумісні типи вимірювань або одиниці.",
+  "availability.valueNotNumeric": "Сутність не передає число.",
+  "availability.valueImpossible": "Сутність передає фізично неможливе значення.",
+  "availability.unitAmbiguous": (v) => `Для ${v.entity} потрібен device_class: цю одиницю використовують кілька типів вимірювань, і картка не вгадує.`,
+  "availability.unidentified": (v) => `${v.entity} не повідомляє, що вимірює. Додайте device_class або одиницю, відому картці.`,
+  "availability.unitUnreadable": (v) => `${v.entity} передає одиницю, яку картка не може прочитати для цього типу вимірювання.`,
   "availability.roomNoData": (v) => `${v.name}: немає даних. Відкрийте деталі.`,
   "availability.valueNoData": (v) => `${v.label}: немає даних`,
 
@@ -92,7 +97,8 @@ export const uk = {
   "rangeScale.currentLabelShort": "зараз",
   "rangeScale.minLabel": "мін.",
   "rangeScale.maxLabel": "макс.",
-  "rangeScale.footer": (v) => `Діапазон за сьогодні ${v.span} · Мін. ${v.min} (${v.minTime}) · Макс. ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Діапазон за сьогодні ${v.span} · Мін. ${v.min}${v.minTime} · Макс. ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Діапазон за сьогодні ${v.span} · Мін. ${v.min} · Макс. ${v.max}`,
 
   "card.coldestRoom": "Найхолодніша кімната",

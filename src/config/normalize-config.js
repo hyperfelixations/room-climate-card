@@ -12,7 +12,7 @@
 // domain, i18n or view registries:
 //   classificationZones   the accepted zone vocabulary
 //   paletteForName        a palette by name, or the default for null
-//   paletteNames          the names a palette error message may offer
+//   paletteKeys           every word a palette option may be, for the error message
 //   assertPalette         what makes a written-out palette usable
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
@@ -55,6 +55,43 @@ export function normalizeShowRooms(value) {
   if (value === true) return "always";
   if (value === false) return "never";
   return "auto";
+}
+
+// How the line under the title behaves, and what it says.
+//
+// `title:` sets a NAME, so it takes a string and that is the end of it. The subtitle is
+// different in kind: it is the card describing its own state, and there are two separate
+// things to say about it — what it reads and what happens when it is longer than the card
+// is wide. Hence one option with two answers, and both spellings of it:
+//
+//   subtitle: Ground floor          the text, automatic wrapping unchanged
+//   subtitle: wrap                  the wrapping, text still automatic
+//   subtitle: ""                    no line at all
+//   subtitle: {text: …, overflow: …}  both
+//
+// THE ONE AMBIGUITY, and it is deliberate: a bare `clip` or `wrap` is read as the
+// overflow mode, so those two words alone cannot be used as subtitle TEXT. That is worth
+// the shorthand — nobody labels a card "wrap" — and it has an escape hatch that needs no
+// guessing, `subtitle: {text: wrap}`. An ambiguity with no way out would not be worth it.
+//
+// Malformed values fall back to the default rather than throwing, like every other purely
+// cosmetic option.
+export const SUBTITLE_OVERFLOWS = ["clip", "wrap"];
+
+export function normalizeSubtitle(value) {
+  const DEFAULT = { text: null, overflow: "clip" };
+  if (typeof value === "string") {
+    const word = value.trim().toLowerCase();
+    if (SUBTITLE_OVERFLOWS.includes(word)) return { text: null, overflow: word };
+    // optionalLabel() rather than optionalString(), because "" here means "show no line",
+    // which is a real answer and not the same as "not configured".
+    return { text: optionalLabel(value), overflow: "clip" };
+  }
+  if (!isPlainObject(value)) return DEFAULT;
+  return {
+    text: optionalLabel(value.text),
+    overflow: normalizeEnum(typeof value.overflow === "string" ? value.overflow.trim().toLowerCase() : value.overflow, SUBTITLE_OVERFLOWS, "clip"),
+  };
 }
 
 export function normalizeConfig(config, collaborators) {
@@ -102,6 +139,9 @@ export function normalizeConfig(config, collaborators) {
     // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
     entity_label: optionalLabel(userConfig.entity_label),
     title: optionalString(userConfig.title),
+    // The line under the title: its text and how it behaves when it does not fit. See
+    // normalizeSubtitle() above for why one option carries both.
+    subtitle: normalizeSubtitle(userConfig.subtitle),
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),
     language: normalizeLanguage(userConfig.language, isSupportedLanguage),

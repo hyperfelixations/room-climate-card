@@ -4,16 +4,29 @@
 // configured range entity, not two separate sensors — so neither card carries a room
 // index and the action layer falls back to the card's default actions.
 //
-// show_time drives the cards' name slot, which is where their timestamp goes. The
-// value itself is unaffected either way.
+// show_time drives the cards' name slot, which is where their timestamp goes. The value
+// itself is unaffected either way.
+//
+// A range entity need not report timestamps at all, and one that reports only the minimum
+// is a perfectly ordinary state. Where there is no timestamp the name slot is not shown
+// rather than filled with a placeholder: a dash where a time should be reads as a fault,
+// and there is none — the entity simply does not say.
 
 import { buildMetricCardModel } from "../metric-card.js";
 
 export function buildRangeViewContent(shared, options) {
   const { texts, range, unit, rangeEntity } = shared;
-  const showName = options.show_time;
   const card = (labelKey, name, value, color) =>
-    buildMetricCardModel({ label: texts.t(labelKey), name, value, entity: rangeEntity, color, unit, texts, showName });
+    buildMetricCardModel({
+      label: texts.t(labelKey),
+      name,
+      value,
+      entity: rangeEntity,
+      color,
+      unit,
+      texts,
+      showName: Boolean(options.show_time && name),
+    });
 
   return {
     key: "range",

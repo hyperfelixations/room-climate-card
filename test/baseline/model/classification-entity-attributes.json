@@ -117,7 +117,7 @@
       "value": 21.1
     },
     {
-      "color": "#B4B2A9",
+      "color": "#7D7D7D",
       "entity": "sensor.r2",
       "index": 1,
       "name": "Room B",
@@ -177,7 +177,7 @@
     "tap_action": null,
     "value": 23.6
   },
-  "warmestColor": "#B4B2A9",
+  "warmestColor": "#7D7D7D",
   "warmestPos": 76.6666666666667,
   "warmestShift": 0
 }

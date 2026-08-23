@@ -129,6 +129,20 @@
           text-overflow: ellipsis;
         }
 
+        /* subtitle: wrap — the line runs onto as many lines as it needs and the card
+           grows under it. Written as an override rather than as two variants of the rule
+           above, so the default is literally unchanged.
+
+           overflow-wrap: anywhere is not decoration: the no-data explanations name entity
+           ids, and an id is one unbreakable token that would otherwise run out of the
+           card sideways instead of wrapping. */
+        .rtc-root[data-subtitle="wrap"] .rtc-subtitle {
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          overflow-wrap: anywhere;
+        }
+
         .rtc-status-pill {
           padding: 6px 10px;
           border-radius: 999px;

@@ -67,6 +67,11 @@ export const pl = {
   "availability.valueUnavailable": "Wartość jest obecnie niedostępna.",
   "availability.noUsableRooms": "Żadna skonfigurowana wartość pomieszczenia nie jest obecnie użyteczna.",
   "availability.incompatible": "Skonfigurowane źródła używają niezgodnych typów pomiaru lub jednostek.",
+  "availability.valueNotNumeric": "Encja nie podaje liczby.",
+  "availability.valueImpossible": "Encja podaje wartość fizycznie niemożliwą.",
+  "availability.unitAmbiguous": (v) => `${v.entity} wymaga device_class: tej jednostki używa kilka typów pomiaru, a karta nie zgaduje.`,
+  "availability.unidentified": (v) => `${v.entity} nie mówi, co mierzy. Dodaj device_class lub jednostkę znaną karcie.`,
+  "availability.unitUnreadable": (v) => `${v.entity} podaje jednostkę, której karta nie odczyta dla tego typu pomiaru.`,
   "availability.roomNoData": (v) => `${v.name}: brak danych. Otwórz szczegóły.`,
   "availability.valueNoData": (v) => `${v.label}: brak danych`,
 
@@ -100,7 +105,8 @@ export const pl = {
   "rangeScale.currentLabelShort": "teraz",
   "rangeScale.minLabel": "min.",
   "rangeScale.maxLabel": "maks.",
-  "rangeScale.footer": (v) => `Dzisiejszy zakres ${v.span} · Min. ${v.min} (${v.minTime}) · Maks. ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Dzisiejszy zakres ${v.span} · Min. ${v.min}${v.minTime} · Maks. ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Dzisiejszy zakres ${v.span} · Min. ${v.min} · Maks. ${v.max}`,
 
   "card.coldestRoom": "Najchłodniejszy pokój",

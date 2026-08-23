@@ -63,6 +63,11 @@ export const ko = {
   "availability.valueUnavailable": "현재 값을 사용할 수 없습니다.",
   "availability.noUsableRooms": "현재 사용할 수 있는 구성된 방 값이 없습니다.",
   "availability.incompatible": "구성된 소스의 측정 유형 또는 단위가 호환되지 않습니다.",
+  "availability.valueNotNumeric": "엔티티가 숫자를 제공하지 않습니다.",
+  "availability.valueImpossible": "엔티티가 물리적으로 불가능한 값을 제공합니다.",
+  "availability.unitAmbiguous": (v) => `${v.entity}에는 device_class가 필요합니다. 여러 측정 유형이 이 단위를 사용하므로 카드는 추측하지 않습니다.`,
+  "availability.unidentified": (v) => `${v.entity}이(가) 무엇을 측정하는지 알 수 없습니다. device_class 또는 카드가 아는 단위를 추가하세요.`,
+  "availability.unitUnreadable": (v) => `${v.entity}이(가) 이 측정 유형에 대해 카드가 읽을 수 없는 단위를 제공합니다.`,
   "availability.roomNoData": (v) => `${v.name}: 데이터 없음. 세부 정보 열기.`,
   "availability.valueNoData": (v) => `${v.label}: 데이터 없음`,
 
@@ -92,7 +97,8 @@ export const ko = {
   "rangeScale.currentLabelShort": "현재",
   "rangeScale.minLabel": "최저",
   "rangeScale.maxLabel": "최고",
-  "rangeScale.footer": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} (${v.minTime}) · 최고 ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min}${v.minTime} · 최고 ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `오늘의 범위 ${v.span} · 최저 ${v.min} · 최고 ${v.max}`,
 
   "card.coldestRoom": "가장 추운 방",

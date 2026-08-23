@@ -20,6 +20,14 @@ export const TONE_SOFT_ALPHA = 0.20;
 export const TONE_BORDER_ALPHA = 0.38;
 export const TONE_BAND_ALPHA = 0.20;
 
+// The colour of NOTHING TO SAY: a card with no usable value, and a room chip whose sensor
+// has none. It belongs here rather than in a palette because it is not a classification at
+// all — no palette should have an opinion about the absence of one — and it lives in ONE
+// place for the same reason the alphas above do. It is read from two modules that render
+// it side by side, and two copies drifting apart would be a visual bug no test shape
+// would catch.
+export const NO_DATA_COLOR = "#7F8792";
+
 export function toneLabel(classification, texts) {
   return classification.level || texts.t(classification.levelKey);
 }

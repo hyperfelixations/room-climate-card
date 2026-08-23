@@ -71,6 +71,11 @@ export const nb = {
   "availability.valueUnavailable": "Verdien er ikke tilgjengelig akkurat nå.",
   "availability.noUsableRooms": "Ingen konfigurerte romverdier kan brukes akkurat nå.",
   "availability.incompatible": "Konfigurerte kilder bruker inkompatible måletyper eller enheter.",
+  "availability.valueNotNumeric": "Entiteten oppgir ikke et tall.",
+  "availability.valueImpossible": "Entiteten oppgir en fysisk umulig verdi.",
+  "availability.unitAmbiguous": (v) => `${v.entity} trenger en device_class: flere måletyper bruker denne enheten, og kortet gjetter ikke.`,
+  "availability.unidentified": (v) => `${v.entity} sier ikke hva den måler. Legg til en device_class, eller en enhet kortet kjenner.`,
+  "availability.unitUnreadable": (v) => `${v.entity} oppgir en enhet kortet ikke kan lese for denne måletypen.`,
   "availability.roomNoData": (v) => `${v.name}: ingen data. Åpne detaljer.`,
   "availability.valueNoData": (v) => `${v.label}: ingen data`,
 
@@ -100,7 +105,8 @@ export const nb = {
   "rangeScale.currentLabelShort": "nå",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "maks",
-  "rangeScale.footer": (v) => `Dagens spenn ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Dagens spenn ${v.span} · Min ${v.min}${v.minTime} · Maks ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Dagens spenn ${v.span} · Min ${v.min} · Maks ${v.max}`,
 
   "card.coldestRoom": "Kaldeste rommet",

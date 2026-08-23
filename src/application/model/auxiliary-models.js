@@ -17,6 +17,7 @@ import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { classificationColorOf, isValuePhysicallyValid } from "./classification.js";
 import {
   convertMetricValue,
+  readFirstAttribute,
   readNumericAttribute,
   readNumericState,
   resolveAuxiliaryUnitProfileKey,
@@ -79,8 +80,11 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
   if (max !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, max)) max = null;
 
   const attributes = hasRange ? states?.[config.range_entity]?.attributes : undefined;
-  const minTimestamp = hasRange ? attributes?.minimum_zeitpunkt ?? null : null;
-  const maxTimestamp = hasRange ? attributes?.maximum_zeitpunkt ?? null : null;
+  // Two spellings, English first. The German one is what the card was originally built
+  // against and stays supported; nothing that already works may stop working. Both are
+  // OPTIONAL — a range entity that reports only its minimum and maximum is complete.
+  const minTimestamp = hasRange ? readFirstAttribute(attributes, ["minimum_timestamp", "minimum_zeitpunkt"]) : null;
+  const maxTimestamp = hasRange ? readFirstAttribute(attributes, ["maximum_timestamp", "maximum_zeitpunkt"]) : null;
 
   // No attributes are passed to the classifier on purpose. min/max are HISTORICAL
   // readings taken from attributes, not the entity's current state — letting them

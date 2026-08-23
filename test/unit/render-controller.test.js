@@ -30,6 +30,9 @@ function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavai
     // hasLabel is part of the structure signature: the caption is a node that either
     // exists or does not, so the fixture has to carry it like the renderer does.
     average: { hasLabel: true, entity: headlineEntity },
+    // Same story for the subtitle: `subtitle: ""` removes the node, so its presence is
+    // structural too.
+    header: { hasSubtitle: true },
     rooms: { showChips: true },
     noData: { hintKind },
     views: empty

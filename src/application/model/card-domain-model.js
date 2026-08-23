@@ -62,16 +62,22 @@ export function buildCardDomainModel({ states, config, context, language }) {
   // was excluded from it (see source-topology.js), and the presentation layer has no
   // `states` to recompute it from — so the model that HAS them answers for everyone.
   const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
+  // `status` is what every decision compares against; `reason` is what the card TELLS a
+  // reader. Both travel, because the presentation layer has no states object to work
+  // either of them out again — see UNUSABLE_REASON in entity-model.js for why they are
+  // two values and not one.
   const sourceAvailability = {
     primary: {
       entity: context.primary.entityId,
       status: context.primary.availability,
+      reason: context.primary.unusableReason,
       metricKind: context.primary.metricKind,
     },
     rooms: context.rooms.map((room, index) => ({
       index,
       entity: room.entityId,
       status: room.availability,
+      reason: room.unusableReason,
       metricKind: room.metricKind,
     })),
   };

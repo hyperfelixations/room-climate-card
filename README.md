@@ -44,8 +44,13 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 - **At least one sensor**: a main `entity`, one or more `rooms`, or both. The
   card reads the mode from a `device_class` of `temperature`, `humidity`,
-  `carbon_dioxide`, or `pm25`, and falls back to a recognized unit such as
-  `°C`, `%`, `ppm`, or `µg/m³`. In practice these are `sensor.*` entities.
+  `carbon_dioxide`, or `pm25`. In practice these are `sensor.*` entities.
+- **A `device_class` on your CO₂ and PM2.5 sensors.** For temperature and
+  humidity the unit is enough on its own — `°C`, `°F`, `K` and `%` each belong
+  to one measurement. `ppm` and `µg/m³` do not: Home Assistant uses them for
+  several different measurements, so the card asks which one rather than
+  guessing. Most sensors from integrations already carry a `device_class`; a
+  hand-written template sensor may need one added.
 - **A current browser.** There is no backend part and no minimum Home Assistant
   version — but the layout uses CSS container queries, so any currently
   supported version of Chrome, Edge, Firefox, or Safari.
@@ -178,12 +183,12 @@ default.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `entity` | none | Your main or whole-home sensor. Its `device_class`, or its unit, decides whether this is a temperature, humidity, CO₂, or PM2.5 card. Leave it out and the rooms take over: one room is used directly, several are averaged. |
+| `entity` | none | Your main or whole-home sensor. Its `device_class` decides whether this is a temperature, humidity, CO₂, or PM2.5 card; for `°C`, `°F`, `K` and `%` the unit alone is enough. Leave it out and the rooms take over: one room is used directly, several are averaged. |
 | `rooms` | `[]` | Your room sensors. From two rooms with values on, you get the comparison features and the `extremes` view. Each room needs its own `entity` — see [Room entries](#room-entries). |
-| `range_entity` | none | A sensor holding todays range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_zeitpunkt` and `maximum_zeitpunkt` attributes if you also want the times. |
+| `range_entity` | none | A sensor holding today's range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_timestamp` and `maximum_timestamp` if you also want the times — `minimum_zeitpunkt` and `maximum_zeitpunkt` work too. Only `minimum` and `maximum` are needed; where a time is missing, the card just shows the value. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |
 | `classification` | `auto` + metric default | Decides where the colors and level names come from. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
-| `palette` | `pastel` | The colors the card classifies with. `pastel` is the card's own soft ramp, `vivid` a saturated one. You can also write out a palette of your own. See [Palettes](#palettes). |
+| `palette` | `pastel` | The colors the card classifies with. `pastel` is the card's own soft ramp, `vivid` a saturated one. You can also name any color, or write out a palette of your own. See [Palettes](#palettes). |
 
 Small changes count as stable rather than as a trend, so the arrow does not
 flicker — for temperature, anything within about `±0.1 °C/h`. The arrow appears
@@ -195,6 +200,7 @@ needs at least two rooms with values.
 | Option | Default | What it does |
 | --- | --- | --- |
 | `title` | automatic | Replaces the card title, which otherwise names the measurement — “Temperature”, for example. |
+| `subtitle` | automatic | Replaces the line under the title, and decides what happens when it is too long for the card. `subtitle: ""` removes the line. See [The line under the title](#the-line-under-the-title). |
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
@@ -573,30 +579,83 @@ every color on the card with one line:
 palette: vivid
 ```
 
-Two palettes ship with the card. `pastel` is the default, a soft ramp running
-from blue through green to red. `vivid` takes the same journey with saturated
-colors, which reads better on a bright wall panel or beside strongly colored
-cards.
+Four palettes ship with the card:
 
-A palette is written as a middle and two wings. `optimal` is the color for a
-reading that is where it should be; `above` runs outwards from there towards
-"too much" and `below` outwards towards "too little", so the first entry of each
-is one step off optimal:
+| Name | What it is for |
+| --- | --- |
+| `pastel` | The default: a soft ramp running from blue through green to red. |
+| `vivid` | The same journey in saturated colors — easier to read on a bright wall panel, or beside strongly colored cards. |
+| `color-vision` | For color vision deficiency, of any kind. Its ends are blue and gold, a pair that stays apart for protanopes, deuteranopes and tritanopes alike, instead of green and red, the pair that does not. Also answers to `protan-deutan`, `protan`, `deutan` and `tritan`. |
+| `signal` | Green, amber, red — a traffic light rather than a gradient, for a dashboard you read from across the room. Both directions use the same pair, so it says how far a reading is from where it should be rather than which way. It is built from green and red, so `color-vision` is the better choice if that pair is hard for you. |
+
+You can also ask for a ramp in a single color, by name or as a hex:
+
+```yaml
+palette: teal
+```
+
+Any of the 148 CSS color names works, as does `palette: "#3366CC"`. The color you
+name is the middle of the ramp, exactly as you wrote it; from there the ramp runs
+paler towards “too little” and deeper towards “too much”, keeping your color the
+whole way. A color with no hue of its own — `gray`, `white`, `black` — gives a
+grayscale ramp, which stays readable with any kind of color vision.
+
+Not every color has room in both directions: nothing is paler than `white`, and
+`gold` is already so light that only a couple of paler steps fit. Then the ramp
+is shorter on that side rather than made up of steps you could not tell apart.
+
+One honest limitation: a ramp in a single color cannot hold its contrast the way
+the four designed palettes do. They change hue as well, which is what lets them
+stay in a narrow lightness range; a single color has only paler and deeper to
+work with. Every ramp keeps at least a couple of steps that read well on both a
+light and a dark dashboard, and none runs further out than the color you named
+— but if you pick something very dark or very pale, its far end will be hard to
+read on one of the two.
+
+A name that ships as a palette always wins over a color of the same name.
+
+#### Writing your own
+
+A palette has a middle and two wings. `optimal` is the color for a reading that
+is where it should be, `above` runs outwards from there towards “too much” and
+`below` outwards towards “too little”, so the first entry of each is one step off
+optimal:
 
 ```yaml
 palette:
-  optimal: "#5FBF77"
-  above: ["#8CC65A", "#C7C24E", "#D9A648", "#DE8544", "#C94A4A"]
-  below: ["#4FB3A5", "#4A8FC4", "#3B5BA5", "#34479A", "#2E3A8C"]
+  optimal: 1DB85D
+  above: FD9808, EE2046
+  below: 6EC1E4, 2A6FDB
 ```
 
-The wings do not have to be five long, or even the same length as each other —
-more resolution towards "too much" than towards "too little" is a perfectly good
-thing to want. Nor do they have to match the profile. Both are anchored at the
-middle, so a palette with fewer steps than the profile collapses onto the colors
-it has, and one with more spreads the profile across it; either way the first
-step away from optimal already leaves the middle color, and the profile's
-furthest tier reaches the palette's furthest color.
+**Only `optimal` is required.** Leave a wing out and the card simply does not
+color that direction — useful for CO₂ and PM2.5, which have no “too little” at
+all. Leave both out and the whole card is that one color:
+
+```yaml
+palette:
+  optimal: teal
+```
+
+Each color can be written the way you have it to hand: `1DB85D`, `"#1DB85D"`,
+`#0F8` in quotes, or a CSS color name such as `teal`. A wing can be a list, a
+single color, or several separated by commas.
+
+> **Watch the `#`.** In YAML a `#` after a space starts a comment, so
+> `optimal: #1DB85D` leaves the value empty. Write it without the `#`, or put it
+> in quotes. If you do hit it, the card says so rather than just calling the
+> value invalid.
+>
+> One more corner: a hex made only of digits, such as `123456`, is fine
+> unquoted, but a three-digit shorthand of the form `1E5` is read by YAML as a
+> number. Quote that one, or write it out in six digits.
+
+The wings do not have to be the same length as each other, or the same length as
+the profile. Both are anchored at the middle, so a palette with fewer steps than
+the profile collapses onto the colors it has, and one with more spreads the
+profile across it; either way the first step away from optimal already leaves the
+middle color, and the profile's furthest tier reaches the palette's furthest
+color.
 
 `invalid` is optional. It belongs to a reading the card considers physically
 impossible; the card currently filters those out before they are colored, so
@@ -605,6 +664,41 @@ leaving it out is the normal thing to do and a neutral grey fills in.
 A value the entity classifies itself keeps its own `value_color`, and shows the
 neutral color when it supplies none — the palette applies to the card's own
 classification, never to one an integration provided.
+
+### The line under the title
+
+Under the title the card writes a sentence about what it is showing — which rooms
+are comfortable, which one stands out, or why there is no data. You can replace
+that sentence, and you can decide what happens when it is longer than the card is
+wide:
+
+```yaml
+subtitle: Ground floor sensors
+```
+
+```yaml
+subtitle: wrap
+```
+
+```yaml
+subtitle:
+  text: Ground floor sensors
+  overflow: wrap
+```
+
+`overflow: clip` is the default and cuts the line off with an ellipsis. `wrap`
+lets it run onto as many lines as it needs; everything below moves down to make
+room. Writing `subtitle: clip` or `subtitle: wrap` on its own sets the overflow
+and keeps the card's own sentence — which is why those two words cannot be used
+as subtitle text on their own. If you really want one of them as the text, use
+the block form: `subtitle: {text: wrap}`.
+
+`subtitle: ""` removes the line entirely.
+
+One exception, on purpose: when the card has no data to show, the line explains
+why, and that explanation replaces your text until data comes back. A card
+showing `--` under a line that says nothing about it would be the wrong kind of
+quiet.
 
 ### What the card checks, and what it decides for you
 
@@ -727,12 +821,23 @@ situations:
   not a number.** The entity exists, so it keeps its place as a `--` chip and
   the card keeps its layout. Use `unavailable_values: hide` to leave those
   chips out.
+- **A reading that cannot be real**, such as 800 % humidity. The card says so
+  rather than showing it.
 - **A sensor measuring something else, or using a unit that does not fit.** It
   is left out of this card.
 
 If everything looks right, check that your sensors have a `device_class` of
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`, or at least a unit the
-card recognizes (see [What you need](#what-you-need)).
+`temperature`, `humidity`, `carbon_dioxide`, or `pm25`. The line under the title
+names the sensor whenever the fix is on the sensor rather than in the card; if it
+is long, `subtitle: wrap` shows all of it.
+
+**"… needs a device_class", and the sensor reads ppm or µg/m³.**
+Those two units belong to several measurements in Home Assistant — `ppm` to CO₂
+but also to carbon monoxide and volatile organic compounds, `µg/m³` to PM1,
+PM2.5, PM4, PM10 and more — so the card will not guess which one it is looking
+at. Add the matching `device_class` to the sensor (`carbon_dioxide` or `pm25`)
+and the card picks it up. Temperature and humidity sensors are unaffected:
+their units belong to one measurement each.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the

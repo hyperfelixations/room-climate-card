@@ -67,6 +67,11 @@ export const ru = {
   "availability.valueUnavailable": "Значение сейчас недоступно.",
   "availability.noUsableRooms": "Сейчас нет доступных значений настроенных комнат.",
   "availability.incompatible": "Настроенные источники используют несовместимые типы измерений или единицы.",
+  "availability.valueNotNumeric": "Сущность не передаёт число.",
+  "availability.valueImpossible": "Сущность передаёт физически невозможное значение.",
+  "availability.unitAmbiguous": (v) => `Для ${v.entity} нужен device_class: эту единицу используют несколько типов измерений, и карточка не угадывает.`,
+  "availability.unidentified": (v) => `${v.entity} не сообщает, что измеряет. Добавьте device_class или единицу, известную карточке.`,
+  "availability.unitUnreadable": (v) => `${v.entity} передаёт единицу, которую карточка не может прочитать для этого типа измерения.`,
   "availability.roomNoData": (v) => `${v.name}: нет данных. Открыть подробности.`,
   "availability.valueNoData": (v) => `${v.label}: нет данных`,
 
@@ -97,7 +102,8 @@ export const ru = {
   "rangeScale.currentLabelShort": "сейчас",
   "rangeScale.minLabel": "мин.",
   "rangeScale.maxLabel": "макс.",
-  "rangeScale.footer": (v) => `Диапазон за сегодня ${v.span} · Мин. ${v.min} (${v.minTime}) · Макс. ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Диапазон за сегодня ${v.span} · Мин. ${v.min}${v.minTime} · Макс. ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Диапазон за сегодня ${v.span} · Мин. ${v.min} · Макс. ${v.max}`,
 
   "card.coldestRoom": "Самая холодная комната",

@@ -444,7 +444,7 @@ test("source entity deliberately accepts partial attributes but never fills them
 
   const noAttributes = createTemperatureCard({ source: "entity" });
   const neutral = noAttributes._computeViewModel().tone;
-  assert.equal(neutral.color, "#B4B2A9");
+  assert.equal(neutral.color, "#7D7D7D", "the card's own neutral grey, which belongs to no palette");
   assert.equal(neutral.label, "—");
   assert.equal(neutral.source, "entity");
   env.cleanup(noAttributes);
@@ -899,8 +899,25 @@ test("a palette shorter than the profile collapses onto what it has", () => {
 test("an unknown palette name stops the card with a message naming the known ones", () => {
   assert.throws(
     () => env.createCard({ entity: "sensor.avg", palette: "neon" }, temperatureHass()),
-    /Invalid configuration: palette "neon" is not a known palette — available: "pastel", "vivid"/
+    /palette "neon" is neither a palette nor a color — the palettes are "pastel", "vivid", "color-vision", "protan-deutan", "protan", "deutan", "tritan", "signal"/
   );
+});
+
+// The two roads a single word can take, through a real card.
+test("a colour name gives a ramp in that colour, and a palette name still wins", () => {
+  const teal = env.createCard({ entity: "sensor.avg", palette: "teal" }, temperatureHass(22));
+  // The promise of a monochrome palette, through a real card: name a colour, get that
+  // colour. 22 °C is optimal, so the middle of the ramp — and the middle IS #008080.
+  assert.equal(teal._computeViewModel().tone.color, "#008080");
+  env.cleanup(teal);
+
+  const hex = env.createCard({ entity: "sensor.avg", palette: "#3366CC" }, temperatureHass(22));
+  assert.match(hex._computeViewModel().tone.color, /^#[0-9A-F]{6}$/, "a hex base works the same way");
+  env.cleanup(hex);
+
+  const shipped = env.createCard({ entity: "sensor.avg", palette: "pastel" }, temperatureHass(22));
+  assert.equal(shipped._computeViewModel().tone.color, "#79A86C");
+  env.cleanup(shipped);
 });
 
 test("a custom profile without tier colours takes them from the palette", () => {
@@ -947,7 +964,7 @@ test("entity mode without a value_color stays neutral, and never borrows a ramp 
     { entity: "sensor.avg", classification: "entity", palette: "vivid" },
     temperatureHass(22, { value_score: 1, value_level: "From the integration" })
   );
-  assert.equal(card._computeViewModel().tone.color, "#B4B2A9");
+  assert.equal(card._computeViewModel().tone.color, "#7D7D7D");
   env.cleanup(card);
 });
 

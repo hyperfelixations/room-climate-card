@@ -749,9 +749,16 @@ test.describe("visual golden: headline shapes and headline widths", () => {
 // scale bands, the room chips and the extremes. One picture per palette is what proves
 // that, in a way no per-colour assertion can: it also catches a colour that reached
 // somewhere the palette was never threaded through.
+//
+// The six cover every road into the palette layer: the default, a second shipped design,
+// the one built for colour vision deficiency, the short one whose wings do not reach as
+// far as the profile does, one DERIVED from a colour name — which has no file to inspect,
+// so a picture is the only way to see what it produces — and one written out in YAML with
+// nothing but a middle, which is a card in a single colour.
 test.describe("visual golden: the shipped palettes", () => {
-  for (const palette of ["pastel", "vivid"]) {
-    test(palette, async ({ page }) => {
+  for (const palette of ["pastel", "vivid", "color-vision", "signal", "blue", { optimal: "1DB85D" }]) {
+    const name = typeof palette === "string" ? palette : "single-color";
+    test(name, async ({ page }) => {
       await gotoHarness(page);
       const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
       const states = {
@@ -773,7 +780,66 @@ test.describe("visual golden: the shipped palettes", () => {
         },
         states
       );
-      await shot(page, cardId, `palette-${palette}.png`, 400);
+      await shot(page, cardId, `palette-${name}.png`, 400);
     });
   }
+});
+
+// The line under the title, when it is longer than the card is wide.
+//
+// Two pictures, because the whole promise is a comparison: `clip` is what the card has
+// always done and must still do to the pixel, and `wrap` lets the line run on and pushes
+// everything below it down. A screenshot is the only honest proof of the second — that
+// the header grew, that the panel moved rather than being overlapped, and that a long
+// unbroken entity id wrapped instead of running out of the card.
+test.describe("visual golden: the subtitle", () => {
+  for (const overflow of ["clip", "wrap"]) {
+    test(overflow, async ({ page }) => {
+      await gotoHarness(page);
+      const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+      const cardId = await createCard(
+        page,
+        {
+          entity: "sensor.avg",
+          auto_slide: false,
+          subtitle: {
+            text: "Ground floor sensors, averaged every five minutes by sensor.ground_floor_temperature_average",
+            overflow,
+          },
+          views: [{ type: "scale" }],
+        },
+        { "sensor.avg": mkStateObj("sensor.avg", 22, attributes) }
+      );
+      await shot(page, cardId, `subtitle-${overflow}.png`, 400);
+    });
+  }
+});
+
+// One palette, in the other colour scheme, and only one — because this is the case that
+// went wrong. A ramp derived from a colour name is the only palette on the card that
+// nobody can inspect as a file, and `palette: blue` producing a washed-out lilac was
+// noticed on a dark dashboard. The light picture above proves the ramp; this one proves
+// it in the place the report came from. The hand-written palettes need no dark twin: they
+// are five hex values anyone can read.
+test("visual golden: a derived palette in dark mode", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await gotoHarness(page);
+  const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+  const cardId = await createCard(
+    page,
+    {
+      entity: "sensor.avg",
+      palette: "blue",
+      auto_slide: false,
+      rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }],
+      views: [{ type: "scale" }],
+    },
+    {
+      "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+      "sensor.r1": mkStateObj("sensor.r1", 18.4, attributes),
+      "sensor.r2": mkStateObj("sensor.r2", 22.1, attributes),
+      "sensor.r3": mkStateObj("sensor.r3", 26.8, attributes),
+    }
+  );
+  await shot(page, cardId, "palette-blue-dark.png", 400);
 });

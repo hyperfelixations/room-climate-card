@@ -78,9 +78,14 @@ function configCollaborators() {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
+    // The full palette collaborator set, exactly as element/room-climate-card.js wires it.
+    // A partial stub would still pass every baseline here — they all use a palette name —
+    // while hiding the day one of them stops resolving and takes the colour road instead.
     paletteForName: (name) => (name === null ? palettes.DEFAULT_PALETTE : palettes.paletteForName(name)),
-    paletteNames: () => Object.keys(palettes.CLASSIFICATION_PALETTE_REGISTRY),
+    paletteForColor: palettes.paletteForColor,
+    paletteKeys: palettes.paletteKeys,
     assertPalette: palettes.assertPalette,
+    completePalette: palettes.completePalette,
   };
 }
 

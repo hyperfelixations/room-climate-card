@@ -22,22 +22,30 @@
 import { buildMarker } from "../marker.js";
 import { buildScaleBarContent } from "./scale-bar.js";
 
-// The placeholder for a missing timestamp. minimum_zeitpunkt/maximum_zeitpunkt can
-// be absent even when the numeric attributes are present.
-const NO_TIME = "–";
+// A timestamp as it appears beside its value, brackets and all — or nothing at all when
+// there is no timestamp to show.
+//
+// The brackets belong to the TRANSLATION rather than to this file, because where they go
+// and which ones to use is a question about a language: Japanese and Chinese use
+// full-width brackets and no leading space. Putting the whole parenthetical in the value
+// is also what lets one sentence serve all four cases — both times, either one, or
+// neither — instead of four sentences per language.
+function timeSuffix(texts, time) {
+  return time ? texts.t("rangeScale.footerTime", { time }) : "";
+}
 
-// Today's span (the range entity's own state, never max - min), plus the daily
-// extremes and their timestamps. "compact" is the same sentence with the two
-// timestamp parentheticals dropped — a separate translation per language rather than
-// a string truncated here, which would have to guess each language's punctuation.
+// Today's span (the range entity's own state, never max - min), plus the daily extremes
+// and, when the entity reports them, their timestamps. "compact" is the same sentence
+// with both timestamps dropped for want of room — a separate translation, because
+// truncating a sentence here would have to guess each language's punctuation.
 function buildFooterText(shared, mode) {
   const { texts, range } = shared;
   return texts.t(mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer", {
     span: texts.fmtWithUnit(range.state),
     min: texts.fmtWithUnit(range.min),
-    minTime: range.minTime || NO_TIME,
+    minTime: timeSuffix(texts, range.minTime),
     max: texts.fmtWithUnit(range.max),
-    maxTime: range.maxTime || NO_TIME,
+    maxTime: timeSuffix(texts, range.maxTime),
   });
 }
 
@@ -78,12 +86,12 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       min: buildMarker({
         position: positions.min,
         color: range.minColor,
-        title: `${texts.t("card.dailyMinimum")}: ${range.minTime || NO_TIME} ${texts.fmtWithUnit(range.min)}`,
+        title: [texts.t("card.dailyMinimum") + ":", range.minTime, texts.fmtWithUnit(range.min)].filter(Boolean).join(" "),
       }),
       max: buildMarker({
         position: positions.max,
         color: range.maxColor,
-        title: `${texts.t("card.dailyMaximum")}: ${range.maxTime || NO_TIME} ${texts.fmtWithUnit(range.max)}`,
+        title: [texts.t("card.dailyMaximum") + ":", range.maxTime, texts.fmtWithUnit(range.max)].filter(Boolean).join(" "),
       }),
       average: buildMarker({
         position: positions.current,

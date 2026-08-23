@@ -7,7 +7,7 @@
 // primary-with-rooms or room-consensus.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
-import { AVAILABILITY, buildEntityModel, hasEntity } from "./entity-model.js";
+import { AVAILABILITY, UNUSABLE_REASON, buildEntityModel, hasEntity } from "./entity-model.js";
 import { SOURCE_TOPOLOGY, resolveSourceTopology } from "./source-topology.js";
 
 // Numeric consumers use this only after the no-data branch has returned. Display
@@ -26,6 +26,12 @@ function identityMetricKind(primary, rooms) {
 // EntityModel owns intrinsic availability. MeasurementContext adds the one
 // card-wide fact EntityModel cannot know: whether a recognized entity kind is
 // compatible with the selected card kind.
+//
+// The two rewrites that DO change the reason are the two where the card-wide view is the
+// reason: this source measures something else. The third does not touch it, deliberately
+// — a sentinel value whose kind cannot be identified is still best explained by what its
+// state actually is, and "unavailable" remains the more useful sentence than anything
+// this function could add.
 function withContextAvailability(model, metricKind, mixed) {
   if (!model.entityId) return model;
   if (
@@ -33,7 +39,7 @@ function withContextAvailability(model, metricKind, mixed) {
     model.metricKind &&
     [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
   ) {
-    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND, unusableReason: UNUSABLE_REASON.KIND_MISMATCH };
   }
   if (
     metricKind &&
@@ -41,7 +47,7 @@ function withContextAvailability(model, metricKind, mixed) {
     model.metricKind !== metricKind &&
     [AVAILABILITY.USABLE, AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(model.availability)
   ) {
-    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND };
+    return { ...model, availability: AVAILABILITY.INCOMPATIBLE_KIND, unusableReason: UNUSABLE_REASON.KIND_MISMATCH };
   }
   // A sentinel or malformed value without enough metadata to identify its
   // measurement kind cannot become a typed room placeholder.

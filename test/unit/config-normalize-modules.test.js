@@ -50,16 +50,19 @@ const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", below: ["#abcdef"],
 const COLLABORATORS = {
   classificationZones: ZONES,
   paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
-  paletteNames: () => Object.keys(PALETTES),
+  // A stand-in for the colour lookup: one name that resolves, so precedence and the
+  // error message can both be exercised without the 148-entry table.
+  paletteForColor: (name) =>
+    name === "teal" ? { id: "teal", below: ["#003333"], optimal: "#006666", above: ["#009999"] } : null,
+  paletteKeys: () => Object.keys(PALETTES),
   assertPalette: (palette, path) => {
+    if (typeof palette.optimal !== "string") throw new Error(`Invalid configuration: ${path}.optimal must be a color.`);
     for (const wing of ["below", "above"]) {
-      if (!Array.isArray(palette[wing]) || palette[wing].length === 0) {
-        throw new Error(`Invalid configuration: ${path}.${wing} must be a non-empty list of colors.`);
-      }
+      if (!Array.isArray(palette[wing])) throw new Error(`Invalid configuration: ${path}.${wing} must be a list of colors.`);
     }
     return palette;
   },
-  completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#8A8A8A" }),
+  completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#7D7D7D" }),
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   optionSchemaForView: (type) =>
     type === "scale"
@@ -903,29 +906,104 @@ test("the palette option resolves a name, a written-out palette, or the default"
   assert.equal(normalizePalette("  OTHER  ", COLLABORATORS).id, "other", "a name is matched case-insensitively");
 
   const written = normalizePalette({ below: ["#111"], optimal: "#222", above: ["#333"] }, COLLABORATORS);
-  assert.deepEqual(written.below, ["#111"]);
-  assert.equal(written.optimal, "#222");
-  // The one field a palette may leave out: nobody has to invent a colour for a state
-  // they never see.
-  assert.equal(written.invalid, "#8A8A8A");
+  assert.deepEqual(written.below, ["#111111"]);
+  assert.equal(written.optimal, "#222222");
+  // The one field a palette may leave out and still be complete: nobody has to invent a
+  // colour for a state they never see.
+  assert.equal(written.invalid, "#7D7D7D");
+});
+
+// WHAT A PERSON ACTUALLY TYPES. `optimal: #1DB85D` is a YAML comment, so the strict
+// spelling is a trap rather than a safeguard here; every row below is a form somebody
+// reaches for, and all of them have to arrive as the same normalized hex.
+test("a colour may be written the way a person writes it", () => {
+  const { normalizePalette } = paletteModule;
+  const optimalOf = (value) => normalizePalette({ optimal: value }, COLLABORATORS).optimal;
+  assert.equal(optimalOf("#1DB85D"), "#1DB85D", "quoted, with the hash");
+  assert.equal(optimalOf("1DB85D"), "#1DB85D", "unquoted, without it");
+  assert.equal(optimalOf("1db85d"), "#1DB85D", "lower case");
+  assert.equal(optimalOf("  1DB85D  "), "#1DB85D", "surrounded by spaces");
+  assert.equal(optimalOf("#0F8"), "#00FF88", "three digits, expanded the way CSS defines them");
+  assert.equal(optimalOf("teal"), "#008080", "a CSS colour name");
+  // YAML turns an all-digit hex into a NUMBER. Its decimal spelling is the six digits the
+  // user typed, so they are recoverable — and anything that does not come back as exactly
+  // six digits is refused rather than guessed at.
+  assert.equal(optimalOf(123456), "#123456", "a number YAML made of six digits");
+  assert.throws(() => optimalOf(12345), /palette\.optimal/, "five digits is not a colour");
+  assert.throws(() => optimalOf(1.5), /palette\.optimal/, "and neither is a fraction");
+});
+
+// The wings are the other half of the same idea: a list is fine, one colour is fine, and
+// so is the comma-separated line people write without thinking about it.
+test("a wing may be a list, a single colour, or a comma-separated line", () => {
+  const { normalizePalette } = paletteModule;
+  const expected = ["#FD9808", "#EE2046"];
+  for (const written of [
+    ["FD9808", "EE2046"],
+    "FD9808, EE2046",
+    "FD9808 EE2046",
+    "#FD9808,#EE2046",
+    ["FD9808, EE2046"],
+  ]) {
+    const palette = normalizePalette({ optimal: "1DB85D", above: written }, COLLABORATORS);
+    assert.deepEqual(palette.above, expected, JSON.stringify(written));
+  }
+  assert.deepEqual(normalizePalette({ optimal: "1DB85D", above: "FD9808" }, COLLABORATORS).above, ["#FD9808"]);
+});
+
+// A palette with one wing, or none at all, is a legitimate thing to want: CO2 has no
+// "too little" to colour, and a single colour is a perfectly good way to say "this card
+// is teal". Requiring both wings made all of that an error for no gain.
+test("only optimal is required, and a wing left out is simply empty", () => {
+  const { normalizePalette } = paletteModule;
+  const single = normalizePalette({ optimal: "1DB85D" }, COLLABORATORS);
+  assert.equal(single.optimal, "#1DB85D");
+  assert.deepEqual(single.above, []);
+  assert.deepEqual(single.below, []);
+
+  const oneSided = normalizePalette({ optimal: "1DB85D", above: "FD9808, EE2046" }, COLLABORATORS);
+  assert.deepEqual(oneSided.above, ["#FD9808", "#EE2046"]);
+  assert.deepEqual(oneSided.below, []);
+
+  assert.throws(() => normalizePalette({ above: "FD9808" }, COLLABORATORS), /palette needs an optimal color/);
+});
+
+// The mistake this system makes most often produces an EMPTY value rather than a wrong
+// one, so "must be a hex color" would be describing something the user cannot see. The
+// message has to name the cause.
+test("a value that a YAML comment swallowed is explained, not just rejected", () => {
+  const { normalizePalette } = paletteModule;
+  // What `optimal: #1DB85D` actually reaches the card as.
+  assert.throws(() => normalizePalette({ optimal: null }, COLLABORATORS), /starts a comment in YAML/);
+  assert.throws(() => normalizePalette({ optimal: "1DB85D", above: null }, COLLABORATORS), /palette\.above.*starts a comment in YAML/s);
+  // Leaving the key out entirely means something different and is not an error.
+  assert.deepEqual(normalizePalette({ optimal: "1DB85D" }, COLLABORATORS).above, []);
 });
 
 // A name the card does not know is a hard error, not a silent fallback: a user who
 // typed it meant it, and a dashboard that quietly ignored them would look like a bug
 // in the palette rather than a typo.
-test("an unknown palette name is refused, and the message says which ones exist", () => {
+test("an unknown palette name is refused, and the message names all three roads in", () => {
   assert.throws(
     () => paletteModule.normalizePalette("neon", COLLABORATORS),
-    /Invalid configuration: palette "neon" is not a known palette — available: "tiny", "other", or write one out as \{below, optimal, above\}\./
+    /palette "neon" is neither a palette nor a color — the palettes are "tiny", "other", or name any CSS color/
   );
+});
+
+// A shipped palette wins over a colour of the same name, so adding a palette later can
+// take a word back without changing anything else.
+test("a registered palette name beats a colour name", () => {
+  assert.equal(paletteModule.normalizePalette("teal", COLLABORATORS).id, "teal", "no palette is called teal here");
+  const shadowed = { ...COLLABORATORS, paletteForName: (name) => (name === "teal" ? { id: "shipped" } : null) };
+  assert.equal(paletteModule.normalizePalette("teal", shadowed).id, "shipped");
 });
 
 test("a written-out palette is refused for the same reasons a shipped one would be", () => {
   const ok = { below: ["#111"], optimal: "#222", above: ["#333"] };
-  assert.throws(() => paletteModule.normalizePalette(5, COLLABORATORS), /palette must be a palette name or an object/);
-  assert.throws(() => paletteModule.normalizePalette([], COLLABORATORS), /palette must be a palette name or an object/);
+  assert.throws(() => paletteModule.normalizePalette([], COLLABORATORS), /palette must be a palette name, a color, or an object/);
+  assert.throws(() => paletteModule.normalizePalette(true, COLLABORATORS), /palette must be a palette name, a color, or an object/);
   assert.throws(() => paletteModule.normalizePalette({ ...ok, extra: 1 }, COLLABORATORS), /palette\.extra/);
-  assert.throws(() => paletteModule.normalizePalette({ ...ok, above: [] }, COLLABORATORS), /palette\.above must be a non-empty list/);
+  assert.throws(() => paletteModule.normalizePalette({ ...ok, above: "not-a-colour" }, COLLABORATORS), /palette\.above\[1\]/);
 });
 
 // -------------------------------------------------- tier colour contract ---

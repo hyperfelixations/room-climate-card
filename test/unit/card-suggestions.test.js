@@ -271,3 +271,50 @@ test("neither function throws, whatever the picker hands it", () => {
   }
   assert.equal({}.polluted, undefined, "no prototype pollution may survive the sweep");
 });
+
+// ------------------------------------------------ what the browse path avoids --
+
+// Home Assistant's own cards search the sensor domain when they look for something to
+// start with, and so does this one. A `number.*` with a temperature device class reads
+// perfectly well, but it is a control rather than a measurement, and offering one unasked
+// as somebody's home average is a poor first impression.
+test("the browse path offers only sensors, while the entity path offers whatever was picked", () => {
+  const states = {
+    ...statesWith([named("sensor.hall", "Hall")]),
+    "number.setpoint": { entity_id: "number.setpoint", state: "21", attributes: { ...TEMPERATURE, friendly_name: "Setpoint" } },
+  };
+  assert.equal(suggestions.stubConfigFor(states, ["number.setpoint", "sensor.hall"], []).entity, "sensor.hall");
+  assert.equal(suggestions.stubConfigFor(states, ["number.setpoint"], []).rooms, undefined);
+  // Picked deliberately, so it is offered.
+  assert.deepEqual(suggestions.suggestionsForEntity(states, "number.setpoint"), {
+    config: { type: "custom:room-climate-card", entity: "number.setpoint" },
+  });
+});
+
+// `Object.keys` follows insertion order, and Home Assistant fills that object from
+// whatever arrived first — so without sorting, the same system could open the picker on a
+// different sensor each time and look like a card with a mind of its own.
+test("the same system always produces the same stub", () => {
+  const entries = [named("sensor.c", "C"), named("sensor.a", "A"), named("sensor.b", "B")];
+  const forwards = suggestions.stubConfigFor(statesWith(entries), [], []);
+  const backwards = suggestions.stubConfigFor(statesWith([...entries].reverse()), [], []);
+  assert.deepEqual(forwards, backwards);
+  assert.equal(forwards.entity, "sensor.a", "and it is the first by id, not by arrival");
+});
+
+// The mixed-measurement case the supervisor asked about: a system with temperature,
+// humidity and CO2 sensors must not produce a card that averages them together.
+test("a mixed system produces a card of one measurement only", () => {
+  const states = statesWith([
+    named("sensor.a_temp", "Hall"),
+    named("sensor.b_hum", "Bath", { device_class: "humidity", unit_of_measurement: "%" }),
+    named("sensor.c_co2", "Study", { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    named("sensor.d_temp", "Study temp"),
+  ]);
+  const stub = suggestions.stubConfigFor(states, [], []);
+  const kinds = [stub.entity, ...(stub.rooms || []).map((room) => room.entity)].map(
+    (entityId) => states[entityId].attributes.device_class
+  );
+  assert.equal(new Set(kinds).size, 1, `every entity must share one measurement, got ${kinds.join(", ")}`);
+  assert.equal(kinds[0], "temperature", "the first usable sensor by id decides, and the rooms follow it");
+});

@@ -163,7 +163,7 @@ function viewModel(overrides = {}) {
     subtitle: "All rooms comfortable",
     tone: { label: "Optimal", color: "#79A86C", soft: "rgba(121,168,108,0.2)", icon: "mdi:thermometer" },
     toneStyle: "--tone-color:#79A86C;--tone-soft:rgba(121,168,108,0.2);",
-    header: { icon: "mdi:thermometer", title: "Temperature", subtitle: "All rooms comfortable", statusLabel: "Optimal" },
+    header: { icon: "mdi:thermometer", title: "Temperature", subtitle: "All rooms comfortable", hasSubtitle: true, subtitleOverflow: "clip", statusLabel: "Optimal" },
     average: {
       value: 22,
       valueText: "22.0",
@@ -221,7 +221,7 @@ function emptyViewModel(overrides = {}) {
     title: "CO₂",
     subtitle: "No data yet.",
     noData: { hintKind: "value-unavailable" },
-    header: { icon: "mdi:molecule-co2", title: "CO₂", subtitle: "No data yet.", statusLabel: "No data" },
+    header: { icon: "mdi:molecule-co2", title: "CO₂", subtitle: "No data yet.", hasSubtitle: true, subtitleOverflow: "clip", statusLabel: "No data" },
     average: {
       ...base.average,
       value: null,
@@ -814,7 +814,7 @@ test("the shell patches the header, the average, the chips and then every view",
 
   const changed = viewModel({
     views: { ...model.views, keys: ["alpha"] },
-    header: { icon: "mdi:water-percent", title: "Humidity", subtitle: "Dry", statusLabel: "Low" },
+    header: { icon: "mdi:water-percent", title: "Humidity", subtitle: "Dry", hasSubtitle: true, subtitleOverflow: "clip", statusLabel: "Low" },
   });
   calls.length = 0;
   cardShell.patchCardBody(realm.context, realm.root, changed, syntheticRegistry(calls));
@@ -843,7 +843,7 @@ test("the shell resolves the layout of every view that declares one, and skips t
 test("the structure signature composes the shell's parts with each view's own", () => {
   const model = viewModel();
   const signature = cardShell.cardStructureSignature(model, registry.VIEW_RENDERERS);
-  assert.match(signature, /^state:data\|chips:1\|avgLabel:1\|views:scale\|collapsed:0\|/);
+  assert.match(signature, /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|views:scale\|collapsed:0\|/);
   assert.match(signature, /scale:/, "the active view contributes its own part");
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
 });
@@ -969,7 +969,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
   const model = viewModel({
     title: payload,
     subtitle: payload,
-    header: { icon: payload, title: payload, subtitle: payload, statusLabel: payload },
+    header: { icon: payload, title: payload, subtitle: payload, hasSubtitle: true, subtitleOverflow: "clip", statusLabel: payload },
     average: { ...viewModel().average, entity: payload, label: payload, tooltip: payload, ariaLabel: payload, unitText: payload },
     carousel: { hint: payload, noActiveViewsHint: payload },
     rooms: {

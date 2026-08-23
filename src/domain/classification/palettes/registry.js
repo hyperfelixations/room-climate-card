@@ -1,21 +1,44 @@
-// The palettes the card ships, and the one shape every palette has to have.
+// The palettes the card ships, the one shape every palette has to have, and the words
+// that reach them.
 //
 // Validated at MODULE LOAD rather than on use, for the same reason the translation
 // registry is: a palette with a hole in it produces a card with an invisible value, and
 // the honest moment to find that out is the build, not a reading that happens to land
 // three steps above optimal. The check runs over user-supplied palettes too —
 // normalizePalette() in the configuration layer calls assertPalette() on a written-out
-// one — so both roads into the resolver arrive at the same guarantee.
+// one — so both roads into the resolver arrive at the same guarantee, and there is
+// exactly ONE definition of "a usable palette" rather than one for the card and a
+// stricter one for its users.
 
-import { isHexColor } from "../../../core/color.js";
+import { isHexColor, parseColorToken } from "../../../core/color.js";
+import { colorVision } from "./color-vision.js";
+import { monochromePalette } from "./monochrome.js";
 import { pastel } from "./pastel.js";
+import { signal } from "./signal.js";
 import { vivid } from "./vivid.js";
 
 export const DEFAULT_PALETTE_ID = "pastel";
 
-// What "no judgement is possible" looks like when a palette does not say. Deliberately a
-// plain grey: it has to read as "off the scale" beside any ramp, warm or cold.
-export const NEUTRAL_INVALID_COLOR = "#8A8A8A";
+// "No judgement is possible", in one colour: an invalid reading when the palette does not
+// name one, and a value the entity classified itself without supplying a colour.
+//
+// It is a plain grey because it has to read as "off the scale" beside any ramp, warm or
+// cold — and it is THIS grey because that is measured. A card colour is foreground on a
+// light background and on a dark one, and the whole grey axis was walked against both:
+// #7D7D7D reaches 4,12 : 1 on each, which is the most a single grey can do. (The value
+// this replaced came out at 2,13 : 1 on a light card, because it was the pastel palette's
+// own warm grey wired in where no palette should have had a say.)
+export const NEUTRAL_COLOR = "#7D7D7D";
+
+// Which card background a palette was designed against, for the palettes that were
+// designed against a particular one at all.
+//
+// Nothing reads this yet, and that is deliberate: it is the fact an eventual
+// theme-adaptation pass would need, recorded now while the palettes are being designed
+// and the answer is known, rather than reconstructed later by guesswork. Recording it
+// costs one validated field; reconstructing it would cost the measurements again.
+export const PALETTE_TUNINGS = Object.freeze(["light", "dark", "any"]);
+const DEFAULT_TUNING = "any";
 
 function assertColor(value, path) {
   if (typeof value !== "string" || !isHexColor(value.trim())) {
@@ -23,12 +46,17 @@ function assertColor(value, path) {
   }
 }
 
-// Both wings must exist, or a profile that reaches in that direction has nowhere to go.
-// A profile that never reaches one way — CO2 has no "too little" — simply leaves that
-// wing untouched, which is not the same thing as the palette not having one.
+// A wing may be missing, and a missing wing is not a broken palette.
+//
+// CO2 and PM2.5 have no "too little" to colour, a single-colour palette has neither
+// direction, and a generated ramp on `white` has nowhere paler to go. Requiring both
+// wings would have made all three of those an error for no gain: a wing nothing asks for
+// costs nothing, and a wing that cannot exist cannot be conjured. What a wing may NOT be
+// is present-but-malformed, which is what this still catches.
 function assertWing(wing, path) {
-  if (!Array.isArray(wing) || wing.length === 0) {
-    throw new Error(`Invalid configuration: ${path} must be a non-empty list of colors, running outwards from the middle.`);
+  if (wing === undefined || wing === null) return;
+  if (!Array.isArray(wing)) {
+    throw new Error(`Invalid configuration: ${path} must be a list of colors, running outwards from the middle.`);
   }
   // 1-based, because a wing is addressed by "steps from optimal" everywhere else.
   wing.forEach((color, index) => assertColor(color, `${path}[${index + 1}]`));
@@ -44,24 +72,44 @@ export function assertPalette(palette, path = "palette") {
   assertWing(palette.above, `${path}.above`);
   assertWing(palette.below, `${path}.below`);
   if (palette.invalid !== undefined && palette.invalid !== null) assertColor(palette.invalid, `${path}.invalid`);
+  if (palette.tunedFor !== undefined && palette.tunedFor !== null && !PALETTE_TUNINGS.includes(palette.tunedFor)) {
+    throw new Error(`Invalid configuration: ${path}.tunedFor must be one of ${PALETTE_TUNINGS.join(", ")}.`);
+  }
   return palette;
 }
 
-// A palette in the shape the resolver reads, with the one optional field filled in. Kept
+// A palette in the shape the resolver reads, with the optional fields filled in. Kept
 // separate from assertPalette() so validation stays a question and normalization stays an
 // answer.
+//
+// `aliases` is dropped rather than carried: which words reach a palette is the registry's
+// business, and the object the card renders from is the palette itself.
 export function completePalette(palette) {
   return Object.freeze({
-    ...palette,
-    invalid: palette.invalid ?? NEUTRAL_INVALID_COLOR,
-    above: Object.freeze([...palette.above]),
-    below: Object.freeze([...palette.below]),
+    id: palette.id,
+    optimal: palette.optimal,
+    above: Object.freeze([...(palette.above || [])]),
+    below: Object.freeze([...(palette.below || [])]),
+    invalid: palette.invalid ?? NEUTRAL_COLOR,
+    tunedFor: palette.tunedFor ?? DEFAULT_TUNING,
   });
 }
 
+const SHIPPED = [pastel, vivid, colorVision, signal];
+
+// One palette, several words for it.
+//
+// A user searches by the name of the thing they have — a tritanope writes `tritan`, and
+// finding nothing there would be worse than any tidiness gained by insisting on the one
+// canonical spelling. So the index maps every accepted word to the palette, while the
+// palette keeps exactly one `id`, which is what documentation, diagnostics and golden
+// screenshots name it by.
 export const CLASSIFICATION_PALETTE_REGISTRY = Object.freeze(
   Object.fromEntries(
-    [pastel, vivid].map((palette) => [palette.id, completePalette(assertPalette(palette, `palette "${palette.id}"`))])
+    SHIPPED.flatMap((palette) => {
+      const complete = completePalette(assertPalette(palette, `palette "${palette.id}"`));
+      return [palette.id, ...(palette.aliases || [])].map((key) => [key, complete]);
+    })
   )
 );
 
@@ -70,3 +118,34 @@ export function paletteForName(name) {
 }
 
 export const DEFAULT_PALETTE = CLASSIFICATION_PALETTE_REGISTRY[DEFAULT_PALETTE_ID];
+
+// A palette DERIVED from a single colour, named or written as a hex.
+//
+// Deliberately a second lookup rather than 148 more entries in the registry above: a
+// registered palette is a design somebody made, and a monochrome ramp is a calculation.
+// Keeping them apart is also what makes the precedence obvious — a registered name always
+// wins, so adding a palette called `teal` one day would take that word back without
+// breaking the mechanism.
+//
+// Returns null for anything that is neither, which is what lets the configuration layer
+// produce one error message naming both roads.
+export function paletteForColor(value) {
+  const hex = parseColorToken(value);
+  if (!hex) return null;
+  const id = typeof value === "string" ? value.trim().toLowerCase() : String(value);
+  // Alpha is dropped from the SEED, and dropping it is the honest answer rather than an
+  // oversight: a ramp is a statement about lightness, colourfulness and hue, and there is
+  // no meaningful way to derive ten more transparencies from one. Keeping it on the
+  // middle alone would make the middle behave unlike every other step of its own ramp.
+  // A written-out palette still takes an 8-digit colour per step, where the user chose
+  // each one deliberately.
+  return completePalette(monochromePalette(hex.length > 7 ? hex.slice(0, 7) : hex, id));
+}
+
+// Every word a `palette:` option may be, for the message a user sees when theirs was none
+// of them. All of them, aliases included: a word that works but is not listed would send
+// somebody looking for a mistake they did not make. The 148 colour names stay out — they
+// would bury the palettes, and the message names that road separately.
+export function paletteKeys() {
+  return Object.keys(CLASSIFICATION_PALETTE_REGISTRY);
+}

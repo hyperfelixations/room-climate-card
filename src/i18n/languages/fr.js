@@ -67,6 +67,11 @@ export const fr = {
   "availability.valueUnavailable": "La valeur est actuellement indisponible.",
   "availability.noUsableRooms": "Aucune valeur de pièce configurée n'est actuellement exploitable.",
   "availability.incompatible": "Les sources configurées utilisent des types de mesure ou des unités incompatibles.",
+  "availability.valueNotNumeric": "L’entité ne fournit pas de nombre.",
+  "availability.valueImpossible": "L’entité fournit une valeur physiquement impossible.",
+  "availability.unitAmbiguous": (v) => `${v.entity} a besoin d’un device_class : plusieurs types de mesure utilisent cette unité, et la carte ne devine pas.`,
+  "availability.unidentified": (v) => `${v.entity} n’indique pas ce qu’elle mesure. Ajoutez un device_class, ou une unité que la carte connaît.`,
+  "availability.unitUnreadable": (v) => `${v.entity} fournit une unité que la carte ne peut pas lire pour ce type de mesure.`,
   "availability.roomNoData": (v) => `${v.name} : aucune donnée. Ouvrir les détails.`,
   "availability.valueNoData": (v) => `${v.label} : aucune donnée`,
 
@@ -98,7 +103,8 @@ export const fr = {
   "rangeScale.currentLabelShort": "act.",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "max",
-  "rangeScale.footer": (v) => `Écart du jour ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Écart du jour ${v.span} · Min ${v.min}${v.minTime} · Max ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Écart du jour ${v.span} · Min ${v.min} · Max ${v.max}`,
 
   "card.coldestRoom": "Pièce la plus froide",

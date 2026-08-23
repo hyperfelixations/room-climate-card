@@ -63,6 +63,11 @@ export const zh = {
   "availability.valueUnavailable": "当前无法使用该值。",
   "availability.noUsableRooms": "当前没有可用的已配置房间值。",
   "availability.incompatible": "已配置的来源使用了不兼容的测量类型或单位。",
+  "availability.valueNotNumeric": "该实体未提供数值。",
+  "availability.valueImpossible": "该实体提供了物理上不可能的数值。",
+  "availability.unitAmbiguous": (v) => `${v.entity} 需要 device_class：多种测量类型使用该单位，卡片不会猜测。`,
+  "availability.unidentified": (v) => `${v.entity} 未说明它测量什么。请添加 device_class，或卡片认识的单位。`,
+  "availability.unitUnreadable": (v) => `${v.entity} 提供的单位，卡片无法用于此测量类型。`,
   "availability.roomNoData": (v) => `${v.name}：无数据。打开详情。`,
   "availability.valueNoData": (v) => `${v.label}：无数据`,
 
@@ -92,7 +97,8 @@ export const zh = {
   "rangeScale.currentLabelShort": "当前",
   "rangeScale.minLabel": "最低",
   "rangeScale.maxLabel": "最高",
-  "rangeScale.footer": (v) => `今日范围 ${v.span} · 最低 ${v.min} (${v.minTime}) · 最高 ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `今日范围 ${v.span} · 最低 ${v.min}${v.minTime} · 最高 ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => `（${v.time}）`,
   "rangeScale.footerCompact": (v) => `今日范围 ${v.span} · 最低 ${v.min} · 最高 ${v.max}`,
 
   "card.coldestRoom": "最冷房间",

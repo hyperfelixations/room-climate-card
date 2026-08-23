@@ -24,14 +24,13 @@ import { buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
 import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/model/source-topology.js";
 import { buildRoomMarker } from "./marker.js";
-import { buildTone, toneStyleDeclaration } from "./tone.js";
+import { buildTone, toneStyleDeclaration, NO_DATA_COLOR } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
-import { AVAILABILITY } from "../../application/model/entity-model.js";
+import { AVAILABILITY, UNUSABLE_REASON } from "../../application/model/entity-model.js";
 import { CARD_NAME } from "../../core/card-metadata.js";
 import { UNAVAILABLE_TEXT } from "../../core/text.js";
 import { rgba } from "../../core/color.js";
 
-const NO_DATA_COLOR = "#7F8792";
 const PLACEHOLDER_STATUSES = new Set([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE]);
 
 function buildNeutralTone(icon, texts) {
@@ -203,6 +202,47 @@ function noDataHeadlineSource(domainModel, config, topology) {
   return { entity: null, status: null, source: "calculated", roomIndex: null };
 }
 
+// WHAT EACH REASON READS AS. One row per way of being unusable, which is the whole point
+// of the reason vocabulary: before this, five different causes produced three sentences,
+// and two of those sentences were wrong. A reading of 800 % is not "currently
+// unavailable" — it is there, it is just impossible — and a ppm sensor without a
+// device_class is not an incompatibility between sources, it is one sensor that has not
+// said what it measures.
+//
+// `entity: true` marks the rows that NAME the sensor, and that is a rule rather than a
+// case-by-case judgement: a message asking the reader to change something has to say what
+// to change. A message about a passing data condition does not, because the source of the
+// big value is not in doubt and a shorter sentence fits the line better.
+const REASON_TEXTS = {
+  [UNUSABLE_REASON.UNAVAILABLE]: { kind: "value-unavailable", key: "availability.valueUnavailable" },
+  [UNUSABLE_REASON.NOT_NUMERIC]: { kind: "value-not-numeric", key: "availability.valueNotNumeric" },
+  [UNUSABLE_REASON.OUT_OF_RANGE]: { kind: "value-impossible", key: "availability.valueImpossible" },
+  [UNUSABLE_REASON.UNIT_AMBIGUOUS]: { kind: "unit-ambiguous", key: "availability.unitAmbiguous", entity: true },
+  [UNUSABLE_REASON.UNIDENTIFIED]: { kind: "unidentified", key: "availability.unidentified", entity: true },
+  [UNUSABLE_REASON.UNIT_UNREADABLE]: { kind: "unit-unreadable", key: "availability.unitUnreadable", entity: true },
+  [UNUSABLE_REASON.KIND_MISMATCH]: { kind: "incompatible", key: "availability.incompatible" },
+};
+
+// The line under the title: what it says, and how it behaves when it is too long.
+//
+// THE ORDER IS THE CONTRACT, and it is not the same order `title` uses. A title is a NAME,
+// so a user's own always wins. A subtitle is the card describing its own state, and when
+// that state is "there is nothing to show", the reason is the only thing worth saying:
+//
+//   no-data explanation  ->  the user's own text  ->  the automatic sentence
+//
+// A card that showed `--` under a cheerful custom line and no explanation would be
+// withholding the one fact its reader needs. The custom line comes back the moment data
+// does; the explanation is temporary by definition.
+//
+// `text: ""` is a real answer meaning "no line here" — the node is then not rendered at
+// all rather than rendered empty, which is why hasSubtitle has to travel with it.
+function buildHeaderSubtitle(config, automatic, { forced = null } = {}) {
+  const own = config.subtitle?.text;
+  const text = forced !== null ? forced : own === null || own === undefined ? automatic : own;
+  return { subtitle: text, hasSubtitle: text !== "", subtitleOverflow: config.subtitle?.overflow || "clip" };
+}
+
 function buildNoDataSubtitle({ domainModel, headline, texts }) {
   const missingRooms = domainModel.context.availability.rooms.filter(
     (room) => room.status === AVAILABILITY.MISSING && room.entity !== headline.entity
@@ -231,6 +271,16 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
       text: texts.t("availability.entityMissing", { entity: headline.entity }),
     });
   }
+  const explained = REASON_TEXTS[headline.reason];
+  if (explained) {
+    return appendMissingRooms({
+      kind: explained.kind,
+      text: texts.t(explained.key, explained.entity ? { entity: headline.entity } : undefined),
+    });
+  }
+  // Unreached from a headline the model built — every unusable status carries a reason.
+  // Kept because this function is also the fallback for a headline that has none at all
+  // (a calculated source), and losing the old sentence there would be a regression.
   if ([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(headline.status)) {
     return appendMissingRooms({ kind: "value-unavailable", text: texts.t("availability.valueUnavailable") });
   }
@@ -270,6 +320,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
   const icon = config.icon || meta?.emptyIcon || "mdi:home-thermometer-outline";
   const tone = buildNeutralTone(icon, texts);
   const noData = buildNoDataSubtitle({ domainModel, headline, texts });
+  // Forced: in the no-data state the explanation outranks a custom line (see
+  // buildHeaderSubtitle) and there is always one, so the header always has a subtitle.
+  const headerSubtitle = buildHeaderSubtitle(config, noData.text, { forced: noData.text });
 
   const displayRooms = buildDisplayRooms(domainModel, config);
   const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
@@ -284,13 +337,13 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
     empty: true,
     metric: { kind: metricKind, unit: "", displayUnitProfile: null },
     title,
-    subtitle: noData.text,
+    subtitle: headerSubtitle.subtitle,
     missingRooms: domainModel.missingRooms,
     configurationState: domainModel.configurationState,
     noData: { hintKind: noData.kind },
     tone,
     toneStyle: toneStyleDeclaration(tone),
-    header: { icon, title, subtitle: noData.text, statusLabel },
+    header: { icon, title, ...headerSubtitle, statusLabel },
     average: {
       value: null,
       valueText: UNAVAILABLE_TEXT,
@@ -497,7 +550,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   };
 
   const byKey = buildViewContent({ shared, viewState });
-  const subtitle = buildSubtitleText(domainModel.subtitle, texts, metricKind);
+  const headerSubtitle = buildHeaderSubtitle(config, buildSubtitleText(domainModel.subtitle, texts, metricKind));
 
   const chips = layout.visible.map((room) =>
     buildRoomChipModel({
@@ -517,13 +570,13 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       displayUnitProfile: domainModel.metric.displayUnitProfile,
     },
     title,
-    subtitle,
+    subtitle: headerSubtitle.subtitle,
     tone,
     // The card root's own custom properties, built once and reused by the patch path.
     toneStyle: toneStyleDeclaration(tone),
     // The header's four slots, referencing the same strings rather than recomputing
     // them — a cohesive group for the renderer, not a second copy.
-    header: { icon: tone.icon, title, subtitle, statusLabel: tone.label },
+    header: { icon: tone.icon, title, ...headerSubtitle, statusLabel: tone.label },
     average: averageModel,
     rooms: {
       visible: layout.visible,

@@ -66,6 +66,11 @@ export const nl = {
   "availability.valueUnavailable": "De waarde is momenteel niet beschikbaar.",
   "availability.noUsableRooms": "Geen geconfigureerde ruimtewaarde is momenteel bruikbaar.",
   "availability.incompatible": "Geconfigureerde bronnen gebruiken incompatibele meettypen of eenheden.",
+  "availability.valueNotNumeric": "De entiteit levert geen getal.",
+  "availability.valueImpossible": "De entiteit levert een fysiek onmogelijke waarde.",
+  "availability.unitAmbiguous": (v) => `${v.entity} heeft een device_class nodig: meerdere meettypen gebruiken deze eenheid, en de kaart gokt niet.`,
+  "availability.unidentified": (v) => `${v.entity} zegt niet wat er gemeten wordt. Voeg een device_class toe, of een eenheid die de kaart kent.`,
+  "availability.unitUnreadable": (v) => `${v.entity} levert een eenheid die de kaart voor dit meettype niet kan lezen.`,
   "availability.roomNoData": (v) => `${v.name}: geen gegevens. Details openen.`,
   "availability.valueNoData": (v) => `${v.label}: geen gegevens`,
 
@@ -95,7 +100,8 @@ export const nl = {
   "rangeScale.currentLabelShort": "nu",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "max",
-  "rangeScale.footer": (v) => `Dagbereik ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Dagbereik ${v.span} · Min ${v.min}${v.minTime} · Max ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Dagbereik ${v.span} · Min ${v.min} · Max ${v.max}`,
 
   "card.coldestRoom": "Koudste kamer",

@@ -67,6 +67,11 @@ export const it = {
   "availability.valueUnavailable": "Il valore non è attualmente disponibile.",
   "availability.noUsableRooms": "Nessun valore stanza configurato è attualmente utilizzabile.",
   "availability.incompatible": "Le sorgenti configurate usano tipi di misura o unità incompatibili.",
+  "availability.valueNotNumeric": "L’entità non fornisce un numero.",
+  "availability.valueImpossible": "L’entità fornisce un valore fisicamente impossibile.",
+  "availability.unitAmbiguous": (v) => `${v.entity} richiede un device_class: più tipi di misura usano questa unità e la scheda non tira a indovinare.`,
+  "availability.unidentified": (v) => `${v.entity} non dice che cosa misura. Aggiungi un device_class o un’unità nota alla scheda.`,
+  "availability.unitUnreadable": (v) => `${v.entity} fornisce un’unità che la scheda non sa leggere per questo tipo di misura.`,
   "availability.roomNoData": (v) => `${v.name}: nessun dato. Apri i dettagli.`,
   "availability.valueNoData": (v) => `${v.label}: nessun dato`,
 
@@ -96,7 +101,8 @@ export const it = {
   "rangeScale.currentLabelShort": "ora",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "max",
-  "rangeScale.footer": (v) => `Intervallo di oggi ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Intervallo di oggi ${v.span} · Min ${v.min}${v.minTime} · Max ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Intervallo di oggi ${v.span} · Min ${v.min} · Max ${v.max}`,
 
   "card.coldestRoom": "Stanza più fredda",

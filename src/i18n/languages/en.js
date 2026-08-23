@@ -63,6 +63,11 @@ export const en = {
   "availability.valueUnavailable": "The value is currently unavailable.",
   "availability.noUsableRooms": "No configured room value is currently usable.",
   "availability.incompatible": "Configured sources use incompatible measurement types or units.",
+  "availability.valueNotNumeric": "The entity does not report a number.",
+  "availability.valueImpossible": "The entity reports a physically impossible value.",
+  "availability.unitAmbiguous": (v) => `${v.entity} needs a device_class: several measurements use its unit, so the card will not guess.`,
+  "availability.unidentified": (v) => `${v.entity} does not say what it measures. Add a device_class, or a unit the card knows.`,
+  "availability.unitUnreadable": (v) => `${v.entity} reports a unit the card cannot read for this measurement.`,
   "availability.roomNoData": (v) => `${v.name}: no data. Open details.`,
   "availability.valueNoData": (v) => `${v.label}: no data`,
 
@@ -92,7 +97,8 @@ export const en = {
   "rangeScale.currentLabelShort": "now",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "max",
-  "rangeScale.footer": (v) => `Today's span ${v.span} · Min ${v.min} (${v.minTime}) · Max ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Today's span ${v.span} · Min ${v.min}${v.minTime} · Max ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Today's span ${v.span} · Min ${v.min} · Max ${v.max}`,
 
   "card.coldestRoom": "Coldest room",

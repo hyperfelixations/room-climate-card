@@ -63,6 +63,11 @@ export const ja = {
   "availability.valueUnavailable": "現在、値を利用できません。",
   "availability.noUsableRooms": "現在利用できる設定済みの部屋値がありません。",
   "availability.incompatible": "設定されたソースの測定種類または単位に互換性がありません。",
+  "availability.valueNotNumeric": "エンティティが数値を返していません。",
+  "availability.valueImpossible": "エンティティが物理的にあり得ない値を返しています。",
+  "availability.unitAmbiguous": (v) => `${v.entity} には device_class が必要です。複数の測定種類が同じ単位を使うため、カードは推測しません。`,
+  "availability.unidentified": (v) => `${v.entity} が何を測定しているか分かりません。device_class か、カードが知っている単位を追加してください。`,
+  "availability.unitUnreadable": (v) => `${v.entity} は、この測定種類ではカードが読めない単位を返しています。`,
   "availability.roomNoData": (v) => `${v.name}: データなし。詳細を開く。`,
   "availability.valueNoData": (v) => `${v.label}: データなし`,
 
@@ -92,7 +97,8 @@ export const ja = {
   "rangeScale.currentLabelShort": "現在",
   "rangeScale.minLabel": "最小",
   "rangeScale.maxLabel": "最大",
-  "rangeScale.footer": (v) => `今日の範囲 ${v.span} · 最小 ${v.min} (${v.minTime}) · 最大 ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `今日の範囲 ${v.span} · 最小 ${v.min}${v.minTime} · 最大 ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => `（${v.time}）`,
   "rangeScale.footerCompact": (v) => `今日の範囲 ${v.span} · 最小 ${v.min} · 最大 ${v.max}`,
 
   "card.coldestRoom": "最も寒い部屋",

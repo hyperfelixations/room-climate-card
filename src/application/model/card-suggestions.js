@@ -68,8 +68,20 @@ function templateConfig() {
   };
 }
 
+// The browse path only ever offers `sensor.*`, which is what Home Assistant's own cards
+// do when they search for something to start with. A `number.*` or `input_number.*` with
+// a temperature device class would read correctly, but it is a control rather than a
+// measurement, and offering one unasked as somebody's home average is a worse first
+// impression than one room fewer. The ENTITY path applies no such filter: there the user
+// pointed at it deliberately.
+const SENSOR_DOMAIN = "sensor.";
+
 function isSupportedEntity(states, entityId) {
   return typeof entityId === "string" && Boolean(metricKindForEntity(states, entityId));
+}
+
+function isBrowsableEntity(states, entityId) {
+  return typeof entityId === "string" && entityId.startsWith(SENSOR_DOMAIN) && isSupportedEntity(states, entityId);
 }
 
 // Whether the card could actually SHOW this entity right now, decided by the same
@@ -77,7 +89,7 @@ function isSupportedEntity(states, entityId) {
 // means. A sensor that is unavailable, non-numeric, in a unit the card cannot read or
 // outside its own physical limits is recognized, but would render as no data.
 function isUsableEntity(states, entityId) {
-  if (!isSupportedEntity(states, entityId)) return false;
+  if (!isBrowsableEntity(states, entityId)) return false;
   return buildEntityModel(states, null, entityId, "primary").availability === AVAILABILITY.USABLE;
 }
 
@@ -100,7 +112,12 @@ export function suggestionsForEntity(states, entityId) {
 // `states` afterwards is this card's own third step, because a climate sensor anywhere
 // is still a better start than an invented id.
 function browseCandidates(states, entities, entitiesFallback) {
-  const all = states && typeof states === "object" ? Object.keys(states) : [];
+  // Sorted, because `Object.keys` follows insertion order and Home Assistant builds that
+  // object from whatever arrived first. Without this the preview could show a different
+  // sensor on every reload of the same system, which looks like a bug in the card. The
+  // two lists Home Assistant supplies keep THEIR order: it is a preference, not an
+  // accident.
+  const all = states && typeof states === "object" ? Object.keys(states).sort() : [];
   const ordered = [...[entities, entitiesFallback].filter(Array.isArray).flat(), ...all];
   return [...new Set(ordered.filter((entityId) => typeof entityId === "string"))];
 }
@@ -115,6 +132,8 @@ function browseRooms(states, candidates, primary) {
   for (const entityId of candidates) {
     if (rooms.length >= BROWSE_ROOM_LIMIT) break;
     if (entityId === primary) continue;
+    // Same measurement as the primary, or the card would be asked to average a humidity
+    // into a temperature. The card refuses that at runtime; the picker must not build it.
     if (metricKindForEntity(states, entityId) !== kind) continue;
     if (!isUsableEntity(states, entityId)) continue;
     const name = states?.[entityId]?.attributes?.friendly_name;
@@ -137,7 +156,7 @@ export function stubConfigFor(states, entities, entitiesFallback) {
   const candidates = browseCandidates(states, entities, entitiesFallback);
   const primary =
     candidates.find((entityId) => isUsableEntity(states, entityId)) ||
-    candidates.find((entityId) => isSupportedEntity(states, entityId));
+    candidates.find((entityId) => isBrowsableEntity(states, entityId));
   if (!primary) return templateConfig();
 
   if (BROWSE_DISCOVERY !== "entity-and-rooms") return { entity: primary };

@@ -236,18 +236,69 @@ test("RangeScale footer without rooms shows span/min/max", () => {
   env.cleanup(el);
 });
 
-test("RangeScale footer uses a dash for a missing timestamp", () => {
+// A range entity is complete with just its minimum and maximum; the timestamps are extra.
+// Where they are absent the sentence simply does not mention a time — an empty bracket or
+// a dash reads as a fault, and there is none.
+test("a missing timestamp leaves no bracket behind in the RangeScale footer", () => {
   const el = rangeScaleFooterFixture(
     {},
     {
       "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }), // no *_zeitpunkt
+      "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
     },
     "en"
   );
   const footerEl = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer");
   assert.ok(footerEl);
-  assert.match(footerEl.textContent, /–/, "missing timestamps must render as the established '–' fallback");
+  assert.doesNotMatch(footerEl.textContent, /[–(]/, footerEl.textContent);
+  assert.match(footerEl.textContent, /Min 18\.0 °C · Max 23\.0 °C/);
+  env.cleanup(el);
+});
+
+// Both spellings of the attribute are accepted, English first — the German one is what
+// the card was first built against and stays supported.
+test("the timestamp attributes are read in either spelling, English first", () => {
+  const footerOf = (attributes) => {
+    const el = rangeScaleFooterFixture(
+      {},
+      {
+        "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+        "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23, ...attributes }),
+      },
+      "en"
+    );
+    const text = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer").textContent;
+    env.cleanup(el);
+    return text;
+  };
+  const german = footerOf({ minimum_zeitpunkt: "2026-08-23T07:12:00", maximum_zeitpunkt: "2026-08-23T17:41:00" });
+  const english = footerOf({ minimum_timestamp: "2026-08-23T07:12:00", maximum_timestamp: "2026-08-23T17:41:00" });
+  assert.equal(english, german, "the two spellings must produce the same sentence");
+  assert.match(english, /\(07:12\).*\(17:41\)/);
+
+  const both = footerOf({ minimum_timestamp: "2026-08-23T06:00:00", minimum_zeitpunkt: "2026-08-23T07:12:00" });
+  assert.match(both, /\(06:00\)/, "English wins when both are present");
+});
+
+// Only one of the two is a perfectly ordinary state, and it must produce exactly one
+// bracket rather than one bracket and one apology.
+test("one timestamp present gives one bracket", () => {
+  const el = rangeScaleFooterFixture(
+    {},
+    {
+      "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.range": mkState("sensor.range", 5, {
+        unit_of_measurement: "°C",
+        minimum: 18,
+        maximum: 23,
+        minimum_timestamp: "2026-08-23T07:12:00",
+      }),
+    },
+    "en"
+  );
+  const text = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer").textContent;
+  assert.equal((text.match(/\(/g) || []).length, 1, text);
+  assert.match(text, /Min 18\.0 °C \(07:12\) · Max 23\.0 °C/);
   env.cleanup(el);
 });
 

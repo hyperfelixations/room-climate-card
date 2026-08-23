@@ -238,9 +238,16 @@ test("no-data updates patch stable text and rebuild only real structure changes"
     const headline = el.shadowRoot.querySelector(".rtc-avg-button");
     headline.focus();
 
-    el.hass = mkHass({ "sensor.primary": state("sensor.primary", "garbage") });
+    el.hass = mkHass({ "sensor.primary": state("sensor.primary", "unknown") });
     assert.equal(el.shadowRoot.querySelector(".rtc-root"), noDataRoot, "same no-data structure is patched");
     assert.equal(el.shadowRoot.activeElement, headline, "a stable button keeps focus through the patch");
+
+    // A DIFFERENT reason is a different card, though: "unavailable" and "does not report a
+    // number" are two things, the card now says which, and the explanation is part of the
+    // no-data structure rather than text that can be swapped in place.
+    el.hass = mkHass({ "sensor.primary": state("sensor.primary", "garbage") });
+    assert.notEqual(el.shadowRoot.querySelector(".rtc-root"), noDataRoot, "a new explanation rebuilds");
+    assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The entity does not report a number.");
 
     el.hass = mkHass({ "sensor.primary": state("sensor.primary", 22) });
     assert.notEqual(el.shadowRoot.querySelector(".rtc-root"), noDataRoot, "recovery rebuilds the data structure");
@@ -277,6 +284,79 @@ test("focus falls back safely when a no-data placeholder disappears", () => {
     assert.equal(el.shadowRoot.activeElement, headline);
     assert.equal(headline.getAttribute("data-entity"), "sensor.b");
   } finally {
+    env.cleanup(el);
+  }
+});
+
+// ------------------------------------------- why, as distinct from whether ---
+
+// Five different things go wrong, and before this they produced three sentences — two of
+// which were wrong. A reading of 800 % is not "currently unavailable": it is there, it is
+// just impossible. A ppm sensor with no device_class is not an incompatibility BETWEEN
+// sources; it is one sensor that has not said what it measures, and saying so is the
+// difference between a user fixing it in a minute and not knowing where to look.
+//
+// AVAILABILITY is unchanged by all of this and still answers the only question the rest
+// of the card asks it — may this source be used. The reason rides alongside.
+test("every way of being unusable has its own reason, and availability is unchanged by it", () => {
+  const { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } = entityModel;
+  const cases = [
+    ["sensor.gone", null, AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING],
+    ["sensor.off", state("sensor.off", "unavailable"), AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE],
+    ["sensor.text", state("sensor.text", "heating"), AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC],
+    // The supervisor's own scenario: a humidity sensor reading 800 %.
+    ["sensor.wet", state("sensor.wet", 800, HUMIDITY), AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.OUT_OF_RANGE],
+    // ppm belongs to five Home Assistant device classes, so the unit decides nothing.
+    ["sensor.air", mkState("sensor.air", 700, { unit_of_measurement: "ppm" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIT_AMBIGUOUS],
+    ["sensor.mute", mkState("sensor.mute", 7, {}), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
+    ["sensor.press", mkState("sensor.press", 1013, { unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
+    // A recognized measurement in a unit the card cannot read for it.
+    ["sensor.odd", mkState("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }), AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_UNREADABLE],
+    ["sensor.ok", state("sensor.ok", 22), AVAILABILITY.USABLE, UNUSABLE_REASON.NONE],
+  ];
+  for (const [entity, stateObject, availability, reason] of cases) {
+    const model = buildEntityModel(stateObject ? { [entity]: stateObject } : {}, null, entity, "primary");
+    assert.equal(model.availability, availability, `${entity}: availability`);
+    assert.equal(model.unusableReason, reason, `${entity}: reason`);
+  }
+});
+
+// The card-wide fact an entity cannot know about itself. Only the two rewrites that mean
+// "this source measures something else" change the reason; a sentinel whose kind cannot
+// be identified keeps the more useful explanation it already had.
+test("a room measuring something else is a mismatch, and an unavailable one still reads as unavailable", () => {
+  const { UNUSABLE_REASON } = entityModel;
+  const context = measurementContext.resolveMeasurementContext(
+    {
+      "sensor.primary": state("sensor.primary", 22),
+      "sensor.humid": state("sensor.humid", 45, HUMIDITY),
+      "sensor.off": mkState("sensor.off", "unavailable", {}),
+    },
+    { entity: "sensor.primary", rooms: [room("sensor.humid", "Humid"), room("sensor.off", "Off")] }
+  );
+  assert.equal(context.rooms[0].unusableReason, UNUSABLE_REASON.KIND_MISMATCH);
+  assert.equal(context.rooms[1].unusableReason, UNUSABLE_REASON.UNAVAILABLE);
+});
+
+// And what a reader actually sees, through a real card.
+test("the card says which of the five things went wrong", () => {
+  const cases = [
+    [state("sensor.primary", "heating"), "The entity does not report a number."],
+    [state("sensor.primary", 800, HUMIDITY), "The entity reports a physically impossible value."],
+    [
+      mkState("sensor.primary", 700, { unit_of_measurement: "ppm" }),
+      "sensor.primary needs a device_class: several measurements use its unit, so the card will not guess.",
+    ],
+    [mkState("sensor.primary", 7, {}), "sensor.primary does not say what it measures. Add a device_class, or a unit the card knows."],
+    [
+      mkState("sensor.primary", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }),
+      "sensor.primary reports a unit the card cannot read for this measurement.",
+    ],
+    [state("sensor.primary", "unavailable"), "The value is currently unavailable."],
+  ];
+  for (const [stateObject, expected] of cases) {
+    const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": stateObject }));
+    assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, expected, JSON.stringify(stateObject.state));
     env.cleanup(el);
   }
 });

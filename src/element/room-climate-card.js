@@ -42,11 +42,12 @@ import { DEFAULT_CONFIG } from "../config/defaults.js";
 import { normalizeConfig } from "../config/normalize-config.js";
 import { CLASSIFICATION_ZONES } from "../domain/classification/zones.js";
 import {
-  CLASSIFICATION_PALETTE_REGISTRY,
   DEFAULT_PALETTE,
   assertPalette,
   completePalette,
+  paletteForColor,
   paletteForName,
+  paletteKeys,
 } from "../domain/classification/palettes/registry.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
 import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
@@ -107,10 +108,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
-    // Wrapped rather than handed over: the config layer gets the three questions it has
-    // to ask about palettes, and never the registry itself.
+    // Wrapped rather than handed over: the config layer gets the questions it has to ask
+    // about palettes, and never the registry itself.
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
-    paletteNames: () => Object.keys(CLASSIFICATION_PALETTE_REGISTRY),
+    paletteForColor,
+    paletteKeys,
     assertPalette,
     completePalette,
   };

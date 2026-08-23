@@ -8,6 +8,7 @@
 import { rgba } from "../../core/color.js";
 import { isTwoUpperLetterLabel, UNAVAILABLE_TEXT } from "../../core/text.js";
 import { autoRoomColumnsFor } from "./metric-meta.js";
+import { NO_DATA_COLOR } from "./tone.js";
 
 // The alphas a chip's own custom properties are derived at. A chip outside the
 // comfort band gets a tinted background and a coloured border; one inside keeps the
@@ -15,7 +16,6 @@ import { autoRoomColumnsFor } from "./metric-meta.js";
 const CHIP_MARK_ALPHA = 0.18;
 const CHIP_OUT_BG_ALPHA = 0.10;
 const CHIP_OUT_BORDER_ALPHA = 0.36;
-const UNAVAILABLE_COLOR = "#7F8792";
 
 // room_label picks which of the configured short/name pair a chip shows. "auto"
 // and "short" both resolve to the short code; "name" shows the full name and
@@ -141,10 +141,10 @@ export function buildRoomChipModel({ room, color, comfort, unit, texts }) {
       displayLabel: room.displayLabel,
       shortGuaranteed: room.shortGuaranteed,
       unavailable: true,
-      color: UNAVAILABLE_COLOR,
+      color: NO_DATA_COLOR,
       mark: "–",
       out: false,
-      markBackground: rgba(UNAVAILABLE_COLOR, CHIP_MARK_ALPHA),
+      markBackground: rgba(NO_DATA_COLOR, CHIP_MARK_ALPHA),
       background: "var(--rtc-chip-bg)",
       border: "var(--rtc-hairline)",
       valueText: UNAVAILABLE_TEXT,

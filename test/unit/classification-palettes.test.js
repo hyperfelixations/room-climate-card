@@ -16,32 +16,38 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { measure } = require("../helpers/color-vision.js");
 
 let palettes;
 let pastel;
 let vivid;
+let signal;
 let paletteColor;
 let classify;
 let registry;
+
+// The palettes themselves, one entry each. The registry is keyed by every WORD that
+// reaches a palette, so iterating it directly would measure `color-vision` five times and
+// say nothing about the other four.
+let shipped;
 
 test.before(async () => {
   palettes = await import("../../src/domain/classification/palettes/registry.js");
   ({ pastel } = await import("../../src/domain/classification/palettes/pastel.js"));
   ({ vivid } = await import("../../src/domain/classification/palettes/vivid.js"));
+  ({ signal } = await import("../../src/domain/classification/palettes/signal.js"));
   paletteColor = await import("../../src/domain/classification/palette-color.js");
   classify = await import("../../src/domain/classification/classify.js");
   registry = await import("../../src/domain/classification/registry.js");
+  shipped = [...new Set(Object.values(palettes.CLASSIFICATION_PALETTE_REGISTRY))].map((palette) => [palette.id, palette]);
 });
 
 // ------------------------------------------------------------- registry ----
 
 test("every shipped palette is complete, and the registry is frozen", () => {
-  const ids = Object.keys(palettes.CLASSIFICATION_PALETTE_REGISTRY);
-  assert.deepEqual(ids.sort(), ["pastel", "vivid"]);
-  for (const id of ids) {
-    const palette = palettes.CLASSIFICATION_PALETTE_REGISTRY[id];
+  assert.deepEqual(shipped.map(([id]) => id).sort(), ["color-vision", "pastel", "signal", "vivid"]);
+  for (const [id, palette] of shipped) {
     for (const [wing, colors] of [["above", palette.above], ["below", palette.below]]) {
-      assert.ok(colors.length > 0, `${id}: ${wing} is non-empty`);
       for (const [index, color] of colors.entries()) {
         assert.match(color, /^#[0-9A-Fa-f]{6}$/, `${id}: ${wing} step ${index + 1}`);
       }
@@ -49,19 +55,41 @@ test("every shipped palette is complete, and the registry is frozen", () => {
     }
     assert.match(palette.optimal, /^#[0-9A-Fa-f]{6}$/, `${id}: optimal`);
     assert.match(palette.invalid, /^#[0-9A-Fa-f]{6}$/, `${id}: invalid`);
+    assert.ok(palettes.PALETTE_TUNINGS.includes(palette.tunedFor), `${id}: tunedFor`);
     assert.equal(Object.isFrozen(palette), true, `${id}: frozen`);
+    assert.equal("aliases" in palette, false, `${id}: which words reach a palette is not part of the palette`);
   }
   assert.equal(Object.isFrozen(palettes.CLASSIFICATION_PALETTE_REGISTRY), true);
   assert.equal(palettes.DEFAULT_PALETTE, palettes.CLASSIFICATION_PALETTE_REGISTRY.pastel);
 });
 
+// A user searches by the name of the thing they have. A tritanope writes `tritan`, and
+// finding nothing there would be worse than any tidiness gained by insisting on one
+// spelling — so several words reach one palette, and every one of them is offered when a
+// name does not match.
+test("a palette can be reached by several words, and all of them are listed", () => {
+  const canonical = palettes.paletteForName("color-vision");
+  for (const alias of ["protan-deutan", "protan", "deutan", "tritan"]) {
+    assert.equal(palettes.paletteForName(alias), canonical, alias);
+  }
+  assert.equal(canonical.id, "color-vision", "the palette keeps exactly one id");
+  assert.deepEqual(
+    palettes.paletteKeys(),
+    ["pastel", "vivid", "color-vision", "protan-deutan", "protan", "deutan", "tritan", "signal"]
+  );
+});
+
 // Both shipped palettes have to be usable by the same profile, or "the profile means the
 // same thing under either" is not true.
-test("the two shipped palettes reach equally far in both directions", () => {
+test("the full-length palettes reach equally far in both directions", () => {
   assert.equal(pastel.above.length, 5);
   assert.equal(pastel.below.length, 5);
   assert.equal(vivid.above.length, pastel.above.length);
   assert.equal(vivid.below.length, pastel.below.length);
+  // `signal` is deliberately shorter, which is what makes it the proof that a palette and
+  // a profile of different reach fit together without anything being configured.
+  assert.equal(signal.above.length, 2);
+  assert.equal(signal.below.length, 2);
 });
 
 test("an unknown palette name resolves to nothing rather than to a default", () => {
@@ -70,17 +98,17 @@ test("an unknown palette name resolves to nothing rather than to a default", () 
   assert.equal(palettes.paletteForName(undefined), null);
 });
 
-test("assertPalette() refuses every incomplete shape, naming the path it was given", () => {
+test("assertPalette() refuses every unusable shape, naming the path it was given", () => {
   const ok = { below: ["#111111"], optimal: "#222222", above: ["#333333"] };
   const cases = [
     [null, /my_palette must be an object/],
     [["#111111"], /my_palette must be an object/],
     [{ ...ok, optimal: undefined }, /my_palette\.optimal must be a 3\/4\/6\/8-digit hex color/],
     [{ ...ok, optimal: "red" }, /my_palette\.optimal must be a 3\/4\/6\/8-digit hex color/],
-    [{ ...ok, above: [] }, /my_palette\.above must be a non-empty list of colors, running outwards from the middle/],
-    [{ ...ok, below: undefined }, /my_palette\.below must be a non-empty list/],
+    [{ ...ok, above: "#111111" }, /my_palette\.above must be a list of colors/],
     [{ ...ok, above: ["#111111", "nope"] }, /my_palette\.above\[2\] must be a 3\/4\/6\/8-digit hex color/],
     [{ ...ok, invalid: "red" }, /my_palette\.invalid must be a 3\/4\/6\/8-digit hex color/],
+    [{ ...ok, tunedFor: "midnight" }, /my_palette\.tunedFor must be one of light, dark, any/],
   ];
   for (const [palette, expected] of cases) {
     assert.throws(() => palettes.assertPalette(palette, "my_palette"), expected, JSON.stringify(palette));
@@ -90,12 +118,55 @@ test("assertPalette() refuses every incomplete shape, naming the path it was giv
   assert.throws(() => palettes.assertPalette({ ...ok, below: ["bad"] }, "palette"), /palette\.below\[1\]/);
 });
 
+// ONE contract, not one for the card and a stricter one for its users. A missing wing is
+// not a broken palette: CO2 has no "too little" to colour, and a single colour is a
+// perfectly good way to say "this card is teal".
+test("a palette without wings is complete, and a missing wing completes to empty", () => {
+  const single = palettes.completePalette(palettes.assertPalette({ id: "one", optimal: "#1DB85D" }, "palette"));
+  assert.deepEqual(single.above, []);
+  assert.deepEqual(single.below, []);
+  assert.equal(single.optimal, "#1DB85D");
+  assert.equal(Object.isFrozen(single.above), true);
+
+  const oneSided = palettes.completePalette(palettes.assertPalette({ id: "up", optimal: "#111111", above: ["#222222"] }));
+  assert.deepEqual(oneSided.above, ["#222222"]);
+  assert.deepEqual(oneSided.below, []);
+});
+
+// Recorded now, while the palettes are being designed and the answer is known. Nothing
+// reads it yet — see PALETTE_TUNINGS in the registry for why it exists anyway.
+test("tunedFor records the card background a palette was designed against", () => {
+  assert.equal(palettes.paletteForName("pastel").tunedFor, "dark");
+  assert.equal(palettes.paletteForName("vivid").tunedFor, "any");
+  assert.equal(palettes.completePalette({ id: "x", optimal: "#111111" }).tunedFor, "any", "a written-out palette says nothing");
+});
+
 // The one field a palette may leave out. Nobody should have to invent a colour for a
 // state they never see.
 test("invalid is optional and completes to a neutral grey", () => {
   const bare = { below: ["#111111"], optimal: "#222222", above: ["#333333"] };
-  assert.equal(palettes.completePalette(palettes.assertPalette(bare)).invalid, palettes.NEUTRAL_INVALID_COLOR);
+  assert.equal(palettes.completePalette(palettes.assertPalette(bare)).invalid, palettes.NEUTRAL_COLOR);
   assert.equal(palettes.completePalette(palettes.assertPalette({ ...bare, invalid: "#abcdef" })).invalid, "#abcdef");
+});
+
+// The neutral grey is not a taste decision, and the number is the point: a card colour is
+// foreground on a light background AND a dark one, so the whole grey axis was walked
+// against both and this is the value where the two contrasts meet. The one it replaced
+// was the pastel palette's own warm grey, wired in where no palette should have had a
+// say, and it managed 2.13:1 on a light card.
+test("the neutral grey is the best a single grey can do on both backgrounds", () => {
+  const { contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
+  const onLight = contrastRatio(palettes.NEUTRAL_COLOR, LIGHT_CARD);
+  const onDark = contrastRatio(palettes.NEUTRAL_COLOR, DARK_CARD);
+  assert.ok(onLight >= 4.1, `${onLight.toFixed(2)}:1 on a light card`);
+  assert.ok(onDark >= 4.1, `${onDark.toFixed(2)}:1 on a dark card`);
+  // No other pure grey does better on its weaker side, which is what "best" has to mean
+  // for a value that has to work in both directions at once.
+  for (let value = 0; value < 256; value += 1) {
+    const grey = `#${value.toString(16).padStart(2, "0").repeat(3)}`;
+    const weakest = Math.min(contrastRatio(grey, LIGHT_CARD), contrastRatio(grey, DARK_CARD));
+    assert.ok(weakest <= Math.min(onLight, onDark) + 1e-9, `${grey} would be better`);
+  }
 });
 
 // --------------------------------------------------- the profile's reach ---
@@ -215,9 +286,9 @@ function classification(overrides) {
 test("an entity-classified value never takes a ramp colour, whatever score it carries", () => {
   // The trap: an integration supplies value_score but no value_color. That score is a
   // number on the integration's own scale and means nothing in the card's palette.
-  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity", deviation: null }), WIDE), "#B4B2A9");
+  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity", deviation: null }), WIDE), palettes.NEUTRAL_COLOR);
   // Even if something upstream did hand it a distance, the entity branch comes first.
-  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity" }), WIDE), "#B4B2A9");
+  assert.equal(paletteColor.resolveClassificationColor(classification({ source: "entity" }), WIDE), palettes.NEUTRAL_COLOR);
   assert.equal(
     paletteColor.resolveClassificationColor(classification({ source: "entity", explicitColor: "#123456" }), WIDE),
     "#123456"
@@ -317,4 +388,120 @@ test("the same profiles under the second palette differ everywhere and stay cohe
     seen.add(bold);
   }
   assert.equal(seen.size, profile.tiers.length, "eleven tiers, eleven distinct colours");
+});
+
+// ------------------------------------------- the colour-blind palettes ------
+
+// These two exist to be USABLE by someone who cannot see the default ramp, and that is a
+// measurable claim rather than a design intention. The instrument is
+// test/helpers/color-vision.js, and it verifies itself first in color-vision-tool.test.js
+// — without that, these numbers would only be self-consistent.
+//
+// What is checked is the JUDGEMENT the colour carries: how far each end sits from the
+// middle, how far the two ends sit from each other, and that every step outwards is
+// further out than the last. Not checked, and deliberately not claimed: that all eleven
+// steps are individually distinguishable. With one hue axis gone and 25 L* to work in —
+// the colours are foreground on a light card and a dark one — that is not reachable, and
+// the level text is what carries the fine detail.
+const CVD_LIMITS = { wing: 30, ends: 55 };
+
+// ONE palette for all three deficiencies, and that is a measurement rather than a
+// convenience. Protan and deutan were always going to share a design — they confuse the
+// same colours. Tritan was expected to need its own, and does not: a search over 36 hue
+// pairs crossed with lightness and chroma schedules picked the same winner for both
+// targets independently. So the claim under test is the strong one: this ramp holds up
+// under EVERY way of seeing, not only the one it is named for.
+test("the colour-vision palette works for all three deficiencies, not only one", () => {
+  const palette = palettes.paletteForName("color-vision");
+  for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
+    const seen = measure(palette, deficiency);
+    assert.equal(seen.monotone, true, `${deficiency}: every step out is further from the middle`);
+    assert.ok(seen.lowWing >= CVD_LIMITS.wing, `${deficiency}: middle to coldest is ${seen.lowWing.toFixed(0)}`);
+    assert.ok(seen.highWing >= CVD_LIMITS.wing, `${deficiency}: middle to hottest is ${seen.highWing.toFixed(0)}`);
+    assert.ok(seen.ends >= CVD_LIMITS.ends, `${deficiency}: end to end is ${seen.ends.toFixed(0)}`);
+  }
+});
+
+// Contrast measured on the colours as they are SEEN, not as they are written. A palette
+// for people who see colour differently that was only ever checked against normal vision
+// would be checking the one case it is not for.
+test("the colour-vision palette stays readable under the simulation, not just on paper", () => {
+  const { asRamp, simulate, contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
+  const palette = palettes.paletteForName("color-vision");
+  for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
+    const seen = asRamp(palette).map((hex) => simulate(hex, deficiency));
+    const onLight = Math.min(...seen.map((hex) => contrastRatio(hex, LIGHT_CARD)));
+    const onDark = Math.min(...seen.map((hex) => contrastRatio(hex, DARK_CARD)));
+    assert.ok(onLight >= 2.0, `${deficiency}: ${onLight.toFixed(2)}:1 on a light card`);
+    assert.ok(onDark >= 2.6, `${deficiency}: ${onDark.toFixed(2)}:1 on a dark card`);
+  }
+});
+
+// The comparison that says this palette is needed at all. Under red-green deficiency the
+// default ramp's own two ends — green and red — are the pair that disappears.
+test("the colour-vision palette beats the default ramp for every deficiency", () => {
+  const weakest = (m) => Math.min(m.lowWing, m.highWing);
+  for (const deficiency of ["protan", "deutan", "tritan"]) {
+    const theirs = weakest(measure(palettes.paletteForName("color-vision"), deficiency));
+    const defaults = weakest(measure(pastel, deficiency));
+    assert.ok(theirs > defaults, `under ${deficiency}: ${theirs.toFixed(0)} must beat the default's ${defaults.toFixed(0)}`);
+  }
+});
+
+// Every palette the card ships has to be readable on both card backgrounds, whatever it
+// was designed around — a palette that vanished in dark mode would have traded one group
+// of users for another.
+test("every shipped palette carries usable contrast on both backgrounds", () => {
+  for (const [id, palette] of shipped) {
+    const seen = measure(palette, "normal");
+    assert.ok(seen.onLight >= 2.0, `${id}: ${seen.onLight.toFixed(2)}:1 on a light card`);
+    assert.ok(seen.onDark >= 2.6, `${id}: ${seen.onDark.toFixed(2)}:1 on a dark card`);
+  }
+});
+
+// A palette meant for one deficiency need not serve the others, but every palette must
+// still be a ramp for everyone: each step further out has to look further out.
+test("every shipped palette still reads as a ramp for normal vision", () => {
+  for (const [id, palette] of shipped) {
+    const seen = measure(palette, "normal");
+    assert.equal(seen.monotone, true, `${id}: monotone from the middle out`);
+    assert.ok(Math.min(seen.lowWing, seen.highWing) >= 25, `${id}: the weaker wing reaches ${Math.min(seen.lowWing, seen.highWing).toFixed(0)}`);
+  }
+});
+
+// Whether the two DIRECTIONS are told apart is a separate question, and one palette
+// answers it deliberately differently. Pinned by name rather than as a blanket rule, so
+// that `signal` staying symmetric is a recorded decision and pastel losing its two ends
+// would still be a failure.
+test("three palettes distinguish too little from too much, and signal deliberately does not", () => {
+  for (const id of ["pastel", "vivid", "color-vision"]) {
+    assert.ok(measure(palettes.paletteForName(id), "normal").ends >= 25, `${id}: the two ends are far apart`);
+  }
+  assert.equal(measure(signal, "normal").ends, 0, "signal says HOW FAR from optimal, not which way");
+});
+
+// The short palette exists to be this test. A profile that reaches five steps, a palette
+// that carries two: every deviation has to land somewhere sensible, without an option and
+// without an error.
+test("a five-step profile on the two-step signal palette collapses onto what it has", () => {
+  const span = { above: 5, below: 5 };
+  const seen = [1, 2, 3, 4, 5].map((k) => paletteColor.rampColorFor(k, span, signal));
+  assert.deepEqual(seen, ["#FD9808", "#FD9808", "#EE2046", "#EE2046", "#EE2046"]);
+  assert.equal(paletteColor.rampColorFor(0, span, signal), "#1DB85D", "and the middle is still the middle");
+  assert.deepEqual(
+    [1, 2, 3, 4, 5].map((k) => paletteColor.rampColorFor(-k, span, signal)),
+    seen,
+    "both wings carry the same pair, so distance reads the same in either direction"
+  );
+});
+
+// A palette may say nothing about a direction — `palette: {optimal: …}` is a card in one
+// colour, and a generated ramp on `white` has nowhere paler to go. Neither is an error.
+test("a wing with no colours in it answers with the middle", () => {
+  const single = palettes.completePalette({ id: "one", optimal: "#1DB85D" });
+  for (const deviation of [-5, -1, 0, 1, 5]) {
+    assert.equal(paletteColor.rampColorFor(deviation, { above: 5, below: 5 }, single), "#1DB85D", String(deviation));
+  }
+  // Still not a place where a malformed deviation goes unnoticed.
+  assert.throws(() => paletteColor.rampColorFor(1.5, { above: 5, below: 5 }, single), /whole number of steps/);
 });

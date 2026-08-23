@@ -69,6 +69,11 @@ export const lv = {
   "availability.valueUnavailable": "Vērtība pašlaik nav pieejama.",
   "availability.noUsableRooms": "Pašlaik nav izmantojama neviena konfigurētā telpas vērtība.",
   "availability.incompatible": "Konfigurētie avoti izmanto nesaderīgus mērījumu veidus vai mērvienības.",
+  "availability.valueNotNumeric": "Entītija nesniedz skaitli.",
+  "availability.valueImpossible": "Entītija sniedz fiziski neiespējamu vērtību.",
+  "availability.unitAmbiguous": (v) => `${v.entity} nepieciešama device_class: šo mērvienību izmanto vairāki mērījumu veidi, un karte nemin.`,
+  "availability.unidentified": (v) => `${v.entity} nenorāda, ko tā mēra. Pievieno device_class vai mērvienību, ko karte pazīst.`,
+  "availability.unitUnreadable": (v) => `${v.entity} sniedz mērvienību, ko karte šim mērījumu veidam nevar nolasīt.`,
   "availability.roomNoData": (v) => `${v.name}: nav datu. Atvērt informāciju.`,
   "availability.valueNoData": (v) => `${v.label}: nav datu`,
 
@@ -107,7 +112,8 @@ export const lv = {
   "rangeScale.currentLabelShort": "tagad",
   "rangeScale.minLabel": "min",
   "rangeScale.maxLabel": "maks",
-  "rangeScale.footer": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} (${v.minTime}) · Maks ${v.max} (${v.maxTime})`,
+  "rangeScale.footer": (v) => `Šodienas diapazons ${v.span} · Min ${v.min}${v.minTime} · Maks ${v.max}${v.maxTime}`,
+  "rangeScale.footerTime": (v) => ` (${v.time})`,
   "rangeScale.footerCompact": (v) => `Šodienas diapazons ${v.span} · Min ${v.min} · Maks ${v.max}`,
 
   "card.coldestRoom": "Aukstākā telpa",
