@@ -95,8 +95,21 @@ function createTestEnvironment() {
     const el = window.document.createElement(CARD_TAG);
     window.document.body.appendChild(el);
     liveCards.add(el);
-    if (hass !== undefined) el.hass = hass;
-    if (config !== undefined) el.setConfig(config);
+    try {
+      if (hass !== undefined) el.hass = hass;
+      if (config !== undefined) el.setConfig(config);
+    } catch (error) {
+      // A card whose very first setConfig was refused was never created. Leaving it
+      // attached leaks it: the caller is in a catch block, holds no reference, and has
+      // nothing to clean up. Measured before this existed — a property run creating cards
+      // from randomly broken configurations retained about 3.8 MB per refusal and ran the
+      // heap out at four thousand cases.
+      //
+      // This is the FIRST setConfig only. Refusing a LATER one must leave the card exactly
+      // as it was, which is the atomicity contract and is tested separately.
+      cleanup(el);
+      throw error;
+    }
     return el;
   }
 

@@ -55,14 +55,15 @@ jobs:
       - name: Syntax check
         run: npm run check:run
 
-      - name: Unit tests (node:test + jsdom)
+      # Everything under test/ that ends in .test.js, the seeded property run included.
+      # It used to be listed again as a separate step, which ran it TWICE per CI job for
+      # no additional evidence: the unit glob already matched the file.
+      #
+      # A larger property run belongs in a scheduled job rather than here, so that a pull
+      # request stays fast and deterministic. `npm run test:fuzz` runs the property layer
+      # on its own, and ROOM_CLIMATE_CARD_FUZZ_CASES raises the case count.
+      - name: Unit, component, contract and property tests (node:test + jsdom)
         run: npm run test:unit:run
-
-      # The seeded property test. Separate from the unit suite because it is a
-      # different kind of evidence: randomized inputs against invariants rather than
-      # named cases.
-      - name: Property test (seeded fuzz)
-        run: npm run test:fuzz:run
 
   browser:
     name: Browser Tests
