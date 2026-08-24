@@ -235,19 +235,122 @@ export const CSS_COLOR_NAMES = Object.freeze({
 // the theme author wrote it, which is why hex and names are accepted too. A fully
 // transparent colour is not an answer: nothing is painted, so the background is whatever
 // is behind it and this cannot say.
-export function luminanceOfCssColor(value) {
+// One CSS colour, as an opaque hex and the alpha it was written with.
+//
+// The alpha is reported rather than applied, because applying it needs something to apply
+// it TO — see compositeOver(). null means the value says nothing usable: a form this cannot
+// read, or a fully transparent colour, where the answer has to come from further up the
+// tree instead of being guessed.
+export function cssColorToHex(value) {
   if (typeof value !== "string") return null;
   const text = value.trim();
   const rgb = text.match(/^rgba?\(([^)]*)\)$/i);
   if (rgb) {
     const parts = rgb[1].split(/[\s,/]+/).filter(Boolean).map(Number);
     if (parts.length < 3 || parts.slice(0, 3).some((part) => !Number.isFinite(part))) return null;
-    if (parts.length > 3 && Number.isFinite(parts[3]) && parts[3] === 0) return null;
-    const hex = `#${parts.slice(0, 3).map((part) => Math.round(Math.min(255, Math.max(0, part))).toString(16).padStart(2, "0")).join("")}`;
-    return relativeLuminance(hex);
+    const alpha = parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 1;
+    if (alpha === 0) return null;
+    const hex = `#${parts
+      .slice(0, 3)
+      .map((part) => Math.round(Math.min(255, Math.max(0, part))).toString(16).padStart(2, "0"))
+      .join("")}`;
+    return { hex, alpha };
   }
   const parsed = parseColorToken(text);
-  return parsed ? relativeLuminance(parsed) : null;
+  if (!parsed) return null;
+  // An 8-digit hex carries its own alpha in the last pair.
+  const digits = parsed.slice(1);
+  if (digits.length === 8) {
+    const alpha = parseInt(digits.slice(6, 8), 16) / 255;
+    return alpha === 0 ? null : { hex: `#${digits.slice(0, 6)}`, alpha };
+  }
+  return { hex: parsed.length === 9 ? parsed.slice(0, 7) : parsed, alpha: 1 };
+}
+
+export function luminanceOfCssColor(value) {
+  const parsed = cssColorToHex(value);
+  return parsed ? relativeLuminance(parsed.hex) : null;
+}
+
+// ---------------------------------------------------------- compositing and blending --
+
+const channelsOf = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
+const hexOf = (channels) =>
+  `#${channels.map((value) => Math.round(Math.min(255, Math.max(0, value))).toString(16).padStart(2, "0")).join("")}`;
+
+// A translucent colour painted over an opaque one.
+//
+// Blended in sRGB, NOT in linear light. That is not an approximation — it is what browsers
+// do: CSS composites in the device colour space, so `rgba(0,0,0,0.5)` over white really does
+// come out near #808080 rather than the linear-correct #BCBCBC. Matching the browser matters
+// more here than matching physics, because the point is to predict what is on screen.
+export function compositeOver(hex, alpha, backdrop) {
+  if (!(alpha > 0)) return backdrop;
+  if (alpha >= 1) return hex;
+  const front = channelsOf(hex);
+  const back = channelsOf(backdrop);
+  return hexOf(front.map((value, index) => value * alpha + back[index] * (1 - alpha)));
+}
+
+// The colours a CSS gradient actually puts behind the card.
+//
+// Two things make this more than "list the colour stops". First, browsers interpolate
+// gradients in sRGB by default, so the colours BETWEEN two stops are a straight per-channel
+// blend and can be sampled the same way. Second — and this is the part that matters — the
+// interior is where a gradient hurts: a card on `linear-gradient(#FFF, #000)` has white and
+// black at its edges and mid grey through the middle, and mid grey is where every mid-light
+// palette dies. Sampling only the stops would have declared that gradient harmless.
+//
+// Returns an empty list for anything this cannot read — a `url(...)` image, a conic gradient
+// with angular interpolation, `color-mix()`, relative colours. An honest nothing, so the
+// caller falls back rather than acting on a guess.
+export function gradientSamples(value, { between = 3 } = {}) {
+  if (typeof value !== "string") return [];
+  const gradient = value.trim().match(/^(?:repeating-)?(?:linear|radial)-gradient\((.*)\)$/is);
+  if (!gradient) return [];
+
+  // Split on top-level commas: a stop may itself contain commas inside rgb(...).
+  const parts = [];
+  let depth = 0;
+  let current = "";
+  for (const character of gradient[1]) {
+    if (character === "(") depth += 1;
+    if (character === ")") depth -= 1;
+    if (character === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  parts.push(current);
+
+  const stops = [];
+  for (const part of parts) {
+    // A stop is a colour optionally followed by one or two positions; the first token of a
+    // gradient may instead be a direction ("to bottom", "45deg", "circle at center"), which
+    // simply parses as no colour and is skipped.
+    const colour = part.trim().match(/^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|[a-z]+)/i);
+    if (!colour) continue;
+    const parsed = cssColorToHex(colour[1]);
+    if (parsed) stops.push(parsed.alpha >= 1 ? parsed.hex : null);
+  }
+
+  const opaque = stops.filter(Boolean);
+  if (opaque.length === 0) return [];
+  if (opaque.length === 1) return opaque;
+
+  const samples = [opaque[0]];
+  for (let index = 1; index < opaque.length; index++) {
+    const from = channelsOf(opaque[index - 1]);
+    const to = channelsOf(opaque[index]);
+    for (let step = 1; step <= between; step++) {
+      const t = step / (between + 1);
+      samples.push(hexOf(from.map((value, channel) => value + (to[channel] - value) * t)));
+    }
+    samples.push(opaque[index]);
+  }
+  return samples;
 }
 
 // The colour spellings a human writes in YAML, normalized to hex — or null.

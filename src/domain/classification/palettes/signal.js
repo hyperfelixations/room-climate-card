@@ -29,7 +29,6 @@
 
 export const signal = {
   id: "signal",
-  tunedFor: "any",
   optimal: "#1DB85D",
   above: ["#FD9808", "#EE2046"],
   below: ["#FD9808", "#EE2046"],

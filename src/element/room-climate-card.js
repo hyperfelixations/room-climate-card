@@ -49,7 +49,7 @@ import {
   paletteForName,
   paletteKeys,
 } from "../domain/classification/palettes/registry.js";
-import { surfaceForBackgroundColor } from "../domain/classification/surface.js";
+import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
 import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
 import { normalizeUnitToken } from "../domain/units/unit-token.js";
@@ -228,9 +228,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // Returned by the platform when the visibility listener is attached; the only
       // thing that knows how to detach it again.
       this._unlistenVisibility = null;
-      // _surface() memoization — see there.
-      this._surfaceCacheBackground = undefined;
-      this._surfaceCacheValue = undefined;
+      // _background() memoization — see there.
+      this._backgroundCacheKey = undefined;
+      this._backgroundCacheValue = undefined;
       // _language() memoization — see _language().
       this._languageCacheHass = undefined;
       this._languageCacheConfigLanguage = undefined;
@@ -753,25 +753,36 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       }
     }
 
-    // Which background this card is actually painted on, as "light" or "dark".
+    // EVERY COLOUR THIS CARD IS ACTUALLY PAINTED ON, as a list of opaque hex values.
     //
     // MEASURED, not taken from the theme. `hass.themes.darkMode` says which theme is
-    // active; it does not say what colour THIS card sits on, and card-mod, a custom theme
-    // or a dashboard that styles one card differently all break that equivalence. So the
-    // browser is asked first (see readBackgroundColor in the platform adapter) and hass is
-    // the fallback for the moment before the card is painted, or a realm that will not
-    // answer. Home Assistant's own default is a light theme, which is the last resort.
+    // active; it does not say what THIS card sits on, and card-mod, a custom theme or a
+    // dashboard that styles one card differently all break that equivalence. So the browser
+    // is asked first (readBackgroundSamples in the platform adapter, which also reads a
+    // gradient's colour stops and composites a translucent card onto what is behind it),
+    // and `hass` is the fallback for the moment before the card is painted, or a realm that
+    // will not answer. Home Assistant's own default is a light theme, which is the last
+    // resort.
     //
-    // Memoized on the background STRING rather than on a render count: the expensive part
-    // is the parse, the read itself is one getComputedStyle, and a theme switch changes
-    // the string, which is exactly when the answer has to change.
-    _surface() {
-      const background = this._platform.readBackgroundColor(this.shadowRoot?.querySelector(".rtc-card") ?? this);
-      if (background === null) return this._hass?.themes?.darkMode ? "dark" : "light";
-      if (this._surfaceCacheBackground === background) return this._surfaceCacheValue;
-      this._surfaceCacheBackground = background;
-      this._surfaceCacheValue = surfaceForBackgroundColor(background) ?? (this._hass?.themes?.darkMode ? "dark" : "light");
-      return this._surfaceCacheValue;
+    // A LIST rather than one colour, because a card-mod gradient is several colours and a
+    // palette has to hold up over all of them.
+    //
+    // Memoized on the samples themselves rather than on a render count: the work is in
+    // judging them, the read is one getComputedStyle, and a theme switch changes the
+    // samples — which is exactly when the answer has to change.
+    _background() {
+      const samples = this._platform.readBackgroundSamples(this.shadowRoot?.querySelector(".rtc-card") ?? this);
+      if (samples.length) {
+        const key = samples.join(",");
+        if (this._backgroundCacheKey !== key) {
+          this._backgroundCacheKey = key;
+          this._backgroundCacheValue = samples;
+        }
+        return this._backgroundCacheValue;
+      }
+      // Nothing readable was painted. The theme flag is the next best statement about what
+      // is behind the card, and it maps to the canonical background of its surface.
+      return [this._hass?.themes?.darkMode ? SURFACE_BACKGROUNDS.dark : SURFACE_BACKGROUNDS.light];
     }
 
     _computeViewModel() {
@@ -784,8 +795,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // A plain locale string, needed for the name tie-break that keeps the
         // extrema and the "stands out most" room agreeing on ties.
         language: this._language(),
-        // "light" or "dark" — which background the palette is about to be painted on.
-        surface: this._surface(),
+        // The colours the palette is about to be painted on.
+        background: this._background(),
       });
       return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
     }
@@ -832,7 +843,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           activeViewIndex: this._activeView,
           // A theme switch changes no entity and no configuration, so without this the
           // card would keep the colours of the background it is no longer on.
-          surface: this._surface(),
+          background: this._background(),
         }),
         structuralConfigSignature: structuralConfigSignature(this._config),
       });

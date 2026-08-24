@@ -30,14 +30,26 @@ export const DEFAULT_PALETTE_ID = "pastel";
 // own warm grey wired in where no palette should have had a say.)
 export const NEUTRAL_COLOR = "#7D7D7D";
 
-// Which card background a palette was designed against. A shipped palette states it in
-// its own module, a generated one derives it from its base colour (see tuningForColor in
-// ../surface.js), and a palette written in YAML says nothing and gets "any" — the card has
-// measured nothing about it and will not claim otherwise.
+// WHERE A PALETTE CAME FROM, which decides whether the card is entitled to change it.
 //
-// Read by adaptPaletteToSurface() below.
-export const PALETTE_TUNINGS = Object.freeze(["light", "dark", "any"]);
-const DEFAULT_TUNING = "any";
+//   builtin   one of the four the card ships. The card designed it, so the card may adapt
+//             it when the background makes it unreadable.
+//   derived   calculated from what the user wrote after `palette:` — today a single colour,
+//             `palette: teal`. The user named a COLOUR and asked the card to build a ramp
+//             out of it, so the ramp is the card's work and the card may rebuild it.
+//   custom    written out in YAML as {optimal, above, below}. Every colour in it is a
+//             deliberate choice somebody typed. The card does NOT touch it.
+//
+// The distinction is intent, not measurement, which is why it is declared rather than
+// derived: nothing about the colours themselves can tell you whether a person chose them.
+// It is also the one thing `tunedFor` got right and the reason a field survives here at
+// all — unlike a claim about which background suits a palette, an origin cannot drift away
+// from the truth, because it is fixed at construction.
+//
+// `custom` is the DEFAULT, deliberately. A palette that forgot to say where it came from is
+// left alone, which is the harmless direction to be wrong in.
+export const PALETTE_ORIGINS = Object.freeze(["builtin", "derived", "custom"]);
+const DEFAULT_ORIGIN = "custom";
 
 function assertColor(value, path) {
   if (typeof value !== "string" || !isHexColor(value.trim())) {
@@ -71,9 +83,6 @@ export function assertPalette(palette, path = "palette") {
   assertWing(palette.above, `${path}.above`);
   assertWing(palette.below, `${path}.below`);
   if (palette.invalid !== undefined && palette.invalid !== null) assertColor(palette.invalid, `${path}.invalid`);
-  if (palette.tunedFor !== undefined && palette.tunedFor !== null && !PALETTE_TUNINGS.includes(palette.tunedFor)) {
-    throw new Error(`Invalid configuration: ${path}.tunedFor must be one of ${PALETTE_TUNINGS.join(", ")}.`);
-  }
   return palette;
 }
 
@@ -90,7 +99,11 @@ export function completePalette(palette) {
     above: Object.freeze([...(palette.above || [])]),
     below: Object.freeze([...(palette.below || [])]),
     invalid: palette.invalid ?? NEUTRAL_COLOR,
-    tunedFor: palette.tunedFor ?? DEFAULT_TUNING,
+    origin: PALETTE_ORIGINS.includes(palette.origin) ? palette.origin : DEFAULT_ORIGIN,
+    // Only a derived palette has one: the colour it was calculated from. Carried because a
+    // derived ramp can be REBUILT from its seed, which is a far better way to adapt it than
+    // pushing its finished steps around — see palettes/adaptation.js.
+    source: palette.source ? Object.freeze({ ...palette.source }) : null,
   });
 }
 
@@ -106,7 +119,7 @@ const SHIPPED = [pastel, vivid, colorVision, signal];
 export const CLASSIFICATION_PALETTE_REGISTRY = Object.freeze(
   Object.fromEntries(
     SHIPPED.flatMap((palette) => {
-      const complete = completePalette(assertPalette(palette, `palette "${palette.id}"`));
+      const complete = completePalette({ ...assertPalette(palette, `palette "${palette.id}"`), origin: "builtin" });
       return [palette.id, ...(palette.aliases || [])].map((key) => [key, complete]);
     })
   )
@@ -138,38 +151,16 @@ export function paletteForColor(value) {
   // middle alone would make the middle behave unlike every other step of its own ramp.
   // A written-out palette still takes an 8-digit colour per step, where the user chose
   // each one deliberately.
-  return completePalette(monochromePalette(hex.length > 7 ? hex.slice(0, 7) : hex, id));
+  const seed = hex.length > 7 ? hex.slice(0, 7) : hex;
+  return completePalette({ ...monochromePalette(seed, id), origin: "derived", source: { color: seed } });
 }
 
-// WHETHER A PALETTE SUITS THE BACKGROUND IT IS ABOUT TO BE PAINTED ON, and what to do
-// when it does not.
+// WHETHER A PALETTE SUITS THE BACKGROUND IT IS PAINTED ON is not decided here.
 //
-// One rule for every palette, which is the point: a palette declares (or derives) the
-// surface it was designed against, the card knows the surface it is actually on, and the
-// two either agree or the palette goes through one transformation. No palette gets its
-// own special handling, and adding a palette adds nothing here.
-//
-// `"any"` passes through because it means "measured on both and good on both" — for the
-// shipped palettes that is a fact recorded in their own modules, for a generated one it
-// is what tuningForColor() found.
-export function adaptPaletteToSurface(palette, surface) {
-  if (!palette || palette.tunedFor === "any" || palette.tunedFor === surface) return palette;
-  return transformPaletteForSurface(palette, surface);
-}
-
-// The seam, and it is deliberately empty.
-//
-// Everything around it is in place and tested: the card knows its surface, every palette
-// knows what it was made for, and the decision above runs on every render. What is not
-// here yet is the transformation itself — the monotone, hue-preserving move into the
-// lightness band that the other surface can read. It is left for its own round so that
-// this one changes no pixel, which is exactly what the golden screenshots then prove.
-//
-// Returning the palette unchanged is the honest identity for that: a palette on the wrong
-// background is today still the palette the user asked for.
-export function transformPaletteForSurface(palette, _surface) {
-  return palette;
-}
+// It used to be, on a `tunedFor` field each palette carried. That field is gone: it was an
+// answer about two canonical backgrounds, and the background a card is actually on is
+// whatever a theme or card-mod made it. The measurement lives in ../palette-fit.js and the
+// seam that acts on it in ./adaptation.js, which is what buildCardDomainModel() calls.
 
 // Every word a `palette:` option may be, for the message a user sees when theirs was none
 // of them. All of them, aliases included: a word that works but is not listed would send

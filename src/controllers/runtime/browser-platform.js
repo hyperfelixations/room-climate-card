@@ -20,6 +20,7 @@
 //   createResizeObserver(callback) -> observer, or null when unsupported
 //   fontsReady()                   -> Promise, or null when unsupported
 //   createEvent(type, init)        -> an Event from the card's own realm
+//   readBackgroundSamples(el)      -> every colour the element is painted on, as hex
 //   readTranslateXPx(element)      -> the element's current translate X in CSS
 //                                     pixels, or null when it cannot be read
 //   readAnimationPhase(element, name)
@@ -56,6 +57,8 @@
 // Reading the transform needs BOTH the element's computed style and its realm's
 // DOMMatrixReadOnly. Doing it here keeps the only two realm-bound globals the carousel
 // needs in the one module that is allowed to touch them.
+import { compositeOver, cssColorToHex, gradientSamples } from "../../core/color.js";
+
 function readTranslateXPx(element) {
   if (!element) return null;
   const view = element.ownerDocument?.defaultView;
@@ -159,24 +162,73 @@ function readAnimationPhase(element, animationName) {
 //
 // Realm-correct throughout: getComputedStyle comes from the element's OWN view, never
 // from an ambient global, so a card adopted into another document still measures itself.
-function readBackgroundColor(element) {
+// EVERY COLOUR THE CARD IS PAINTED ON, as a list of opaque hex values.
+//
+// A list rather than one colour, because a card-mod background can be a gradient and a
+// palette has to be legible over the whole of it — including the interior, which is where a
+// white-to-black gradient hides the mid grey that kills every mid-light ramp.
+//
+// THE LADDER, in order, stopping at the first rung that answers:
+//
+//   1  a gradient in `background-image`  ->  its colour stops and the blends between them
+//   2  an opaque computed `background-color`  ->  itself
+//   3  a translucent one  ->  composited over whatever is behind it, walking up the tree
+//   4  `--ha-card-background`, `--card-background-color`  ->  what the theme sets
+//   5  nothing readable  ->  [] and the caller falls back
+//
+// A `url(...)` image is deliberately NOT read. Nothing here can know the average colour of
+// a photograph, and a guess is worse than the theme value the caller falls back to.
+//
+// Realm-correct throughout: getComputedStyle comes from the element's own view, never from
+// a browser global, so a card adopted into another document still measures itself.
+function readBackgroundSamples(element) {
   try {
     const view = element?.ownerDocument?.defaultView;
-    if (!view || typeof view.getComputedStyle !== "function") return null;
+    if (!view || typeof view.getComputedStyle !== "function") return [];
     const style = view.getComputedStyle(element);
-    if (!style) return null;
-    const own = style.backgroundColor;
-    if (own && !/^(transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))$/i.test(own.trim())) return own.trim();
+    if (!style) return [];
+
+    const gradient = gradientSamples(style.backgroundImage);
+    if (gradient.length) return gradient;
+
+    const own = cssColorToHex(style.backgroundColor);
+    if (own) {
+      if (own.alpha >= 1) return [own.hex];
+      const behind = backdropOf(element, view);
+      if (behind) return [compositeOver(own.hex, own.alpha, behind)];
+      // Translucent over something unreadable. The colour itself is still a better sample
+      // than nothing, and it is the one thing definitely being painted.
+      return [own.hex];
+    }
+
     for (const property of ["--ha-card-background", "--card-background-color"]) {
       const value = style.getPropertyValue(property);
-      if (value && value.trim()) return value.trim();
+      const parsed = cssColorToHex(value);
+      if (parsed) return [parsed.hex];
     }
-    return null;
+    return [];
   } catch (_error) {
-    // A realm without a usable CSSOM. The caller has a fallback; a card that cannot
-    // measure its background must still render.
-    return null;
+    // A realm without a usable CSSOM. The caller has a fallback; a card that cannot measure
+    // its background must still render.
+    return [];
   }
+}
+
+// The first opaque colour above `element` in the tree, for compositing a translucent card
+// onto. Bounded: a dashboard is not deep, and an unbounded walk over a hostile DOM is not
+// something a render path should do.
+function backdropOf(element, view) {
+  let node = element.parentNode;
+  for (let depth = 0; depth < 12 && node; depth += 1) {
+    // Cross a shadow boundary the way paint does.
+    if (node.host) node = node.host;
+    if (typeof node.nodeType === "number" && node.nodeType === 1) {
+      const parsed = cssColorToHex(view.getComputedStyle(node)?.backgroundColor);
+      if (parsed && parsed.alpha >= 1) return parsed.hex;
+    }
+    node = node.parentNode || node.host || null;
+  }
+  return null;
 }
 
 export function createBrowserPlatform(getDocument) {
@@ -247,6 +299,6 @@ export function createBrowserPlatform(getDocument) {
 
     readTranslateXPx,
     readAnimationPhase,
-    readBackgroundColor,
+    readBackgroundSamples,
   };
 }

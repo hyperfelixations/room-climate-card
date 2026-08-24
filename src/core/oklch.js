@@ -74,6 +74,42 @@ export function oklabDistance(hexA, hexB) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
+// HOW FAR APART TWO COLOURS LOOK ON A REAL SCREEN, which is a different question.
+//
+// oklabDistance() above answers "how different are these two colours". This answers "would
+// someone notice one of them painted on the other", and the two part company at the dark
+// end. Oklab takes a cube root, so a luminance of 0.0106 (Home Assistant's dark card,
+// #1C1C1C) lands 0.226 away from black — a large number, as if the two were obviously
+// different. In a lit room they are not: light from the room reflects off the screen and
+// adds a constant to everything, and near-blacks disappear into each other.
+//
+// WCAG models exactly that with the +0.05 in its contrast ratio, and it is right to. What
+// WCAG then gets wrong is the other end: its ratio saturates near white and goes blind to
+// colourfulness, so it scores a saturated red on mid grey at 1.01 — "invisible" — when the
+// two could hardly be more different.
+//
+// So the flare term is applied FIRST, in linear light, and the perceptually uniform
+// distance is measured afterwards. Raising the dark end also compresses chroma there,
+// which is what the eye does anyway: colour discrimination falls away at low luminance.
+//
+// F was chosen by measurement rather than taste. Against a hand-labelled table of colour /
+// background pairs (test/fixtures/palette-fit-calibration.js), F = 0.02 is the only value
+// that separates the visible pairs from the invisible ones at all: F = 0 leaves black on
+// #1C1C1C looking distinguishable, and F >= 0.04 starts calling dark-slate-grey on black
+// invisible. The separation is narrow, which is honest — these are genuinely hard cases.
+const SCREEN_FLARE = 0.02;
+
+// Linear light plus the flare a lit room adds, renormalised so white stays white.
+const withFlare = (linear) => linear.map((channel) => (channel + SCREEN_FLARE) / (1 + SCREEN_FLARE));
+
+export function screenDistance(hexA, hexB) {
+  const a = linearToOklab(withFlare(hexToRgb(hexA).map(toLinear)));
+  const b = linearToOklab(withFlare(hexToRgb(hexB).map(toLinear)));
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+export { SCREEN_FLARE };
+
 // A rounding tolerance, not a colour tolerance: the matrices are given to ten digits and
 // a channel that lands at 1.00000004 is white, not out of gamut.
 const GAMUT_EPSILON = 1e-4;

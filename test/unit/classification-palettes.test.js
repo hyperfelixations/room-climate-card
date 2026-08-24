@@ -55,7 +55,7 @@ test("every shipped palette is complete, and the registry is frozen", () => {
     }
     assert.match(palette.optimal, /^#[0-9A-Fa-f]{6}$/, `${id}: optimal`);
     assert.match(palette.invalid, /^#[0-9A-Fa-f]{6}$/, `${id}: invalid`);
-    assert.ok(palettes.PALETTE_TUNINGS.includes(palette.tunedFor), `${id}: tunedFor`);
+    assert.equal(palette.origin, "builtin", `${id}: a shipped palette is the card's own work`);
     assert.equal(Object.isFrozen(palette), true, `${id}: frozen`);
     assert.equal("aliases" in palette, false, `${id}: which words reach a palette is not part of the palette`);
   }
@@ -108,7 +108,6 @@ test("assertPalette() refuses every unusable shape, naming the path it was given
     [{ ...ok, above: "#111111" }, /my_palette\.above must be a list of colors/],
     [{ ...ok, above: ["#111111", "nope"] }, /my_palette\.above\[2\] must be a 3\/4\/6\/8-digit hex color/],
     [{ ...ok, invalid: "red" }, /my_palette\.invalid must be a 3\/4\/6\/8-digit hex color/],
-    [{ ...ok, tunedFor: "midnight" }, /my_palette\.tunedFor must be one of light, dark, any/],
   ];
   for (const [palette, expected] of cases) {
     assert.throws(() => palettes.assertPalette(palette, "my_palette"), expected, JSON.stringify(palette));
@@ -133,12 +132,23 @@ test("a palette without wings is complete, and a missing wing completes to empty
   assert.deepEqual(oneSided.below, []);
 });
 
-// Recorded now, while the palettes are being designed and the answer is known. Nothing
-// reads it yet — see PALETTE_TUNINGS in the registry for why it exists anyway.
-test("tunedFor records the card background a palette was designed against", () => {
-  assert.equal(palettes.paletteForName("pastel").tunedFor, "dark");
-  assert.equal(palettes.paletteForName("vivid").tunedFor, "any");
-  assert.equal(palettes.completePalette({ id: "x", optimal: "#111111" }).tunedFor, "any", "a written-out palette says nothing");
+// WHERE A PALETTE CAME FROM decides whether the card may change it, and it is the one
+// thing about a palette that cannot be measured: nothing in the colours says whether a
+// person chose them. See PALETTE_ORIGINS in the registry and adaptPalette() in adaptation.js.
+test("a palette says where it came from, and an unstated origin is treated as somebody's choice", () => {
+  assert.equal(palettes.paletteForName("pastel").origin, "builtin");
+  assert.equal(palettes.paletteForColor("teal").origin, "derived");
+  assert.deepEqual(palettes.paletteForColor("teal").source, { color: "#008080" }, "a derived ramp remembers its seed");
+  assert.equal(palettes.paletteForName("pastel").source, null, "a shipped palette has no seed to remember");
+  // The default is the conservative one: a palette that says nothing is left alone.
+  assert.equal(palettes.completePalette({ id: "x", optimal: "#111111" }).origin, "custom");
+});
+
+test("a user cannot claim an origin, and a nonsense one falls back to custom", () => {
+  // `origin` is not in the allowed key set for a written-out palette (see the config
+  // layer), so this can only come from inside the card — and even then it is not trusted.
+  assert.equal(palettes.completePalette({ id: "x", optimal: "#111111", origin: "builtin " }).origin, "custom");
+  assert.equal(palettes.completePalette({ id: "x", optimal: "#111111", origin: 7 }).origin, "custom");
 });
 
 // The one field a palette may leave out. Nobody should have to invent a colour for a

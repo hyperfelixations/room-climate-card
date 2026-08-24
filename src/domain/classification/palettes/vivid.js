@@ -16,11 +16,10 @@
 // the contrast every shipped palette has to keep on a dark card, and a ramp end nobody
 // can read on half the dashboards is not a stronger end.
 //
-// Measured on a light card and a dark one, hence `tunedFor: "any"`.
+// Measured on a light card and a dark one.
 
 export const vivid = {
   id: "vivid",
-  tunedFor: "any",
   optimal: "#17A93F",
   above: ["#7EB018", "#CBA30A", "#E5811A", "#E1552A", "#CC2B2B"],
   below: ["#0DA97E", "#06A5B4", "#128FD1", "#1F6FD6", "#3B58CF"],

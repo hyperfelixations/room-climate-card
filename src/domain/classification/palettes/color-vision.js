@@ -43,7 +43,6 @@
 
 export const colorVision = {
   id: "color-vision",
-  tunedFor: "any",
   // Every name a user is likely to reach for, because they will search by their own
   // diagnosis and not by ours. `tritan` resolving here is deliberate and measured (above),
   // not a leftover.

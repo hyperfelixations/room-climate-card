@@ -14,13 +14,14 @@
 // have wings of any length, and of DIFFERENT lengths: more resolution towards "too much"
 // than towards "too little" is a legitimate thing to want, and costs nothing to express.
 
-// `tunedFor: "dark"` records where this ramp is at its best. Its colours are soft, which
-// reads as calm against a dark card and as slightly washed out against a light one.
-// Nothing acts on that yet — see PALETTE_TUNINGS in registry.js.
+// This ramp is at its best on a dark card: its colours are soft, which reads as calm
+// against a dark background and slightly washed out against a light one. It is stated here
+// as a note and nowhere in the data, because the card does not take a palette's word for
+// where it works — it measures the palette against the background it is actually painted on
+// (see ../palette-fit.js).
 
 export const pastel = {
   id: "pastel",
-  tunedFor: "dark",
   optimal: "#79A86C",
   above: ["#9DA85A", "#C0A752", "#C98A67", "#C67277", "#B85F67"],
   below: ["#69A78B", "#67A7AE", "#76A0C0", "#8192C8", "#8A88C9"],

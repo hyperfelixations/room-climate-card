@@ -16,6 +16,10 @@ let RENDER_PATH;
 let entityDataSignature;
 let structuralConfigSignature;
 
+// The colours the card is painted on. A constant here: this file is about which ENTITY
+// changes move the signature, and the background has its own tests in palette-fit.test.js.
+const BACKGROUND = ["#FFFFFF"];
+
 test.before(async () => {
   ({ createRenderController, RENDER_PATH } = await import("../../src/controllers/render/render-controller.js"));
   ({ entityDataSignature, structuralConfigSignature } = await import("../../src/controllers/render/render-signatures.js"));
@@ -306,17 +310,17 @@ test("entityDataSignature covers every entity the card reads, including attribut
     "sensor.r1": { state: "21", last_updated: "T0" },
     "sensor.r2": { state: "23", last_updated: "T0" },
   };
-  const base = entityDataSignature({ config, states, language: "en", activeViewIndex: 0 });
+  const base = entityDataSignature({ config, states, language: "en", activeViewIndex: 0, background: BACKGROUND });
 
   // An attribute-only change leaves the state string alone but moves last_updated,
   // which is exactly why last_updated is used rather than last_changed.
   const attributeOnly = { ...states, "sensor.r2": { state: "23", last_updated: "T1" } };
-  assert.notEqual(entityDataSignature({ config, states: attributeOnly, language: "en", activeViewIndex: 0 }), base);
+  assert.notEqual(entityDataSignature({ config, states: attributeOnly, language: "en", activeViewIndex: 0, background: BACKGROUND }), base);
 
-  assert.notEqual(entityDataSignature({ config, states, language: "de", activeViewIndex: 0 }), base, "language");
-  assert.notEqual(entityDataSignature({ config, states, language: "en", activeViewIndex: 1 }), base, "active view");
+  assert.notEqual(entityDataSignature({ config, states, language: "de", activeViewIndex: 0, background: BACKGROUND }), base, "language");
+  assert.notEqual(entityDataSignature({ config, states, language: "en", activeViewIndex: 1, background: BACKGROUND }), base, "active view");
   assert.notEqual(
-    entityDataSignature({ config: { ...config, rotation_seconds: 9 }, states, language: "en", activeViewIndex: 0 }),
+    entityDataSignature({ config: { ...config, rotation_seconds: 9 }, states, language: "en", activeViewIndex: 0, background: BACKGROUND }),
     base,
     "rotation_seconds"
   );
@@ -324,7 +328,7 @@ test("entityDataSignature covers every entity the card reads, including attribut
 
 test("entityDataSignature ignores entities the card does not read", () => {
   const config = { entity: "sensor.avg", rooms: [], rotation_seconds: 8, slide_seconds: 0.4 };
-  const args = { config, language: "en", activeViewIndex: 0 };
+  const args = { config, language: "en", activeViewIndex: 0, background: BACKGROUND };
   const a = entityDataSignature({ ...args, states: { "sensor.avg": { state: "22", last_updated: "T0" } } });
   const b = entityDataSignature({
     ...args,
@@ -335,9 +339,9 @@ test("entityDataSignature ignores entities the card does not read", () => {
 
 test("entityDataSignature tolerates a missing state object", () => {
   const config = { entity: "sensor.gone", rooms: [], rotation_seconds: 8, slide_seconds: 0.4 };
-  const signature = entityDataSignature({ config, states: {}, language: "en", activeViewIndex: 0 });
+  const signature = entityDataSignature({ config, states: {}, language: "en", activeViewIndex: 0, background: BACKGROUND });
   assert.match(signature, /^sensor\.gone::\|/, "an absent entity is still part of the signature, as an empty reading");
-  assert.equal(signature, entityDataSignature({ config, states: undefined, language: "en", activeViewIndex: 0 }));
+  assert.equal(signature, entityDataSignature({ config, states: undefined, language: "en", activeViewIndex: 0, background: BACKGROUND }));
 });
 
 test("structuralConfigSignature changes for every option that cannot be patched", () => {

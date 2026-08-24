@@ -37,7 +37,6 @@
 // it rather than overruling it.
 
 import { hexToOklch, oklabDistance, oklchToHex } from "../../../core/oklch.js";
-import { tuningForColor } from "../surface.js";
 
 // Where each wing is headed, in Oklab lightness.
 //
@@ -121,11 +120,6 @@ export function monochromePalette(baseHex, id = "monochrome") {
   );
   return {
     id,
-    // Measured from the base colour rather than declared, because there is no list that
-    // could cover a hex somebody typed. `yellow` says it is for dark dashboards, `navy`
-    // for light ones, `teal` for both — see tuningForColor(). Computed here means once
-    // per setConfig(), for the one colour that was asked for.
-    tunedFor: tuningForColor(baseHex),
     // The base colour itself, passed through rather than round-tripped through Oklab. A
     // round trip is exact to well under an 8-bit step, but "exact enough" is not the
     // promise; the promise is that `palette: teal` puts #008080 on the card. The caller
