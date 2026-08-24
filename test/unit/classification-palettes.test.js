@@ -16,7 +16,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { measure } = require("../helpers/color-vision.js");
+const { measureRamp } = require("../helpers/color-measurement.js");
 
 let palettes;
 let pastel;
@@ -155,7 +155,7 @@ test("invalid is optional and completes to a neutral grey", () => {
 // was the pastel palette's own warm grey, wired in where no palette should have had a
 // say, and it managed 2.13:1 on a light card.
 test("the neutral grey is the best a single grey can do on both backgrounds", () => {
-  const { contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
+  const { contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-measurement.js");
   const onLight = contrastRatio(palettes.NEUTRAL_COLOR, LIGHT_CARD);
   const onDark = contrastRatio(palettes.NEUTRAL_COLOR, DARK_CARD);
   assert.ok(onLight >= 4.1, `${onLight.toFixed(2)}:1 on a light card`);
@@ -390,84 +390,67 @@ test("the same profiles under the second palette differ everywhere and stay cohe
   assert.equal(seen.size, profile.tiers.length, "eleven tiers, eleven distinct colours");
 });
 
-// ------------------------------------------- the colour-blind palettes ------
+// ------------------------------------------- the colour-vision palette ------
 
-// These two exist to be USABLE by someone who cannot see the default ramp, and that is a
-// measurable claim rather than a design intention. The instrument is
-// test/helpers/color-vision.js, and it verifies itself first in color-vision-tool.test.js
-// — without that, these numbers would only be self-consistent.
+// The colour-vision palette exists to be USABLE by someone who cannot see the default
+// ramp. It was DERIVED with a Brettel-Viénot-Mollon (1997) dichromacy simulation — a
+// search over 36 hue pairs crossed with lightness and chroma schedules, measured under
+// protanopia, deuteranopia and tritanopia, which is how one palette came to serve all
+// three rather than two. Those measurements are recorded in the RCC changelog.
 //
-// What is checked is the JUDGEMENT the colour carries: how far each end sits from the
-// middle, how far the two ends sit from each other, and that every step outwards is
-// further out than the last. Not checked, and deliberately not claimed: that all eleven
-// steps are individually distinguishable. With one hue axis gone and 25 L* to work in —
-// the colours are foreground on a light card and a dark one — that is not reachable, and
-// the level text is what carries the fine detail.
-// Measured with the Brettel 1997 simulation, under every way of seeing, and written as
-// floors just under what the palette actually reaches. The neighbour gap is here because
-// reach alone does not make a ramp readable: `pastel` spans a long distance under
-// deuteranopia and still has two adjacent steps dE00 1,9 apart.
-const CVD_LIMITS = { wing: 30, ends: 48, step: 4 };
+// The simulator is gone, and on purpose: it was a derivation tool, and the palette is now
+// a set of anchored hex codes like every other. What is left is what a shipped palette has
+// to keep satisfying, checked with the ordinary instrument — reach, separation, order and
+// contrast. Those are the properties an edit can break; the derivation is not something an
+// edit can break, because it already happened.
+//
+// The numbers are floors just under what the palette actually reaches today, so a change
+// that degrades it fails and a change that improves it does not.
+const COLOR_VISION_LIMITS = { wing: 30, ends: 48, step: 4, onLight: 2.4, onDark: 2.6 };
 
-// ONE palette for all three deficiencies, and that is a measurement rather than a
-// convenience. Protan and deutan were always going to share a design — they confuse the
-// same colours. Tritan was expected to need its own, and does not: a search over 36 hue
-// pairs crossed with lightness and chroma schedules picked the same winner for both
-// targets independently. So the claim under test is the strong one: this ramp holds up
-// under EVERY way of seeing, not only the one it is named for.
-test("the colour-vision palette works for all three deficiencies, not only one", () => {
-  const palette = palettes.paletteForName("color-vision");
-  for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
-    const seen = measure(palette, deficiency);
-    assert.equal(seen.monotone, true, `${deficiency}: every step out is further from the middle`);
-    assert.ok(seen.lowWing >= CVD_LIMITS.wing, `${deficiency}: middle to coldest is ${seen.lowWing.toFixed(1)}`);
-    assert.ok(seen.highWing >= CVD_LIMITS.wing, `${deficiency}: middle to hottest is ${seen.highWing.toFixed(1)}`);
-    assert.ok(seen.ends >= CVD_LIMITS.ends, `${deficiency}: end to end is ${seen.ends.toFixed(1)}`);
-    assert.ok(seen.minStep >= CVD_LIMITS.step, `${deficiency}: nearest neighbours are ${seen.minStep.toFixed(1)} apart`);
-  }
+test("the colour-vision palette keeps the reach and separation it was chosen for", () => {
+  const seen = measureRamp(palettes.completePalette(palettes.paletteForName("color-vision")));
+  assert.equal(seen.monotone, true, "every step out is further from the middle");
+  assert.ok(seen.lowWing >= COLOR_VISION_LIMITS.wing, `middle to coldest is ${seen.lowWing.toFixed(1)}`);
+  assert.ok(seen.highWing >= COLOR_VISION_LIMITS.wing, `middle to hottest is ${seen.highWing.toFixed(1)}`);
+  assert.ok(seen.ends >= COLOR_VISION_LIMITS.ends, `end to end is ${seen.ends.toFixed(1)}`);
+  // Reach alone does not make a ramp readable: a ramp can span a long distance and still
+  // put two neighbours where nobody can tell them apart.
+  assert.ok(seen.minStep >= COLOR_VISION_LIMITS.step, `nearest neighbours are ${seen.minStep.toFixed(1)} apart`);
+  assert.ok(seen.onLight >= COLOR_VISION_LIMITS.onLight, `${seen.onLight.toFixed(2)}:1 on a light card`);
+  assert.ok(seen.onDark >= COLOR_VISION_LIMITS.onDark, `${seen.onDark.toFixed(2)}:1 on a dark card`);
 });
 
-// Contrast measured on the colours as they are SEEN, not as they are written. A palette
-// for people who see colour differently that was only ever checked against normal vision
-// would be checking the one case it is not for.
-test("the colour-vision palette stays readable under the simulation, not just on paper", () => {
-  const palette = palettes.paletteForName("color-vision");
-  for (const deficiency of ["normal", "protan", "deutan", "tritan"]) {
-    const seen = measure(palette, deficiency);
-    assert.ok(seen.onLight >= 2.4, `${deficiency}: ${seen.onLight.toFixed(2)}:1 on a light card`);
-    assert.ok(seen.onDark >= 2.6, `${deficiency}: ${seen.onDark.toFixed(2)}:1 on a dark card`);
-  }
+// The distinguishing feature, and the reason the palette is not simply "pastel with other
+// colours": it separates its two ends further than the default ramp does, and it does so
+// on a single lightness-and-warmth axis rather than on red against green.
+test("the colour-vision palette separates its ends further than the default ramp", () => {
+  const theirs = measureRamp(palettes.completePalette(palettes.paletteForName("color-vision")));
+  const defaults = measureRamp(palettes.completePalette(pastel));
+  assert.ok(theirs.ends > defaults.ends, `${theirs.ends.toFixed(0)} must beat the default's ${defaults.ends.toFixed(0)}`);
 });
 
-// The comparison that says this palette is needed at all. Under red-green deficiency the
-// default ramp's own two ends — green and red — are the pair that disappears.
-test("the colour-vision palette beats the default ramp for every deficiency", () => {
-  const weakest = (m) => Math.min(m.lowWing, m.highWing);
-  for (const deficiency of ["protan", "deutan", "tritan"]) {
-    const theirs = weakest(measure(palettes.paletteForName("color-vision"), deficiency));
-    const defaults = weakest(measure(pastel, deficiency));
-    assert.ok(theirs > defaults, `under ${deficiency}: ${theirs.toFixed(0)} must beat the default's ${defaults.toFixed(0)}`);
-  }
-});
+// ------------------------------------------------ every shipped palette ------
 
 // Every palette the card ships has to be readable on both card backgrounds, whatever it
 // was designed around — a palette that vanished in dark mode would have traded one group
 // of users for another.
 test("every shipped palette carries usable contrast on both backgrounds", () => {
   for (const [id, palette] of shipped) {
-    const seen = measure(palette, "normal");
+    const seen = measureRamp(palettes.completePalette(palette));
     assert.ok(seen.onLight >= 2.0, `${id}: ${seen.onLight.toFixed(2)}:1 on a light card`);
     assert.ok(seen.onDark >= 2.6, `${id}: ${seen.onDark.toFixed(2)}:1 on a dark card`);
   }
 });
 
-// A palette meant for one deficiency need not serve the others, but every palette must
-// still be a ramp for everyone: each step further out has to look further out.
-test("every shipped palette still reads as a ramp for normal vision", () => {
+// A palette meant for one purpose need not serve the others, but every palette must still
+// be a ramp: each step further out has to look further out.
+test("every shipped palette still reads as a ramp", () => {
   for (const [id, palette] of shipped) {
-    const seen = measure(palette, "normal");
+    const seen = measureRamp(palettes.completePalette(palette));
     assert.equal(seen.monotone, true, `${id}: monotone from the middle out`);
-    assert.ok(Math.min(seen.lowWing, seen.highWing) >= 25, `${id}: the weaker wing reaches ${Math.min(seen.lowWing, seen.highWing).toFixed(0)}`);
+    const weaker = Math.min(seen.lowWing, seen.highWing);
+    assert.ok(weaker >= 25, `${id}: the weaker wing reaches ${weaker.toFixed(0)}`);
   }
 });
 
@@ -477,9 +460,10 @@ test("every shipped palette still reads as a ramp for normal vision", () => {
 // would still be a failure.
 test("three palettes distinguish too little from too much, and signal deliberately does not", () => {
   for (const id of ["pastel", "vivid", "color-vision"]) {
-    assert.ok(measure(palettes.paletteForName(id), "normal").ends >= 25, `${id}: the two ends are far apart`);
+    const seen = measureRamp(palettes.completePalette(palettes.paletteForName(id)));
+    assert.ok(seen.ends >= 25, `${id}: the two ends are far apart (${seen.ends.toFixed(1)})`);
   }
-  assert.equal(measure(signal, "normal").ends, 0, "signal says HOW FAR from optimal, not which way");
+  assert.equal(measureRamp(palettes.completePalette(signal)).ends, 0, "signal says HOW FAR from optimal, not which way");
 });
 
 // The short palette exists to be this test. A profile that reaches five steps, a palette

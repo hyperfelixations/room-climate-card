@@ -17,7 +17,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkHass, mkState } = require("../helpers/hass-fixtures.js");
-const { contrastRatio: measuredContrast, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
+const { contrastRatio: measuredContrast, LIGHT_CARD, DARK_CARD } = require("../helpers/color-measurement.js");
 
 const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
 

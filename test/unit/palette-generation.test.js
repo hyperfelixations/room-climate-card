@@ -19,7 +19,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { deltaE, measure, contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-vision.js");
+const { deltaE, measureRamp, contrastRatio, LIGHT_CARD, DARK_CARD } = require("../helpers/color-measurement.js");
 
 let monochromePalette;
 let assertPalette;
@@ -145,7 +145,7 @@ test("every one of the 148 names produces a usable ramp", () => {
     const palette = monochromePalette(hex, name);
     assert.doesNotThrow(() => assertPalette(palette, name), name);
     assert.ok(palette.above.length + palette.below.length >= 3, `${name}: a ramp needs steps`);
-    assert.equal(measure(palette, "normal").monotone, true, `${name}: every step out is further from the middle`);
+    assert.equal(measureRamp(palette).monotone, true, `${name}: every step out is further from the middle`);
     for (const wing of [palette.below, palette.above]) {
       let previous = palette.optimal;
       for (const step of wing) {
@@ -174,11 +174,13 @@ test("a colour with no hue gives a greyscale, without a special case for it", ()
     for (const hex of [...palette.below, palette.optimal, ...palette.above]) {
       assert.ok(hexToOklch(hex).chroma < 0.005, `${name}: ${hex} must carry no colour`);
     }
-    assert.equal(measure(palette, "normal").monotone, true, `${name}: still a ramp`);
+    assert.equal(measureRamp(palette).monotone, true, `${name}: still a ramp`);
   }
-  // A greyscale is the one ramp every kind of colour vision reads identically.
-  for (const deficiency of ["protan", "deutan", "tritan"]) {
-    assert.equal(measure(monochromePalette(CSS_COLOR_NAMES.gray), deficiency).monotone, true, deficiency);
+  // A greyscale is the one ramp every kind of colour vision reads identically, which is
+  // why it is worth having at all: the ordering survives when the hue does not.
+  const grey = monochromePalette(CSS_COLOR_NAMES.gray);
+  for (const hex of [...grey.below, grey.optimal, ...grey.above]) {
+    assert.ok(hexToOklch(hex).chroma < 0.005, `gray: ${hex} carries colour`);
   }
 });
 

@@ -1,8 +1,8 @@
 // The palette for colour vision deficiency — all of it, in one ramp.
 //
 // WHY THE CARD'S OWN RAMP FAILS. The default ramp runs green in the middle to red at the
-// top, and green against red is exactly the pair red-green deficiency loses: measured
-// with the simulation in test/helpers/color-vision.js, an equiluminant red and green fall
+// top, and green against red is exactly the pair red-green deficiency loses: measured with
+// a Brettel-Viénot-Mollon (1997) dichromacy simulation, an equiluminant red and green fall
 // from a distance of 43 to 3 for a deuteranope. "Optimal" and "critical" become the same
 // colour, which is the worst thing a climate card can do. That deficiency is about 99 %
 // of all colour blindness — deutan ≈ 2,96 %, protan ≈ 1,05 % of the population, roughly
@@ -20,8 +20,11 @@
 // room is narrow: it has to avoid red against green, which protan and deutan need, while
 // not being the yellow-blue axis, which tritan needs.
 //
-// Measured under every way of seeing, with the Brettel 1997 simulation
-// (classification-palettes.test.js pins these):
+// Measured under every way of seeing, with the Brettel 1997 simulation, at the time these
+// colours were chosen. The simulator was a derivation tool and has been removed now that
+// the palette is anchored; the full derivation is recorded in the RCC changelog, and
+// classification-palettes.test.js keeps the properties an edit could break — reach,
+// separation, order and contrast — measured without it.
 //
 //                middle -> coldest   middle -> hottest   end to end   nearest neighbours
 //   normal              37                  33              52               5,5
@@ -29,9 +32,9 @@
 //   deuteranope         34                  31              58               4,0
 //   tritanope           31                  32              50               4,5
 //
-// Contrast holds at 2,47 : 1 on a light card and 2,61 : 1 on a dark one, in every one of
+// Contrast held at 2,47 : 1 on a light card and 2,61 : 1 on a dark one in every one of
 // those simulations rather than only for normal vision — a palette for people who see
-// colour differently has to be measured as they see it.
+// colour differently had to be measured as they see it.
 //
 // NOT CLAIMED: that all eleven steps are individually distinguishable. With one hue axis
 // gone and a lightness band of L* 40-70 to work in — these colours are foreground on a
