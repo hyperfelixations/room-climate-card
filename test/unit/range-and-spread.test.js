@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { LANGUAGES } = require("../contracts/product-surface.js");
 
 let env;
 
@@ -331,12 +332,15 @@ test("RangeScale footer text is localized", () => {
   env.cleanup(de);
 });
 
-test("I18N-02: RangeScale footer renders without throwing in all 11 supported languages", () => {
+test("I18N-02: RangeScale footer renders without throwing in every supported language", () => {
   const states = {
     "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   };
-  for (const lang of ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "ko", "ja", "zh"]) {
+  // The language list comes from the manifest. It used to be written out here, and it
+  // stopped at eleven: Ukrainian, Norwegian, Swedish and Latvian shipped without this
+  // test ever rendering a footer in them, while the test name still said "all".
+  for (const lang of LANGUAGES) {
     const el = rangeScaleFooterFixture({}, states, lang);
     const footerEl = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer");
     assert.ok(footerEl && footerEl.textContent.length > 0, `lang=${lang}: footer must render non-empty text`);

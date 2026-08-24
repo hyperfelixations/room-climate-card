@@ -16,8 +16,8 @@
     "characterize:update": "npm run build && node scripts/update-characterization.mjs",
     "test:install": "playwright install --with-deps chromium",
     "check:run": "node --check dist/room-climate-card.js",
-    "test:unit:run": "node --test --test-reporter=./test/helpers/compact-reporter.js --test-reporter-destination=stdout \"test/unit/*.test.js\"",
-    "test:unit:verbose:run": "node --test \"test/unit/*.test.js\"",
+    "test:unit:run": "node --test --test-reporter=./test/helpers/compact-reporter.js --test-reporter-destination=stdout \"test/**/*.test.js\"",
+    "test:unit:verbose:run": "node --test \"test/**/*.test.js\"",
     "test:browser:run": "playwright test",
     "test:fuzz:run": "node --test test/unit/randomized-extremes.property.test.js"
   },

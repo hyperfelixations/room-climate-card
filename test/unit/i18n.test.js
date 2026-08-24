@@ -30,7 +30,10 @@ let internals;
 let access;
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
-const SUPPORTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
+// From the manifest, not written out again: this file iterates EVERY supported language,
+// so it is exactly the kind of generic matrix that must not carry its own copy. See
+// test/contracts/product-surface.js.
+const { LANGUAGES: SUPPORTED_LANGUAGES } = require("../contracts/product-surface.js");
 
 test("all TRANSLATIONS language blocks stay in sync with en (the file's own load-time self-check never warns)", () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {

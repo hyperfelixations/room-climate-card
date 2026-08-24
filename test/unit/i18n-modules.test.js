@@ -17,7 +17,10 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const EXPECTED_LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
+// From the manifest — see test/contracts/product-surface.js. The comparison of the
+// manifest against the registry itself lives in product-surface.test.js; what this file
+// does with the list is ask the translation modules about each language in turn.
+const { LANGUAGES: EXPECTED_LANGUAGES } = require("../contracts/product-surface.js");
 
 let locales;
 let formatters;
@@ -35,9 +38,11 @@ test.before(async () => {
 
 // --------------------------------------------------------------- registry --
 
-test("every supported language is registered, with English as the reference", () => {
+// The registry-against-manifest comparison is product-surface.test.js's job and is not
+// repeated here. What is this module's own business is that the reference language it
+// key-checks everything else against actually exists.
+test("the reference language exists and is the default", () => {
   assert.equal(locales.DEFAULT_LANGUAGE, "en");
-  assert.deepEqual(Object.keys(registry.TRANSLATIONS).sort(), [...EXPECTED_LANGUAGES].sort());
   assert.ok(registry.TRANSLATIONS.en, "the reference language must exist");
 });
 

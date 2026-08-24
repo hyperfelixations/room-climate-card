@@ -85,7 +85,8 @@ test("_resolveLabelForm: reverts a previously-shortened element back to the long
 
 // ==== TRANSLATIONS content: the actual fixes ====
 
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
+// From the manifest — see test/contracts/product-surface.js.
+const { LANGUAGES } = require("../contracts/product-surface.js");
 
 test("every language declares scale.comfortLabelShort/scale.optimalLabelShort/rangeScale.currentLabelShort", () => {
   for (const lang of LANGUAGES) {

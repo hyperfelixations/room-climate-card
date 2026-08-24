@@ -18,7 +18,8 @@
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
+// From the manifest — see test/contracts/product-surface.js.
+const { LANGUAGES } = require("../contracts/product-surface.js");
 // Widths cover the supported 280-500 px range. Below that range, some long-label
 // combinations cannot fit without exceeding the solver's layout assumptions.
 const WIDTHS = [280, 320, 380, 420, 500];

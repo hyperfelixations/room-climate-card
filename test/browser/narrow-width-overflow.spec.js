@@ -10,6 +10,11 @@ const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../helpers/browser-helpers");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
+// DELIBERATELY CURATED, not the manifest's fifteen. These five are the typographic
+// extremes among the supported languages — the longest German compounds, Polish and
+// Russian case endings, Latvian's long unit words — and they are what makes a 280 px
+// card overflow. Running all fifteen would triple a slow browser spec to re-prove the
+// same five. A new language belongs here only if it is harder than these.
 const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 
 // ha-card is never registered as a custom element in the shared offline
