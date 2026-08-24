@@ -109,11 +109,41 @@ function createTestEnvironment() {
     for (const el of Array.from(liveCards)) cleanup(el);
   }
 
+  // Create, use, and clean up — even when the body throws.
+  //
+  // The manual `const el = createCard(...); ...; cleanup(el);` shape leaks the card on
+  // every FAILING assertion, which is precisely when a leaked card does most harm: the
+  // resume timer keeps running and the next test in the same file inherits it. This wraps
+  // the pair so the failure that matters is the assertion, not the mess it left behind.
+  function withCard(config, hass, body) {
+    const el = createCard(config, hass);
+    try {
+      return body(el);
+    } finally {
+      cleanup(el);
+    }
+  }
+
+  // How many cards this environment still holds. A test file that cleans up after itself
+  // ends at zero; anything else means a card — and its timers — outlived its test.
+  function liveCardCount() {
+    return liveCards.size;
+  }
+
   function setReducedMotion(value) {
     reducedMotion = Boolean(value);
   }
 
-  return { window, document: window.document, createCard, cleanup, cleanupAll, setReducedMotion };
+  return {
+    window,
+    document: window.document,
+    createCard,
+    withCard,
+    cleanup,
+    cleanupAll,
+    liveCardCount,
+    setReducedMotion,
+  };
 }
 
 // vm.runInContext() gives room-climate-card.js a genuinely separate V8
