@@ -146,6 +146,40 @@ expectedFailure("RCC-BUG-03", () => {
   }
 });
 
+// RCC-BUG-04 — found while working out what the property generator should be allowed to
+// write. A key nobody meant to type produces no complaint of any kind.
+//
+// The card is strict about this everywhere else: `palette: {optimal: …, nonsense: 1}` is
+// refused by name, and so is an unknown key in `classification`. Only the top level, which
+// is the level a user actually edits, lets a typo through in silence.
+expectedFailure("RCC-BUG-04", () => {
+  const built = buildScenario({ rooms: [{}] });
+  for (const key of ["pallete", "subtitel", "roomz", "entiy"]) {
+    const messages = [];
+    const original = { warn: console.warn, error: console.error };
+    console.warn = (...args) => messages.push(args.join(" "));
+    console.error = (...args) => messages.push(args.join(" "));
+    let refused = false;
+    try {
+      env.withCard({ ...built.config, [key]: "vivid" }, built.hass, () => {});
+    } catch {
+      refused = true;
+    } finally {
+      Object.assign(console, original);
+    }
+    assert.ok(refused || messages.length > 0, `"${key}" was accepted without a word about it`);
+  }
+});
+
+test("RCC-BUG-04's neighbourhood: the same mistake one level down IS refused by name", () => {
+  const built = buildScenario({ rooms: [{}] });
+  assert.throws(
+    () => env.withCard({ ...built.config, palette: { optimal: "#3D9970", nonsense: 1 } }, built.hass, () => {}),
+    /nonsense/,
+    "a nested unknown key is named in the error, which is what the top level should also do"
+  );
+});
+
 test("RCC-BUG-03's neighbourhood: the other three metrics do reject their impossible readings", () => {
   const impossible = [
     ["humidity", -1],

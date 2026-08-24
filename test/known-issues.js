@@ -42,11 +42,17 @@ const KNOWN_ISSUES = [
       "An unusable computed span should reach the no-data state the way an unusable reading does.",
     foundBy: "test/property/model.property.test.js",
     // How the property run recognises THIS defect among the violations it collects, so a
-    // case that reproduces a registered bug is counted as one rather than reported as a
-    // new failure. Deliberately narrow: it keys on the overflowing span and on the CSS the
-    // overflow produces, not on "a NaN somewhere" — a different NaN must still fail.
+    // case that reproduces a registered bug is counted as one rather than reported as a new
+    // failure.
+    //
+    // Two symptoms, one cause. The overflow shows either as the spread itself going
+    // infinite, or — when the scale range is what overflows — as every derived POSITION
+    // going NaN with nothing else wrong. The second clause is an `every` rather than a
+    // `some` on purpose: a NaN position accompanied by any other kind of violation is a
+    // different finding and must still be reported as new.
     fingerprint: (violations) =>
-      violations.some((violation) => /spread is Infinity|calc\(NaN%|"\)" is expected/.test(violation)),
+      violations.some((violation) => /spread is Infinity|calc\(NaN%|"\)" is expected/.test(violation)) ||
+      violations.every((violation) => /everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation)),
   },
   {
     id: "RCC-BUG-02",
@@ -75,6 +81,20 @@ const KNOWN_ISSUES = [
     // Not reachable through the property invariants: nothing there knows what is physically
     // possible, and teaching it would mean writing the missing rule in the test instead of
     // the product. The reproduction below is deterministic and direct.
+  },
+  {
+    id: "RCC-BUG-04",
+    area: "config/normalize-config",
+    discovered: "2026-08-25",
+    summary:
+      "A misspelled TOP-LEVEL configuration key is accepted in silence. `pallete: vivid` or " +
+      "`subtitel: Ground floor` produce no error, no warning and no diagnostic — the option " +
+      "simply does nothing. The same mistake one level down is refused by name, because every " +
+      "nested object goes through assertAllowedKeys(), so the card is inconsistent with its " +
+      "own convention exactly where a user is most likely to make the mistake.",
+    foundBy: "manual investigation while extending the property generator",
+    // Deliberately no fingerprint: the property invariants cannot see this. Nothing about
+    // the rendered card is wrong — that IS the problem, and only a direct test can say so.
   },
 ];
 

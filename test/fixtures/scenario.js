@@ -74,6 +74,9 @@ function describeEntity(raw, { metric, id, index, defaults }) {
     // Room-only, ignored for the primary entity.
     name: source.name === undefined ? (index === null ? undefined : `Room ${index}`) : source.name,
     short: source.short === undefined ? (index === null ? undefined : `R${index}`) : source.short,
+    // Per-room action overrides, passed through to the room entry as written.
+    tap_action: source.tap_action,
+    hold_action: source.hold_action,
   };
 }
 
@@ -90,6 +93,17 @@ function describeScenario(raw) {
   const rooms = (source.rooms || []).map((room, index) =>
     describeEntity(room, { metric, id: `sensor.room${index}`, index, defaults })
   );
+  // Entities that exist in `hass.states` WITHOUT being configured as rooms. That is what a
+  // `range_entity` or a `trend_entity` is: the card reads it, and it must not turn into a
+  // room chip. Without this the two roles could not be told apart in a description.
+  const extras = (source.extras || []).map((entity, index) =>
+    describeEntity({ name: null, short: null, ...entity }, {
+      metric,
+      id: entity.id || `sensor.extra${index}`,
+      index: null,
+      defaults,
+    })
+  );
   // Absent means "the ordinary primary entity"; an explicit null means "no primary entity
   // is configured at all" — a rooms-only card, which is a supported and quite different
   // shape.
@@ -100,6 +114,7 @@ function describeScenario(raw) {
   return {
     metric,
     defaults,
+    extras,
     language: source.language === undefined ? DEFAULT_LANGUAGE : source.language,
     primary,
     rooms,
@@ -148,8 +163,14 @@ function buildScenario(raw) {
       const entry = { entity: room.id };
       if (room.name !== undefined) entry.name = room.name;
       if (room.short !== undefined) entry.short = room.short;
+      if (room.tap_action !== undefined) entry.tap_action = room.tap_action;
+      if (room.hold_action !== undefined) entry.hold_action = room.hold_action;
       return entry;
     });
+  }
+  // Present in hass, absent from the configuration.
+  for (const extra of description.extras) {
+    if (extra.present) states[extra.id] = stateObjectOf(extra);
   }
   Object.assign(config, description.config);
 
@@ -222,6 +243,11 @@ class ScenarioBuilder {
   // One more room, described explicitly.
   room(patch) {
     return this._with({ rooms: [...(this._d.rooms || []), patch || {}] });
+  }
+
+  // An entity that exists but is not a room — what a range_entity or trend_entity is.
+  extra(patch) {
+    return this._with({ extras: [...(this._d.extras || []), patch || {}] });
   }
 
   // Scenario-wide, order-independent, and overridable per room. The common case is one

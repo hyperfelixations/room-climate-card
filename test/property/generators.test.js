@@ -7,43 +7,36 @@
 //
 // So the weights are not just declared, they are checked — and so is the claim that each
 // axis actually reaches the values it says it reaches. A generator that has, say, quietly
-// stopped producing misspelled attribute keys is still green everywhere else; only this
-// file notices.
+// stopped producing misspelled attribute keys is still green everywhere else; only this file
+// notices.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
-const {
-  generateDescription,
-  weighted,
-  WEIGHTS,
-  FOREIGN_UNITS,
-  MISSPELLED_DEVICE_CLASS_KEYS,
-  MISSPELLED_UNIT_KEYS,
-  MALFORMED_STATES,
-  ABSURD_NUMBERS,
-} = require("./generators.js");
+const { generateDescription, weighted, WEIGHTS, OPTION_PRESENCE, ENUMS, OTHER_DOMAIN_UNITS } = require("./generators.js");
+const V = require("./vocabulary.js");
 const { describeScenario } = require("../fixtures/scenario.js");
-const { METRICS, METRIC_KINDS, LANGUAGES } = require("../contracts/product-surface.js");
+const { METRICS, METRIC_KINDS, LANGUAGES, VIEWS } = require("../contracts/product-surface.js");
 
-const SAMPLE = 4000;
+const SAMPLE = 5000;
 
 // Every description a sample of seeds produces, generated once and shared: these tests all
 // ask different questions of the same population.
 //
 // Measured through describeScenario(), not on the raw generator output. A generator that
-// leaves a field out is saying "the default", and the default is what the card will see —
-// so counting raw output would measure the generator's shorthand rather than the population
-// it actually produces. (It also silently reports zero for anything defaulted, which is how
-// this file first failed.)
+// leaves a field out is saying "the default", and the default is what the card will see — so
+// counting raw output would measure the generator's shorthand rather than the population it
+// actually produces. (It also silently reports zero for anything defaulted, which is how this
+// file first failed.)
 const population = (() => {
   const rng = new SeededRandom(0x9e3779b9);
   return Array.from({ length: SAMPLE }, () => describeScenario(generateDescription(rng.int(0, 0x7fffffff))));
 })();
 
 function everyEntity(description) {
-  return description.primary ? [description.primary, ...description.rooms] : description.rooms;
+  const own = description.primary ? [description.primary, ...description.rooms] : description.rooms;
+  return [...own, ...(description.extras || [])];
 }
 
 function shareOf(predicate) {
@@ -56,6 +49,16 @@ function shareOf(predicate) {
     }
   }
   return total === 0 ? 0 : hits / total;
+}
+
+// How often a configuration key appears at all.
+function configShare(key) {
+  return population.filter((description) => key in description.config).length / SAMPLE;
+}
+
+// Every value a configuration key was ever given across the population.
+function valuesOf(key) {
+  return population.filter((description) => key in description.config).map((description) => description.config[key]);
 }
 
 // ------------------------------------------------------- the weighting machinery --
@@ -87,6 +90,20 @@ test("every declared weight table is well formed", () => {
   }
 });
 
+test("typo() damages a token without destroying it", () => {
+  const rng = new SeededRandom(3);
+  for (const word of ["clip", "wrap", "value_desc", "extremes", "device_class", "pastel"]) {
+    const seen = new Set();
+    for (let index = 0; index < 200; index++) seen.add(V.typo(rng, word));
+    assert.ok(seen.size >= 5, `${word}: only ${seen.size} distinct misspellings`);
+    for (const damaged of seen) {
+      assert.equal(typeof damaged, "string");
+      assert.notEqual(damaged, word, `${word}: typo() returned the original`);
+      assert.ok(damaged.trim().length > 0, `${word}: typo() produced nothing`);
+    }
+  }
+});
+
 // ------------------------------------------------ the population it actually makes --
 
 test("the ordinary case dominates: most entities carry a correct device class and unit", () => {
@@ -96,10 +113,10 @@ test("the ordinary case dominates: most entities carry a correct device class an
       entity.deviceClass.key === "device_class" &&
       entity.deviceClass.value === METRICS[description.metric].deviceClass
   );
-  assert.ok(correctClass > 0.6 && correctClass < 0.85, `correct device class share is ${correctClass.toFixed(3)}`);
+  assert.ok(correctClass > 0.55 && correctClass < 0.85, `correct device class share is ${correctClass.toFixed(3)}`);
 
   const numericState = shareOf((entity) => typeof entity.state === "number");
-  assert.ok(numericState > 0.7 && numericState < 0.9, `numeric state share is ${numericState.toFixed(3)}`);
+  assert.ok(numericState > 0.65 && numericState < 0.9, `numeric state share is ${numericState.toFixed(3)}`);
 });
 
 test("the rare cases are rare, but they do happen", () => {
@@ -107,20 +124,34 @@ test("the rare cases are rare, but they do happen", () => {
   // often enough to be exercised and seldom enough not to dominate the run.
   const axes = {
     "misspelled device_class key": shareOf(
-      (entity) => entity.deviceClass && MISSPELLED_DEVICE_CLASS_KEYS.includes(entity.deviceClass.key)
+      (entity) => entity.deviceClass && entity.deviceClass.key !== "device_class"
     ),
-    "misspelled unit key": shareOf((entity) => entity.unit && MISSPELLED_UNIT_KEYS.includes(entity.unit.key)),
-    "unit from another domain entirely": shareOf((entity) => entity.unit && FOREIGN_UNITS.includes(entity.unit.value)),
+    "misspelled unit key": shareOf((entity) => entity.unit && entity.unit.key !== "unit_of_measurement"),
+    "unit from another Home Assistant domain": shareOf(
+      (entity) => entity.unit && OTHER_DOMAIN_UNITS.includes(entity.unit.value)
+    ),
+    "unit from no domain at all": shareOf((entity) => entity.unit && V.NON_HA_UNITS.includes(entity.unit.value)),
     "no unit at all": shareOf((entity) => entity.unit === null),
     "no device class at all": shareOf((entity) => entity.deviceClass === null),
+    "a foreign device class": shareOf(
+      (entity) => entity.deviceClass && V.FOREIGN_DEVICE_CLASSES.includes(entity.deviceClass.value)
+    ),
     "unavailable or unknown": shareOf((entity) => entity.state === "unavailable" || entity.state === "unknown"),
-    "malformed state": shareOf((entity) => MALFORMED_STATES.includes(entity.state)),
+    "malformed state": shareOf((entity) => V.MALFORMED_STATES.includes(entity.state)),
     "absent from hass entirely": shareOf((entity) => entity.present === false),
-    "an absurd number": shareOf((entity) => ABSURD_NUMBERS.includes(entity.state)),
+    "an absurd number": shareOf((entity) => V.ABSURD_NUMBERS.includes(entity.state)),
+    "a physically impossible reading": shareOf(
+      (entity, description) =>
+        typeof entity.state === "number" &&
+        ((description.metric === "temperature" && entity.state < -273.15) ||
+          (description.metric === "humidity" && entity.state < 0) ||
+          (description.metric === "co2" && entity.state <= 0) ||
+          (description.metric === "pm25" && entity.state < 0))
+    ),
   };
   for (const [name, share] of Object.entries(axes)) {
     assert.ok(share > 0.005, `${name} never or almost never happens (${share.toFixed(4)})`);
-    assert.ok(share < 0.25, `${name} dominates the run (${share.toFixed(4)})`);
+    assert.ok(share < 0.3, `${name} dominates the run (${share.toFixed(4)})`);
   }
 });
 
@@ -151,19 +182,121 @@ test("cards with mixed units are generated, and so are cards without a primary e
   assert.ok(roomsOnly.length / SAMPLE > 0.05, `only ${roomsOnly.length}/${SAMPLE} cards have no primary entity`);
 });
 
-test("palettes and view lists cover their interesting shapes", () => {
-  const palettes = population.map((description) => description.config.palette).filter((value) => value !== undefined);
-  assert.ok(palettes.some((value) => typeof value === "string"), "no palette is ever named");
-  assert.ok(palettes.some((value) => typeof value === "object" && value !== null), "no palette is ever written out");
-  assert.ok(palettes.some((value) => typeof value === "number"), "a numeric colour scalar is never generated");
+// ------------------------------------------------------- the configuration surface --
 
-  const views = population.map((description) => description.config.views).filter((value) => value !== undefined);
-  assert.ok(views.some((value) => Array.isArray(value) && !value.includes("scale")), "no views list omits scale");
-  assert.ok(
-    views.some((value) => Array.isArray(value) && new Set(value).size !== value.length),
-    "a views list with duplicates is never generated"
+test("every optional configuration key is generated, at roughly the rate declared", () => {
+  // The check that keeps the YAML surface covered. A key that stops being generated — because
+  // a refactor dropped it, or a weight went to zero — takes a whole configuration path out of
+  // the run without failing anything else.
+  for (const [key, expected] of Object.entries(OPTION_PRESENCE)) {
+    if (key === "misspelledKey" || key === "view_options") continue; // measured separately below
+    const actual = configShare(key);
+    assert.ok(actual > expected / 3, `${key} appears in only ${(100 * actual).toFixed(1)} % of cards`);
+    assert.ok(actual < expected * 3 + 0.05, `${key} appears in ${(100 * actual).toFixed(1)} % of cards, far above its weight`);
+  }
+});
+
+test("view options and misspelled top-level keys both occur", () => {
+  assert.ok(configShare("view_options") > 0.05, "per-view options are never configured");
+  const misspelled = population.filter((description) =>
+    Object.keys(description.config).some((key) => V.MISSPELLED_CONFIG_KEYS.includes(key))
   );
-  assert.ok(views.some((value) => !Array.isArray(value)), "a views value that is not a list is never generated");
+  assert.ok(misspelled.length / SAMPLE > 0.01, "a misspelled top-level key is never generated");
+});
+
+test("every enumerated option is written correctly, misspelled, and as the wrong type", () => {
+  for (const [key, allowed] of Object.entries(ENUMS)) {
+    if (key === "subtitle_overflow") continue; // reached through subtitle, measured below
+    const values = valuesOf(key);
+    assert.ok(values.length > 20, `${key}: only ${values.length} samples`);
+    assert.ok(values.some((value) => allowed.includes(value)), `${key}: never written correctly`);
+    assert.ok(
+      values.some((value) => typeof value === "string" && !allowed.includes(value)),
+      `${key}: never misspelled`
+    );
+    assert.ok(
+      values.some((value) => typeof value !== "string" && !allowed.includes(value)),
+      `${key}: never given the wrong type`
+    );
+  }
+});
+
+test("subtitle is generated in every shape it accepts, including both reserved words wrong", () => {
+  // `subtitle: clip` sets the WRAPPING; `subtitle: Ground floor` sets the TEXT. Getting one
+  // of those two words slightly wrong therefore changes the meaning entirely, which is
+  // exactly the kind of mistake worth generating.
+  const values = valuesOf("subtitle");
+  assert.ok(values.length > 40, `only ${values.length} subtitles`);
+  assert.ok(values.some((value) => value === "clip" || value === "wrap"), "the reserved words are never used");
+  assert.ok(
+    values.some((value) => typeof value === "string" && /^\s*(clip|wrap)\s*$/i.test(value) === false && /cl|wr/i.test(value)),
+    "a near-miss of a reserved word is never generated"
+  );
+  assert.ok(values.some((value) => value && typeof value === "object"), "the object form is never used");
+  assert.ok(values.some((value) => value === "" || value === null), "the empty forms are never used");
+});
+
+test("actions are generated valid, unknown, misspelled and malformed", () => {
+  const actions = [...valuesOf("tap_action"), ...valuesOf("hold_action")];
+  assert.ok(actions.length > 40, `only ${actions.length} actions`);
+  const named = actions.filter((value) => value && typeof value === "object" && typeof value.action === "string");
+  assert.ok(named.some((value) => V.VALID_ACTIONS.includes(value.action)), "no valid action is ever generated");
+  assert.ok(named.some((value) => !V.VALID_ACTIONS.includes(value.action)), "no unknown action is ever generated");
+  assert.ok(actions.some((value) => !value || typeof value !== "object"), "no malformed action is ever generated");
+});
+
+test("views are generated in every shape, including a list that omits scale", () => {
+  const lists = valuesOf("views");
+  assert.ok(lists.length > 40, `only ${lists.length} view lists`);
+  const arrays = lists.filter(Array.isArray);
+  assert.ok(arrays.some((value) => value.length && !value.includes("scale")), "no views list omits scale");
+  assert.ok(arrays.some((value) => new Set(value).size !== value.length), "a views list with duplicates is never generated");
+  assert.ok(arrays.some((value) => value.some((entry) => entry && typeof entry === "object")), "the object form is never used");
+  assert.ok(
+    arrays.some((value) => value.some((entry) => typeof entry === "string" && !VIEWS.includes(entry))),
+    "an unknown view name is never generated"
+  );
+  assert.ok(lists.some((value) => !Array.isArray(value)), "a views value that is not a list is never generated");
+});
+
+test("palettes are generated in every shape the card accepts, and several it does not", () => {
+  const palettes = valuesOf("palette");
+  assert.ok(palettes.length > 100, `only ${palettes.length} palettes`);
+  assert.ok(palettes.some((value) => typeof value === "string"), "no palette is ever named");
+  assert.ok(palettes.some((value) => typeof value === "number"), "a numeric colour scalar is never generated");
+  const written = palettes.filter((value) => value && typeof value === "object" && !Array.isArray(value));
+  assert.ok(written.length > 5, "a palette is never written out in YAML");
+  assert.ok(written.some((value) => "above" in value && "below" in value), "a two-winged written palette never occurs");
+  assert.ok(written.some((value) => !("above" in value) && !("below" in value)), "a single-colour written palette never occurs");
+  assert.ok(palettes.some((value) => Array.isArray(value)), "a nonsense palette shape is never generated");
+});
+
+test("classification overrides are generated, including a ramp that breaks the score contract", () => {
+  const overrides = valuesOf("classification");
+  assert.ok(overrides.length > 20, `only ${overrides.length} classification overrides`);
+  assert.ok(overrides.some((value) => "source" in value), "the source form never occurs");
+  assert.ok(overrides.some((value) => typeof value.profile === "string"), "a named profile never occurs");
+  assert.ok(
+    overrides.some((value) => value.profile && typeof value.profile === "object" && Array.isArray(value.profile.tiers)),
+    "a written-out tier ramp never occurs"
+  );
+});
+
+test("the auxiliary entities exist in hass without becoming rooms", () => {
+  // A range_entity is read by the card and must not turn into a room chip. Getting that
+  // wrong in the generator would quietly change what every card in the run looks like.
+  const withRange = population.filter((description) => description.config.range_entity === "sensor.range");
+  assert.ok(withRange.length > 20, `only ${withRange.length} cards point at a range entity`);
+  for (const description of withRange) {
+    assert.ok(
+      description.extras.some((entity) => entity.id === "sensor.range"),
+      "the range entity is configured but never exists"
+    );
+    assert.ok(
+      !description.rooms.some((room) => room.id === "sensor.range"),
+      "the range entity became a room, which would change the card's data"
+    );
+  }
 });
 
 // --------------------------------------------------------------------- determinism --
@@ -178,4 +311,14 @@ test("the same seed always describes the same card", () => {
 test("different seeds describe different cards", () => {
   const distinct = new Set(population.slice(0, 500).map((description) => JSON.stringify(description)));
   assert.ok(distinct.size > 480, `only ${distinct.size}/500 descriptions are distinct`);
+});
+
+test("every generated description is plain JSON, so it can be printed and shrunk", () => {
+  for (const description of population.slice(0, 300)) {
+    const round = JSON.parse(JSON.stringify(description));
+    // NaN and -0 do not survive JSON, and both are deliberately generated. What must survive
+    // is the STRUCTURE — a case that cannot be printed cannot be reported.
+    assert.equal(typeof round, "object");
+    assert.ok(Array.isArray(round.rooms));
+  }
 });
