@@ -146,7 +146,7 @@ const MISSPELLED_DEVICE_CLASS_VALUES = {
 };
 
 // Top-level configuration keys somebody meant to write. The card accepts unknown top-level
-// keys in silence today (see RCC-BUG-04), so these are worth generating: what they prove is
+// keys in silence today (see BUG-09), so these are worth generating: what they prove is
 // that a misspelled key changes nothing, which is the whole problem.
 const MISSPELLED_CONFIG_KEYS = [
   "entiy",

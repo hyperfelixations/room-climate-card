@@ -22,8 +22,13 @@
 // the same discipline pytest calls a strict xfail and Playwright calls test.fail().
 //
 // WHAT DOES NOT BELONG HERE: a test that is merely awkward, slow, or environment-
-// dependent. This register is for defects in the CARD, each one with an entry in the
-// internal RCC backlog under the same id.
+// dependent. This register is for defects in the CARD.
+//
+// THE ID IS THE INTERNAL BACKLOG'S ID. Every entry below has a matching `BUG-xx` section in
+// the project's internal backlog carrying the reproduction, the affected module, an
+// assessment of the impact and whatever decision is still open. This file is the executable
+// half of that pair, not a substitute for it: a bug that lives only in a test file is a bug
+// nobody plans.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,7 +38,7 @@ const assert = require("node:assert/strict");
 // backlog; nothing here is a substitute for that entry.
 const KNOWN_ISSUES = [
   {
-    id: "RCC-BUG-01",
+    id: "BUG-06",
     area: "domain/scale",
     discovered: "2026-08-24",
     summary:
@@ -55,7 +60,7 @@ const KNOWN_ISSUES = [
       violations.every((violation) => /everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation)),
   },
   {
-    id: "RCC-BUG-02",
+    id: "BUG-07",
     area: "domain/metrics conversion",
     discovered: "2026-08-24",
     summary:
@@ -64,12 +69,12 @@ const KNOWN_ISSUES = [
       "cold. Celsius and Kelvin at the same magnitude are unaffected — only the scaling path " +
       "overflows. A non-finite conversion result should reach the no-data state.",
     foundBy: "test/property/model.property.test.js",
-    // Distinct from RCC-BUG-01: no span is involved, a single room is enough, and what goes
+    // Distinct from BUG-06: no span is involved, a single room is enough, and what goes
     // non-finite is the VALUE rather than a position derived from a spread.
     fingerprint: (violations) => violations.some((violation) => /\.value is -?Infinity/.test(violation)),
   },
   {
-    id: "RCC-BUG-03",
+    id: "BUG-08",
     area: "domain/classification profiles",
     discovered: "2026-08-24",
     summary:
@@ -77,13 +82,13 @@ const KNOWN_ISSUES = [
       "is accepted and rendered as data. Every other metric rejects its impossible readings — " +
       "co2 at <= 0, humidity outside 0-100, pm25 below 0 — and the machinery to do the same " +
       "for temperature already exists and is simply not used.",
-    foundBy: "manual investigation while characterising RCC-BUG-02",
+    foundBy: "manual investigation while characterising BUG-07",
     // Not reachable through the property invariants: nothing there knows what is physically
     // possible, and teaching it would mean writing the missing rule in the test instead of
     // the product. The reproduction below is deterministic and direct.
   },
   {
-    id: "RCC-BUG-04",
+    id: "BUG-09",
     area: "config/normalize-config",
     discovered: "2026-08-25",
     summary:

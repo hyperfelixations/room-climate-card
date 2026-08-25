@@ -224,7 +224,7 @@ const OPTION_PRESENCE = {
   range_entity: 0.1,
   trend_entity: 0.08,
   // A key nobody meant to write. The card takes unknown top-level keys in silence today,
-  // which is RCC-BUG-04 — so generating them is how the run keeps proving it.
+  // which is BUG-09 — so generating them is how the run keeps proving it.
   misspelledKey: 0.06,
 };
 

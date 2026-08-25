@@ -27,7 +27,7 @@ test.after(() => {
 
 test("every registered issue is fully described", () => {
   for (const issue of KNOWN_ISSUES) {
-    assert.match(issue.id, /^RCC-BUG-\d{2,}$/, `id "${issue.id}"`);
+    assert.match(issue.id, /^BUG-\d{2,}$/, `id "${issue.id}"`);
     assert.ok(issue.summary && issue.summary.length > 40, `${issue.id}: summary must say what is wrong`);
     assert.ok(issue.area, `${issue.id}: area`);
     assert.match(issue.discovered, /^\d{4}-\d{2}-\d{2}$/, `${issue.id}: discovered`);
@@ -54,7 +54,7 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
-// RCC-BUG-01 — found by the property run, seed 0x99accdd, shrunk to two rooms.
+// BUG-06 — found by the property run, seed 0x99accdd, shrunk to two rooms.
 //
 // Two rooms whose values are 1e308 and -1e308 have a span of 2e308, which is not a double.
 // The subtraction overflows to Infinity, every position derived from it divides by that
@@ -66,7 +66,7 @@ test("every registered issue has a reproduction in this file", () => {
 // sensor cannot produce this, but a template sensor dividing by something near zero can,
 // and the card's answer should be the no-data state it already has for unusable readings —
 // not a card drawn at NaN per cent.
-expectedFailure("RCC-BUG-01", () => {
+expectedFailure("BUG-06", () => {
   const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e308 }, { state: -1e308 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -81,7 +81,7 @@ expectedFailure("RCC-BUG-01", () => {
 
 // The neighbouring case that DOES work, so the boundary is recorded and a future fix can be
 // checked against something. This is an ordinary test: it passes today and must keep doing so.
-test("RCC-BUG-01's neighbourhood: a span that fits in a double is handled correctly", () => {
+test("BUG-06's neighbourhood: a span that fits in a double is handled correctly", () => {
   const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e200 }, { state: -1e200 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -91,7 +91,7 @@ test("RCC-BUG-01's neighbourhood: a span that fits in a double is handled correc
   });
 });
 
-// RCC-BUG-02 — found by the property run, seed 0x6627f909, shrunk to one room.
+// BUG-07 — found by the property run, seed 0x6627f909, shrunk to one room.
 //
 // One room reporting -1e308 °F. The conversion to Celsius is (F - 32) × 5/9; the
 // multiplication by five overflows, and -Infinity is what comes out. The card then displays
@@ -99,7 +99,7 @@ test("RCC-BUG-01's neighbourhood: a span that fits in a double is handled correc
 //
 // The overflow is specific to the SCALING path — °C and K at the same magnitude come
 // through as ordinary (if absurd) numbers, because their conversion never multiplies.
-expectedFailure("RCC-BUG-02", () => {
+expectedFailure("BUG-07", () => {
   const built = buildScenario({
     metric: "temperature",
     primary: null,
@@ -112,7 +112,7 @@ expectedFailure("RCC-BUG-02", () => {
   });
 });
 
-test("RCC-BUG-02's neighbourhood: the same magnitude in Celsius does not overflow", () => {
+test("BUG-07's neighbourhood: the same magnitude in Celsius does not overflow", () => {
   const built = buildScenario({
     metric: "temperature",
     primary: null,
@@ -123,7 +123,7 @@ test("RCC-BUG-02's neighbourhood: the same magnitude in Celsius does not overflo
   });
 });
 
-// RCC-BUG-03 — found while characterising RCC-BUG-02.
+// BUG-08 — found while characterising BUG-07.
 //
 // -274 °C is colder than anything can be. The card accepts it, averages it, classifies it
 // and draws it. The same card rejects -1 % humidity, 101 % humidity, 0 ppm CO2 and a
@@ -133,7 +133,7 @@ test("RCC-BUG-02's neighbourhood: the same magnitude in Celsius does not overflo
 // Whether temperature SHOULD have one is a product decision, not a technical one, and it is
 // recorded here as a defect because the card already has an opinion about impossible
 // readings and does not apply it consistently.
-expectedFailure("RCC-BUG-03", () => {
+expectedFailure("BUG-08", () => {
   for (const value of [-273.16, -274, -1000]) {
     const built = buildScenario({ metric: "temperature", primary: { state: value }, rooms: [] });
     env.withCard(built.config, built.hass, (card) => {
@@ -146,13 +146,13 @@ expectedFailure("RCC-BUG-03", () => {
   }
 });
 
-// RCC-BUG-04 — found while working out what the property generator should be allowed to
+// BUG-09 — found while working out what the property generator should be allowed to
 // write. A key nobody meant to type produces no complaint of any kind.
 //
 // The card is strict about this everywhere else: `palette: {optimal: …, nonsense: 1}` is
 // refused by name, and so is an unknown key in `classification`. Only the top level, which
 // is the level a user actually edits, lets a typo through in silence.
-expectedFailure("RCC-BUG-04", () => {
+expectedFailure("BUG-09", () => {
   const built = buildScenario({ rooms: [{}] });
   for (const key of ["pallete", "subtitel", "roomz", "entiy"]) {
     const messages = [];
@@ -171,7 +171,7 @@ expectedFailure("RCC-BUG-04", () => {
   }
 });
 
-test("RCC-BUG-04's neighbourhood: the same mistake one level down IS refused by name", () => {
+test("BUG-09's neighbourhood: the same mistake one level down IS refused by name", () => {
   const built = buildScenario({ rooms: [{}] });
   assert.throws(
     () => env.withCard({ ...built.config, palette: { optimal: "#3D9970", nonsense: 1 } }, built.hass, () => {}),
@@ -180,7 +180,7 @@ test("RCC-BUG-04's neighbourhood: the same mistake one level down IS refused by 
   );
 });
 
-test("RCC-BUG-03's neighbourhood: the other three metrics do reject their impossible readings", () => {
+test("BUG-08's neighbourhood: the other three metrics do reject their impossible readings", () => {
   const impossible = [
     ["humidity", -1],
     ["humidity", 101],
