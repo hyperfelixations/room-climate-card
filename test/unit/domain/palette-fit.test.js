@@ -193,8 +193,11 @@ test("a collision in the middle is reported as a middle region, not as a broken 
   const onGreen = fit.evaluatePaletteFit(blueGreenRed, ["#2E8B57"]);
   assert.equal(onGreen.fits, false);
   assert.equal(onGreen.regions.length, 1);
-  assert.equal(onGreen.regions[0].where, "middle");
-  assert.ok(onGreen.regions[0].length < onGreen.steps.length, "a middle region cannot be the whole ramp");
+  const [middle] = onGreen.regions;
+  assert.equal(middle.touchesStart, false, "the coldest end is still legible");
+  assert.equal(middle.touchesEnd, false, "and so is the hottest");
+  assert.ok(middle.length < onGreen.steps.length, "a middle region cannot be the whole ramp");
+  assert.deepEqual(middle.keys.length, middle.length, "a region lists the steps it covers");
 
   // And the same ramp on the backgrounds it was built for is not touched at all.
   for (const background of ["#FFFFFF", "#1C1C1C"]) {
@@ -204,13 +207,65 @@ test("a collision in the middle is reported as a middle region, not as a broken 
   }
 });
 
-test("a collision at one end is reported as an end region", () => {
+test("a collision at one end is reported as touching that end", () => {
   const yellowOnWhite = fit.evaluatePaletteFit(palettes.paletteForColor("yellow"), ["#FFFFFF"]);
   assert.equal(yellowOnWhite.regions.length, 1);
-  assert.equal(yellowOnWhite.regions[0].where, "start", "the pale wing is the start of the ramp");
+  assert.equal(yellowOnWhite.regions[0].touchesStart, true, "the pale wing is the start of the ramp");
+  assert.equal(yellowOnWhite.regions[0].touchesEnd, false);
 
   const blackOnDark = fit.evaluatePaletteFit(palettes.paletteForColor("black"), ["#1C1C1C"]);
-  assert.equal(blackOnDark.regions[0].where, "end", "black itself is the far end of that ramp");
+  assert.equal(blackOnDark.regions[0].touchesEnd, true, "black itself is the far end of that ramp");
+  assert.equal(blackOnDark.regions[0].touchesStart, false);
+});
+
+test("a one-winged palette is not mislabelled: its middle is not its start", () => {
+  // The case the old `where` label got wrong. With no `below` wing, `optimal` is the ramp's
+  // first element — so a collision there "touches the start" as a matter of array position,
+  // and any name for that shape would have to claim it is the palette's beginning. The facts
+  // say what happened; they do not interpret it.
+  const upwardsOnly = palettes.completePalette({
+    id: "up",
+    origin: "builtin",
+    optimal: "#000000",
+    above: ["#333333", "#666666"],
+  });
+  const report = fit.evaluatePaletteFit(upwardsOnly, ["#1C1C1C"]);
+  assert.equal(report.fits, false);
+  assert.equal(report.palette.counts.below, 0);
+  assert.equal(report.palette.optimalIndex, 0, "with no below wing, optimal IS the first step");
+  assert.equal(report.regions[0].touchesStart, true);
+  assert.deepEqual(
+    report.failing.map((entry) => entry.key),
+    report.steps.filter((step) => !step.fits).map((step) => step.key),
+    "`failing` is the same set, said plainly"
+  );
+});
+
+test("the report carries the palette's geometry, so a method need not recompute it", () => {
+  const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#808080"]);
+  assert.equal(report.palette.counts.total, 11);
+  assert.equal(report.palette.optimalIndex, 5);
+  assert.equal(report.palette.steps[0].wing, "below");
+  assert.equal(report.palette.steps[0].offset, 5, "the far end of below is five steps from optimal");
+  assert.equal(report.palette.steps[5].wing, "optimal");
+  assert.equal(report.palette.steps[5].offset, 0);
+  for (const step of report.steps) {
+    assert.equal(typeof step.lightness, "number", `${step.key}: lightness`);
+    assert.equal(typeof step.chroma, "number", `${step.key}: chroma`);
+    assert.equal(step.fits, step.deficit === 0);
+    assert.ok(step.fits ? step.margin >= 0 : step.margin === 0, `${step.key}: margin`);
+  }
+});
+
+test("a passing step reports how much room it still has", () => {
+  // Without this a method that moves the whole ramp cannot tell how far it may go before it
+  // breaks a step that currently works.
+  const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#1C1C1C"]);
+  assert.equal(report.fits, true);
+  for (const step of report.steps) {
+    assert.ok(step.margin > 0, `${step.key} fits, so it must report a positive margin`);
+    assert.equal(step.deficit, 0);
+  }
 });
 
 test("the invalid colour is judged, and judged separately from the ramp", () => {
@@ -290,6 +345,34 @@ test("a gradient containing every lightness leaves nowhere to go, and says so", 
   assert.equal(report.fits, false);
   assert.deepEqual(report.lightness.usable, [], "nothing is left, and the report says nothing is left");
   assert.equal(report.lightness.largestUsable, null);
+});
+
+test("the forbidden bands are cached on the background, and never served stale", () => {
+  // The bands depend on the background alone, so they are memoized — and the classic way to
+  // get that wrong is to keep serving the first answer after the background has changed.
+  const black = palettes.paletteForColor("black");
+  const onDark = fit.evaluatePaletteFit(black, ["#1C1C1C"]);
+  const onGrey = fit.evaluatePaletteFit(black, ["#808080"]);
+  const onDarkAgain = fit.evaluatePaletteFit(black, ["#1C1C1C"]);
+
+  assert.notDeepEqual(onDark.lightness.forbidden, onGrey.lightness.forbidden, "a different card forbids a different band");
+  assert.deepEqual(onDarkAgain.lightness.forbidden, onDark.lightness.forbidden, "and coming back gives the first answer again");
+
+  // Two palettes on one background share the answer, because it never depended on the palette.
+  const white = palettes.paletteForColor("white");
+  assert.deepEqual(
+    fit.evaluatePaletteFit(white, ["#808080"]).lightness.forbidden,
+    fit.evaluatePaletteFit(black, ["#808080"]).lightness.forbidden
+  );
+});
+
+test("a cached band cannot be altered by whoever received it", () => {
+  const report = fit.evaluatePaletteFit(palettes.paletteForColor("black"), ["#1C1C1C"]);
+  const [band] = report.lightness.forbidden;
+  assert.throws(() => {
+    "use strict";
+    band.min = 0.5;
+  }, TypeError);
 });
 
 test("a palette that fits reports no regions and forbids nothing", () => {

@@ -19,6 +19,7 @@ const assert = require("node:assert/strict");
 const { measureRamp } = require("../../helpers/color-measurement.js");
 
 let palettes;
+let geometry;
 let pastel;
 let vivid;
 let signal;
@@ -33,6 +34,7 @@ let shipped;
 
 test.before(async () => {
   palettes = await import("../../../src/domain/classification/palettes/registry.js");
+  geometry = await import("../../../src/domain/classification/palettes/geometry.js");
   ({ pastel } = await import("../../../src/domain/classification/palettes/pastel.js"));
   ({ vivid } = await import("../../../src/domain/classification/palettes/vivid.js"));
   ({ signal } = await import("../../../src/domain/classification/palettes/signal.js"));
@@ -521,4 +523,89 @@ test("every built-in profile obeys the ramp contract it imposes on custom ones",
       assert.notEqual(previous, null, `${kind}/${id}: a profile with no palette-driven tier would colour nothing`);
     }
   }
+});
+
+// ------------------------------------------------ the shape of a palette ------
+
+// describePalette() answers "what is this palette shaped like" without a background, which
+// is what lets the fit evaluation and any future adaptation method share one description
+// instead of each walking the ramp themselves. Every shape the contract allows has to come
+// out right, because the contract really does allow all of them.
+
+test("the ramp is described in the order a reader travels it", () => {
+  const described = geometry.describePalette(palettes.paletteForName("pastel"));
+  assert.equal(described.counts.total, 11);
+  assert.equal(described.optimalIndex, 5);
+  assert.deepEqual(
+    described.steps.map((step) => step.key),
+    ["below:5", "below:4", "below:3", "below:2", "below:1", "optimal", "above:1", "above:2", "above:3", "above:4", "above:5"]
+  );
+  described.steps.forEach((step, index) => assert.equal(step.index, index, step.key));
+});
+
+test("offset is the distance from optimal, the way the card addresses a step everywhere else", () => {
+  const described = geometry.describePalette(palettes.paletteForName("pastel"));
+  assert.equal(described.steps[0].offset, 5, "the far end of below is five steps out");
+  assert.equal(described.steps[described.optimalIndex].offset, 0);
+  assert.equal(described.steps.at(-1).offset, 5, "and so is the far end of above");
+  for (const step of described.steps) {
+    assert.equal(step.wing, step.offset === 0 ? "optimal" : step.key.split(":")[0]);
+  }
+});
+
+test("every shape the palette contract allows is described without a special case", () => {
+  const cases = [
+    [{ optimal: "#808080" }, { total: 1, optimalIndex: 0, below: 0, above: 0 }],
+    [{ optimal: "#808080", above: ["#909090", "#A0A0A0"] }, { total: 3, optimalIndex: 0, below: 0, above: 2 }],
+    [{ optimal: "#808080", below: ["#707070"] }, { total: 2, optimalIndex: 1, below: 1, above: 0 }],
+    [{ optimal: "#808080", above: ["#909090"], below: ["#707070", "#606060"] }, { total: 4, optimalIndex: 2, below: 2, above: 1 }],
+  ];
+  for (const [shape, expected] of cases) {
+    const described = geometry.describePalette(palettes.completePalette({ id: "s", ...shape }));
+    assert.equal(described.counts.total, expected.total, JSON.stringify(shape));
+    assert.equal(described.optimalIndex, expected.optimalIndex, JSON.stringify(shape));
+    assert.equal(described.counts.below, expected.below);
+    assert.equal(described.counts.above, expected.above);
+    assert.equal(described.steps[described.optimalIndex].key, "optimal");
+  }
+});
+
+test("a hundred steps is described as readily as one", () => {
+  const long = palettes.completePalette({
+    id: "long",
+    optimal: "#808080",
+    above: Array.from({ length: 50 }, (_, i) => `#${(128 + i * 2).toString(16).padStart(2, "0").repeat(3)}`),
+    below: Array.from({ length: 50 }, (_, i) => `#${(128 - i * 2).toString(16).padStart(2, "0").repeat(3)}`),
+  });
+  const described = geometry.describePalette(long);
+  assert.equal(described.counts.total, 101);
+  assert.equal(described.optimalIndex, 50);
+  assert.equal(described.steps[0].key, "below:50");
+  assert.equal(described.steps.at(-1).key, "above:50");
+});
+
+test("invalid is described but kept out of the ramp", () => {
+  // It is painted, so it is measured; it is not a point on the scale, so nothing that walks
+  // the ramp may walk over it.
+  const withInvalid = geometry.describePalette(palettes.paletteForName("pastel"));
+  assert.ok(withInvalid.invalid, "the shipped palettes all carry one");
+  assert.equal(withInvalid.invalid.key, "invalid");
+  assert.equal(withInvalid.invalid.offset, null, "it has no distance from optimal, because it is not on the ramp");
+  assert.ok(!withInvalid.steps.some((step) => step.key === "invalid"));
+
+  const without = geometry.describePalette({ id: "n", optimal: "#808080", above: [], below: [], invalid: null });
+  assert.equal(without.invalid, null);
+});
+
+test("every step carries the coordinates an adaptation method would otherwise recompute", () => {
+  const described = geometry.describePalette(palettes.paletteForName("vivid"));
+  for (const step of described.steps) {
+    assert.equal(typeof step.lightness, "number", step.key);
+    assert.ok(step.lightness >= 0 && step.lightness <= 1, `${step.key}: ${step.lightness}`);
+    assert.ok(step.chroma >= 0, step.key);
+    assert.ok(step.hue >= 0 && step.hue < 360, `${step.key}: ${step.hue}`);
+  }
+  const lightnesses = described.steps.map((step) => step.lightness);
+  assert.equal(described.lightnessSpan.min, Math.min(...lightnesses));
+  assert.equal(described.lightnessSpan.max, Math.max(...lightnesses));
 });

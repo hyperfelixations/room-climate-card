@@ -23,6 +23,7 @@
 // for the light a real room reflects off a real screen. Its own reasoning is written there.
 
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
+import { describePalette } from "./palettes/geometry.js";
 
 // The line between "a reader can pick this out" and "this is the background".
 //
@@ -36,31 +37,13 @@ import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
 // through. The calibration table is the place to argue about a specific case.
 export const VISIBILITY_THRESHOLD = 0.16;
 
-// Every colour a palette can paint, IN THE ORDER A READER TRAVELS IT: the far end of
-// `below`, inwards to optimal, out again along `above`.
-//
-// Ramp order rather than declaration order, because the interesting question about a
-// collision is not which steps fail but WHERE they fail — a run in the middle is a very
-// different problem from a run at one end, and only a ramp-ordered list can say which it
-// is. See regionsOf() below.
-function rampSteps(palette) {
-  const below = palette.below || [];
-  const steps = [];
-  for (let index = below.length; index >= 1; index -= 1) {
-    steps.push({ key: `below:${index}`, color: below[index - 1] });
-  }
-  steps.push({ key: "optimal", color: palette.optimal });
-  (palette.above || []).forEach((color, index) => steps.push({ key: `above:${index + 1}`, color }));
-  return steps;
-}
-
 // `invalid` is deliberately NOT part of the ramp and just as deliberately not forgotten: it
 // is a colour the card paints, it is not a point on the scale, and a transformation that
 // reshapes the ramp would leave it behind. On a mid-grey card the shared neutral #7D7D7D is
 // exactly as invisible as everything else, and the finding has to say so on its own.
-function invalidStep(palette) {
-  return palette.invalid ? { key: "invalid", color: palette.invalid } : null;
-}
+//
+// The ramp itself is described by describePalette() in palettes/geometry.js — see there for
+// why the geometry is a separate question from the measurement.
 
 // The contiguous runs of colliding steps, in ramp order.
 //
@@ -69,17 +52,26 @@ function invalidStep(palette) {
 // neither end; a black ramp on a dark card collides in one run at the bottom. Those want
 // different treatment, and a flat list of failing steps cannot tell them apart.
 //
-// `where` names the shape directly so a strategy does not have to work it out again.
+// A region reports FACTS about where it sits — which steps, and whether it reaches either
+// end of the ramp — rather than a name for its shape.
+//
+// It used to carry a `where` of "start" | "middle" | "end" | "whole", and that was a lossy
+// abstraction wearing a helpful label. For a palette with only an `above` wing, a collision
+// at `optimal` is the ramp's first element and was therefore called "start" — while it is
+// plainly the palette's MIDDLE. And a run of failures with one accidental survivor in it
+// became two regions whose labels described neither. `touchesStart`/`touchesEnd` cannot be
+// wrong in that way, and "middle" is one negation away for anything that wants it.
 function regionsOf(steps) {
   const regions = [];
   let run = null;
   steps.forEach((step, index) => {
     if (!step.fits) {
-      if (!run) run = { fromIndex: index, toIndex: index, from: step.key, to: step.key, deficit: step.deficit };
+      if (!run) run = { fromIndex: index, toIndex: index, from: step.key, to: step.key, keys: [step.key], maxDeficit: step.deficit };
       else {
         run.toIndex = index;
         run.to = step.key;
-        run.deficit = Math.max(run.deficit, step.deficit);
+        run.keys.push(step.key);
+        run.maxDeficit = Math.max(run.maxDeficit, step.deficit);
       }
       return;
     }
@@ -93,18 +85,8 @@ function regionsOf(steps) {
   return regions.map((region) => ({
     ...region,
     length: region.toIndex - region.fromIndex + 1,
-    // Named by POSITION IN THE RAMP, not by temperature. "start" is the outermost step of
-    // `below`, "end" the outermost step of `above` — which for a monochrome palette with
-    // only one wing means the end that exists. Calling them cold and warm would be wrong
-    // for exactly those palettes.
-    where:
-      region.fromIndex === 0 && region.toIndex === steps.length - 1
-        ? "whole"
-        : region.fromIndex === 0
-          ? "start"
-          : region.toIndex === steps.length - 1
-            ? "end"
-            : "middle",
+    touchesStart: region.fromIndex === 0,
+    touchesEnd: region.toIndex === steps.length - 1,
   }));
 }
 
@@ -199,10 +181,30 @@ function largestRun(runs) {
   return largest;
 }
 
+// The bands depend on the BACKGROUND alone, never on the palette — so two palettes judged
+// against the same card produce the same answer, and so does the same palette on the next
+// render. One entry is enough: a card has one background at a time, and the sequence of
+// calls is "the same samples, over and over".
+//
+// Bounded by construction rather than by an eviction policy: there is only ever one slot, so
+// nothing accumulates. Measured, this is what keeps a gradient from costing three times
+// what a flat card does on every render.
+let lastBands = null;
+
 function bandsFor(samples, threshold) {
-  const forbidden = forbiddenBands(samples, threshold);
-  const usable = usableRuns(forbidden);
-  return { forbidden, usable, largestUsable: largestRun(usable) };
+  const key = `${threshold}|${samples.join(",")}`;
+  if (lastBands && lastBands.key === key) return lastBands.value;
+  const forbidden = forbiddenBands(samples, threshold).map((band) => Object.freeze(band));
+  const usable = usableRuns(forbidden).map((run) => Object.freeze(run));
+  // Frozen because the same object is handed out again on the next call: a consumer that
+  // adjusted a band in place would change what every later render is told.
+  const value = Object.freeze({
+    forbidden: Object.freeze(forbidden),
+    usable: Object.freeze(usable),
+    largestUsable: Object.freeze(largestRun(usable)),
+  });
+  lastBands = { key, value };
+  return value;
 }
 
 // The one question, answered in full.
@@ -220,23 +222,35 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
       fits: true,
       threshold,
       samples: backgrounds,
+      palette: palette ? describePalette(palette) : null,
       steps: [],
       regions: [],
+      failing: [],
       invalid: null,
       worst: null,
       lightness: { forbidden: [], usable: [{ min: 0, max: 1 }], largestUsable: { min: 0, max: 1 } },
     };
   }
 
-  const judge = ({ key, color }) => {
-    const nearest = nearestSample(color, backgrounds);
+  // Every step keeps its geometry and gains the measurement. `deficit` is how far short a
+  // failing step is; `margin` is how much room a passing one still has. Both are always
+  // present and one of them is always zero — a method that moves the whole ramp needs the
+  // margins to know how far it may go before it breaks something that currently works.
+  const judge = (step) => {
+    const nearest = nearestSample(step.color, backgrounds);
     const fits = nearest.distance >= threshold;
-    return { key, color, nearest, fits, deficit: fits ? 0 : threshold - nearest.distance };
+    return {
+      ...step,
+      nearest,
+      fits,
+      deficit: fits ? 0 : threshold - nearest.distance,
+      margin: fits ? nearest.distance - threshold : 0,
+    };
   };
 
-  const steps = rampSteps(palette).map(judge);
-  const invalidColor = invalidStep(palette);
-  const invalid = invalidColor ? judge(invalidColor) : null;
+  const geometry = describePalette(palette);
+  const steps = geometry.steps.map(judge);
+  const invalid = geometry.invalid ? judge(geometry.invalid) : null;
 
   const everything = invalid ? [...steps, invalid] : steps;
   let worst = everything[0];
@@ -247,13 +261,20 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
     fits,
     threshold,
     samples: backgrounds,
+    // What the palette is shaped like, measured once — see palettes/geometry.js.
+    palette: geometry,
     // In ramp order — the far end of `below`, through optimal, out along `above`.
     steps,
     // Where the collisions are, not just that there are some. See regionsOf().
     regions: regionsOf(steps),
+    // The plain answer to "which colours are the problem", `invalid` included, without
+    // anything having to filter for it.
+    failing: everything
+      .filter((step) => !step.fits)
+      .map((step) => ({ key: step.key, color: step.color, deficit: step.deficit })),
     // Judged, reported separately, and never part of a region: it is not on the scale.
     invalid,
-    worst: { key: worst.key, color: worst.color, distance: worst.nearest.distance },
+    worst: { key: worst.key, color: worst.color, distance: worst.nearest.distance, deficit: worst.deficit },
     // Only computed when something is wrong with the palette: it exists for the
     // transformation, and a palette that fits is not going to be transformed. The bisection
     // is the expensive part of this whole function, so keeping it off the common path is
