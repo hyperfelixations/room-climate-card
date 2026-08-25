@@ -1,0 +1,65 @@
+# The large property sweep, once a week.
+#
+# WHY IT IS NOT IN CI. The pull-request run is small and fixed-seed on purpose: a check that
+# draws different cards every time will eventually fail on a change that did not cause it, and
+# a check people learn to re-run is a check they have stopped reading. So CI proves the card
+# survives a known population, and this job goes looking for a new one.
+#
+# WHY WEEKLY RATHER THAN NIGHTLY. This is a Home Assistant custom card, not a service. It is
+# not developed every day, most nights would sweep an unchanged commit, and a scheduled job
+# that usually reports on nothing is one nobody opens. Once a week is often enough to find a
+# regression while the change that caused it is still recent.
+#
+# WHAT A FAILURE HERE MEANS. The run prints a SHRUNK case: a minimal scenario description in
+# plain JSON, small enough to read and directly usable as a fixture. Paste it into
+# scenario(…) in a hand-written test, and the finding is reproducible forever after — the
+# seed is not needed and neither is this workflow.
+#
+# Defects that are already understood do not fail this job: they are listed in
+# test/known-issues.js with a fingerprint, counted in the run's census, and reproduced
+# deterministically by test/known-issues.test.js in every ordinary CI run.
+
+name: Weekly property sweep
+
+on:
+  schedule:
+    # Mondays, 04:17 UTC. Off the hour deliberately — the top of the hour is when every
+    # scheduled workflow on GitHub starts at once, and a queued job that runs an hour late is
+    # a job whose timestamps mean nothing.
+    - cron: "17 4 * * 1"
+  # So a change to the generator can be swept immediately rather than next Monday.
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "How many randomly described dashboards to try"
+        required: false
+        default: "50000"
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Property sweep
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the bundle from src/
+        run: npm run build
+
+      - name: Sweep
+        env:
+          # The scheduled run has no inputs, so the fallback is what the weekly sweep uses.
+          ROOM_CLIMATE_CARD_FUZZ_CASES: ${{ github.event.inputs.cases || '50000' }}
+        run: npm run test:fuzz:run

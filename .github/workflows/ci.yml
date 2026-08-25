@@ -1,13 +1,22 @@
 # CI for the standalone room-climate-card repository.
 #
-# Two independent jobs, deliberately with no `needs:` between them. They answer
-# different questions — "is the logic right" and "does it behave in a real browser" —
-# and a failure in one says nothing about the other. Chaining them would hide the
-# browser result on every unit failure, exactly when knowing both is most useful.
+# Two independent jobs, deliberately with no `needs:` between them. They answer different
+# questions — "is the logic right" and "does it behave in a real browser" — and a failure in
+# one says nothing about the other. Chaining them would hide the browser result on every unit
+# failure, exactly when knowing both is most useful.
 #
-# Both jobs build the bundle themselves. That repeats one Rollup build, which is cheap,
-# and it is what makes each status check meaningful on its own: no browser job can ever
-# report green while testing an artifact that some other job produced.
+# Both jobs build the bundle themselves. That repeats one Rollup build, which is cheap, and it
+# is what makes each status check meaningful on its own: no browser job can ever report green
+# while testing an artifact that some other job produced.
+#
+# WHAT THIS WORKFLOW DOES NOT DO, on purpose:
+#
+#   * it does not run a large property sweep. That belongs in the weekly job (property.yml) so
+#     that a pull request stays fast and, more importantly, DETERMINISTIC — a check that fails
+#     on a different seed every time is a check nobody trusts.
+#   * it does not gate on coverage. The number is published as an artifact and read by people;
+#     turning it into a threshold would mostly measure how much of the bundle jsdom happens to
+#     execute, which is not a quality anyone is trying to improve.
 
 name: CI
 
@@ -17,8 +26,7 @@ on:
   pull_request:
     branches: [main]
 
-# Read-only: this workflow tests, it never publishes. Releases and tags are not part
-# of it.
+# Read-only: this workflow tests, it never publishes. Releases and tags are not part of it.
 permissions:
   contents: read
 
@@ -30,8 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Nothing here pushes; leaving the token in .git/config would let any later
-          # step write to the repository with it.
+          # Nothing here pushes; leaving the token in .git/config would let any later step
+          # write to the repository with it.
           persist-credentials: false
 
       - uses: actions/setup-node@v6
@@ -41,29 +49,39 @@ jobs:
 
       - run: npm ci
 
-      # dist/ is not in the repository: the bundle is what src/ produces, and this is
-      # where it gets produced. Every later step loads that artifact, so this has to
-      # come first.
+      # dist/ is not in the repository: the bundle is what src/ produces, and this is where it
+      # gets produced. Every later step loads that artifact, so this has to come first.
       #
-      # The steps after it deliberately use the internal *:run scripts. The public
-      # commands (npm run check / test:unit) build first themselves, which is what makes
-      # them safe to run on their own — but in a pipeline that would repeat the same
-      # Rollup build for no added guarantee.
+      # The steps after it deliberately use the internal *:run scripts. The public commands
+      # (npm run check / test:unit) build first themselves, which is what makes them safe to
+      # run on their own — but in a pipeline that would repeat the same Rollup build for no
+      # added guarantee.
       - name: Build the bundle from src/
         run: npm run build
 
       - name: Syntax check
         run: npm run check:run
 
-      # Everything under test/ that ends in .test.js, the seeded property run included.
-      # It used to be listed again as a separate step, which ran it TWICE per CI job for
-      # no additional evidence: the unit glob already matched the file.
+      # Everything under test/ that ends in .test.js: unit, component, contract, architecture,
+      # characterization, the known-defect register and the small deterministic property run.
       #
-      # A larger property run belongs in a scheduled job rather than here, so that a pull
-      # request stays fast and deterministic. `npm run test:fuzz` runs the property layer
-      # on its own, and ROOM_CLIMATE_CARD_FUZZ_CASES raises the case count.
-      - name: Unit, component, contract and property tests (node:test + jsdom)
+      # The property run used to be listed again as a separate step, which executed it TWICE
+      # per job for no additional evidence — the glob already matched the file.
+      - name: Unit, component, contract and property tests
         run: npm run test:unit:run
+
+      # Published, never enforced. See the header.
+      - name: Coverage report
+        if: always()
+        run: npm run coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 14
 
   browser:
     name: Browser Tests
@@ -81,8 +99,8 @@ jobs:
 
       - run: npm ci
 
-      # Repeated on purpose — see the file header. This job must not be able to pass
-      # against a bundle it did not produce from the source it checked out.
+      # Repeated on purpose — see the file header. This job must not be able to pass against a
+      # bundle it did not produce from the source it checked out.
       - name: Build the bundle from src/
         run: npm run build
 
@@ -92,8 +110,15 @@ jobs:
       - name: Browser tests (Playwright)
         run: npm run test:browser:run
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      # A FLAKY result is a pass, and it is also the result whose evidence is most likely to be
+      # thrown away: the job succeeds, so a `failure()` condition never fires and the trace from
+      # the retry is gone. Two files ask for retries (see playwright.config.js), so a flaky
+      # result there is exactly the thing worth keeping.
+      #
+      # `always()` rather than a cleverer condition: the report is small, and a rule that
+      # sometimes keeps the evidence is not much better than one that never does.
+      - name: Upload Playwright report
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: playwright-report

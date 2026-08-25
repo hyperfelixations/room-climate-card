@@ -14,6 +14,19 @@
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../helpers/browser-helpers");
 
+// TIMING-SENSITIVE, AND RETRIED FOR THAT REASON ALONE.
+//
+// The gestures below are driven by real mouse.move() sequences whose settling depends on how
+// promptly the browser gets a frame. Under CPU contention that occasionally slips, and the
+// failure is the machine rather than the card: the same case passes on the retry and on the
+// next run.
+//
+// The rest of the suite runs with retries: 0 (see playwright.config.js), so this is a local
+// exception a reader can see, not a blanket policy that also quietly retries the golden
+// screenshots. If a case here fails on the retry as well, it is real.
+test.describe.configure({ retries: 2 });
+
+
 function threeViewStates() {
   return {
     "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),

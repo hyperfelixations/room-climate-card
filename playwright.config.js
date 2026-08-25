@@ -7,20 +7,30 @@ module.exports = defineConfig({
   testDir: "./test/browser",
   testMatch: "**/*.spec.js",
   fullyParallel: true,
-  // 8 parallel Chromium workers (the local default) caused observable CPU-
-  // contention timing flakiness (resize/rAF settling, mouse-gesture
-  // sequences) on this machine, worse the larger the full suite run gets —
-  // capped locally, uncapped in CI where the runner is normally more
-  // consistent/dedicated (a single shared machine, not N parallel browsers
-  // competing for the same cores).
-  workers: process.env.CI ? undefined : 2,
+  // 8 parallel Chromium workers (the local default) caused observable CPU-contention timing
+  // flakiness (resize/rAF settling, mouse-gesture sequences) on this machine, worse the
+  // larger the full suite run gets.
+  //
+  // SET EXPLICITLY FOR CI TOO. It used to be `undefined` there, on the reasoning that a CI
+  // runner is dedicated. A GitHub-hosted runner has two cores, so "however many the machine
+  // thinks it can manage" is a guess about hardware nobody here controls — and the one thing
+  // this suite has actually observed is that oversubscription makes timing tests flaky. Two
+  // is the number that was measured to be stable; naming it means the same number runs
+  // everywhere, which is what makes a local failure worth believing.
+  workers: 2,
   forbidOnly: Boolean(process.env.CI),
-  // Pointer-gesture tests (test/browser/pointer-interaction.spec.js) were
-  // observed to be occasionally flaky under heavy parallel-worker CPU load
-  // on this machine (timing-sensitive mouse.move() sequences) — a single
-  // retry absorbs that without masking a genuine, reproducible failure
-  // (which would still fail on the retry too).
-  retries: process.env.CI ? 2 : 1,
+  // NO GLOBAL RETRIES.
+  //
+  // A retry turns a genuine intermittent failure into a green run with a `flaky` annotation
+  // that nobody reads, and it does that for every spec in the suite — including the golden
+  // screenshots, where an intermittent difference is exactly the thing worth knowing about.
+  // Retrying everything to absorb the two timing-sensitive specs was paying for that
+  // everywhere to fix it in two places.
+  //
+  // Those two files now ask for retries themselves, with test.describe.configure({ retries }),
+  // and say in their own comments why they need it. See pointer-interaction.spec.js and
+  // double-swipe.spec.js.
+  retries: 0,
   // "dot" locally: one character per test, full detail only on failure, one
   // summary line at the end — far less output to process on the common
   // all-green path than "list"'s one line per test. CI keeps "list" since
@@ -28,7 +38,10 @@ module.exports = defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["dot"], ["html", { open: "never" }]],
   use: {
     baseURL: `http://localhost:${PORT}`,
-    trace: "retain-on-failure",
+    // On the first retry rather than on every failure: a spec that asked for retries is
+    // exactly the one whose trace is worth having, and a deterministic failure does not need
+    // a trace to be understood — it needs to be re-run, which anyone can do.
+    trace: "on-first-retry",
   },
   expect: {
     toHaveScreenshot: {
