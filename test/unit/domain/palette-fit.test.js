@@ -225,24 +225,79 @@ test("the invalid colour is judged, and judged separately from the ramp", () => 
   }
 });
 
-test("the collision band says which lightnesses are unusable, for a method to aim away from", () => {
+test("the forbidden bands say which lightnesses are unusable, for a method to aim away from", () => {
   const report = fit.evaluatePaletteFit(palettes.paletteForColor("black"), ["#1C1C1C"]);
-  assert.ok(report.collision, "a palette that does not fit must say where the trouble is");
-  assert.ok(report.collision.min >= 0 && report.collision.max <= 1);
-  assert.ok(report.collision.min < report.collision.max);
+  assert.equal(report.lightness.forbidden.length, 1, "one background, one neighbourhood");
+  const [band] = report.lightness.forbidden;
+  assert.ok(band.min >= 0 && band.max <= 1);
+  assert.ok(band.min < band.max);
   // #1C1C1C sits at Oklab L 0.226, so the unusable band has to contain it.
   const backgroundLightness = oklch.hexToOklch("#1C1C1C").lightness;
   assert.ok(
-    report.collision.min <= backgroundLightness && backgroundLightness <= report.collision.max,
-    `band ${report.collision.min}..${report.collision.max} does not contain the background at ${backgroundLightness}`
+    band.min <= backgroundLightness && backgroundLightness <= band.max,
+    `band ${band.min}..${band.max} does not contain the background at ${backgroundLightness}`
   );
+  // And the room above it is where a method would rebuild the ramp.
+  assert.ok(report.lightness.largestUsable.min >= band.max);
 });
 
-test("a palette that fits reports no regions and no band", () => {
+test("two far-apart samples forbid two separate bands, never one merged one", () => {
+  // The defect this locks out: a single min/max over every sample says the WHOLE lightness
+  // range is unusable as soon as the samples sit at both ends of it. Measured on a ramp that
+  // reaches both ends over a white-to-black gradient, the merged answer was 0.000..1.000
+  // while 0.40..0.83 was in fact free — so a method reading it would conclude there was
+  // nowhere to move to and give up on a palette it could easily have rebuilt.
+  const wide = palettes.completePalette({
+    id: "w",
+    origin: "builtin",
+    optimal: "#808080",
+    above: ["#B0B0B0", "#E8E8E8", "#FDFDFD"],
+    below: ["#505050", "#181818", "#020202"],
+  });
+  const report = fit.evaluatePaletteFit(wide, ["#FFFFFF", "#000000"]);
+  assert.equal(report.fits, false);
+
+  assert.ok(Array.isArray(report.lightness.forbidden), "the forbidden set is a list of bands");
+  assert.equal(report.lightness.forbidden.length, 2, "one band per end, not one spanning everything");
+  for (const band of report.lightness.forbidden) {
+    assert.ok(band.min <= band.max);
+    assert.ok(band.max - band.min < 0.5, `a band covering ${(band.max - band.min).toFixed(2)} of the range is the merge bug`);
+  }
+
+  // And the complement is what a method actually needs: somewhere to aim.
+  assert.ok(report.lightness.usable.length >= 1, "there is room between the two bands");
+  const largest = report.lightness.largestUsable;
+  assert.ok(largest && largest.max - largest.min > 0.3, JSON.stringify(largest));
+  // Independently probed: a neutral colour is visible against both ends between 0.40 and 0.83.
+  assert.ok(largest.min < 0.45 && largest.max > 0.78, JSON.stringify(largest));
+});
+
+test("a gradient containing every lightness leaves nowhere to go, and says so", () => {
+  // The honest opposite: when the forbidden bands really do cover the range, `usable` is
+  // empty. A method may then answer "not achievable" instead of inventing a ramp.
+  const wide = palettes.completePalette({
+    id: "w",
+    origin: "builtin",
+    optimal: "#808080",
+    above: ["#B0B0B0"],
+    below: ["#505050"],
+  });
+  const everyLightness = Array.from({ length: 11 }, (_, index) => {
+    const channel = Math.round((index / 10) * 255).toString(16).padStart(2, "0");
+    return `#${channel}${channel}${channel}`;
+  });
+  const report = fit.evaluatePaletteFit(wide, everyLightness);
+  assert.equal(report.fits, false);
+  assert.deepEqual(report.lightness.usable, [], "nothing is left, and the report says nothing is left");
+  assert.equal(report.lightness.largestUsable, null);
+});
+
+test("a palette that fits reports no regions and forbids nothing", () => {
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#1C1C1C"]);
   assert.equal(report.fits, true);
   assert.deepEqual(report.regions, []);
-  assert.equal(report.collision, null);
+  assert.deepEqual(report.lightness.forbidden, [], "nothing is in the way");
+  assert.deepEqual(report.lightness.usable, [{ min: 0, max: 1 }], "so everything is available");
 });
 
 test("with nothing to measure against, nothing is claimed", () => {

@@ -16,16 +16,17 @@
 // test/browser/palette-fit-calibration.spec.js and was looked at. A visibility claim nobody
 // has looked at is not a claim.
 //
-// ONE THING TO EXPECT WHEN LOOKING AT THAT IMAGE, so the next reader does not mistake it
-// for a bug. The two dark-on-dark rows — `#000000` and `#000080` on `#1C1C1C`, both labelled
-// invisible — are more legible in the rendered PNG than the labels suggest. That is the
-// screenshot flattering them, not the table being wrong: a PNG has perfect black levels,
-// and a real screen in a lit room does not. Light from the room reflects off the panel and
-// lifts both colours towards each other, which is the effect screenDistance() models with
-// its flare term and the effect WCAG models with the +0.05 in its contrast ratio. WCAG puts
-// black on #1C1C1C at 1.15 : 1, far below anything it considers readable, and the same two
-// combinations are the ones the card is specifically required to adapt. Judge these rows on
-// a real screen, not on the image.
+// REVIEWED, AND THE VERDICTS HOLD. Every row below was looked at in the rendered swatches.
+// The tightest visible pair is legible, the widest invisible pair is not, and nothing in
+// between is misfiled.
+//
+// One note for whoever looks next, so a correct table is not doubted: `#000000` on `#1C1C1C`
+// reads slightly better in a PNG than on a real screen, because an image has perfect black
+// levels and a panel in a lit room does not — light from the room lifts both towards each
+// other. That is the effect screenDistance() models with its flare term and the one WCAG
+// models with the +0.05 in its contrast ratio, which puts this pair at 1.15 : 1. Even in the
+// image it is the dimmest text on the page and plainly worse than the row above it, so the
+// verdict is right either way. Judge it on a screen rather than on the file.
 //
 // HOW TO CHANGE A VERDICT. Change the row, with its reason. That is the point of the file:
 // the product decision lives here, in one readable place, and the algorithm does not have

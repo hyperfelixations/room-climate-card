@@ -119,43 +119,90 @@ function nearestSample(color, samples) {
   return nearest;
 }
 
-// THE LIGHTNESS BAND NO STEP MAY OCCUPY, in Oklab L.
+// WHICH LIGHTNESSES NO STEP MAY OCCUPY, in Oklab L — and, more usefully, which it may.
 //
 // Reported because a transformation needs it and cannot cheaply recompute it: it is the
-// answer to "if I move this step, where must it not land". Solved for a NEUTRAL colour,
-// which is the conservative case — chroma only ever helps — by bisection on each side of
-// each sample.
+// answer to "if I move this step, where must it not land", and its complement is the answer
+// to "is there anywhere to move it to at all".
 //
-// null when the samples do not collide with anything, which happens when they are outside
-// the range a palette occupies at all.
-function collisionBand(samples, threshold) {
-  const greyAt = (lightness) => oklchToHex({ lightness, chroma: 0, hue: 0 });
-  const collides = (lightness) => samples.some((sample) => screenDistance(greyAt(lightness), sample) < threshold);
+// A LIST OF BANDS, NEVER ONE MERGED RANGE. Each sample forbids a neighbourhood around its
+// own lightness; two samples far apart forbid two separate neighbourhoods with usable space
+// between them. Carrying a single min/max over all samples collapses those into one band
+// spanning everything — measured, a ramp over a white-to-black gradient reported 0.000..1.000
+// as forbidden while 0.40..0.83 was in fact free, and a method reading that would abandon a
+// palette it could trivially have rebuilt.
+//
+// Solved for a NEUTRAL colour, which is the conservative case — chroma only ever helps — by
+// bisecting each edge of each sample's neighbourhood.
+const BISECTION_STEPS = 24;
 
-  let min = Infinity;
-  let max = -Infinity;
+function forbiddenBands(samples, threshold) {
+  const greyAt = (lightness) => oklchToHex({ lightness, chroma: 0, hue: 0 });
+  const collidesWith = (lightness, sample) => screenDistance(greyAt(lightness), sample) < threshold;
+
+  const bands = [];
   for (const sample of samples) {
     const centre = hexToOklch(sample).lightness;
-    if (!collides(centre)) continue;
-    // Walk out to the first lightness that does NOT collide, then bisect the crossing.
-    for (const direction of [-1, 1]) {
+    if (!collidesWith(centre, sample)) continue;
+
+    // One edge: walk from inside the neighbourhood towards `limit` and bisect the crossing.
+    const edge = (limit) => {
+      if (collidesWith(limit, sample)) return limit;
       let inside = centre;
-      let outside = direction < 0 ? 0 : 1;
-      if (collides(outside)) {
-        min = Math.min(min, direction < 0 ? outside : min);
-        max = Math.max(max, direction > 0 ? outside : max);
-        continue;
-      }
-      for (let step = 0; step < 24; step++) {
+      let outside = limit;
+      for (let step = 0; step < BISECTION_STEPS; step += 1) {
         const middle = (inside + outside) / 2;
-        if (collides(middle)) inside = middle;
+        if (collidesWith(middle, sample)) inside = middle;
         else outside = middle;
       }
-      min = Math.min(min, inside, outside);
-      max = Math.max(max, inside, outside);
-    }
+      return inside;
+    };
+    bands.push({ min: edge(0), max: edge(1) });
   }
-  return min <= max ? { min, max } : null;
+  return mergeOverlapping(bands);
+}
+
+// Bands are merged only where they genuinely touch, so two distant samples stay two bands
+// and two samples of similar lightness become one.
+function mergeOverlapping(bands) {
+  const sorted = [...bands].sort((a, b) => a.min - b.min);
+  const merged = [];
+  for (const band of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && band.min <= last.max) last.max = Math.max(last.max, band.max);
+    else merged.push({ ...band });
+  }
+  return merged;
+}
+
+// The complement over [0, 1]: where a step MAY sit. Empty when the bands cover everything,
+// which is the honest answer for a gradient that contains every lightness — no fixed ramp is
+// legible over all of it, and a method may say so rather than invent one.
+function usableRuns(bands) {
+  const runs = [];
+  let cursor = 0;
+  for (const band of bands) {
+    if (band.min > cursor) runs.push({ min: cursor, max: band.min });
+    cursor = Math.max(cursor, band.max);
+  }
+  if (cursor < 1) runs.push({ min: cursor, max: 1 });
+  // A run too thin to hold anything is not a run. The floor is one just-noticeable step in
+  // Oklab lightness; below it there is no room to place a colour, only arithmetic.
+  return runs.filter((run) => run.max - run.min > 0.02);
+}
+
+function largestRun(runs) {
+  let largest = null;
+  for (const run of runs) {
+    if (!largest || run.max - run.min > largest.max - largest.min) largest = run;
+  }
+  return largest;
+}
+
+function bandsFor(samples, threshold) {
+  const forbidden = forbiddenBands(samples, threshold);
+  const usable = usableRuns(forbidden);
+  return { forbidden, usable, largestUsable: largestRun(usable) };
 }
 
 // The one question, answered in full.
@@ -177,7 +224,7 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
       regions: [],
       invalid: null,
       worst: null,
-      collision: null,
+      lightness: { forbidden: [], usable: [{ min: 0, max: 1 }], largestUsable: { min: 0, max: 1 } },
     };
   }
 
@@ -207,8 +254,10 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
     // Judged, reported separately, and never part of a region: it is not on the scale.
     invalid,
     worst: { key: worst.key, color: worst.color, distance: worst.nearest.distance },
-    // Only worth computing when something is wrong with the palette; it exists for the
-    // transformation, and a palette that fits is not going to be transformed.
-    collision: fits ? null : collisionBand(backgrounds, threshold),
+    // Only computed when something is wrong with the palette: it exists for the
+    // transformation, and a palette that fits is not going to be transformed. The bisection
+    // is the expensive part of this whole function, so keeping it off the common path is
+    // what keeps a fitting palette cheap.
+    lightness: fits ? { forbidden: [], usable: [{ min: 0, max: 1 }], largestUsable: { min: 0, max: 1 } } : bandsFor(backgrounds, threshold),
   };
 }
