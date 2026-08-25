@@ -750,13 +750,20 @@ test.describe("visual golden: headline shapes and headline widths", () => {
 // that, in a way no per-colour assertion can: it also catches a colour that reached
 // somewhere the palette was never threaded through.
 //
-// The six cover every road into the palette layer: the default, a second shipped design,
+// The eight cover every road into the palette layer: the default, a second shipped design,
 // the one built for colour vision deficiency, the short one whose wings do not reach as
 // far as the profile does, one DERIVED from a colour name — which has no file to inspect,
-// so a picture is the only way to see what it produces — and one written out in YAML with
-// nothing but a middle, which is a card in a single colour.
+// so a picture is the only way to see what it produces — one written out in YAML with
+// nothing but a middle, which is a card in a single colour, and the two INTERPOLATED
+// spellings.
+//
+// The last two matter for the same reason as `blue`, only more so: a gradient ramp exists
+// nowhere as a file, and both the hue path and the spacing of its steps are things only a
+// picture shows. `blue-red` is the two-colour case and travels the short way round through
+// violet; `blue-green-red` is the three-colour case, where the middle is the named green and
+// each wing is interpolated to its own end.
 test.describe("visual golden: the shipped palettes", () => {
-  for (const palette of ["pastel", "vivid", "color-vision", "signal", "blue", { optimal: "1DB85D" }]) {
+  for (const palette of ["pastel", "vivid", "color-vision", "signal", "blue", "blue-red", "blue-green-red", { optimal: "1DB85D" }]) {
     const name = typeof palette === "string" ? palette : "single-color";
     test(name, async ({ page }) => {
       await gotoHarness(page);

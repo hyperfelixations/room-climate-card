@@ -12,6 +12,9 @@
 // domain, i18n or view registries:
 //   classificationZones   the accepted zone vocabulary
 //   paletteForName        a palette by name, or the default for null
+//   paletteForColor       a ramp derived from one named colour
+//   paletteForGradient    a ramp derived from two or three colours joined by hyphens
+//   paletteGradientLimit  how many colours such a palette may name, for the error message
 //   paletteKeys           every word a palette option may be, for the error message
 //   assertPalette         what makes a written-out palette usable
 //   isSupportedLanguage   whether a language code has translations

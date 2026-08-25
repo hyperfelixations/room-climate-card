@@ -12,6 +12,11 @@
 
 import { isHexColor, parseColorToken } from "../../../core/color.js";
 import { colorVision } from "./color-vision.js";
+import { MAX_GRADIENT_COLORS, gradientPalette } from "./gradient.js";
+
+// Re-exported so the composition root has one door to the palette vocabulary rather than
+// reaching past this file into the generator.
+export { MAX_GRADIENT_COLORS };
 import { monochromePalette } from "./monochrome.js";
 import { pastel } from "./pastel.js";
 import { signal } from "./signal.js";
@@ -153,6 +158,36 @@ export function paletteForColor(value) {
   // each one deliberately.
   const seed = hex.length > 7 ? hex.slice(0, 7) : hex;
   return completePalette({ ...monochromePalette(seed, id), origin: "derived", source: { color: seed } });
+}
+
+// A palette DERIVED FROM TWO OR THREE COLOURS, joined by hyphens: `blue-red`.
+//
+// A THIRD LOOKUP RATHER THAN A BRANCH INSIDE THE SECOND, and the order is what resolves the
+// only ambiguity the hyphen creates. Five CSS colours can be written either way —
+// `orangered` and `orange-red`, and the same for blueviolet, greenyellow, limegreen and
+// yellowgreen — and two shipped palettes are spelled with one (`color-vision`,
+// `protan-deutan`). Because a registered name is tried first and a single colour second,
+// each of those words keeps the meaning it already had, and only a spelling that is neither
+// reaches this. Nothing had to be reserved and nothing had to be excluded.
+//
+// Returns null for anything that is not two or three colours joined by hyphens, so the
+// configuration layer can produce one message naming every road — and, when the value does
+// look like a gradient, say which part of it was the problem.
+export function paletteForGradient(value) {
+  if (typeof value !== "string") return null;
+  const parts = value.trim().split("-");
+  if (parts.length < 2 || parts.length > MAX_GRADIENT_COLORS) return null;
+  const hexes = parts.map((part) => parseColorToken(part));
+  if (hexes.some((hex) => !hex)) return null;
+  // Alpha is dropped from every anchor, for the reason written out in paletteForColor():
+  // a ramp is a statement about lightness, colourfulness and hue, and transparency does not
+  // interpolate into one.
+  const seeds = hexes.map((hex) => (hex.length > 7 ? hex.slice(0, 7) : hex));
+  // The id is built from the PARTS rather than from the raw string, so `blue - red` and
+  // `Blue-Red` are the same palette rather than two spellings with two identities. It ends up
+  // in the fit report's memo key, among other places, and a palette is what its colours are.
+  const id = parts.map((part) => part.trim().toLowerCase()).join("-");
+  return completePalette({ ...gradientPalette(seeds, id), origin: "derived", source: { colors: seeds } });
 }
 
 // WHETHER A PALETTE SUITS THE BACKGROUND IT IS PAINTED ON is not decided here.

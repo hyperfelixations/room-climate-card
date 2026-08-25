@@ -5,11 +5,21 @@
 //   palette: vivid                    one of the palettes the card ships
 //   palette: teal                     any CSS colour name, or a hex — a ramp in that
 //                                     one colour, derived rather than written down
+//   palette: blue-red                 two or three colours joined by hyphens — a ramp
+//                                     interpolated between them
 //   palette: {optimal, above, below}  a palette written out
 //
-// A shipped palette always wins over a colour name. That is what lets a future palette
-// take a word like `teal` back without anything else changing, and it means the names the
-// card ships can be read as a closed list rather than as exceptions.
+// A shipped palette always wins over a colour name, and a colour name over a hyphenated
+// pair. That is what lets a future palette take a word like `teal` back without anything
+// else changing, and it means the names the card ships can be read as a closed list rather
+// than as exceptions.
+//
+// THE ORDER IS ALSO WHAT MAKES THE HYPHEN SAFE. Five CSS colours can be written either way
+// — `orangered` and `orange-red`, and the same for blueviolet, greenyellow, limegreen and
+// yellowgreen — and two shipped palettes are spelled with one (`color-vision`,
+// `protan-deutan`). Every one of those keeps the meaning it already had, because it
+// resolves before the split is ever tried; only a spelling that is neither reaches it.
+// Nothing had to be reserved, and no existing configuration changes meaning.
 //
 // WRITTEN FOR SOMEONE TYPING, not for a parser. The strict spelling of a colour is a trap
 // in YAML rather than a safeguard: `optimal: #1DB85D` is a COMMENT, and what the parser
@@ -72,7 +82,29 @@ function normalizeWing(palette, key, path) {
   return tokens.map((token, index) => normalizeColor(token, `${path}.${key}[${index + 1}]`));
 }
 
-export function normalizePalette(value, { paletteForName, paletteForColor, paletteKeys, assertPalette, completePalette }) {
+// The three ways a hyphenated value can be wrong, each named specifically. Returns without
+// complaint when the value is not hyphenated at all, so the caller falls through to the
+// general message.
+function gradientError(text, limit) {
+  if (!text.includes("-")) return;
+  const parts = text.trim().split("-");
+  if (parts.length > limit) {
+    pathError(
+      "palette",
+      `"${text}" names ${parts.length} colors — a gradient palette takes two, for the two ends, or three, where the middle one is the optimal color`
+    );
+  }
+  const emptyAt = parts.findIndex((part) => part.trim() === "");
+  if (emptyAt >= 0) {
+    pathError("palette", `"${text}" has an empty part where a color should be — write two or three colors with a single hyphen between them, such as "blue-green-red"`);
+  }
+  const badAt = parts.findIndex((part) => !parseColorToken(part));
+  if (badAt >= 0) {
+    pathError("palette", `"${parts[badAt]}" in "${text}" is not a color — write ${COLOR_FORMS}`);
+  }
+}
+
+export function normalizePalette(value, { paletteForName, paletteForColor, paletteForGradient, paletteGradientLimit, paletteKeys, assertPalette, completePalette }) {
   if (value === undefined || value === null) return paletteForName(null);
 
   if (typeof value === "string" || typeof value === "number") {
@@ -80,12 +112,17 @@ export function normalizePalette(value, { paletteForName, paletteForColor, palet
     // not a palette name anyone meant to write.
     const name = typeof value === "number" ? String(value) : optionalString(value)?.toLowerCase();
     if (!name) return paletteForName(null);
-    const palette = paletteForName(name) || paletteForColor(value);
+    const palette = paletteForName(name) || paletteForColor(value) || paletteForGradient(String(value));
     if (!palette) {
+      // A value with a hyphen in it was almost certainly MEANT as a gradient, so it gets a
+      // message about the part that failed rather than the general list. Diagnosed here
+      // rather than returned from the lookup: which part of what somebody typed was wrong is
+      // a question about their configuration, and this is the layer that owns those.
+      gradientError(String(value), paletteGradientLimit);
       const known = paletteKeys().map((id) => `"${id}"`).join(", ");
       pathError(
         "palette",
-        `"${value}" is neither a palette nor a color — the palettes are ${known}, or name any CSS color such as "teal" for a ramp in that one color, or write a palette out as {optimal, above, below}`
+        `"${value}" is neither a palette nor a color — the palettes are ${known}, or name any CSS color such as "teal" for a ramp in that one color, or two or three colors joined by hyphens such as "blue-green-red", or write a palette out as {optimal, above, below}`
       );
     }
     return palette;

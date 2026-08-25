@@ -45,7 +45,9 @@ import {
   DEFAULT_PALETTE,
   assertPalette,
   completePalette,
+  MAX_GRADIENT_COLORS,
   paletteForColor,
+  paletteForGradient,
   paletteForName,
   paletteKeys,
 } from "../domain/classification/palettes/registry.js";
@@ -114,6 +116,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // about palettes, and never the registry itself.
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
     paletteForColor,
+    paletteForGradient,
+    // How many colours a hyphenated palette may name. Handed over rather than restated in
+    // the message, so the number the user is told cannot drift from the one the generator
+    // enforces — the same reason paletteKeys() exists.
+    paletteGradientLimit: MAX_GRADIENT_COLORS,
     paletteKeys,
     assertPalette,
     completePalette,

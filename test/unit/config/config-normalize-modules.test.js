@@ -54,6 +54,15 @@ const COLLABORATORS = {
   // error message can both be exercised without the 148-entry table.
   paletteForColor: (name) =>
     name === "teal" ? { id: "teal", below: ["#003333"], optimal: "#006666", above: ["#009999"] } : null,
+  // A stand-in for the gradient lookup with the same contract as the real one: two or three
+  // colours it recognises, and null for everything else so the layer owns every message.
+  paletteForGradient: (value) => {
+    const parts = String(value).trim().split("-").map((part) => part.trim().toLowerCase());
+    if (parts.length < 2 || parts.length > 3) return null;
+    if (!parts.every((part) => part === "teal" || part === "black")) return null;
+    return { id: parts.join("-"), below: ["#001111"], optimal: "#006666", above: ["#00BBBB"] };
+  },
+  paletteGradientLimit: 3,
   paletteKeys: () => Object.keys(PALETTES),
   assertPalette: (palette, path) => {
     if (typeof palette.optimal !== "string") throw new Error(`Invalid configuration: ${path}.optimal must be a color.`);
@@ -1000,6 +1009,53 @@ test("a registered palette name beats a colour name", () => {
   assert.equal(paletteModule.normalizePalette("teal", COLLABORATORS).id, "teal", "no palette is called teal here");
   const shadowed = { ...COLLABORATORS, paletteForName: (name) => (name === "teal" ? { id: "shipped" } : null) };
   assert.equal(paletteModule.normalizePalette("teal", shadowed).id, "shipped");
+});
+
+// -------------------------------------------------- a palette from two or three colours ----
+
+// The hyphen is only ever reached by a spelling the two lookups above could not resolve,
+// and that order is the whole safeguard: five CSS colours can be written either way
+// (`orangered` / `orange-red`) and two shipped palettes contain a hyphen (`color-vision`).
+// Every one of them keeps the meaning it already had, so no existing configuration changes.
+test("a name and a single colour are both tried before the hyphen is", () => {
+  const { normalizePalette } = paletteModule;
+  const hyphenated = {
+    ...COLLABORATORS,
+    paletteForName: (name) => (name === "teal-black" ? { id: "shipped-palette" } : PALETTES[name] ?? null),
+  };
+  assert.equal(normalizePalette("teal-black", hyphenated).id, "shipped-palette", "a registered name wins");
+
+  const oneColour = {
+    ...COLLABORATORS,
+    paletteForColor: (value) => (value === "teal-black" ? { id: "one-colour", optimal: "#008080" } : null),
+  };
+  assert.equal(normalizePalette("teal-black", oneColour).id, "one-colour", "and a single colour beats the split");
+
+  // Only when neither answers does the split get its turn.
+  assert.equal(normalizePalette("teal-black", COLLABORATORS).id, "teal-black");
+  assert.equal(normalizePalette("teal-black-teal", COLLABORATORS).id, "teal-black-teal");
+  assert.equal(normalizePalette("  TEAL-BLACK  ", COLLABORATORS).id, "teal-black", "one palette, however it was spelled");
+});
+
+// Each way of getting a hyphenated palette wrong gets its own sentence, naming the part at
+// fault — a user who mistyped one of three colours should not have to work out which.
+test("a hyphenated palette that does not resolve says which part was the problem", () => {
+  const { normalizePalette } = paletteModule;
+  assert.throws(
+    () => normalizePalette("teal-black-teal-black", COLLABORATORS),
+    /names 4 colors — a gradient palette takes two, for the two ends, or three, where the middle one is the optimal color/,
+    "too many"
+  );
+  for (const empty of ["teal-", "-teal", "teal--black"]) {
+    assert.throws(() => normalizePalette(empty, COLLABORATORS), /has an empty part where a color should be/, empty);
+  }
+  assert.throws(
+    () => normalizePalette("teal-nonsense", COLLABORATORS),
+    /"nonsense" in "teal-nonsense" is not a color/,
+    "and the part that is not a colour is quoted back"
+  );
+  // A value with no hyphen in it never reaches any of that, and still gets the general list.
+  assert.throws(() => normalizePalette("neon", COLLABORATORS), /is neither a palette nor a color/);
 });
 
 test("a written-out palette is refused for the same reasons a shipped one would be", () => {
