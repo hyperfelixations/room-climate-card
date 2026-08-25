@@ -676,14 +676,30 @@ test("the fonts subscription happens once per instance and honours a disconnecte
   assert.equal(measures, 1, "three renders before the fonts land still measure once");
 });
 
-test("a platform without the Fonts API is simply skipped", () => {
-  const resize = resizeRuntime.createResizeRuntime({
+test("a platform without the Fonts API is simply skipped, and one with it still measures", async () => {
+  // Both halves, deliberately. The negative case on its own is a test that also passes when
+  // measureOnceFontsReady() has stopped doing anything at all — it asserted only that nothing
+  // happened, which is exactly what a broken implementation also achieves. Pairing it with the
+  // positive case is what makes "skipped" mean skipped rather than dead.
+  let measuredWithout = 0;
+  const without = resizeRuntime.createResizeRuntime({
     platform: createFakePlatform({ fontsReady: null }),
-    onMeasure: () => {
-      throw new Error("must not measure");
-    },
+    onMeasure: () => (measuredWithout += 1),
   });
-  resize.measureOnceFontsReady(() => true);
+  without.measureOnceFontsReady(() => true);
+  await Promise.resolve();
+  assert.equal(measuredWithout, 0, "with no Fonts API there is nothing to wait for, so nothing measures");
+
+  let measuredWith = 0;
+  const fontsReady = Promise.resolve();
+  const withApi = resizeRuntime.createResizeRuntime({
+    platform: createFakePlatform({ fontsReady }),
+    onMeasure: () => (measuredWith += 1),
+  });
+  withApi.measureOnceFontsReady(() => true);
+  await fontsReady;
+  await Promise.resolve();
+  assert.equal(measuredWith, 1, "the same call on a platform that HAS the API does measure");
 });
 
 // ---------------------------------------------------------- browser adapter --
