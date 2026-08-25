@@ -866,6 +866,7 @@ If none of this helps, please open a
   version, with its notes and its download
 - [Issues](https://github.com/hyperfelixations/room-climate-card/issues)
 - [License](LICENSE) (MIT)
+- [Testing](TESTING.md) — how the card is tested, and how to run any part of it
 - [Home Assistant forum thread](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
   — questions and discussion about this card
 - [Discord](https://discord.gg/zfGKCVEvwe) — the same, as a conversation
