@@ -50,6 +50,7 @@ import {
   paletteKeys,
 } from "../domain/classification/palettes/registry.js";
 import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
+import { surfaceOf } from "../domain/classification/paint-roles.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
 import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
 import { normalizeUnitToken } from "../domain/units/unit-token.js";
@@ -229,8 +230,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // thing that knows how to detach it again.
       this._unlistenVisibility = null;
       // _background() memoization — see there.
-      this._backgroundCacheKey = undefined;
-      this._backgroundCacheValue = undefined;
+      this._surfaceCacheKey = undefined;
+      this._surfaceCacheValue = undefined;
       // _language() memoization — see _language().
       this._languageCacheHass = undefined;
       this._languageCacheConfigLanguage = undefined;
@@ -753,7 +754,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       }
     }
 
-    // EVERY COLOUR THIS CARD IS ACTUALLY PAINTED ON, as a list of opaque hex values.
+    // THE SURFACE THIS CARD IS ACTUALLY PAINTED ON: every colour it sits on, and the text
+    // colour of the theme around it.
     //
     // MEASURED, not taken from the theme. `hass.themes.darkMode` says which theme is
     // active; it does not say what THIS card sits on, and card-mod, a custom theme or a
@@ -767,22 +769,28 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // A LIST rather than one colour, because a card-mod gradient is several colours and a
     // palette has to hold up over all of them.
     //
-    // Memoized on the samples themselves rather than on a render count: the work is in
-    // judging them, the read is one getComputedStyle, and a theme switch changes the
-    // samples — which is exactly when the answer has to change.
-    _background() {
-      const samples = this._platform.readBackgroundSamples(this.shadowRoot?.querySelector(".rtc-card") ?? this);
-      if (samples.length) {
-        const key = samples.join(",");
-        if (this._backgroundCacheKey !== key) {
-          this._backgroundCacheKey = key;
-          this._backgroundCacheValue = samples;
-        }
-        return this._backgroundCacheValue;
-      }
+    // Memoized on the readings themselves rather than on a render count: the work is in
+    // judging them, the read is two getComputedStyle calls, and a theme switch changes both
+    // the samples and the text colour — which is exactly when the answer has to change.
+    _surface() {
+      const root = this.shadowRoot?.querySelector(".rtc-card") ?? this;
+      const samples = this._platform.readBackgroundSamples(root);
+      // The theme's text colour, asked separately because it answers a separate question:
+      // the scale track and a room chip's background are tints of IT, not of the card, so a
+      // palette step painted on either is not painted on the card. Null when the theme will
+      // not say, and paint-roles.js falls back to the card rather than inventing one.
+      const text = this._platform.readTextColor(root);
       // Nothing readable was painted. The theme flag is the next best statement about what
       // is behind the card, and it maps to the canonical background of its surface.
-      return [this._hass?.themes?.darkMode ? SURFACE_BACKGROUNDS.dark : SURFACE_BACKGROUNDS.light];
+      const resolved = samples.length
+        ? samples
+        : [this._hass?.themes?.darkMode ? SURFACE_BACKGROUNDS.dark : SURFACE_BACKGROUNDS.light];
+      const key = `${resolved.join(",")}|${text || ""}`;
+      if (this._surfaceCacheKey !== key) {
+        this._surfaceCacheKey = key;
+        this._surfaceCacheValue = surfaceOf(resolved, text);
+      }
+      return this._surfaceCacheValue;
     }
 
     _computeViewModel() {
@@ -795,8 +803,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // A plain locale string, needed for the name tie-break that keeps the
         // extrema and the "stands out most" room agreeing on ties.
         language: this._language(),
-        // The colours the palette is about to be painted on.
-        background: this._background(),
+        // The surface the palette is about to be painted on.
+        surface: this._surface(),
       });
       return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
     }
@@ -843,7 +851,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           activeViewIndex: this._activeView,
           // A theme switch changes no entity and no configuration, so without this the
           // card would keep the colours of the background it is no longer on.
-          background: this._background(),
+          surface: this._surface(),
         }),
         structuralConfigSignature: structuralConfigSignature(this._config),
       });

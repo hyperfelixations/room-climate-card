@@ -181,6 +181,35 @@ function readAnimationPhase(element, animationName) {
 //
 // Realm-correct throughout: getComputedStyle comes from the element's own view, never from
 // a browser global, so a card adopted into another document still measures itself.
+// THE THEME'S TEXT COLOUR, as an opaque hex value, or null.
+//
+// Asked because several things the card paints are tints of it rather than of the card: the
+// scale track is 8% of `--primary-text-color` over the card background, and a room chip's
+// own background is 3% of it. A palette step painted on either of those is not painted on
+// the card, and judging it against the card overstates the contrast it really has.
+//
+// EXACTLY `--primary-text-color`, and nothing else. The stylesheet mixes those tints out of
+// that property by name — `color-mix(in srgb, var(--primary-text-color) 8%, transparent)` —
+// so reading anything else, `style.color` included, would measure a colour the track is not
+// made of and hand the palette check a background nothing paints.
+//
+// Null rather than a guess when the theme will not say, or says something translucent that
+// cannot be composited onto. The caller falls back to the card background, which is what
+// those tints are painted OVER: an overestimate by the tint's own weight — a few percent —
+// against an invented colour that could be wrong by any amount.
+function readTextColor(element) {
+  try {
+    const view = element?.ownerDocument?.defaultView;
+    if (!view || typeof view.getComputedStyle !== "function") return null;
+    const style = view.getComputedStyle(element);
+    if (!style) return null;
+    const parsed = cssColorToHex(style.getPropertyValue("--primary-text-color"));
+    return parsed && parsed.alpha >= 1 ? parsed.hex : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function readBackgroundSamples(element) {
   try {
     const view = element?.ownerDocument?.defaultView;
@@ -300,5 +329,6 @@ export function createBrowserPlatform(getDocument) {
     readTranslateXPx,
     readAnimationPhase,
     readBackgroundSamples,
+    readTextColor,
   };
 }

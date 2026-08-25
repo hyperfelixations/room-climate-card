@@ -24,6 +24,7 @@
 
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
 import { describePalette } from "./palettes/geometry.js";
+import { PAINT_ROLES, PALETTE_ROLES, SELF_TINTED_ROLES, backgroundsFor, foregroundFor, pointsOf, surfaceOf } from "./paint-roles.js";
 
 // The line between "a reader can pick this out" and "this is the background".
 //
@@ -61,17 +62,18 @@ export const VISIBILITY_THRESHOLD = 0.16;
 // plainly the palette's MIDDLE. And a run of failures with one accidental survivor in it
 // became two regions whose labels described neither. `touchesStart`/`touchesEnd` cannot be
 // wrong in that way, and "middle" is one negation away for anything that wants it.
-function regionsOf(steps) {
+function regionsOf(steps, role) {
   const regions = [];
   let run = null;
   steps.forEach((step, index) => {
-    if (!step.fits) {
-      if (!run) run = { fromIndex: index, toIndex: index, from: step.key, to: step.key, keys: [step.key], maxDeficit: step.deficit };
+    const judged = step.roles[role];
+    if (!judged.fits) {
+      if (!run) run = { role, fromIndex: index, toIndex: index, from: step.key, to: step.key, keys: [step.key], maxDeficit: judged.deficit };
       else {
         run.toIndex = index;
         run.to = step.key;
         run.keys.push(step.key);
-        run.maxDeficit = Math.max(run.maxDeficit, step.deficit);
+        run.maxDeficit = Math.max(run.maxDeficit, judged.deficit);
       }
       return;
     }
@@ -90,15 +92,61 @@ function regionsOf(steps) {
   }));
 }
 
-// The worst background this step has to survive. A gradient is several samples and the
-// palette has to work over all of it, so the weakest pairing is the one that counts.
-function nearestSample(color, samples) {
-  let nearest = { sample: samples[0], distance: Infinity };
-  for (const sample of samples) {
-    const distance = screenDistance(color, sample);
-    if (distance < nearest.distance) nearest = { sample, distance };
+// ONE COLOUR IN ONE ROLE, against every point of the surface.
+//
+// The worst pairing is the one that counts: a gradient is several colours and the palette has
+// to hold up over all of it, so the point where this role has the least separation decides.
+//
+// `required` is the role's own bar, not the global threshold — see paint-roles.js for why a
+// nine-pixel chip mark and a large band are not the same question.
+function judgeRole(color, role, points, threshold) {
+  const required = threshold * role.factor;
+  let worst = null;
+  for (const point of points) {
+    const foreground = foregroundFor(role, color, point);
+    for (const background of backgroundsFor(role, color, point)) {
+      const distance = screenDistance(foreground, background);
+      if (!worst || distance < worst.distance) worst = { foreground, background, distance };
+    }
   }
-  return nearest;
+  const fits = worst.distance >= required;
+  return Object.freeze({
+    role: role.id,
+    ...worst,
+    required,
+    fits,
+    deficit: fits ? 0 : required - worst.distance,
+    margin: fits ? worst.distance - required : 0,
+  });
+}
+
+// EVERY ROLE FOR ONE STEP, plus the summary a caller that does not care about roles needs.
+//
+// `worstRole` is where this colour is in the most trouble — and, when nothing is in trouble,
+// where it has the least room left. Both readings matter: a method that moves the whole ramp
+// needs to know which role would break first.
+function judgeStep(step, points, threshold) {
+  const roles = {};
+  let worstRole = null;
+  for (const role of PAINT_ROLES) {
+    const judged = judgeRole(step.color, role, points, threshold);
+    roles[role.id] = judged;
+    if (!worstRole) worstRole = judged;
+    else if (judged.deficit > worstRole.deficit) worstRole = judged;
+    else if (judged.deficit === worstRole.deficit && judged.margin < worstRole.margin) worstRole = judged;
+  }
+  return {
+    ...step,
+    roles: Object.freeze(roles),
+    // The palette question: can this colour be seen where it is painted on something it does
+    // not tint. This is what `fits` has always meant and what adaptation acts on.
+    fits: PALETTE_ROLES.every((role) => roles[role.id].fits),
+    // The recipe question, kept apart so the two are never added together — see paint-roles.js.
+    selfTintFits: SELF_TINTED_ROLES.every((role) => roles[role.id].fits),
+    worstRole: worstRole.role,
+    deficit: worstRole.deficit,
+    margin: worstRole.margin,
+  };
 }
 
 // WHICH LIGHTNESSES NO STEP MAY OCCUPY, in Oklab L — and, more usefully, which it may.
@@ -189,6 +237,14 @@ function largestRun(runs) {
 // Bounded by construction rather than by an eviction policy: there is only ever one slot, so
 // nothing accumulates. Measured, this is what keeps a gradient from costing three times
 // what a flat card does on every render.
+// Nothing ruled out, nothing to say. Shared so that the two paths that mean "no constraint"
+// cannot drift apart, and frozen because it is handed to every caller that hits them.
+const NO_CONSTRAINT = Object.freeze({
+  forbidden: Object.freeze([]),
+  usable: Object.freeze([Object.freeze({ min: 0, max: 1 })]),
+  largestUsable: Object.freeze({ min: 0, max: 1 }),
+});
+
 let lastBands = null;
 
 function bandsFor(samples, threshold) {
@@ -207,13 +263,54 @@ function bandsFor(samples, threshold) {
   return value;
 }
 
+// WHERE A STEP MAY SIT SO THAT IT CAN BE SEEN ON THE CARD ITSELF.
+//
+// Scoped to the card background on purpose, and the name of the field says so. A role whose
+// background is a tint of the colour cannot have a fixed forbidden band at all: move the
+// colour and its background moves with it, so "which lightnesses are ruled out" has no
+// answer that does not depend on where the colour already is. What a method can be told
+// ahead of time is where the CARD rules out, and that is what this is.
+
 // The one question, answered in full.
 //
-//   samples: one or more background colours the card is painted on. A flat card is one; a
-//            gradient is its colour stops. Never empty — the reading ladder in the platform
-//            adapter always ends somewhere (see readBackgroundSamples).
-export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_THRESHOLD } = {}) {
-  const backgrounds = Array.isArray(samples) && samples.length ? samples : [];
+//   surface: what the card is painted on. Either a surface — `{ samples, text }` from
+//            surfaceOf() — or a bare array of colours, which means the same thing with no
+//            text colour known. `samples` is never empty by the time this is reached: the
+//            reading ladder in the platform adapter always ends somewhere (see
+//            readBackgroundSamples and readTextColor).
+// THE WHOLE REPORT, MEMOIZED ON WHAT IT WAS COMPUTED FROM.
+//
+// The card asks this question on every render, with the same palette and the same surface,
+// and the answer costs seven roles times twelve steps times however many colours a gradient
+// has. Measured on a five-stop gradient that is around five hundred perceptual distances,
+// and it came to more than half a millisecond per render before this existed.
+//
+// Keyed on the VALUES rather than on object identity, because a derived palette
+// (`palette: teal`) is rebuilt on every call and would never hit an identity check. One slot
+// is enough and nothing accumulates: a card has one palette on one surface at a time, and
+// the sequence of calls is that same pair over and over.
+//
+// The report is frozen down to its lists, because the same object is handed out again on the
+// next call: a consumer that sorted `failing` in place would change what every later render
+// is told. Same reasoning as the band memo below.
+let lastReport = null;
+
+function reportKeyFor(palette, surface, threshold) {
+  return [
+    threshold,
+    surface.samples.join(","),
+    surface.text || "",
+    palette.id,
+    palette.optimal,
+    (palette.below || []).join(","),
+    (palette.above || []).join(","),
+    palette.invalid || "",
+  ].join("|");
+}
+
+export function evaluatePaletteFit(palette, surface, { threshold = VISIBILITY_THRESHOLD } = {}) {
+  const resolved = surfaceOf(surface);
+  const backgrounds = resolved.samples;
   if (!palette || !backgrounds.length) {
     // Nothing measured, so nothing claimed. "Fits" is the right answer to "should I change
     // this": with no background to judge against, leaving the user's palette alone is the
@@ -221,6 +318,7 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
     return {
       fits: true,
       threshold,
+      surface: resolved,
       samples: backgrounds,
       palette: palette ? describePalette(palette) : null,
       steps: [],
@@ -228,57 +326,97 @@ export function evaluatePaletteFit(palette, samples, { threshold = VISIBILITY_TH
       failing: [],
       invalid: null,
       worst: null,
-      lightness: { forbidden: [], usable: [{ min: 0, max: 1 }], largestUsable: { min: 0, max: 1 } },
+      lightness: NO_CONSTRAINT,
     };
   }
 
-  // Every step keeps its geometry and gains the measurement. `deficit` is how far short a
-  // failing step is; `margin` is how much room a passing one still has. Both are always
-  // present and one of them is always zero — a method that moves the whole ramp needs the
-  // margins to know how far it may go before it breaks something that currently works.
-  const judge = (step) => {
-    const nearest = nearestSample(step.color, backgrounds);
-    const fits = nearest.distance >= threshold;
-    return {
-      ...step,
-      nearest,
-      fits,
-      deficit: fits ? 0 : threshold - nearest.distance,
-      margin: fits ? nearest.distance - threshold : 0,
-    };
-  };
+  const key = reportKeyFor(palette, resolved, threshold);
+  if (lastReport && lastReport.key === key) return lastReport.value;
 
+  const points = pointsOf(resolved);
   const geometry = describePalette(palette);
-  const steps = geometry.steps.map(judge);
-  const invalid = geometry.invalid ? judge(geometry.invalid) : null;
+  const steps = geometry.steps.map((step) => judgeStep(step, points, threshold));
+  const invalid = geometry.invalid ? judgeStep(geometry.invalid, points, threshold) : null;
 
   const everything = invalid ? [...steps, invalid] : steps;
-  let worst = everything[0];
-  for (const step of everything) if (step.nearest.distance < worst.nearest.distance) worst = step;
-
   const fits = everything.every((step) => step.fits);
-  return {
+  const selfTintFits = everything.every((step) => step.selfTintFits);
+
+  // Every colour-and-role pairing that fails, which is the direct answer to "which
+  // individual colours are affected, and in what way". A step can fail in one role and pass
+  // in another — `palette: lime` on a light dashboard does exactly that, and the difference
+  // is what stops a method from moving a colour that is fine where it is painted.
+  const failing = [];
+  const selfTintConflicts = [];
+  for (const step of everything) {
+    for (const role of PAINT_ROLES) {
+      const judged = step.roles[role.id];
+      if (judged.fits) continue;
+      const entry = { key: step.key, role: role.id, color: step.color, background: judged.background, distance: judged.distance, required: judged.required, deficit: judged.deficit };
+      (role.selfTinted ? selfTintConflicts : failing).push(entry);
+    }
+  }
+
+  let worst = null;
+  for (const entry of failing) if (!worst || entry.deficit > worst.deficit) worst = entry;
+  if (!worst) {
+    // Everything fits; the useful "worst" is then the tightest margin — the pairing that
+    // would break first if the ramp were moved.
+    for (const step of everything) {
+      for (const role of PALETTE_ROLES) {
+        const judged = step.roles[role.id];
+        if (!worst || judged.margin < worst.margin) {
+          worst = { key: step.key, role: role.id, color: step.color, background: judged.background, distance: judged.distance, required: judged.required, deficit: 0, margin: judged.margin };
+        }
+      }
+    }
+  }
+
+  // One list of regions per role, keyed by role. Mixing them would invent a region that
+  // exists nowhere: a run of steps that collide in the scale track is a different problem
+  // from a run that collides in the status label, and they rarely have the same extent.
+  const regions = {};
+  for (const role of PAINT_ROLES) regions[role.id] = regionsOf(steps, role.id);
+
+  const value = Object.freeze({
     fits,
     threshold,
+    // What the palette is painted on, as read — see paint-roles.js.
+    surface: resolved,
+    // The background colours alone, which is what most callers and every existing test mean
+    // when they say "samples".
     samples: backgrounds,
     // What the palette is shaped like, measured once — see palettes/geometry.js.
     palette: geometry,
-    // In ramp order — the far end of `below`, through optimal, out along `above`.
-    steps,
-    // Where the collisions are, not just that there are some. See regionsOf().
-    regions: regionsOf(steps),
-    // The plain answer to "which colours are the problem", `invalid` included, without
-    // anything having to filter for it.
-    failing: everything
-      .filter((step) => !step.fits)
-      .map((step) => ({ key: step.key, color: step.color, deficit: step.deficit })),
-    // Judged, reported separately, and never part of a region: it is not on the scale.
+    // In ramp order — the far end of `below`, through optimal, out along `above`. Each step
+    // carries `roles`, and a summary of its worst role.
+    steps: Object.freeze(steps),
+    // Keyed by role; see regionsOf().
+    regions: Object.freeze(regions),
+    // Colour AND role, for every PALETTE-role pairing that fails: the answer to "which
+    // individual colours are the problem, and in what way".
+    failing: Object.freeze(failing),
+    // THE SECOND VERDICT, deliberately not folded into the first.
+    //
+    // A colour painted on a tint of itself can fail while the same colour is perfectly legible
+    // on the card — `palette: lime` on a light dashboard is exactly that, with the ramp
+    // readable and "Optimal" in the top right not. Adding the two together would make the card
+    // rewrite a palette that is fine where it is a palette, which is the wrong repair: the
+    // status pill's recipe is what puts that colour on that background.
+    //
+    // So it is measured, named, and reported — and nothing acts on it yet.
+    selfTintFits,
+    selfTintConflicts: Object.freeze(selfTintConflicts),
+    // Judged like a step, reported separately, and never part of a region: it is not on the
+    // scale — see the note above describePalette's `invalid`.
     invalid,
-    worst: { key: worst.key, color: worst.color, distance: worst.nearest.distance, deficit: worst.deficit },
-    // Only computed when something is wrong with the palette: it exists for the
-    // transformation, and a palette that fits is not going to be transformed. The bisection
-    // is the expensive part of this whole function, so keeping it off the common path is
-    // what keeps a fitting palette cheap.
-    lightness: fits ? { forbidden: [], usable: [{ min: 0, max: 1 }], largestUsable: { min: 0, max: 1 } } : bandsFor(backgrounds, threshold),
-  };
+    worst,
+    // Only computed when something is wrong: it exists for the transformation, and a palette
+    // that fits is not going to be transformed. The bisection is the expensive part of this
+    // whole function, so keeping it off the common path is what keeps a fitting palette
+    // cheap.
+    lightness: fits ? NO_CONSTRAINT : bandsFor(backgrounds, threshold),
+  });
+  lastReport = { key, value };
+  return value;
 }

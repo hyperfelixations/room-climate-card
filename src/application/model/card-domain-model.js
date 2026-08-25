@@ -53,13 +53,13 @@ import {
   sortRoomsByValue,
 } from "./aggregates.js";
 
-export function buildCardDomainModel({ states, config, context, language, background }) {
+export function buildCardDomainModel({ states, config, context, language, surface }) {
   const policy = classificationPolicyOf(config);
   // The palette the user asked for, then the one background question asked of it: can it be
   // seen on what it is about to be painted on. One rule, applied in one place — and only to
   // palettes the card built itself, never to one written out in YAML. See adaptPalette() in
   // domain/classification/palettes/adaptation.js.
-  const palette = adaptPalette(paletteOf(config), background);
+  const palette = adaptPalette(paletteOf(config), surface);
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
   // Resolved once here and carried out on the model. It stopped being a pure function

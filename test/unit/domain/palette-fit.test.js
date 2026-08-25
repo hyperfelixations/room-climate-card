@@ -27,6 +27,7 @@ let adaptation;
 let palettes;
 let color;
 let oklch;
+let paintRoles;
 
 test.before(async () => {
   fit = await import("../../../src/domain/classification/palette-fit.js");
@@ -34,6 +35,7 @@ test.before(async () => {
   palettes = await import("../../../src/domain/classification/palettes/registry.js");
   color = await import("../../../src/core/color.js");
   oklch = await import("../../../src/core/oklch.js");
+  paintRoles = await import("../../../src/domain/classification/paint-roles.js");
 });
 
 // A one-step palette, so a calibration pair can be judged as a palette without anything
@@ -162,8 +164,8 @@ test("the finding names which steps collide, not merely that some do", () => {
   for (const step of report.steps) {
     assert.match(step.key, /^(optimal|above:\d+|below:\d+)$/);
     assert.match(step.color, /^#[0-9A-Fa-f]{6}$/);
-    assert.equal(typeof step.nearest.distance, "number");
-    assert.equal(step.fits, step.deficit === 0);
+    assert.equal(typeof step.roles.accent.distance, "number");
+    assert.equal(step.fits, step.roles.accent.fits && step.roles.marker.fits);
   }
   assert.ok(
     report.steps.some((step) => step.fits),
@@ -192,8 +194,8 @@ test("a collision in the middle is reported as a middle region, not as a broken 
   });
   const onGreen = fit.evaluatePaletteFit(blueGreenRed, ["#2E8B57"]);
   assert.equal(onGreen.fits, false);
-  assert.equal(onGreen.regions.length, 1);
-  const [middle] = onGreen.regions;
+  assert.equal(onGreen.regions.accent.length, 1);
+  const [middle] = onGreen.regions.accent;
   assert.equal(middle.touchesStart, false, "the coldest end is still legible");
   assert.equal(middle.touchesEnd, false, "and so is the hottest");
   assert.ok(middle.length < onGreen.steps.length, "a middle region cannot be the whole ramp");
@@ -203,19 +205,20 @@ test("a collision in the middle is reported as a middle region, not as a broken 
   for (const background of ["#FFFFFF", "#1C1C1C"]) {
     const report = fit.evaluatePaletteFit(blueGreenRed, [background]);
     assert.equal(report.fits, true, background);
-    assert.deepEqual(report.regions, []);
+    assert.deepEqual(report.regions.accent, [], background);
+    assert.deepEqual(report.regions.marker, [], background);
   }
 });
 
 test("a collision at one end is reported as touching that end", () => {
   const yellowOnWhite = fit.evaluatePaletteFit(palettes.paletteForColor("yellow"), ["#FFFFFF"]);
-  assert.equal(yellowOnWhite.regions.length, 1);
-  assert.equal(yellowOnWhite.regions[0].touchesStart, true, "the pale wing is the start of the ramp");
-  assert.equal(yellowOnWhite.regions[0].touchesEnd, false);
+  assert.equal(yellowOnWhite.regions.accent.length, 1);
+  assert.equal(yellowOnWhite.regions.accent[0].touchesStart, true, "the pale wing is the start of the ramp");
+  assert.equal(yellowOnWhite.regions.accent[0].touchesEnd, false);
 
   const blackOnDark = fit.evaluatePaletteFit(palettes.paletteForColor("black"), ["#1C1C1C"]);
-  assert.equal(blackOnDark.regions[0].touchesEnd, true, "black itself is the far end of that ramp");
-  assert.equal(blackOnDark.regions[0].touchesStart, false);
+  assert.equal(blackOnDark.regions.accent[0].touchesEnd, true, "black itself is the far end of that ramp");
+  assert.equal(blackOnDark.regions.accent[0].touchesStart, false);
 });
 
 test("a one-winged palette is not mislabelled: its middle is not its start", () => {
@@ -233,11 +236,11 @@ test("a one-winged palette is not mislabelled: its middle is not its start", () 
   assert.equal(report.fits, false);
   assert.equal(report.palette.counts.below, 0);
   assert.equal(report.palette.optimalIndex, 0, "with no below wing, optimal IS the first step");
-  assert.equal(report.regions[0].touchesStart, true);
+  assert.equal(report.regions.accent[0].touchesStart, true);
   assert.deepEqual(
-    report.failing.map((entry) => entry.key),
+    [...new Set(report.failing.map((entry) => entry.key))],
     report.steps.filter((step) => !step.fits).map((step) => step.key),
-    "`failing` is the same set, said plainly"
+    "`failing` is the same set, said plainly — one entry per role that fails"
   );
 });
 
@@ -252,8 +255,10 @@ test("the report carries the palette's geometry, so a method need not recompute 
   for (const step of report.steps) {
     assert.equal(typeof step.lightness, "number", `${step.key}: lightness`);
     assert.equal(typeof step.chroma, "number", `${step.key}: chroma`);
-    assert.equal(step.fits, step.deficit === 0);
-    assert.ok(step.fits ? step.margin >= 0 : step.margin === 0, `${step.key}: margin`);
+    for (const judged of Object.values(step.roles)) {
+      assert.equal(judged.fits, judged.deficit === 0, `${step.key}/${judged.role}: deficit`);
+      assert.ok(judged.fits ? judged.margin >= 0 : judged.margin === 0, `${step.key}/${judged.role}: margin`);
+    }
   }
 });
 
@@ -263,8 +268,10 @@ test("a passing step reports how much room it still has", () => {
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#1C1C1C"]);
   assert.equal(report.fits, true);
   for (const step of report.steps) {
-    assert.ok(step.margin > 0, `${step.key} fits, so it must report a positive margin`);
-    assert.equal(step.deficit, 0);
+    for (const role of ["accent", "marker"]) {
+      assert.ok(step.roles[role].margin > 0, `${step.key}/${role} fits, so it must report a positive margin`);
+      assert.equal(step.roles[role].deficit, 0);
+    }
   }
 });
 
@@ -274,10 +281,14 @@ test("the invalid colour is judged, and judged separately from the ramp", () => 
   const onGrey = fit.evaluatePaletteFit(palettes.paletteForName("vivid"), ["#7D7D7D"]);
   assert.equal(onGrey.invalid.key, "invalid");
   assert.equal(onGrey.invalid.fits, false, "the shared neutral #7D7D7D cannot be seen on itself");
-  for (const region of onGrey.regions) {
-    assert.notEqual(region.from, "invalid");
-    assert.notEqual(region.to, "invalid");
+  for (const perRole of Object.values(onGrey.regions)) {
+    for (const region of perRole) {
+      assert.notEqual(region.from, "invalid");
+      assert.notEqual(region.to, "invalid");
+    }
   }
+  // It is still named where a method would look for it.
+  assert.ok(onGrey.failing.some((entry) => entry.key === "invalid"));
 });
 
 test("the forbidden bands say which lightnesses are unusable, for a method to aim away from", () => {
@@ -347,6 +358,60 @@ test("a gradient containing every lightness leaves nowhere to go, and says so", 
   assert.equal(report.lightness.largestUsable, null);
 });
 
+test("the whole report is cached on what it was computed from, and never served stale", () => {
+  // The card asks this on every render with the same palette and the same surface, and the
+  // answer costs several hundred perceptual distances on a gradient. The classic way to get
+  // that wrong is to keep serving the first answer after something has changed, so every
+  // ingredient of the key is moved here and the answer has to move with it.
+  const { surfaceOf } = paintRoles;
+  const pastel = palettes.paletteForName("pastel");
+  const onDark = fit.evaluatePaletteFit(pastel, ["#1C1C1C"]);
+  assert.equal(fit.evaluatePaletteFit(pastel, ["#1C1C1C"]), onDark, "the same question gives the same object back");
+
+  // 1 — a different background.
+  assert.notEqual(fit.evaluatePaletteFit(pastel, ["#808080"]).fits, onDark.fits);
+  // 2 — a different TEXT colour, with the background unchanged: the track moves, so a
+  // marker is painted on something else.
+  const light = (text) => fit.evaluatePaletteFit(pastel, surfaceOf(["#FFFFFF"], text));
+  assert.notDeepEqual(
+    light("#212121").steps.map((step) => step.roles.marker.background),
+    light("#727272").steps.map((step) => step.roles.marker.background)
+  );
+  // 3 — a different palette under the same id, which is what a derived palette looks like
+  // when its colours change. Object identity would miss this; the key is over the values.
+  const one = palettes.completePalette({ id: "same", origin: "builtin", optimal: "#000000" });
+  const other = palettes.completePalette({ id: "same", origin: "builtin", optimal: "#FFFFFF" });
+  assert.equal(fit.evaluatePaletteFit(one, ["#1C1C1C"]).fits, false);
+  assert.equal(fit.evaluatePaletteFit(other, ["#1C1C1C"]).fits, true, "same id, different colours, different answer");
+  // 4 — a different threshold.
+  assert.notEqual(
+    fit.evaluatePaletteFit(pastel, ["#1C1C1C"], { threshold: 0.9 }).fits,
+    fit.evaluatePaletteFit(pastel, ["#1C1C1C"]).fits
+  );
+  // 5 — and coming back gives the first answer again.
+  assert.deepEqual(fit.evaluatePaletteFit(pastel, ["#1C1C1C"]).fits, onDark.fits);
+});
+
+test("a cached report cannot be altered by whoever received it", () => {
+  // The same object is handed out on the next call, so a consumer that sorted `failing` in
+  // place would change what every later render is told.
+  const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#808080"]);
+  for (const list of [report.steps, report.failing, report.selfTintConflicts]) {
+    assert.throws(
+      () => {
+        "use strict";
+        list.push({});
+      },
+      TypeError,
+      JSON.stringify(list.length)
+    );
+  }
+  assert.throws(() => {
+    "use strict";
+    report.fits = true;
+  }, TypeError);
+});
+
 test("the forbidden bands are cached on the background, and never served stale", () => {
   // The bands depend on the background alone, so they are memoized — and the classic way to
   // get that wrong is to keep serving the first answer after the background has changed.
@@ -378,7 +443,8 @@ test("a cached band cannot be altered by whoever received it", () => {
 test("a palette that fits reports no regions and forbids nothing", () => {
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#1C1C1C"]);
   assert.equal(report.fits, true);
-  assert.deepEqual(report.regions, []);
+  for (const [role, perRole] of Object.entries(report.regions)) assert.deepEqual(perRole, [], role);
+  assert.deepEqual(report.failing, []);
   assert.deepEqual(report.lightness.forbidden, [], "nothing is in the way");
   assert.deepEqual(report.lightness.usable, [{ min: 0, max: 1 }], "so everything is available");
 });

@@ -73,13 +73,15 @@ export function isAdaptable(palette) {
 
 // The one call site is buildCardDomainModel(), directly behind paletteOf(config).
 //
-// `samples` is whatever the card is painted on: one colour for a flat card, the colour
-// stops and their interpolations for a gradient, and the theme's own background when
-// nothing else could be read. Never empty — the reading ladder always ends somewhere.
-export function adaptPalette(palette, samples, strategyId = DEFAULT_ADAPTATION_STRATEGY) {
+// `surface` is whatever the card is painted on: one colour for a flat card, the colour stops
+// and their interpolations for a gradient, and the theme's own background when nothing else
+// could be read — together with the theme's text colour, because several of the places a
+// palette colour lands are tints of THAT rather than of the card. Never empty; the reading
+// ladder always ends somewhere.
+export function adaptPalette(palette, surface, strategyId = DEFAULT_ADAPTATION_STRATEGY) {
   if (!isAdaptable(palette)) return palette;
 
-  const fit = evaluatePaletteFit(palette, samples);
+  const fit = evaluatePaletteFit(palette, surface);
   if (fit.fits) return palette;
 
   const strategy = ADAPTATION_STRATEGIES[strategyId] || ADAPTATION_STRATEGIES[DEFAULT_ADAPTATION_STRATEGY];

@@ -24,8 +24,11 @@ const { BORDERLINE, VISIBLE, INVISIBLE } = require("../../fixtures/palette-fit-c
 
 const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
 
+// The card reads a SURFACE — the colours it sits on, and the theme's text colour. These
+// checks are about the first half; the text colour and what depends on it are the subject of
+// paint-role-calibration.spec.js next door.
 async function backgroundOf(page, cardId) {
-  return page.evaluate((id) => document.getElementById(id)._background(), cardId);
+  return page.evaluate((id) => document.getElementById(id)._surface().samples, cardId);
 }
 
 // ------------------------------------------------ reading the real background --
