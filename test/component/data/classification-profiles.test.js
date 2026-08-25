@@ -1,5 +1,18 @@
 "use strict";
 
+// CLASSIFICATION PROFILES: where a card's idea of "comfortable" comes from.
+//
+// Four sources can supply it and they have a strict precedence - a classification written in
+// YAML, an entity that classifies itself through its own attributes, a built-in profile for
+// the metric, and the projection of any of those into the unit actually being displayed.
+//
+// Covered here: YAML policy normalization, entity-attribute precedence, the built-in indoor
+// and outdoor temperature profiles, custom user profiles, display-unit projection, and the
+// icons a profile drives.
+//
+// Together rather than split, because precedence is only testable as a whole: every one of
+// these tests is really about which source WINS, and a file per source could not say that.
+
 // Classification-profile architecture: YAML policy normalization, strict
 // entity-attribute precedence, built-in indoor/outdoor temperature profiles,
 // custom user profiles, display-unit projection, and profile-driven icons.

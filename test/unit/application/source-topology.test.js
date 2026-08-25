@@ -1,5 +1,18 @@
 "use strict";
 
+// WHICH OF THE FOUR SHAPES A CARD IS, decided from configuration alone.
+//
+// primary-with-rooms, primary-only, rooms-only, or a single room acting as the headline. That
+// answer decides what the big number means, whether tapping it does anything, and whether the
+// room chips would only repeat what the headline already says.
+//
+// Resolved from the NORMALIZED CONFIGURATION and never from availability, which is the point
+// worth protecting: a room that Home Assistant has never heard of, or one that is unavailable
+// this minute, must not change what kind of card this is. A card that reshaped itself every
+// time a sensor blinked would be unreadable.
+//
+// Pure: no card, no DOM. The assembled behaviour is in component/rendering/source-modes.
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 

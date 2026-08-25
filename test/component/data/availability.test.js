@@ -1,5 +1,18 @@
 "use strict";
 
+// AVAILABILITY, as the assembled card resolves it.
+//
+// Not "is this entity unavailable" - that is one boolean and the entity model owns it - but
+// what the CARD does once some of its sources have gone quiet: which rooms still count
+// towards the average, which become neutral placeholders, which disappear, and what the
+// headline says when none of them can answer.
+//
+// Kept together because those are one decision, not four: a room that is unavailable is
+// still a configured source, and the card's answer depends on what the OTHER sources are
+// doing at the same moment. Splitting them by symptom would lose exactly that.
+//
+// The pure arbitration rules live in unit/application/; this is the assembled result.
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");

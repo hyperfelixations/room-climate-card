@@ -607,7 +607,7 @@ const LEGACY_DTO_ALLOWLIST = new Map([
       "pipeline still computes what it always computed",
   ],
   [
-    "component/lifecycle/pipeline-baseline.test.js",
+    "characterization/pipeline.test.js",
     "replays the same baselines through the pure pipeline, with no element involved, so " +
       "it needs the identical projection to compare against",
   ],

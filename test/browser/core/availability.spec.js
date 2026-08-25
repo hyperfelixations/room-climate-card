@@ -1,5 +1,16 @@
 "use strict";
 
+// Availability in a real browser, where the parts jsdom cannot answer live.
+//
+// The same rules are checked in component/data/availability.test.js against the model. What
+// needs a browser is what happens AROUND them: that an unavailable room chip is still a real
+// element a user can click, that the no-data shell tears down its carousel timers instead of
+// leaving them running, and that recovering from an outage restores the views rather than
+// leaving an empty frame behind.
+//
+// Timers and clickability are the reason this file exists: both are invisible to a model
+// test, and both are how an outage used to leave a card quietly broken.
+
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 

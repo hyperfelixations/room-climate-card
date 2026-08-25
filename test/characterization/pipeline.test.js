@@ -25,8 +25,8 @@ process.env.TZ = "UTC";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { stableStringify, expectBaseline } = require("../../helpers/characterization.js");
-const { SCENARIOS, buildHass } = require("../../helpers/characterization-scenarios.js");
+const { stableStringify, expectBaseline } = require("../helpers/characterization.js");
+const { SCENARIOS, buildHass } = require("../helpers/characterization-scenarios.js");
 
 let resolveMeasurementContext;
 let buildCardDomainModel;
@@ -48,22 +48,22 @@ let normalizeUnitToken;
 let palettes;
 
 test.before(async () => {
-  ({ resolveMeasurementContext } = await import("../../../src/application/model/measurement-context.js"));
-  ({ buildCardDomainModel } = await import("../../../src/application/model/card-domain-model.js"));
-  ({ buildCardViewModel } = await import("../../../src/presentation/view-model/card-view-model.js"));
+  ({ resolveMeasurementContext } = await import("../../src/application/model/measurement-context.js"));
+  ({ buildCardDomainModel } = await import("../../src/application/model/card-domain-model.js"));
+  ({ buildCardViewModel } = await import("../../src/presentation/view-model/card-view-model.js"));
   // The frozen oracle, not a production module: the flat shape no longer exists in
   // src/, and the 32 committed baselines are what it still serves.
-  ({ toLegacyData } = require("../../helpers/legacy-dto.js"));
-  ({ normalizeConfig } = await import("../../../src/config/normalize-config.js"));
-  ({ optionSchemaForView } = await import("../../../src/presentation/view-model/view-state.js"));
-  ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../../src/i18n/translate.js"));
-  ({ formatNumber, formatTimeOfDay } = await import("../../../src/i18n/formatters.js"));
-  ({ metricMetaFor } = await import("../../../src/presentation/view-model/metric-meta.js"));
-  ({ CLASSIFICATION_ZONES } = await import("../../../src/domain/classification/zones.js"));
-  ({ METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } = await import("../../../src/domain/metrics/resolution.js"));
-  ({ METRIC_DEFINITIONS } = await import("../../../src/domain/metrics/definitions.js"));
-  ({ normalizeUnitToken } = await import("../../../src/domain/units/unit-token.js"));
-  palettes = await import("../../../src/domain/classification/palettes/registry.js");
+  ({ toLegacyData } = require("../helpers/legacy-dto.js"));
+  ({ normalizeConfig } = await import("../../src/config/normalize-config.js"));
+  ({ optionSchemaForView } = await import("../../src/presentation/view-model/view-state.js"));
+  ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));
+  ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
+  ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
+  ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
+  ({ METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
+  ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
+  ({ normalizeUnitToken } = await import("../../src/domain/units/unit-token.js"));
+  palettes = await import("../../src/domain/classification/palettes/registry.js");
 });
 
 // The same collaborators the composition root injects, assembled here by hand so

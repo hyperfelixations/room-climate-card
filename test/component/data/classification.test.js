@@ -1,5 +1,15 @@
 "use strict";
 
+// The built-in classification boundaries, checked immediately either side of every threshold.
+//
+// A tier boundary is a > or a >=, and getting it the wrong way round moves a reading one tier
+// without moving it far enough for anyone to notice. So each threshold is probed just below,
+// exactly on, and just above.
+//
+// The colour helpers are here too, and belong here: HEX_COLOR_PATTERN accepts 3, 4, 6 and
+// 8-digit values, _rgba() has to handle every one of those lengths, and both are reached
+// through the classification path that turns a tier into a painted colour.
+
 // Built-in classification boundaries are checked immediately around every
 // threshold. HEX_COLOR_PATTERN accepts only 3/4/6/8-digit hex values, and
 // _rgba() must handle each accepted length.

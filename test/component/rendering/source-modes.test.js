@@ -1,5 +1,17 @@
 "use strict";
 
+// The four source topologies, seen from the rendered card.
+//
+// A card can be a primary entity with rooms, a primary alone, several rooms with a calculated
+// average, or a single room standing in as the headline. Which one it is decides what the
+// headline means, whether it is clickable, and whose tap action fires - and the card must not
+// change its mind about that just because a value went unavailable.
+//
+// The resolution itself is pure and lives in unit/application/source-topology.test.js. What
+// is checked here is the part that only exists once the card is assembled: identity held
+// steady across state changes, actions dispatched from the right source, and setConfig
+// rebuilding only when the markup really has to change.
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");

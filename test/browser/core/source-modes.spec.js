@@ -1,5 +1,15 @@
 "use strict";
 
+// The four source topologies as a user meets them, in a real browser.
+//
+// The topology itself is resolved from configuration and tested purely elsewhere. What only a
+// browser can show is the consequence: whether the headline is actually clickable, whether
+// removing its label also removes the space the label occupied, and whether the room chips
+// appear at all under each show_rooms policy.
+//
+// The last test is the one that earns the file - a mistyped room entity must not turn a
+// one-room card into a two-room card, which is a layout question and looks fine in a model.
+
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth, updateHass, waitForStableLayout } = require("../../helpers/browser-helpers");
 

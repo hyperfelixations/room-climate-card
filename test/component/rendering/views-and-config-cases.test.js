@@ -1,5 +1,17 @@
 "use strict";
 
+// Whole configurations, rendered - minimal, rooms-only, with a range entity, and everything
+// at once.
+//
+// What these exercise is not any one option but the comparison in _render() between
+// data.views.keys and the views the element currently has on screen. That comparison decides
+// whether the card patches what is there or rebuilds it, and it is only reachable through a
+// configuration that actually changes the view list.
+//
+// Representative rather than exhaustive on purpose: the option grid itself is generated in
+// test/property/, which is the layer that can afford combinations. These four are the shapes
+// a person actually writes.
+
 // Representative minimal, rooms, range and full configurations exercise the
 // generic data.views.keys versus this._views comparison in _render().
 

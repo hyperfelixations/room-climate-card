@@ -1,5 +1,16 @@
 "use strict";
 
+// The trend indicator, measured rather than inspected.
+//
+// Whether a trend is rising, stable or falling is arithmetic and is tested in the domain
+// layer. What is checked here is everything that only exists once it is drawn: that the block
+// without a trend keeps exactly the height it had before, that both variants stay vertically
+// centred, and that switching rising to stable to falling to hidden does not move the focused
+// node out from under the user.
+//
+// The Fahrenheit case is here for the same reason: a converted RATE is a different number
+// from a converted reading, and it must appear in the scale footer and nowhere else.
+
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 

@@ -1,5 +1,18 @@
 "use strict";
 
+// The subtitle line, and the one judgement it makes.
+//
+// "Which room stands out most" compares distance to the AVERAGE - the absolute difference
+// from it - and not distance to the edge of the comfort band. The two agree often enough that
+// the wrong one looks right for a long time, and then a card with every room inside the band
+// picks the wrong room to name.
+//
+// Also here: the text/overflow contract. A subtitle of "clip" sets the wrapping, a subtitle of
+// "Ground floor" sets the text, and those two words are therefore reserved - which is a
+// decision worth having a test for rather than a comment.
+//
+// Exact ties are covered separately, by the tie-break rules in the domain layer.
+
 // The subtitle's "which room stands out most" logic
 // must compare |value-avg| (distance to the average), not distance to the
 // comfort-band edge. Exact ties are covered separately.
