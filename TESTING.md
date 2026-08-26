@@ -32,7 +32,7 @@ locatable. `test/architecture/suite-structure.test.js` enforces every rule below
 | `test/contract/` | the promises made to the outside world: custom element, registration, distribution artifact, safety | something users or Home Assistant depend on has changed |
 | `test/architecture/` | the layering rules `src/` obeys, and the rules this suite obeys | the design has eroded, even though everything still works |
 | `test/characterization/` | frozen recordings of what the card produced | something **changed**; whether that is a bug is for you to decide — see [POLICY.md](test/characterization/POLICY.md) |
-| `test/property/` | generated populations and the invariants that hold over all of them | an input nobody thought of breaks something |
+| `test/property/` | generated populations, the invariants that hold over all of them, and the relations that hold between two cards | an input nobody thought of breaks something, or the card discards data it could have used |
 | `test/browser/` | a real Chromium, because the question needs one | real geometry, fonts, pointers or pixels disagree |
 
 `test/unit/` and `test/component/` are subdivided further — by `src` layer and by concern
@@ -45,7 +45,11 @@ Shared material lives in three places and is never a test itself:
   import it; a curated subset (five typographically extreme languages, say) stays local and
   says in a comment that it is curated.
 - `test/fixtures/scenario.js` — the scenario builder. One way to describe a card situation, for
-  every layer.
+  every layer, including the environment around it: which timestamps a sensor reports, which
+  fields `hass` arrives without, which theme it declares.
+- `test/fixtures/attributes.js` — the named attribute pairs, derived from the product surface
+  rather than restated. A fixture that is deliberately WRONG — a thermometer reporting
+  hectopascals — keeps its literal, because naming it would hide the thing its test is about.
 - `test/helpers/` — the jsdom harness, the fake platform, colour measurement, browser helpers.
 
 ## Running part of it
@@ -104,16 +108,46 @@ domain at all), device classes, **attribute names**, availability, room counts, 
 palettes in every shape, view lists, view options, actions, subtitles, classification
 overrides, and misspellings of all of them.
 
+So is the environment the card runs in: entity ids Home Assistant would never issue,
+timestamps that are missing or in the future, extra attributes in their awkward shapes, a
+`hass` object arriving without its locale or with an empty `states`, and the same sensor
+configured both as the average and as a room.
+
 The weights live in one place (`generators.js`), and `generators.test.js` measures the realised
-distribution against them. That is not ceremony: the previous property test passed five hundred
-iterations while checking nothing, because every card it built landed in the no-data state and
-its invariants sat behind an `if (!data.empty)` that never ran. The run now asserts what its own
-population looks like, and fails if that population stops being worth testing.
+distribution against them. That is not ceremony: a property test can pass five hundred
+iterations while checking nothing, if every card it builds lands in the no-data state and its
+invariants sit behind an `if (!data.empty)` that never runs. The run asserts what its own
+population looks like, and fails if that population stops being worth testing — including the
+two guards that catch the silent version: every declared weight table must actually be drawn
+from, and every optional configuration key must really appear.
+
+### Two cards, not one
+
+`metamorphic.js` asks a different question. Every invariant above looks at **one** card and
+asks whether it is self-consistent, which finds a card that is *wrong* — not one that is merely
+*poorer than it should be*, because "poorer" is a comparison and there was nothing to compare
+against.
+
+Each relation derives a **sequence** of configurations from one description, applies them to a
+single card, and states what may have moved between the first card and the last: a room the
+card cannot use changes nothing else; taking a source away removes that source and no other;
+giving it back restores exactly what was there; the order of `rooms:` does not change what they
+say; the same readings in another unit describe the same rooms; the same configuration applied
+twice changes nothing.
+
+The preconditions are the careful part. A relation that quietly applies where it has nothing to
+say reports correct behaviour as a defect, which is worse than no test — so each says what it
+needs and why, and the runner **fails if a relation never applied at all**. A relation excluded
+by a wrong precondition looks exactly like one that holds.
 
 ```bash
-npm run test:property                                   # the deterministic run, ~5 s
-ROOM_CLIMATE_CARD_FUZZ_CASES=25000 npm run test:fuzz:run  # a real sweep, ~2 min
+npm run test:property                                            # both deterministic runs
+ROOM_CLIMATE_CARD_FUZZ_CASES=25000 npm run test:fuzz:run         # a real model sweep
+ROOM_CLIMATE_CARD_METAMORPHIC_CASES=15000 npm run test:fuzz:run  # a real metamorphic sweep
 ```
+
+The two counts are separate because a metamorphic case builds the card at least twice and costs
+about three times a model case — measured at 48 ms against 15 ms.
 
 A failure prints a **shrunk** case: the same failure, reduced to the smallest description that
 still causes it, as plain JSON you can paste into `scenario(…)`. The seed is not needed
@@ -123,7 +157,7 @@ A large sweep also runs [weekly in CI](.github/workflows/property.yml).
 
 ## Golden screenshots
 
-52 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
+54 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
 budget of 200 differing pixels. Absolute rather than a ratio on purpose: rendering noise does
 not scale with image area, and a ratio quietly gave a large screenshot a thousand-pixel
 allowance — under which seven baselines depicted a caption the card had stopped drawing.
@@ -154,5 +188,5 @@ against an artifact it did not produce. Coverage is published as an artifact and
 the Playwright report is kept whatever the outcome, because a *flaky* result is a pass whose
 evidence is the first thing to be thrown away.
 
-[`property.yml`](.github/workflows/property.yml) sweeps a large generated population once a
-week, and can be started by hand with a case count.
+[`property.yml`](.github/workflows/property.yml) sweeps both large generated populations once a
+week, and can be started by hand with a case count for each.

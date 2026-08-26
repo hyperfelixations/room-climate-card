@@ -433,9 +433,8 @@ classification:
 ```
 
 `auto` and `profile` use the metric's default profile when `profile` is
-omitted. `outdoor` and `fridge` are currently available only for
-temperature; `indoor` is the default profile for temperature, humidity,
-CO₂, and PM2.5.
+omitted. `outdoor` and `fridge` exist for temperature only; `indoor` is the
+default profile for temperature, humidity, CO₂, and PM2.5.
 
 A custom profile is authoritative: it ignores entity classification and owns
 tiers, bands, base scale, and icons together.
@@ -601,18 +600,36 @@ whole way. A color with no hue of its own — `gray`, `white`, `black` — gives
 grayscale ramp, which stays readable with any kind of color vision.
 
 Not every color has room in both directions: nothing is paler than `white`, and
-`gold` is already so light that only a couple of paler steps fit. Then the ramp
-is shorter on that side rather than made up of steps you could not tell apart.
+`gold` is already so light that only a couple of paler steps fit. The ramp is
+then shorter on that side.
 
-One honest limitation: a ramp in a single color cannot hold its contrast the way
-the four designed palettes do. They change hue as well, which is what lets them
-stay in a narrow lightness range; a single color has only paler and deeper to
-work with. Every ramp keeps at least a couple of steps that read well on both a
-light and a dark dashboard, and none runs further out than the color you named
-— but if you pick something very dark or very pale, its far end will be hard to
-read on one of the two.
+One honest limitation: pick something very dark or very pale and its far end
+will be hard to read on one of the two dashboard themes. Every ramp keeps at
+least a couple of steps that read well on both.
 
-A name that ships as a palette always wins over a color of the same name.
+Two or three colors, joined by hyphens, give you a ramp that travels between
+them:
+
+```yaml
+palette: blue-red            # blue at "too little", red at "too much"
+palette: blue-green-red      # and green in the middle
+```
+
+The first color is the far end of “too little”, the last the far end of “too
+much”, and with three the middle one is the color for a reading that is where it
+should be. You get the colors you named, exactly as you wrote them; everything
+between is filled in. Hex works too: `palette: 1DB85D-FD9808`.
+
+The ramp travels the short way round the color wheel, so `blue-red` runs through
+violet. If you want white in the middle, say so: `blue-white-red`.
+
+Four or more is not supported, and the card says so.
+
+A name that ships as a palette always wins over a color of the same name, and a
+single color wins over the hyphenated form. That matters for five CSS colors you
+can spell either way: `orangered` is one color, `orange-red` is a ramp from
+orange to red. The same goes for `blueviolet`, `greenyellow`, `limegreen` and
+`yellowgreen`.
 
 #### Writing your own
 
@@ -646,26 +663,21 @@ single color, or several separated by commas.
 > in quotes. If you do hit it, the card says so rather than just calling the
 > value invalid.
 >
-> **A colour written only in digits needs all six.** YAML reads `123456`,
-> `080808` and `008000` as numbers, and the card restores the leading zeros — all
-> three work unquoted. Shorter and longer ones do not: `080` could mean `#000080`
-> or the shorthand `#008800`, and nothing after YAML can tell which, so it is
-> refused rather than guessed at. Put those in quotes: `"080"`, `"#0808080"`.
->
-> One value slips through this rule and it is worth knowing about: YAML removes
-> the leading zero from `0808080` before the card sees anything, so it arrives as
-> `808080` and is read as that colour. Quote anything longer than six digits.
+> **A color written only in digits needs exactly six of them.** `123456`,
+> `080808` and `008000` all work unquoted. Anything shorter or longer has to be
+> quoted — `"080"`, `"#0808080"` — because `080` could mean `#000080` or `#008800`
+> and the card will not guess. Quoting is also the only way to be sure with more
+> than six digits: `0808080` unquoted arrives as `808080` and is read as that
+> color.
 
 The wings do not have to be the same length as each other, or the same length as
-the profile. Both are anchored at the middle, so a palette with fewer steps than
-the profile collapses onto the colors it has, and one with more spreads the
-profile across it; either way the first step away from optimal already leaves the
-middle color, and the profile's furthest tier reaches the palette's furthest
-color.
+the profile you are using. However many colors you give it, the first step away
+from the middle already changes color, and the furthest reading gets your
+furthest color.
 
 `invalid` is optional. It belongs to a reading the card considers physically
-impossible; the card currently filters those out before they are colored, so
-leaving it out is the normal thing to do and a neutral grey fills in.
+impossible — a humidity of 130 %, say. Leaving it out is the normal thing to do,
+and a neutral grey fills in.
 
 A value the entity classifies itself keeps its own `value_color`, and shows the
 neutral color when it supplies none — the palette applies to the card's own
