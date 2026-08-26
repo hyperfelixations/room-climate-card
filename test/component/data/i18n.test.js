@@ -34,7 +34,7 @@ const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 // so it is exactly the kind of generic matrix that must not carry its own copy. See
 // test/contracts/product-surface.js.
 const { LANGUAGES: SUPPORTED_LANGUAGES } = require("../../contracts/product-surface.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 test("all TRANSLATIONS language blocks stay in sync with en (the file's own load-time self-check never warns)", () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
@@ -66,7 +66,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-const hassDe = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }, "de");
+const hassDe = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }, "de");
 
 test("I18N-01: language:fr overrides hass.language:de", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "fr" }, hassDe);
@@ -109,7 +109,7 @@ test("I18N-02: all supported base languages are individually selectable via conf
 
 test("I18N-02: regional HA locales resolve to the supported base language", () => {
   for (const [locale, expected] of [["es-MX", "es"], ["ru-RU", "ru"], ["pl-PL", "pl"], ["ko-KR", "ko"], ["ja-JP", "ja"], ["zh-CN", "zh"]]) {
-    const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }, locale);
+    const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }, locale);
     const el = env.createCard({ entity: "sensor.avg" }, hass);
     assert.equal(el._language(), expected, `locale=${locale}`);
     env.cleanup(el);
@@ -385,7 +385,7 @@ test("_t(): an unknown key falls back to the key itself, never throws or returns
 });
 
 test("_t(): unsupported hass.language falls back cleanly to English (2.9.1 default)", () => {
-  const hassUnknown = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }, "xx");
+  const hassUnknown = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }, "xx");
   const el = env.createCard({ entity: "sensor.avg" }, hassUnknown);
   assert.equal(el._language(), "en");
   env.cleanup(el);

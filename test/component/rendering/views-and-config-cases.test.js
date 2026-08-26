@@ -19,7 +19,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -107,7 +107,7 @@ test("roomsComparable requires >= 2 valid room values, not just >= 2 configured 
   const oneRoomHass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
-    "sensor.r2": mkState("sensor.r2", "unavailable", { device_class: "temperature" }),
+    "sensor.r2": mkState("sensor.r2", "unavailable", TEMPERATURE),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, oneRoomHass);
   const data = el._computeViewModel();

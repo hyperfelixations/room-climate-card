@@ -20,16 +20,16 @@ const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../hel
 
 // From the manifest — see test/contracts/product-surface.js.
 const { LANGUAGES } = require("../../contracts/product-surface.js");
-const { CO2, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 // Widths cover the supported 280-500 px range. Below that range, some long-label
 // combinations cannot fit without exceeding the solver's layout assumptions.
 const WIDTHS = [280, 320, 380, 420, 500];
 
 const MODE_FIXTURES = {
-  temperature: { entity: "sensor.avg", value: 22, device_class: "temperature", unit: "°C", roomLow: 19, roomHigh: 27 },
-  humidity: { entity: "sensor.avg", value: 50, device_class: "humidity", unit: "%", roomLow: 33, roomHigh: 68 },
-  co2: { entity: "sensor.avg", value: 700, device_class: "carbon_dioxide", unit: "ppm", roomLow: 350, roomHigh: 1250 },
-  pm25: { entity: "sensor.avg", value: 8, device_class: "pm25", unit: "µg/m³", roomLow: 0, roomHigh: 22 },
+  temperature: { entity: "sensor.avg", value: 22, attributes: TEMPERATURE_C, roomLow: 19, roomHigh: 27 },
+  humidity: { entity: "sensor.avg", value: 50, attributes: HUMIDITY, roomLow: 33, roomHigh: 68 },
+  co2: { entity: "sensor.avg", value: 700, attributes: CO2, roomLow: 350, roomHigh: 1250 },
+  pm25: { entity: "sensor.avg", value: 8, attributes: PM25, roomLow: 0, roomHigh: 22 },
 };
 
 function noOverlap(rects) {
@@ -103,9 +103,9 @@ test.describe("main scale: optimal-label never overlaps min/max labels", () => {
         await gotoHarness(page);
         const fx = MODE_FIXTURES[mode];
         const states = {
-          [fx.entity]: mkStateObj(fx.entity, fx.value, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
-          "sensor.r1": mkStateObj("sensor.r1", fx.roomLow, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
-          "sensor.r2": mkStateObj("sensor.r2", fx.roomHigh, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
+          [fx.entity]: mkStateObj(fx.entity, fx.value, fx.attributes),
+          "sensor.r1": mkStateObj("sensor.r1", fx.roomLow, fx.attributes),
+          "sensor.r2": mkStateObj("sensor.r2", fx.roomHigh, fx.attributes),
         };
         const cardId = await createCard(page, { entity: fx.entity, auto_slide: false, rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, lang);
         const card = page.locator(`#${cardId}`);

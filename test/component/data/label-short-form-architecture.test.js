@@ -15,6 +15,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE } = require("../../fixtures/attributes.js");
 
 // Direct imports make the owner of each label-selection contract explicit.
 let labelForm;
@@ -90,7 +91,7 @@ const { LANGUAGES } = require("../../contracts/product-surface.js");
 
 test("every language declares scale.comfortLabelShort/scale.optimalLabelShort/rangeScale.currentLabelShort", () => {
   for (const lang of LANGUAGES) {
-    const card = env.createCard({ entity: "sensor.avg", language: lang }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }));
+    const card = env.createCard({ entity: "sensor.avg", language: lang }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }));
     for (const key of ["scale.comfortLabelShort", "scale.optimalLabelShort", "rangeScale.currentLabelShort"]) {
       const value = card._t(key, { range: "20–24°C" });
       assert.ok(typeof value === "string" && value.length > 0, `${lang}.${key} must resolve to a non-empty string`);
@@ -100,7 +101,7 @@ test("every language declares scale.comfortLabelShort/scale.optimalLabelShort/ra
 });
 
 test("Polish scale.optimalLabel is restored to the full word, opt. now only lives on scale.optimalLabelShort", () => {
-  const card = env.createCard({ entity: "sensor.avg", language: "pl" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }));
+  const card = env.createCard({ entity: "sensor.avg", language: "pl" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }));
   const full = card._t("scale.optimalLabel", { range: "20–24°C" });
   const short = card._t("scale.optimalLabelShort", { range: "20–24°C" });
   assert.ok(!full.includes("opt."), `scale.optimalLabel must no longer be the permanently-abbreviated form, got "${full}"`);
@@ -110,14 +111,14 @@ test("Polish scale.optimalLabel is restored to the full word, opt. now only live
 });
 
 test("French rangeScale.currentLabel is restored to 'maintenant', act. now only lives on rangeScale.currentLabelShort", () => {
-  const card = env.createCard({ entity: "sensor.avg", language: "fr" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }));
+  const card = env.createCard({ entity: "sensor.avg", language: "fr" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }));
   assert.equal(card._t("rangeScale.currentLabel"), "maintenant");
   assert.equal(card._t("rangeScale.currentLabelShort"), "act.");
   env.cleanup(card);
 });
 
 test("languages with no documented overlap issue keep an identical long/short pair (no unnecessary new translation risk)", () => {
-  const card = env.createCard({ entity: "sensor.avg", language: "de" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) }));
+  const card = env.createCard({ entity: "sensor.avg", language: "de" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }));
   assert.equal(card._t("scale.comfortLabel", { range: "R" }), card._t("scale.comfortLabelShort", { range: "R" }));
   assert.equal(card._t("scale.optimalLabel", { range: "R" }), card._t("scale.optimalLabelShort", { range: "R" }));
   assert.equal(card._t("rangeScale.currentLabel"), card._t("rangeScale.currentLabelShort"));

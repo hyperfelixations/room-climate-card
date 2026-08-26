@@ -13,6 +13,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../helpers/hass-fixtures.js");
+const { TEMPERATURE } = require("../fixtures/attributes.js");
 
 // Direct imports keep each escaping and rendering trust boundary explicit.
 let actions, text;
@@ -56,9 +57,9 @@ test("XSS payload in unit_of_measurement produces no extra DOM nodes", () => {
 
 test("XSS payload in a room name/short produces no extra DOM nodes, before AND after a partial update", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: XSS_PAYLOAD, short: XSS_SCRIPT, entity: "sensor.r1" }, { entity: "sensor.r2" }] },
@@ -67,9 +68,9 @@ test("XSS payload in a room name/short produces no extra DOM nodes, before AND a
   assert.equal(countInjectedNodes(el.shadowRoot), 0, "initial render");
   // Trigger a partial update (innerHTML-based room-grid rebuild path) with the same payload.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22.5, { device_class: "temperature" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature" }),
+    "sensor.avg": mkState("sensor.avg", 22.5, TEMPERATURE),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE),
   });
   assert.equal(countInjectedNodes(el.shadowRoot), 0, "after partial update");
   env.cleanup(el);
@@ -85,7 +86,7 @@ test("XSS payload in value_level (HA attribute) produces no extra DOM nodes", ()
 });
 
 test("XSS payload in title/entity_label config overrides produces no extra DOM nodes", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg", title: XSS_PAYLOAD, entity_label: XSS_SCRIPT }, hass);
   assert.equal(countInjectedNodes(el.shadowRoot), 0);
   env.cleanup(el);
@@ -93,7 +94,7 @@ test("XSS payload in title/entity_label config overrides produces no extra DOM n
 
 test("XSS payload in the entity id itself (used in tooltips/aria-labels) produces no extra DOM nodes", () => {
   const maliciousEntity = `sensor.avg" onmouseover="window.__xss_fired=true`;
-  const hass = mkHass({ [maliciousEntity]: mkState(maliciousEntity, 22, { device_class: "temperature" }) });
+  const hass = mkHass({ [maliciousEntity]: mkState(maliciousEntity, 22, TEMPERATURE) });
   const el = env.createCard({ entity: maliciousEntity }, hass);
   assert.equal(countInjectedNodes(el.shadowRoot), 0);
   // Also confirm no element in the shadow root actually carries the injected onmouseover handler.
@@ -104,9 +105,9 @@ test("XSS payload in the entity id itself (used in tooltips/aria-labels) produce
 
 test("XSS payload in a trend_entity's unit produces no extra DOM nodes", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE),
     "sensor.trend": mkState("sensor.trend", 0.2, { unit_of_measurement: XSS_PAYLOAD }),
   });
   const el = env.createCard(
@@ -118,7 +119,7 @@ test("XSS payload in a trend_entity's unit produces no extra DOM nodes", () => {
 });
 
 test("XSS payload in an icon config value produces no extra DOM nodes (icon is set as an attribute, not interpolated as trusted HTML)", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg", icon: XSS_PAYLOAD }, hass);
   assert.equal(countInjectedNodes(el.shadowRoot), 0);
   env.cleanup(el);
@@ -156,9 +157,9 @@ test("_normalizeAction: a per-room override with no fallback (null) inherits not
 
 test("integration: config-level and per-room tap_action/hold_action are both wired through the allowlist", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE),
   });
   const el = env.createCard(
     {

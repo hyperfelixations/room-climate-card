@@ -5,6 +5,11 @@
 // script (module.exports when available, otherwise a global) so the exact
 // same file can be `require()`d from Node and loaded via a plain <script> tag
 // in test/fixtures/harness.html without a bundler.
+//
+// THAT IS WHY THIS FILE IMPORTS NOTHING, and why its attribute literals are written out
+// rather than taken from test/fixtures/attributes.js like everywhere else. A `require()`
+// here is fine in Node and a `ReferenceError` in the page — the harness loads this file
+// with a bare <script> tag, and there is no bundler to resolve it.
 
 function mkState(entityId, state, attributes) {
   return {

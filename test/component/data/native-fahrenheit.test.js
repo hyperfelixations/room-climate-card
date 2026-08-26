@@ -11,7 +11,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -250,7 +250,7 @@ test("spread attribute (a delta) must round-trip without the Fahrenheit absolute
 // ==== buildScaleModel(): identical geometry for identical input (section 9.6 invariant) ====
 
 test("_buildScaleModel(): identical input produces identical geometry for both the main scale and rangeScale call sites", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   // _buildScaleModel() takes an explicit options
   // object (metricType/unitProfile instead of an implicit
@@ -280,7 +280,7 @@ test("_buildScaleModel(): identical input produces identical geometry for both t
 });
 
 test("_buildScaleModel(): markerPositions covers every key passed in markers, and only those keys", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const celsius = access.getUnitProfile("temperature", "celsius");
   const model = internals.scaleModel(el, {

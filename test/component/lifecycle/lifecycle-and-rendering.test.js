@@ -11,7 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { HUMIDITY_CLASS_ONLY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 // The render paths, imported from the source module so the test names the same
@@ -61,7 +61,7 @@ test("ROB-01: a thrown _computeViewModel() does not commit the render signature,
 });
 
 test("DOM-01: the no-data icon updates on a pure partial update (metric mode changes while staying empty)", () => {
-  const states1 = { "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "temperature" }) };
+  const states1 = { "sensor.avg": mkState("sensor.avg", "unavailable", TEMPERATURE) };
   const el = env.createCard({ entity: "sensor.avg" }, mkHass(states1));
   let iconEl = el.shadowRoot.querySelector(".rtc-icon-badge ha-icon");
   assert.equal(iconEl?.getAttribute("icon"), "mdi:thermometer-off");
@@ -70,7 +70,7 @@ test("DOM-01: the no-data icon updates on a pure partial update (metric mode cha
   // HA attribute-only update always bumps last_updated, so this is forced
   // explicitly (two mkState() calls made within the same millisecond would
   // otherwise collide and be treated as a no-op update).
-  const states2 = { "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "humidity" }) };
+  const states2 = { "sensor.avg": mkState("sensor.avg", "unavailable", HUMIDITY_CLASS_ONLY) };
   states2["sensor.avg"].last_updated = new Date(Date.now() + 1000).toISOString();
   el.hass = mkHass(states2);
   iconEl = el.shadowRoot.querySelector(".rtc-icon-badge ha-icon");

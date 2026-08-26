@@ -17,7 +17,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
-const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 async function shot(page, cardId, name, width = 400) {
   // Waits on the layout mechanism rather than on a duration — see setCardWidth(). A
@@ -33,18 +33,18 @@ async function shot(page, cardId, name, width = 400) {
 
 test.describe("visual golden: one representative render per mode", () => {
   const MODES = {
-    temperature: { value: 22, device_class: "temperature", unit: "°C" },
-    humidity: { value: 50, device_class: "humidity", unit: "%" },
-    co2: { value: 700, device_class: "carbon_dioxide", unit: "ppm" },
-    pm25: { value: 8, device_class: "pm25", unit: "µg/m³" },
+    temperature: { value: 22, attributes: TEMPERATURE_C },
+    humidity: { value: 50, attributes: HUMIDITY },
+    co2: { value: 700, attributes: CO2 },
+    pm25: { value: 8, attributes: PM25 },
   };
   for (const [mode, fx] of Object.entries(MODES)) {
     test(mode, async ({ page }) => {
       await gotoHarness(page);
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", fx.value, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
-        "sensor.r1": mkStateObj("sensor.r1", fx.value * 0.9, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
-        "sensor.r2": mkStateObj("sensor.r2", fx.value * 1.1, { device_class: fx.device_class, unit_of_measurement: fx.unit }),
+        "sensor.avg": mkStateObj("sensor.avg", fx.value, fx.attributes),
+        "sensor.r1": mkStateObj("sensor.r1", fx.value * 0.9, fx.attributes),
+        "sensor.r2": mkStateObj("sensor.r2", fx.value * 1.1, fx.attributes),
       };
       const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
       await shot(page, cardId, `mode-${mode}.png`);
@@ -61,29 +61,21 @@ test.describe("visual golden: narrow trend arrow and Scale footer per mode", () 
   };
 
   for (const [mode, fx] of Object.entries({
-    temperature: { value: 22.4, roomLow: 21.6, roomHigh: 23.1, device_class: "temperature", unit: "°C" },
-    humidity: { value: 50, roomLow: 45, roomHigh: 56, device_class: "humidity", unit: "%" },
-    co2: { value: 700, roomLow: 620, roomHigh: 810, device_class: "carbon_dioxide", unit: "ppm" },
-    pm25: { value: 8, roomLow: 5, roomHigh: 12, device_class: "pm25", unit: "µg/m³" },
+    temperature: { value: 22.4, roomLow: 21.6, roomHigh: 23.1, attributes: TEMPERATURE_C },
+    humidity: { value: 50, roomLow: 45, roomHigh: 56, attributes: HUMIDITY },
+    co2: { value: 700, roomLow: 620, roomHigh: 810, attributes: CO2 },
+    pm25: { value: 8, roomLow: 5, roomHigh: 12, attributes: PM25 },
   })) {
     test(mode, async ({ page }) => {
       await gotoHarness(page);
+      // The trend sensor reports a RATE, so it carries the metric unit per hour and no
+      // device class of its own — the one entity here whose attributes are not the metric's.
+      const perHour = { unit_of_measurement: `${fx.attributes.unit_of_measurement}/h` };
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", fx.value, {
-          device_class: fx.device_class,
-          unit_of_measurement: fx.unit,
-        }),
-        "sensor.trend": mkStateObj("sensor.trend", TREND_VALUES[mode], {
-          unit_of_measurement: `${fx.unit}/h`,
-        }),
-        "sensor.r1": mkStateObj("sensor.r1", fx.roomLow, {
-          device_class: fx.device_class,
-          unit_of_measurement: fx.unit,
-        }),
-        "sensor.r2": mkStateObj("sensor.r2", fx.roomHigh, {
-          device_class: fx.device_class,
-          unit_of_measurement: fx.unit,
-        }),
+        "sensor.avg": mkStateObj("sensor.avg", fx.value, fx.attributes),
+        "sensor.trend": mkStateObj("sensor.trend", TREND_VALUES[mode], perHour),
+        "sensor.r1": mkStateObj("sensor.r1", fx.roomLow, fx.attributes),
+        "sensor.r2": mkStateObj("sensor.r2", fx.roomHigh, fx.attributes),
       };
       const cardId = await createCard(
         page,
@@ -714,14 +706,14 @@ test.describe("visual golden: headline shapes and headline widths", () => {
   });
 
   const WIDE_READINGS = {
-    co2: { value: 2252, device_class: "carbon_dioxide", unit: "ppm", low: 1800, high: 2700 },
-    pm25: { value: 23.5, device_class: "pm25", unit: "µg/m³", low: 18.1, high: 28.9 },
+    co2: { value: 2252, attributes: CO2, low: 1800, high: 2700 },
+    pm25: { value: 23.5, attributes: PM25, low: 18.1, high: 28.9 },
   };
   for (const [mode, fx] of Object.entries(WIDE_READINGS)) {
     for (const width of [320, 520]) {
-      test(`${mode} ${fx.value} ${fx.unit} at ${width}px`, async ({ page }) => {
+      test(`${mode} ${fx.value} ${fx.attributes.unit_of_measurement} at ${width}px`, async ({ page }) => {
         await gotoHarness(page);
-        const attributes = { device_class: fx.device_class, unit_of_measurement: fx.unit };
+        const attributes = fx.attributes;
         const states = {
           "sensor.avg": mkStateObj("sensor.avg", fx.value, attributes),
           "sensor.r1": mkStateObj("sensor.r1", fx.low, attributes),
@@ -739,7 +731,7 @@ test.describe("visual golden: headline shapes and headline widths", () => {
           .locator(`#${cardId}`)
           .locator(".rtc-avg-value")
           .evaluate((node) => node.scrollWidth <= node.clientWidth);
-        expect(fits, `${fx.value} ${fx.unit} must fit its column at ${width}px`).toBe(true);
+        expect(fits, `${fx.value} ${fx.attributes.unit_of_measurement} must fit its column at ${width}px`).toBe(true);
         await shot(page, cardId, `headline-wide-${mode}-${width}.png`, width);
       });
     }

@@ -13,7 +13,7 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { stableStringify } = require("../../helpers/characterization.js");
-const { CO2, HUMIDITY, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../../fixtures/attributes.js");
+const { CO2, HUMIDITY, TEMPERATURE, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../../fixtures/attributes.js");
 
 let entityModel;
 let measurementContext;
@@ -97,7 +97,7 @@ test("a Fahrenheit reading is canonicalized, not passed through", () => {
 test("a MISSING unit is as unusable as an unknown one — never assumed canonical", () => {
   // The asymmetry this replaced (missing -> canonical, wrong -> rejected) was the
   // single most dangerous shortcut in the old pipeline.
-  const missing = entityModel.buildEntityModel({ "sensor.a": st(21.5, { device_class: "temperature" }) }, cfg(), "sensor.a", "primary");
+  const missing = entityModel.buildEntityModel({ "sensor.a": st(21.5, TEMPERATURE) }, cfg(), "sensor.a", "primary");
   assert.equal(missing.metricKind, "temperature", "the kind is still resolved, for title and icon");
   assert.equal(missing.validUnit, false);
   assert.equal(missing.unitProfile, null);
@@ -123,7 +123,7 @@ test("EntityModel assigns every availability status at the raw-state boundary", 
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st("garbage", C) }, config, "sensor.a", "primary").availability, "invalid_value");
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-5, RH) }, config, "sensor.a", "primary").availability, "invalid_value");
   assert.equal(
-    entityModel.buildEntityModel({ "sensor.a": st(21, { device_class: "temperature" }) }, config, "sensor.a", "primary").availability,
+    entityModel.buildEntityModel({ "sensor.a": st(21, TEMPERATURE) }, config, "sensor.a", "primary").availability,
     "incompatible_unit"
   );
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(21, {}) }, config, "sensor.a", "primary").availability, "incompatible_kind");

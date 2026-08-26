@@ -17,11 +17,12 @@ const SEED = 0xc1a6e;
 const ITERATIONS = 30;
 // From the manifest — see test/contracts/product-surface.js.
 const { LANGUAGES } = require("../../contracts/product-surface.js");
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 const MODES = {
-  temperature: { device_class: "temperature", unit: "°C", low: -20, high: 45 },
-  humidity: { device_class: "humidity", unit: "%", low: 0, high: 100 },
-  co2: { device_class: "carbon_dioxide", unit: "ppm", low: 1, high: 3000 },
-  pm25: { device_class: "pm25", unit: "µg/m³", low: 0, high: 400 },
+  temperature: { attributes: TEMPERATURE_C, low: -20, high: 45 },
+  humidity: { attributes: HUMIDITY, low: 0, high: 100 },
+  co2: { attributes: CO2, low: 1, high: 3000 },
+  pm25: { attributes: PM25, low: 0, high: 400 },
 };
 
 function genCase(rng) {
@@ -65,17 +66,23 @@ test.describe("randomized geometry invariants across width/roomCount/language/mo
       await page.emulateMedia({ colorScheme: c.darkMode ? "dark" : "light" });
       await gotoHarness(page);
 
-      const states = { "sensor.avg": mkStateObj("sensor.avg", (c.fx.low + c.fx.high) / 2, { device_class: c.fx.device_class, unit_of_measurement: c.fx.unit }) };
+      const states = { "sensor.avg": mkStateObj("sensor.avg", (c.fx.low + c.fx.high) / 2, c.fx.attributes) };
       const rooms = [];
       for (let r = 0; r < c.roomCount; r++) {
         const entity = `sensor.r${r}`;
         const value = c.fx.low + ((c.fx.high - c.fx.low) * r) / Math.max(1, c.roomCount - 1);
-        states[entity] = mkStateObj(entity, value, { device_class: c.fx.device_class, unit_of_measurement: c.fx.unit });
+        states[entity] = mkStateObj(entity, value, c.fx.attributes);
         rooms.push({ entity, name: `Room ${r}` });
       }
       const config = { entity: "sensor.avg", rooms };
       if (c.hasRange) {
-        states["sensor.range"] = mkStateObj("sensor.range", 3, { unit_of_measurement: c.fx.unit, minimum: c.fx.low, maximum: c.fx.high });
+        // The range entity carries the metric's unit and its own min/max, but no device
+        // class — it describes a value rather than being one.
+        states["sensor.range"] = mkStateObj("sensor.range", 3, {
+          unit_of_measurement: c.fx.attributes.unit_of_measurement,
+          minimum: c.fx.low,
+          maximum: c.fx.high,
+        });
         config.range_entity = "sensor.range";
       }
       if (c.disabledViews || c.viewOrder || c.rangeScale) config.views = buildViewsList(c);

@@ -17,7 +17,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkHass, mkState } = require("../../helpers/hass-fixtures.js");
-const { CO2, HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO2, HUMIDITY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
@@ -59,7 +59,7 @@ test("MeasurementContext exposes typed availability for the primary and every ro
     "sensor.usable": state("sensor.usable", 21),
     "sensor.unavailable": state("sensor.unavailable", "unknown"),
     "sensor.invalid": state("sensor.invalid", "not-a-number"),
-    "sensor.unit": state("sensor.unit", 21, { device_class: "temperature" }),
+    "sensor.unit": state("sensor.unit", 21, TEMPERATURE),
     "sensor.kind": state("sensor.kind", 21, {}),
   }, config);
 
@@ -126,7 +126,7 @@ test("only unavailable and invalid rooms become neutral placeholders after all u
     "sensor.unavailable": state("sensor.unavailable", "unavailable"),
     "sensor.usable": state("sensor.usable", 21),
     "sensor.invalid": state("sensor.invalid", "garbage"),
-    "sensor.unit": state("sensor.unit", 20, { device_class: "temperature" }),
+    "sensor.unit": state("sensor.unit", 20, TEMPERATURE),
     "sensor.foreign": state("sensor.foreign", 50, HUMIDITY),
   }));
   try {

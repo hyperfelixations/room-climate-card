@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE } = require("../../fixtures/attributes.js");
 
 // Import the owning modules directly so each test names its actual subject.
 let numbers, primitives;
@@ -126,7 +127,7 @@ test("_normalizePositiveSeconds: booleans/junk fall back to the default", () => 
 
 // ---- Full setConfig() integration: confirms the parsers are actually wired up ----
 
-const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
 
 test("integration: decimals:true is rejected end to end, does not become 1", () => {
   const card = env.createCard({ entity: "sensor.avg", decimals: true }, hass);

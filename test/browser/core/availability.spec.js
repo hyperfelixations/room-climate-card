@@ -13,7 +13,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
-const { HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { HUMIDITY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
@@ -40,7 +40,7 @@ test("unavailable room values stay visible, actionable and outside calculations"
     "sensor.unavailable": mkStateObj("sensor.unavailable", "unavailable", TEMP),
     "sensor.usable": mkStateObj("sensor.usable", 21, TEMP),
     "sensor.invalid": mkStateObj("sensor.invalid", "garbage", TEMP),
-    "sensor.bad_unit": mkStateObj("sensor.bad_unit", 20, { device_class: "temperature" }),
+    "sensor.bad_unit": mkStateObj("sensor.bad_unit", 20, TEMPERATURE),
     "sensor.foreign": mkStateObj("sensor.foreign", 50, HUMIDITY),
   };
   const cardId = await createCard(page, config, states);

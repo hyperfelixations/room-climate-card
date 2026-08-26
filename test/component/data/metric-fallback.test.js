@@ -28,7 +28,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
-const { CO2, HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
+const { CO2, HUMIDITY, HUMIDITY_CLASS_ONLY, TEMPERATURE, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -70,9 +70,9 @@ test("primary entity exists but carries neither device_class nor unit -> falls b
 
 test("primary entity's own device_class always wins over any room fallback", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }),
-    "sensor.hum1": mkState("sensor.hum1", 55, { device_class: "humidity" }),
-    "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE),
+    "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY_CLASS_ONLY),
+    "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY_CLASS_ONLY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
   const data = el._computeViewModel();
@@ -231,8 +231,8 @@ test("an invalid CO2 primary falls back to valid humidity rooms without mixing l
 test("unavailable rooms do not participate in metric-kind consensus", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.t1": mkState("sensor.t1", "unavailable", { device_class: "temperature" }),
-    "sensor.t2": mkState("sensor.t2", "unavailable", { device_class: "temperature" }),
+    "sensor.t1": mkState("sensor.t1", "unavailable", TEMPERATURE),
+    "sensor.t2": mkState("sensor.t2", "unavailable", TEMPERATURE),
     "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const el = env.createCard(
@@ -343,7 +343,7 @@ test("a usable temperature primary still excludes a same-kind room with an inval
 
 test("a temperature primary without a unit is unusable and falls back to room consensus", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }), // no unit_of_measurement at all
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE), // no unit_of_measurement at all
     "sensor.t1": mkState("sensor.t1", 20, TEMPERATURE_C),
     "sensor.t2": mkState("sensor.t2", 24, TEMPERATURE_C),
   });
@@ -362,7 +362,7 @@ test("a temperature primary without a unit is unusable and falls back to room co
 test("a temperature room without a unit is excluded as unusable_unit", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.bad": mkState("sensor.bad", 21, { device_class: "temperature" }), // no unit_of_measurement
+    "sensor.bad": mkState("sensor.bad", 21, TEMPERATURE), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.bad" }] }, hass);
   const context = el._resolveMetricContext();
@@ -379,7 +379,7 @@ test("a temperature room without a unit is excluded as unusable_unit", () => {
 
 test("a no-data state retains metric-specific presentation when every entity lacks a unit", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 55, { device_class: "humidity" }), // no unit_of_measurement
+    "sensor.avg": mkState("sensor.avg", 55, HUMIDITY_CLASS_ONLY), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
@@ -486,13 +486,13 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
 });
 
 test("_resolveMetricContext() is memoized per hass/config identity, like _language()", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const first = el._resolveMetricContext();
   const second = el._resolveMetricContext();
   assert.equal(first, second, "same hass/config identity must return the cached object, not recompute");
 
-  const hass2 = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "humidity" }) });
+  const hass2 = mkHass({ "sensor.avg": mkState("sensor.avg", 22, HUMIDITY_CLASS_ONLY) });
   el.hass = hass2;
   const third = el._resolveMetricContext();
   assert.notEqual(first, third, "a new hass object must invalidate the cache");
