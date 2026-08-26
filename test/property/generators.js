@@ -134,6 +134,38 @@ const WEIGHTS = {
     [3, "curatedTypo"],
     [2, "mechanicalTypo"],
   ],
+  // What a sensor is called. Home Assistant guarantees `domain.object_id` in lower-case
+  // ASCII, but the id in a card configuration is whatever a person typed into a YAML file, so
+  // the card sees the other kinds too.
+  entityId: [
+    [92, "conventional"],
+    [8, "impossible"],
+  ],
+  // Which timestamps the sensor reports. The card compares them across renders to decide
+  // what has changed, so a sensor that reports none, or reports a time in the future, is
+  // asking the comparison a question it was not written for.
+  timestamps: [
+    [70, "identical"],
+    [16, "normal"],
+    [6, "missing"],
+    [4, "future"],
+    [4, "malformed"],
+  ],
+  // Extra attributes on the entity itself. The range view takes its numbers from them and a
+  // value colour on the entity overrides the palette, so each shape lands on a decision.
+  extraAttributes: [
+    [88, "none"],
+    [6, "plausible"],
+    [6, "awkward"],
+  ],
+  // What the `hass` object is missing. A complete one nearly always, because an incomplete
+  // one is a moment rather than a state — but it is a moment every card lives through.
+  hassShape: [
+    [88, "complete"],
+    [6, "oneGap"],
+    [3, "twoGaps"],
+    [3, "themed"],
+  ],
   // ---- card shape ----
   roomCount: [
     [10, "none"],
@@ -344,6 +376,8 @@ function generateDeviceClass(rng, metric) {
 
 function generateEntity(rng, metric, { unitChoice, forcedUnitValue }) {
   const entity = {};
+  if (weighted(rng, WEIGHTS.entityId) === "impossible") entity.id = rng.pick(V.IMPOSSIBLE_ENTITY_IDS);
+  entity.timestamps = weighted(rng, WEIGHTS.timestamps);
   const kind = weighted(rng, WEIGHTS.stateKind);
   if (kind === "missing") entity.present = false;
   if (kind === "unavailable") entity.state = "unavailable";
@@ -354,16 +388,19 @@ function generateEntity(rng, metric, { unitChoice, forcedUnitValue }) {
   entity.unit = generateUnit(rng, metric, unitChoice, forcedUnitValue);
   entity.deviceClass = generateDeviceClass(rng, metric);
 
-  // Attributes the card reads for the range and trend views, on the entity itself. Rare,
-  // because most sensors do not carry them, and worth generating because the ones that do
-  // are where the range view gets its numbers.
-  if (rng.bool(0.06)) {
+  // Attributes the card reads for the range and trend views, on the entity itself. Most
+  // sensors do not carry them; the ones that do are where the range view gets its numbers,
+  // and where an entity can overrule the palette with a colour of its own.
+  const extras = weighted(rng, WEIGHTS.extraAttributes);
+  if (extras === "plausible") {
     entity.extraAttributes = {
       minimum: rng.number(-30, 20, 1),
       maximum: rng.number(20, 60, 1),
       ...(rng.bool(0.5) ? { minimum_timestamp: "2026-08-23T06:00:00" } : {}),
       ...(rng.bool(0.3) ? { maximum_timestamp: "not-a-timestamp" } : {}),
     };
+  } else if (extras === "awkward") {
+    entity.extraAttributes = { ...rng.pick(V.AWKWARD_EXTRA_ATTRIBUTES) };
   }
   return entity;
 }
@@ -618,6 +655,24 @@ function auxiliaryEntities(rng, config, metric) {
 }
 
 // The one entry point. Returns a plain description; nothing here touches the card.
+// What Home Assistant hands the card, and what it sometimes does not. See the note beside
+// hassGaps in test/fixtures/scenario.js for why each of these is a state a card really meets.
+function generateHassShape(rng) {
+  switch (weighted(rng, WEIGHTS.hassShape)) {
+    case "oneGap":
+      return { hassGaps: [rng.pick(V.HASS_GAPS)] };
+    case "twoGaps": {
+      const first = rng.pick(V.HASS_GAPS);
+      const second = rng.pick(V.HASS_GAPS.filter((gap) => gap !== first));
+      return { hassGaps: [first, second] };
+    }
+    case "themed":
+      return { theme: rng.bool(0.5) ? "dark" : "light" };
+    default:
+      return {};
+  }
+}
+
 function generateDescription(seedOrRng) {
   const rng = typeof seedOrRng === "number" ? new SeededRandom(seedOrRng) : seedOrRng;
   const metric = rng.pick(METRIC_KINDS);
@@ -667,8 +722,18 @@ function generateDescription(seedOrRng) {
     primary: weighted(rng, WEIGHTS.primary) === "absent" ? null : generateEntity(rng, metric, unitFor(0)),
     rooms,
     extras: auxiliaryEntities(rng, config, metric),
+    ...generateHassShape(rng),
     config,
   };
+
+  // THE SAME SENSOR AS THE AVERAGE AND AS A ROOM. A perfectly reasonable thing to write —
+  // one sensor is both the reading the card is about and one of the rooms it lists — and the
+  // card then has one entity in two roles, which is where a marker can be drawn twice or an
+  // average can count a room it already counted.
+  if (description.primary && description.rooms.length && rng.bool(0.05)) {
+    const room = rng.int(0, description.rooms.length - 1);
+    description.rooms[room] = { ...description.rooms[room], id: description.primary.id || "sensor.avg" };
+  }
 
   // A card with neither a primary entity nor a room is not a card. It is also not
   // interesting: setConfig refuses it, and config-validation.test.js already says so

@@ -18,6 +18,8 @@ const { generateDescription, weighted, WEIGHTS, OPTION_PRESENCE, ENUMS, OTHER_DO
 const V = require("./vocabulary.js");
 const { describeScenario } = require("../fixtures/scenario.js");
 const { METRICS, METRIC_KINDS, LANGUAGES, VIEWS } = require("../contracts/product-surface.js");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const SAMPLE = 5000;
 
@@ -88,6 +90,33 @@ test("every declared weight table is well formed", () => {
       assert.ok(Number.isFinite(weight) && weight > 0, `${axis}/${label}: weight must be positive`);
     }
   }
+});
+
+test("every declared weight table is actually drawn from", () => {
+  // An axis nobody draws is a table that documents an intention the generator does not have,
+  // and it looks exactly like a table that works. Static rather than statistical because a
+  // rare outcome and an unused one are indistinguishable in a sample: the question is whether
+  // the code asks, not how often the answer comes back.
+  const source = fs.readFileSync(path.join(__dirname, "generators.js"), "utf8");
+  for (const axis of Object.keys(WEIGHTS)) {
+    assert.ok(source.includes(`WEIGHTS.${axis}`), `WEIGHTS.${axis} is declared and never drawn from`);
+  }
+});
+
+test("every optional configuration key really does appear sometimes", () => {
+  // OPTION_PRESENCE is read through a dynamic key, so the static check above cannot see it.
+  // The realised population can: an option nobody ever writes is a probability that documents
+  // an intention the generator does not have.
+  for (const key of Object.keys(OPTION_PRESENCE)) {
+    // The one key that by construction never appears under its own name — it exists to
+    // produce a MISSPELLING of a real key, which is how the run keeps proving BUG-09.
+    if (key === "misspelledKey") continue;
+    assert.ok(configShare(key) > 0, `${key} is declared in OPTION_PRESENCE and never generated`);
+  }
+  // And the misspelled one does turn up, spelled wrong.
+  const known = new Set([...Object.keys(OPTION_PRESENCE), "entity", "rooms", "palette", "views"]);
+  const strays = population.flatMap((description) => Object.keys(description.config).filter((key) => !known.has(key)));
+  assert.ok(strays.length > 0, "no card was ever given a key nobody meant to type");
 });
 
 test("typo() damages a token without destroying it", () => {
@@ -321,4 +350,65 @@ test("every generated description is plain JSON, so it can be printed and shrunk
     assert.equal(typeof round, "object");
     assert.ok(Array.isArray(round.rooms));
   }
+});
+
+// ------------------------------------------- the axes about the environment ------
+
+// These four describe the world around the card rather than the card itself: what a sensor is
+// called, when it last moved, what else it carries, and what Home Assistant handed over. They
+// are asserted here for the same reason as everything above — an axis whose realised share has
+// drifted from its intent is a generator testing something other than what it says.
+
+test("most sensors are named the way Home Assistant names them, and some are not", () => {
+  const impossible = shareOf((entity) => V.IMPOSSIBLE_ENTITY_IDS.includes(entity.id));
+  assert.ok(impossible > 0.02, `entity ids Home Assistant would never issue: ${impossible}`);
+  assert.ok(impossible < 0.2, `too many: ${impossible}`);
+  // And the ordinary ones really are ordinary.
+  const conventional = shareOf((entity) => /^[a-z_]+\.[a-z0-9_]+$/.test(String(entity.id)));
+  assert.ok(conventional > 0.8, `conventional ids: ${conventional}`);
+});
+
+test("a sensor usually reports the timestamps it should, and sometimes does not", () => {
+  const share = (shape) => shareOf((entity) => entity.timestamps === shape);
+  assert.ok(share("identical") > 0.5, `identical: ${share("identical")}`);
+  for (const shape of ["missing", "future", "malformed"]) {
+    const seen = share(shape);
+    assert.ok(seen > 0.01, `${shape} never appears: ${seen}`);
+    assert.ok(seen < 0.15, `${shape} is too common: ${seen}`);
+  }
+});
+
+test("extra attributes are rare, and the awkward ones are rarer still", () => {
+  const withExtras = shareOf((entity) => Object.keys(entity.extraAttributes || {}).length > 0);
+  assert.ok(withExtras > 0.05 && withExtras < 0.3, `entities carrying extra attributes: ${withExtras}`);
+  // Every awkward shape has to be reachable, or the list is decoration.
+  const seen = new Set();
+  for (const description of population) {
+    for (const entity of everyEntity(description)) {
+      for (const key of Object.keys(entity.extraAttributes || {})) seen.add(key);
+    }
+  }
+  for (const key of ["minimum", "maximum", "value_color", "value_level"]) {
+    assert.ok(seen.has(key), `no entity ever carried ${key}`);
+  }
+});
+
+test("hass is usually complete, and every gap in it is reachable", () => {
+  const gapped = population.filter((description) => (description.hassGaps || []).length > 0).length / SAMPLE;
+  assert.ok(gapped > 0.03 && gapped < 0.25, `descriptions with an incomplete hass: ${gapped}`);
+  const seen = new Set(population.flatMap((description) => description.hassGaps || []));
+  for (const gap of V.HASS_GAPS) assert.ok(seen.has(gap), `hass never arrived without ${gap}`);
+  const themed = population.filter((description) => description.theme).length / SAMPLE;
+  assert.ok(themed > 0.005, `a theme is never declared: ${themed}`);
+});
+
+test("sometimes one sensor is both the average and a room", () => {
+  // Two roles for one entity is a thing people configure, and it is where a marker can be
+  // drawn twice or an average can count a room it has already counted.
+  const shared = population.filter(
+    (description) =>
+      description.primary && description.rooms.some((room) => room.id === description.primary.id)
+  ).length;
+  assert.ok(shared > 0, "no generated card ever used one sensor in both roles");
+  assert.ok(shared / SAMPLE < 0.15, `too many: ${shared / SAMPLE}`);
 });

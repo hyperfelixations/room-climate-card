@@ -248,7 +248,18 @@ const RELATIONS = [
         violations.push(`metric kind changed from ${base.metricKind} to ${derived.metricKind}`);
       }
       if (!derived.empty && !sameAverage(base, derived)) {
-        violations.push(`average moved from ${JSON.stringify(base.average)} to ${JSON.stringify(derived.average)}`);
+        // TWO DIFFERENT FINDINGS WEAR THE SAME SHAPE HERE, and telling them apart is what
+        // lets one of them be attributed to a registered defect while the other stays a new
+        // one. A reading that MOVED is data changing; a reading that stayed put and changed
+        // its PROVENANCE is a caption changing, and the card shows the two differently — the
+        // headline reads "Room 0" in one and "Home avg." in the other.
+        if (agree(base.average.value, derived.average.value) && agree(base.average.position, derived.average.position)) {
+          violations.push(
+            `the average kept its reading and changed where it says it came from: ${base.average.source} -> ${derived.average.source}`
+          );
+        } else {
+          violations.push(`average moved from ${JSON.stringify(base.average)} to ${JSON.stringify(derived.average)}`);
+        }
       }
       return violations;
     },

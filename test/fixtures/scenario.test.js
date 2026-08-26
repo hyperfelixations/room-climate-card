@@ -142,6 +142,45 @@ test("an entity can re-add an attribute the scenario removed", () => {
   assert.equal(states["sensor.room0"].attributes[UNIT_KEY], "°C", "the more specific statement wins");
 });
 
+test("a sensor reports the timestamps it was asked for, and ordinary ones by default", () => {
+  // Fixed and identical unless a description says otherwise, so a test that never mentions
+  // time gets the same card on every run.
+  const plain = buildScenario({ rooms: [{}] });
+  const [first] = Object.values(plain.states);
+  assert.equal(first.last_changed, first.last_updated);
+  assert.match(first.last_updated, /^2026-/);
+
+  const varied = buildScenario({
+    rooms: [{ timestamps: "missing" }, { timestamps: "future" }, { timestamps: "normal" }, { timestamps: "malformed" }],
+  });
+  const [, missing, future, normal, malformed] = Object.values(varied.states);
+  assert.equal("last_updated" in missing, false, "a template sensor can report no timestamps at all");
+  assert.equal("last_changed" in missing, false);
+  assert.match(future.last_updated, /^2099-/, "a clock ahead of the browser");
+  assert.notEqual(normal.last_changed, normal.last_updated, "an attribute-only update moves one and not the other");
+  assert.equal(malformed.last_updated, "not-a-timestamp");
+});
+
+test("hass can arrive without the fields a card expects", () => {
+  const complete = buildScenario({ rooms: [{}] }).hass;
+  assert.deepEqual(Object.keys(complete).sort(), ["callService", "language", "locale", "states"]);
+  assert.equal("themes" in complete, false, "no theme unless one is asked for, which is what every existing test means");
+
+  const gapped = buildScenario({ rooms: [{}], hassGaps: ["locale", "callService"] }).hass;
+  assert.equal("locale" in gapped, false);
+  assert.equal("callService" in gapped, false);
+  assert.equal("language" in gapped, true, "and nothing else was removed");
+
+  // `states` is emptied rather than removed: Home Assistant always passes the field, and a
+  // dashboard being restored passes it empty.
+  const stateless = buildScenario({ rooms: [{}], hassGaps: ["states"] }).hass;
+  assert.deepEqual(stateless.states, {});
+
+  for (const theme of ["dark", "light"]) {
+    assert.deepEqual(buildScenario({ rooms: [{}], theme }).hass.themes, { darkMode: theme === "dark" });
+  }
+});
+
 test("a built scenario carries a description that rebuilds it exactly", () => {
   // This is what makes a randomly found case reportable and shrinkable: the description is
   // plain JSON, and JSON in gives the same card out.

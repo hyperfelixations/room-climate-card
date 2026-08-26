@@ -229,7 +229,62 @@ const AWKWARD_TEXT = [
 // Everything `tap_action`/`hold_action` may be, and a good deal it may not.
 const VALID_ACTIONS = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
 
+// ENTITY IDS HOME ASSISTANT WOULD NEVER ISSUE.
+//
+// Home Assistant guarantees `domain.object_id`, lower case, ASCII, no spaces. None of these
+// satisfies that, and every one of them reaches the card the same way a real id does: through
+// a YAML file a person edited by hand. What the card must not do is crash, and what it must
+// not do more quietly is write one of them into the DOM unescaped.
+const IMPOSSIBLE_ENTITY_IDS = Object.freeze([
+  "no_domain_at_all",
+  "sensor.",
+  ".living_room",
+  "Sensor.Living_Room",
+  "sensor.living room",
+  "sensor.wohnzimmer_temperatur_außen",
+  "sensor.客厅温度",
+  `sensor.${"very_long_".repeat(30)}end`,
+  "sensor.a.b.c",
+  "sensor.<script>",
+  "sensor.quote'and\"double",
+  "  sensor.padded  ",
+]);
+
+// Extra attributes the card reads, written the ways they go wrong. The range view takes its
+// numbers from `minimum`/`maximum`, and a value colour from the entity overrides the palette
+// — so each of these lands somewhere the card has to make a decision.
+const AWKWARD_EXTRA_ATTRIBUTES = Object.freeze([
+  // Reversed: the floor is above the ceiling.
+  { minimum: 40, maximum: -10 },
+  // Equal, so the span is zero and every position divides by it.
+  { minimum: 20, maximum: 20 },
+  // A timestamp with no value to go with it.
+  { minimum_timestamp: "2026-08-23T06:00:00" },
+  { maximum_timestamp: "2026-08-23T06:00:00" },
+  // Wrong types where numbers belong.
+  { minimum: "cold", maximum: "hot" },
+  { minimum: null, maximum: [] },
+  // The entity classifying itself, which takes precedence over the palette.
+  { value_color: "#FF0000" },
+  { value_color: "not-a-colour" },
+  { value_level: "optimal" },
+  { value_level: "nonsense" },
+  { value_color: "#00FF00", value_level: "outside" },
+]);
+
+// Which timestamps a sensor reports. The names are the shapes test/fixtures/scenario.js knows.
+const TIMESTAMP_SHAPES = Object.freeze(["normal", "identical", "missing", "future", "malformed"]);
+
+// Fields a `hass` object can arrive without. Every one of them happens: `hass` is handed to a
+// card before the locale resolves, a custom setup carries no themes, and a dashboard being
+// restored can pass an empty `states`.
+const HASS_GAPS = Object.freeze(["locale", "language", "themes", "callService", "states"]);
+
 module.exports = {
+  IMPOSSIBLE_ENTITY_IDS,
+  AWKWARD_EXTRA_ATTRIBUTES,
+  TIMESTAMP_SHAPES,
+  HASS_GAPS,
   HA_UNITS,
   NON_HA_UNITS,
   FOREIGN_DEVICE_CLASSES,

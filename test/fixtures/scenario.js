@@ -71,6 +71,8 @@ function describeEntity(raw, { metric, id, index, defaults }) {
     deviceClass: resolveAttribute(source.deviceClass, defaults.deviceClass, DEVICE_CLASS_KEY, METRICS[metric].deviceClass),
     unit: resolveAttribute(source.unit, defaults.unit, UNIT_KEY, METRICS[metric].canonicalUnit),
     extraAttributes: source.extraAttributes ? { ...source.extraAttributes } : {},
+    // Which of the TIMESTAMPS shapes this entity reports. Absent means the ordinary one.
+    timestamps: source.timestamps,
     // Room-only, ignored for the primary entity.
     name: source.name === undefined ? (index === null ? undefined : `Room ${index}`) : source.name,
     short: source.short === undefined ? (index === null ? undefined : `R${index}`) : source.short,
@@ -90,6 +92,8 @@ function describeScenario(raw) {
   // .unit("K").rooms(3) and .rooms(3).unit("K") mean the same thing. An earlier version
   // rewrote the rooms added so far, and the ordering trap that created cost a test.
   const defaults = source.defaults ? { ...source.defaults } : {};
+  const hassGaps = Array.isArray(source.hassGaps) ? [...source.hassGaps] : [];
+  const theme = source.theme;
   const rooms = (source.rooms || []).map((room, index) =>
     describeEntity(room, { metric, id: `sensor.room${index}`, index, defaults })
   );
@@ -118,6 +122,11 @@ function describeScenario(raw) {
     language: source.language === undefined ? DEFAULT_LANGUAGE : source.language,
     primary,
     rooms,
+    // Which fields the `hass` object is missing, and which theme it declares. Both describe
+    // the ENVIRONMENT rather than the card, which is why they sit beside the entities and not
+    // in `config` — see buildScenario().
+    hassGaps,
+    theme,
     // Merged over the generated configuration, last. Anything the card accepts goes here:
     // palette, views, view options, subtitle, actions, custom profiles.
     config: source.config ? { ...source.config } : {},
@@ -133,7 +142,24 @@ function attributesOf(entity) {
   return { ...attributes, ...entity.extraAttributes };
 }
 
+// WHEN THE READING LAST MOVED, which the card uses to decide what has changed since the
+// previous render.
+//
+// Fixed and identical by default, because a test that does not mention time should not get a
+// different card on the second run. The named alternatives are the ones a real installation
+// produces: a template sensor that reports no timestamps at all, a sensor whose state and
+// attributes moved together, and a clock that is ahead of the browser.
+const FIXED_TIME = "2026-01-01T00:00:00.000Z";
+const TIMESTAMPS = {
+  normal: { last_changed: FIXED_TIME, last_updated: "2026-01-01T00:05:00.000Z" },
+  identical: { last_changed: FIXED_TIME, last_updated: FIXED_TIME },
+  missing: {},
+  future: { last_changed: "2099-01-01T00:00:00.000Z", last_updated: "2099-01-01T00:00:00.000Z" },
+  malformed: { last_changed: "not-a-timestamp", last_updated: "not-a-timestamp" },
+};
+
 function stateObjectOf(entity) {
+  const timestamps = TIMESTAMPS[entity.timestamps] || TIMESTAMPS.identical;
   // Home Assistant always hands the frontend a STRING state, whatever the sensor's
   // template produced. Anything that arrives here as a non-string is stringified the same
   // way HA would, so a test cannot accidentally hand the card a native number it would
@@ -142,8 +168,7 @@ function stateObjectOf(entity) {
     entity_id: entity.id,
     state: String(entity.state),
     attributes: attributesOf(entity),
-    last_changed: "2026-01-01T00:00:00.000Z",
-    last_updated: "2026-01-01T00:00:00.000Z",
+    ...timestamps,
   };
 }
 
@@ -174,12 +199,22 @@ function buildScenario(raw) {
   }
   Object.assign(config, description.config);
 
-  const hass = {
-    language: description.language,
-    locale: { language: description.language },
-    states,
-    callService: () => {},
-  };
+  // WHAT HOME ASSISTANT HANDS THE CARD, and what it sometimes does not.
+  //
+  // `hassGaps` names fields to leave out. Every one of them is a real state a dashboard
+  // passes through: `hass` arrives before the locale is resolved, a custom setup has no
+  // themes object, and a card can be given a `hass` whose `states` is still empty. The card
+  // has to render — or refuse cleanly — in all of them, and a description that says nothing
+  // gets the complete object.
+  const gaps = new Set(description.hassGaps || []);
+  const hass = {};
+  if (!gaps.has("language")) hass.language = description.language;
+  if (!gaps.has("locale")) hass.locale = { language: description.language };
+  hass.states = gaps.has("states") ? {} : states;
+  if (!gaps.has("callService")) hass.callService = () => {};
+  // Absent unless asked for: the builder used to omit `themes` entirely, so "no themes" is
+  // what every existing test means and has to keep meaning.
+  if (description.theme) hass.themes = { darkMode: description.theme === "dark" };
 
   return { config, states, hass, language: description.language, description };
 }
