@@ -279,6 +279,46 @@ test("a direct-room headline uses the room tap and hold actions through the exis
   }
 });
 
+// One sensor can be BOTH the primary entity and a room, and the card then depends on how
+// many rooms there are — which reads like a defect until you see why.
+//
+// With exactly one room that IS the primary, the card refers to a single entity, so the
+// headline genuinely is that room: it carries the room's name and the room's tap action.
+// Add a second room and the same card is a whole-home card that happens to list its primary
+// among the rooms; captioning its headline "Kitchen" and firing Kitchen's action would be
+// wrong. The rule lives in src/application/model/source-topology.js and is resolved there;
+// what this checks is that the CAPTION on the assembled card follows it.
+test("a sensor that is both the primary and the only room names the headline, and stops when a second room appears", () => {
+  const shared = "sensor.living";
+  const states = {
+    [shared]: state(shared, 21),
+    "sensor.other": state("sensor.other", 23),
+  };
+
+  const alone = env.createCard({ entity: shared, rooms: [{ entity: shared, name: "Living room" }] }, mkHass(states));
+  try {
+    const model = alone._computeViewModel();
+    assert.equal(model.average.label, "Living room", "one entity, one room: the headline IS that room");
+    assert.equal(model.average.roomIndex, 0);
+    assert.equal(model.average.source, "room");
+  } finally {
+    env.cleanup(alone);
+  }
+
+  const withSecond = env.createCard(
+    { entity: shared, rooms: [{ entity: shared, name: "Living room" }, { entity: "sensor.other", name: "Study" }] },
+    mkHass(states)
+  );
+  try {
+    const model = withSecond._computeViewModel();
+    assert.notEqual(model.average.label, "Living room", "with two rooms the headline is no longer one of them");
+    assert.equal(model.average.roomIndex, null, "and it carries no room identity, so no room action fires from it");
+    assert.equal(model.average.value, 21, "the reading itself is unchanged — only what the card calls it");
+  } finally {
+    env.cleanup(withSecond);
+  }
+});
+
 test("setConfig rebuilds only when label-node presence changes", () => {
   const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": state("sensor.primary", 22) }));
   try {

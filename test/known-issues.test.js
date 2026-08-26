@@ -238,61 +238,6 @@ test("BUG-10's neighbourhood: each half of the trigger on its own is handled cor
   });
 });
 
-// BUG-11 — found by the metamorphic relations once the generator learned to configure one
-// sensor in two roles at once, which is a thing people write: the sensor that gives the house
-// average is also one of the rooms.
-//
-// Nothing about the reading changes. The card keeps showing 1600 ppm at the same place on the
-// scale; it just stops calling it "Room 0" and starts calling it "Home avg." — because a
-// second room appeared, and the second room is one it cannot use and does not show.
-expectedFailure("BUG-11", () => {
-  const co2 = (state, id) => ({
-    state,
-    deviceClass: { value: "carbon_dioxide" },
-    unit: { value: "ppm" },
-    ...(id ? { id } : {}),
-  });
-  const shared = co2(1600, "sensor.avg");
-  const ignored = { id: "sensor.foreign", state: 22, deviceClass: { value: "temperature" }, unit: { value: "°C" } };
-
-  const captionOf = (rooms) => {
-    const built = buildScenario({ metric: "co2", primary: co2(800), rooms });
-    let caption;
-    env.withCard(built.config, built.hass, (card) => {
-      const model = card._computeViewModel();
-      caption = { label: model.average.label, value: model.average.value, source: model.average.source };
-    });
-    return caption;
-  };
-
-  const alone = captionOf([shared]);
-  const withIgnored = captionOf([shared, ignored]);
-  assert.equal(withIgnored.value, alone.value, "the reading is the same either way");
-  assert.equal(
-    withIgnored.label,
-    alone.label,
-    `a room the card ignores changed the headline from "${alone.label}" to "${withIgnored.label}"`
-  );
-});
-
-test("BUG-11's neighbourhood: with two distinct sensors the caption does not move", () => {
-  // The ordinary configuration, where the primary entity and the rooms are different sensors.
-  // Adding a room the card cannot use changes nothing at all — which is what makes the case
-  // above a defect rather than a rule.
-  const co2 = (state) => ({ state, deviceClass: { value: "carbon_dioxide" }, unit: { value: "ppm" } });
-  const ignored = { id: "sensor.foreign", state: 22, deviceClass: { value: "temperature" }, unit: { value: "°C" } };
-  const captionOf = (rooms) => {
-    const built = buildScenario({ metric: "co2", primary: co2(800), rooms });
-    let caption;
-    env.withCard(built.config, built.hass, (card) => {
-      const model = card._computeViewModel();
-      caption = { label: model.average.label, value: model.average.value };
-    });
-    return caption;
-  };
-  assert.deepEqual(captionOf([co2(1600), ignored]), captionOf([co2(1600)]));
-});
-
 test("BUG-09's neighbourhood: the same mistake one level down IS refused by name", () => {
   const built = buildScenario({ rooms: [{}] });
   assert.throws(

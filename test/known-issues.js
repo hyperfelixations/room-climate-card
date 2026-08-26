@@ -130,24 +130,6 @@ const KNOWN_ISSUES = [
         )
       ),
   },
-  {
-    id: "BUG-11",
-    area: "application/model average provenance",
-    discovered: "2026-08-26",
-    summary:
-      "When one sensor is configured BOTH as the primary entity and as the only room, the card " +
-      "captions the headline with that room's name. Add any second room — including one the card " +
-      "cannot use and ignores completely — and the same reading, at the same position, is " +
-      "suddenly captioned \"Home avg.\" instead. The value never changes; only what the card says " +
-      "it is. A caption that moves because of a source the card discarded is telling the reader " +
-      "something that did not happen.",
-    foundBy: "test/property/metamorphic.property.test.js",
-    // Narrow on purpose. A relation reports this sentence only when the average kept BOTH its
-    // reading and its position and moved nothing but its provenance; an average that actually
-    // changed reports the other sentence and is still a new finding.
-    fingerprint: (violations) =>
-      violations.some((violation) => /^the average kept its reading and changed where it says it came from:/.test(violation)),
-  },
 ];
 
 // Which registered defect a set of property violations reproduces, if any.

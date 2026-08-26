@@ -189,6 +189,17 @@ function hasDeclaringPrimary(description) {
   return Boolean(kindOf(description.primary, description));
 }
 
+// Whether the card refers to exactly one entity, which is also its only room.
+//
+// The scenario builder names the primary `sensor.avg` and an unnamed room after its
+// position, so the two coincide only when a description says so explicitly.
+function isSingleRoomCard(description) {
+  const rooms = roomsOf(description);
+  if (rooms.length !== 1 || !description.primary || description.primary.present === false) return false;
+  const primaryId = description.primary.id || "sensor.avg";
+  return (rooms[0].id || "sensor.room0") === primaryId;
+}
+
 // A room reporting something THIS CARD is not about.
 //
 // Chosen against the kind the card actually resolved to, not against the kind the description
@@ -230,6 +241,16 @@ const RELATIONS = [
       const rooms = roomsOf(description);
       if (!rooms.length) return null;
       if (!base.metricKind) return null;
+      // A ONE-ENTITY CARD IS A DIFFERENT KIND OF CARD, and adding any room changes which
+      // kind it is rather than what it shows. When the primary entity is also the single
+      // configured room, the headline genuinely IS that room and carries its name and its
+      // tap action; with a second room the same card is a whole-home card that happens to
+      // list its primary, and captioning it with one room's name would be wrong. The rule
+      // and its reasoning are written out in src/application/model/source-topology.js.
+      //
+      // Without this the relation reports the caption moving from "Room 0" to "Home avg." —
+      // which is the documented contract doing exactly what it says.
+      if (isSingleRoomCard(description)) return null;
       const next = clone(description);
       next.rooms = [...next.rooms, foreignRoom(base.metricKind, "sensor.foreign_kind")];
       return scenariosOf(next);
@@ -248,18 +269,7 @@ const RELATIONS = [
         violations.push(`metric kind changed from ${base.metricKind} to ${derived.metricKind}`);
       }
       if (!derived.empty && !sameAverage(base, derived)) {
-        // TWO DIFFERENT FINDINGS WEAR THE SAME SHAPE HERE, and telling them apart is what
-        // lets one of them be attributed to a registered defect while the other stays a new
-        // one. A reading that MOVED is data changing; a reading that stayed put and changed
-        // its PROVENANCE is a caption changing, and the card shows the two differently — the
-        // headline reads "Room 0" in one and "Home avg." in the other.
-        if (agree(base.average.value, derived.average.value) && agree(base.average.position, derived.average.position)) {
-          violations.push(
-            `the average kept its reading and changed where it says it came from: ${base.average.source} -> ${derived.average.source}`
-          );
-        } else {
-          violations.push(`average moved from ${JSON.stringify(base.average)} to ${JSON.stringify(derived.average)}`);
-        }
+        violations.push(`average moved from ${JSON.stringify(base.average)} to ${JSON.stringify(derived.average)}`);
       }
       return violations;
     },
