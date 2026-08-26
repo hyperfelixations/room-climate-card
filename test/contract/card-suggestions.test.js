@@ -9,6 +9,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../fixtures/attributes.js");
 
 let suggestions;
 
@@ -26,10 +27,10 @@ function statesWith(entries) {
 
 test("every measurement the card can read is offered, addressed as a custom card", () => {
   const cases = [
-    ["sensor.t", { device_class: "temperature", unit_of_measurement: "°C" }],
-    ["sensor.h", { device_class: "humidity", unit_of_measurement: "%" }],
-    ["sensor.c", { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }],
-    ["sensor.p", { device_class: "pm25", unit_of_measurement: "µg/m³" }],
+    ["sensor.t", TEMPERATURE_C],
+    ["sensor.h", HUMIDITY],
+    ["sensor.c", CO2],
+    ["sensor.p", PM25],
   ];
   const states = statesWith(cases);
   for (const [entityId] of cases) {
@@ -69,7 +70,7 @@ test("entities this card cannot read are not offered", () => {
 // during every restart window.
 test("an entity that is currently unavailable is still offered", () => {
   const states = {
-    "sensor.t": { entity_id: "sensor.t", state: "unavailable", attributes: { device_class: "temperature", unit_of_measurement: "°C" } },
+    "sensor.t": { entity_id: "sensor.t", state: "unavailable", attributes: TEMPERATURE_C },
   };
   assert.deepEqual(suggestions.suggestionsForEntity(states, "sensor.t"), {
     config: { type: "custom:room-climate-card", entity: "sensor.t" },
@@ -78,7 +79,7 @@ test("an entity that is currently unavailable is still offered", () => {
 
 // ------------------------------------------------------------------ stubConfigFor --
 
-const TEMPERATURE = { device_class: "temperature", unit_of_measurement: "°C" };
+const TEMPERATURE = TEMPERATURE_C;
 
 test("the stub prefers what the view already uses, then the fallback list, then anything", () => {
   const states = statesWith([
@@ -212,7 +213,7 @@ test("a room is skipped rather than shown as a bare entity id or a foreign measu
   const states = {
     ...statesWith([
       named("sensor.avg", "Home"),
-      named("sensor.humidity", "Bathroom", { device_class: "humidity", unit_of_measurement: "%" }),
+      named("sensor.humidity", "Bathroom", HUMIDITY),
       ["sensor.nameless", TEMPERATURE],
       named("sensor.kitchen", "Kitchen"),
     ]),
@@ -307,8 +308,8 @@ test("the same system always produces the same stub", () => {
 test("a mixed system produces a card of one measurement only", () => {
   const states = statesWith([
     named("sensor.a_temp", "Hall"),
-    named("sensor.b_hum", "Bath", { device_class: "humidity", unit_of_measurement: "%" }),
-    named("sensor.c_co2", "Study", { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    named("sensor.b_hum", "Bath", HUMIDITY),
+    named("sensor.c_co2", "Study", CO2),
     named("sensor.d_temp", "Study temp"),
   ]);
   const stub = suggestions.stubConfigFor(states, [], []);

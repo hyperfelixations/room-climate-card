@@ -12,6 +12,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -32,19 +33,19 @@ test.after(() => {
 
 function twoRoomStates(overrides) {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 19, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 25, TEMPERATURE_C),
     ...overrides,
   });
 }
 
 function threeRoomStates(overrides) {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 22.5, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r3": mkState("sensor.r3", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 19, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 22.5, TEMPERATURE_C),
+    "sensor.r3": mkState("sensor.r3", 25, TEMPERATURE_C),
     ...overrides,
   });
 }
@@ -172,7 +173,7 @@ test("scale.markers: 'all' excludes unavailable rooms and keeps marker positions
   const el = env.createCard(
     threeRoomConfig({ views: [{ type: "scale", options: { markers: "all" } }] }),
     threeRoomStates({
-      "sensor.r2": mkState("sensor.r2", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r2": mkState("sensor.r2", "unavailable", TEMPERATURE_C),
     })
   );
   const data = el._computeViewModel();
@@ -192,7 +193,7 @@ test("scale.markers: 'all' patches the keyed marker set when room availability c
   assert.equal(scaleView.querySelectorAll(".rtc-marker-room").length, 3);
 
   el.hass = threeRoomStates({
-    "sensor.r2": mkState("sensor.r2", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r2": mkState("sensor.r2", "unavailable", TEMPERATURE_C),
   });
 
   assert.equal(el.shadowRoot.querySelector(".rtc-scale-view"), scaleView, "the mounted scale view must be patched in place");

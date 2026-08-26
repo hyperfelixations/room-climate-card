@@ -10,6 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 let el;
@@ -214,13 +215,13 @@ test("both fixed, rows requesting more than count*columns needs never produces e
 // rooms must still count in average/extrema/comfort/spread/roomCount.
 test("DATA-01 integration: rooms hidden by room_columns/room_rows still count in average/extrema/comfort/spread", () => {
   const states = {
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
   };
   const rooms = [];
   // 10 rooms, values 15..24 (10 distinct values so coolest/warmest are unambiguous).
   for (let i = 0; i < 10; i++) {
     const entity = `sensor.r${i}`;
-    states[entity] = mkState(entity, 15 + i, { device_class: "temperature", unit_of_measurement: "°C" });
+    states[entity] = mkState(entity, 15 + i, TEMPERATURE_C);
     rooms.push({ name: `R${i}`, entity });
   }
   const hass = mkHass(states);
@@ -246,7 +247,7 @@ test("DATA-01 integration: which rooms get capped-out is decided by configuratio
   // rooms — R1/R3/R2 (the 3 smallest values, 20/21/22) vs R0/R1/R2 (the
   // first 3 declared). The visible set is then sorted by value for display,
   // but the SELECTION itself must be R0/R1/R2 (config order).
-  const states = { "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) };
+  const states = { "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) };
   const rooms = [
     { name: "R0", entity: "sensor.r0" }, // 23
     { name: "R1", entity: "sensor.r1" }, // 20
@@ -255,7 +256,7 @@ test("DATA-01 integration: which rooms get capped-out is decided by configuratio
     { name: "R4", entity: "sensor.r4" }, // 24
   ];
   const values = { R0: 23, R1: 20, R2: 22, R3: 21, R4: 24 };
-  for (const room of rooms) states[room.entity] = mkState(room.entity, values[room.name], { device_class: "temperature", unit_of_measurement: "°C" });
+  for (const room of rooms) states[room.entity] = mkState(room.entity, values[room.name], TEMPERATURE_C);
   const hass = mkHass(states);
   const el2 = env.createCard({ entity: "sensor.avg", rooms, room_columns: 3, room_rows: 1 }, hass); // cap to 3
   const data = el2._computeViewModel();

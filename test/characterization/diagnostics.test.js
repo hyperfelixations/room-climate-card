@@ -21,9 +21,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { st } = require("../helpers/characterization-scenarios.js");
+const { HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../fixtures/attributes.js");
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
-const F = { device_class: "temperature", unit_of_measurement: "°F" };
+const C = TEMPERATURE_C;
+const F = TEMPERATURE_F;
 
 function hassWith(states, language) {
   return {
@@ -43,7 +44,7 @@ const VALID_HASS = hassWith({
 const FAHRENHEIT_HASS = hassWith({ "sensor.avg": st("sensor.avg", 72.5, F) });
 
 const VALID_HASS_HUMIDITY = hassWith({
-  "sensor.avg": st("sensor.avg", 48, { device_class: "humidity", unit_of_measurement: "%" }),
+  "sensor.avg": st("sensor.avg", 48, HUMIDITY),
 });
 
 // A structurally valid custom profile, cloned and then broken one field at a
@@ -376,7 +377,7 @@ test("incompatible room metric kinds warn once and are exposed as a defined conf
   const hass = hassWith({
     "sensor.avg": st("sensor.avg", "unavailable", C),
     "sensor.r1": st("sensor.r1", 21.5, C),
-    "sensor.r2": st("sensor.r2", 55.0, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.r2": st("sensor.r2", 55.0, HUMIDITY),
   });
   const el = newCard(hass);
   const recorder = recordConsole(env);

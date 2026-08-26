@@ -22,6 +22,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -126,9 +127,9 @@ test("outdoor main and range scales share the same unanchored winter bounds and 
       views: [{ type: "range_scale" }, { type: "scale" }],
     },
     mkHass({
-      "sensor.avg": mkState("sensor.avg", 3, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r1": mkState("sensor.r1", -2, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkState("sensor.r2", 8, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkState("sensor.avg", 3, TEMPERATURE_C),
+      "sensor.r1": mkState("sensor.r1", -2, TEMPERATURE_C),
+      "sensor.r2": mkState("sensor.r2", 8, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 10, { unit_of_measurement: "°C", minimum: -2, maximum: 8 }),
     })
   );
@@ -152,9 +153,9 @@ test("outdoor off-axis bands reappear through the partial-update path when live 
     views: [{ type: "scale" }],
   };
   const winter = mkHass({
-    "sensor.avg": mkState("sensor.avg", 3, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", -2, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 8, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 3, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", -2, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 8, TEMPERATURE_C),
   });
   const card = env.createCard(config, winter);
   const scaleView = card.shadowRoot.querySelector(".rtc-scale-view");
@@ -162,9 +163,9 @@ test("outdoor off-axis bands reappear through the partial-update path when live 
   assert.equal(scaleView.querySelector(".rtc-optimal-band").hidden, true);
 
   card.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 24, TEMPERATURE_C),
   });
 
   assert.equal(card.shadowRoot.querySelector(".rtc-scale-view"), scaleView);
@@ -256,7 +257,7 @@ test("fridge profile is projected atomically into Fahrenheit without collapsing 
 
 test("fridge cannot be applied to a non-temperature metric kind", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 50, HUMIDITY),
   });
   assert.throws(
     () => env.createCard({ entity: "sensor.avg", classification: "fridge" }, hass),
@@ -333,7 +334,7 @@ const customHumidityWithIcons = {
 function humidityCardWithIcons(value, classification = customHumidityWithIcons) {
   return env.createCard(
     { entity: "sensor.avg", classification },
-    mkHass({ "sensor.avg": mkState("sensor.avg", value, { device_class: "humidity", unit_of_measurement: "%" }) })
+    mkHass({ "sensor.avg": mkState("sensor.avg", value, HUMIDITY) })
   );
 }
 
@@ -741,8 +742,8 @@ test("a built-in profile cannot be applied to the wrong metric kind", () => {
 // participants -- a foreign-kind room is simply irrelevant to it.
 test("a foreign-kind room does not break profile resolution for the primary's own kind (auto + profile shorthand)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 25, TEMPERATURE_C),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const card = env.createCard(
     { entity: "sensor.avg", classification: "outdoor", rooms: [{ entity: "sensor.hum1" }] },
@@ -764,8 +765,8 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
 
 test("a foreign-kind room does not break profile resolution for the primary's own kind (source: custom)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 25, TEMPERATURE_C),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const card = env.createCard(
     { entity: "sensor.avg", classification: customProfile, rooms: [{ entity: "sensor.hum1" }] },
@@ -792,7 +793,7 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
 // classification decision (_classifyNumericValue()), not just an icon.
 function fahrenheitHass(value = 68) {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", value, { device_class: "temperature", unit_of_measurement: "°F" }),
+    "sensor.avg": mkState("sensor.avg", value, TEMPERATURE_F),
   });
 }
 
@@ -988,7 +989,7 @@ test("entity mode without a value_color stays neutral, and never borrows a ramp 
 // classification-palettes.test.js.
 test("a physically impossible reading is no data, not a colour from the ramp", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 120, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 120, HUMIDITY),
   });
   for (const palette of [undefined, "vivid"]) {
     const card = env.createCard({ entity: "sensor.avg", palette }, hass);

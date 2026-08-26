@@ -12,6 +12,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -27,11 +28,11 @@ test.after(() => {
 // (range, scale, extremes all auto-enabled; range_scale stays off by default).
 function fourAreaStates(overrides) {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r3": mkState("sensor.r3", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
+    "sensor.r3": mkState("sensor.r3", 19, TEMPERATURE_C),
     ...overrides,
   });
 }
@@ -57,7 +58,7 @@ test("Average: value-only update preserves node identity and focus, patches the 
   btn.focus();
   assert.equal(el.shadowRoot.activeElement, btn, "precondition: average button must actually be focused");
 
-  el.hass = fourAreaStates({ "sensor.avg": mkState("sensor.avg", 25, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  el.hass = fourAreaStates({ "sensor.avg": mkState("sensor.avg", 25, TEMPERATURE_C) });
 
   const btnAfter = el.shadowRoot.querySelector("button.rtc-avg-button");
   assert.equal(btnAfter, btn, "average button node identity must be preserved");
@@ -75,7 +76,7 @@ test("Room chip: value-only update preserves node identity and focus, patches nu
   const colorBefore = chip.style.getPropertyValue("--room-color");
 
   // Push r1 well outside the comfort band so tone/color/mark all change too.
-  el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 30, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 30, TEMPERATURE_C) });
 
   const chipAfter = el.shadowRoot.querySelector('.rtc-room-chip[data-entity="sensor.r1"]');
   assert.equal(chipAfter, chip, "room chip node identity must be preserved");
@@ -113,7 +114,7 @@ test("Extrema card: value-only update preserves node identity and focus, patches
   const nameBefore = coldCard.querySelector(".rtc-extreme-name").textContent;
 
   // r3 (19) is currently coldest; make it even colder, still coldest -> same slot, new number.
-  el.hass = fourAreaStates({ "sensor.r3": mkState("sensor.r3", 16, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  el.hass = fourAreaStates({ "sensor.r3": mkState("sensor.r3", 16, TEMPERATURE_C) });
 
   const cardsAfter = el.shadowRoot.querySelectorAll(".rtc-extremes-view .rtc-extreme-card");
   assert.equal(cardsAfter[0], coldCard, "coldest-room card node identity must be preserved");
@@ -129,7 +130,7 @@ test("Extrema card: a NEW room becoming coldest patches the same card node (role
   coldCard.focus();
 
   // r1 (21) becomes colder than r3 (19) -> r1 is now coldest, a DIFFERENT room than before.
-  el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 10, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 10, TEMPERATURE_C) });
 
   const coldCardAfter = el.shadowRoot.querySelector(".rtc-extremes-view .rtc-extreme-card");
   assert.equal(coldCardAfter, coldCard, "the coldest-room SLOT keeps its node identity even when the underlying room changes");
@@ -270,7 +271,7 @@ test("clicking a room chip after several value-only updates fires exactly one ha
   });
 
   for (let i = 0; i < 4; i++) {
-    el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 20 + i, { device_class: "temperature", unit_of_measurement: "°C" }) });
+    el.hass = fourAreaStates({ "sensor.r1": mkState("sensor.r1", 20 + i, TEMPERATURE_C) });
   }
 
   const chip = el.shadowRoot.querySelector('.rtc-room-chip[data-entity="sensor.r1"]');
@@ -284,9 +285,9 @@ test("clicking a room chip after several value-only updates fires exactly one ha
 // ==== 8: a room moving to a different grid row/position keeps its node ====
 
 function eightRoomStates(overrides) {
-  const states = { "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) };
+  const states = { "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) };
   for (let i = 1; i <= 8; i++) {
-    states[`sensor.r${i}`] = mkState(`sensor.r${i}`, 20 + (i % 3), { device_class: "temperature", unit_of_measurement: "°C" });
+    states[`sensor.r${i}`] = mkState(`sensor.r${i}`, 20 + (i % 3), TEMPERATURE_C);
   }
   return mkHass({ ...states, ...overrides });
 }
@@ -326,8 +327,8 @@ test("a single purely-numeric hass update preserves every focusable node's ident
   Object.values(before).forEach((node, i) => assert.ok(node, `precondition: node ${i} must exist`));
 
   el.hass = fourAreaStates({
-    "sensor.avg": mkState("sensor.avg", 22.5, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21.5, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22.5, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21.5, TEMPERATURE_C),
   });
 
   assert.equal(el.shadowRoot.querySelector("button.rtc-avg-button"), before.avg);

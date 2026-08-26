@@ -12,6 +12,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { LANGUAGES } = require("../../contracts/product-surface.js");
+const { CO2, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -26,7 +27,7 @@ test.after(() => {
 
 test("DATA-02: negative range_entity state does not activate hasRange", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", -5, { unit_of_measurement: "°C", minimum: 18, maximum: 13 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -39,7 +40,7 @@ test("DATA-02: negative range_entity state does not activate hasRange", () => {
 
 test("DATA-02 control: a positive range_entity state does activate hasRange", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -50,7 +51,7 @@ test("DATA-02 control: a positive range_entity state does activate hasRange", ()
 
 test("DATA-02: a zero range_entity state is valid (min === max, a physically possible constant day)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 0, { unit_of_measurement: "°C", minimum: 20, maximum: 20 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -67,7 +68,7 @@ test("DATA-02: a zero range_entity state is valid (min === max, a physically pos
 
 test("data.range.state equals the converted range_entity state", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     // State (5) deliberately differs from maximum-minimum (23-18=5 here
     // would coincide; use a state that would NOT match max-min to prove
     // the state itself is authoritative, not derived from the attributes.
@@ -82,7 +83,7 @@ test("data.range.state equals the converted range_entity state", () => {
 
 test("rangeState zero is valid and exposed as zero", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 0, { unit_of_measurement: "°C", minimum: 20, maximum: 20 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -94,7 +95,7 @@ test("rangeState zero is valid and exposed as zero", () => {
 
 test("a range_entity without a unit exposes null rangeState and hasRange false", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -109,8 +110,8 @@ test("a range_entity without a unit exposes null rangeState and hasRange false",
 test("DATA-03: negative spread attribute is rejected, falls back to the locally-computed room spread", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C", spread: -3 }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 25, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -121,8 +122,8 @@ test("DATA-03: negative spread attribute is rejected, falls back to the locally-
 test("DATA-03 control: a valid non-negative spread attribute is used as-is", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C", spread: 3.1 }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 25, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -133,8 +134,8 @@ test("DATA-03 control: a valid non-negative spread attribute is used as-is", () 
 test("DATA-03: a zero spread attribute is valid (all rooms report the same value)", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C", spread: 0 }),
-    "sensor.r1": mkState("sensor.r1", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 22, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 22, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -146,7 +147,7 @@ test("DATA-03: a zero spread attribute is valid (all rooms report the same value
 
 function rangeScaleFixture(avg, rangeState, minimum, maximum) {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", avg, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", avg, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", rangeState, { unit_of_measurement: "°C", minimum, maximum }),
   });
   return env.createCard(
@@ -188,7 +189,7 @@ test("rangeScale axis: avg === min === max (all three identical) does not throw"
 
 test("rangeScale: missing minimum_zeitpunkt/maximum_zeitpunkt attributes leave time fields null, not throwing", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 21 }), // no *_zeitpunkt
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -216,7 +217,7 @@ test("RangeScale footer without rooms shows span/min/max", () => {
   const el = rangeScaleFooterFixture(
     {},
     {
-      "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 5, {
         unit_of_measurement: "°C",
         minimum: 18,
@@ -244,7 +245,7 @@ test("a missing timestamp leaves no bracket behind in the RangeScale footer", ()
   const el = rangeScaleFooterFixture(
     {},
     {
-      "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
     },
     "en"
@@ -263,7 +264,7 @@ test("the timestamp attributes are read in either spelling, English first", () =
     const el = rangeScaleFooterFixture(
       {},
       {
-        "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+        "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
         "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23, ...attributes }),
       },
       "en"
@@ -287,7 +288,7 @@ test("one timestamp present gives one bracket", () => {
   const el = rangeScaleFooterFixture(
     {},
     {
-      "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 5, {
         unit_of_measurement: "°C",
         minimum: 18,
@@ -307,7 +308,7 @@ test("hide_footer suppresses the RangeScale footer", () => {
   const el = rangeScaleFooterFixture(
     { hide_footer: true },
     {
-      "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
     },
     "en"
@@ -318,7 +319,7 @@ test("hide_footer suppresses the RangeScale footer", () => {
 
 test("RangeScale footer text is localized", () => {
   const states = {
-    "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   };
   const en = rangeScaleFooterFixture({}, states, "en");
@@ -334,7 +335,7 @@ test("RangeScale footer text is localized", () => {
 
 test("I18N-02: RangeScale footer renders without throwing in every supported language", () => {
   const states = {
-    "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   };
   // The language list comes from the manifest. It used to be written out here, and it
@@ -354,9 +355,9 @@ test("I18N-02: RangeScale footer renders without throwing in every supported lan
 
 test("DATA-03: main scale expands to include avg when avg is above both coolest and warmest", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 30, { device_class: "temperature", unit_of_measurement: "°C" }), // independent source, well above both rooms
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 30, TEMPERATURE_C), // independent source, well above both rooms
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 22, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -367,9 +368,9 @@ test("DATA-03: main scale expands to include avg when avg is above both coolest 
 
 test("DATA-03: main scale expands to include avg when avg is below both coolest and warmest", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 5, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 5, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 22, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -380,9 +381,9 @@ test("DATA-03: main scale expands to include avg when avg is below both coolest 
 
 test("DATA-03: main scale unaffected when avg already sits inside [coolest, warmest] (no regression)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 19, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -401,7 +402,7 @@ test("DATA-03: main scale unaffected when avg already sits inside [coolest, warm
 
 test("range_entity in a different unit is converted to the display unit", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     // range_entity's OWN unit is Fahrenheit while the card displays Celsius.
     "sensor.range": mkState("sensor.range", 9, { unit_of_measurement: "°F", minimum: 64.4, maximum: 73.4 }), // 9°F delta, 18°C..23°C as °F
   });
@@ -416,7 +417,7 @@ test("range_entity in a different unit is converted to the display unit", () => 
 
 test("range_entity state converts as a delta and a negative result disables hasRange", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     // -18°F as a DELTA converts to -10°C (deltaToCanonical has no +32/-32
     // offset); if the code wrongly treated this as an ABSOLUTE value
     // instead, toCanonical() would apply the offset and yield a very
@@ -432,7 +433,7 @@ test("range_entity state converts as a delta and a negative result disables hasR
 
 test("range_entity with an unresolvable unit is diagnosed as unusable", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "hPa", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -449,7 +450,7 @@ test("range_entity without unit_of_measurement is unusable and hasRange stays fa
   // Primary/Räume contract at _buildEntityModel()) — never silently assumed
   // canonical.
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -462,7 +463,7 @@ test("range_entity without unit_of_measurement is unusable and hasRange stays fa
 
 test("trend_entity in a different unit converts as a rate without an absolute offset", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.trend": mkState("sensor.trend", 1.8, { unit_of_measurement: "°F" }), // +1.8°F/h == +1°C/h
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);
@@ -474,7 +475,7 @@ test("trend_entity in a different unit converts as a rate without an absolute of
 
 test("trend_entity using a conventional per-hour suffix resolves", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.avg": mkState("sensor.avg", 700, CO2),
     "sensor.trend": mkState("sensor.trend", -15, { unit_of_measurement: "ppm/h" }),
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);
@@ -486,7 +487,7 @@ test("trend_entity using a conventional per-hour suffix resolves", () => {
 
 test("trend_entity with an unresolvable unit is unusable", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.trend": mkState("sensor.trend", 3, { unit_of_measurement: "hPa" }),
   });
   const el = env.createCard({ entity: "sensor.avg", trend_entity: "sensor.trend" }, hass);

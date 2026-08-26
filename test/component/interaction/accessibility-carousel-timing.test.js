@@ -17,6 +17,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Import the owning modules directly so each test names its actual subject.
 let carouselTiming, easingMath;
@@ -196,9 +197,9 @@ test("_currentVisualViewIndex(): a bare element with no track falls back to this
 
 test("prefers-reduced-motion: a freshly rendered >=2-view card arms no _a11ySyncTimer", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   env.setReducedMotion(true);
   let reduced;

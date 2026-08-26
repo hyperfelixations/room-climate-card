@@ -17,9 +17,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkHass, mkState } = require("../../helpers/hass-fixtures.js");
+const { CO2, HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
-const HUMIDITY = { device_class: "humidity", unit_of_measurement: "%" };
+const TEMP = TEMPERATURE_C;
 
 let env;
 let entityModel;
@@ -76,7 +76,7 @@ test("MeasurementContext exposes typed availability for the primary and every ro
 
 test("fallback arbitration marks the rooms that supply the winning metric usable", () => {
   const context = measurementContext.resolveMeasurementContext({
-    "sensor.primary": state("sensor.primary", "unavailable", { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.primary": state("sensor.primary", "unavailable", CO2),
     "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
   }, {
     entity: "sensor.primary",

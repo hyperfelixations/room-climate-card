@@ -34,6 +34,7 @@ const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
 // so it is exactly the kind of generic matrix that must not carry its own copy. See
 // test/contracts/product-surface.js.
 const { LANGUAGES: SUPPORTED_LANGUAGES } = require("../../contracts/product-surface.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 test("all TRANSLATIONS language blocks stay in sync with en (the file's own load-time self-check never warns)", () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
@@ -392,9 +393,9 @@ test("_t(): unsupported hass.language falls back cleanly to English (2.9.1 defau
 
 test("pluralization: missingRooms uses singular/plural correctly for 1 vs N missing entities", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
     // sensor.missing1 intentionally absent from hass.states
   }, "en");
   const el = env.createCard(

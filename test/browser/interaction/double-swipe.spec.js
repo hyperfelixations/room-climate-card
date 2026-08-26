@@ -13,6 +13,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // TIMING-SENSITIVE, AND RETRIED FOR THAT REASON ALONE.
 //
@@ -29,10 +30,10 @@ test.describe.configure({ retries: 2 });
 
 function threeViewStates() {
   return {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 3, { unit_of_measurement: "°C", minimum: 20, maximum: 23 }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
   };
 }
 

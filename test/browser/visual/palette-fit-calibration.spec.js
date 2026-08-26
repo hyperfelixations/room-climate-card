@@ -21,8 +21,9 @@
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
 const { BORDERLINE, VISIBLE, INVISIBLE } = require("../../fixtures/palette-fit-calibration.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
+const TEMP = TEMPERATURE_C;
 
 // The card reads a SURFACE — the colours it sits on, and the theme's text colour. These
 // checks are about the first half; the text colour and what depends on it are the subject of

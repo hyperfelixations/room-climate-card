@@ -13,9 +13,9 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
+const { HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
-const HUMIDITY = { device_class: "humidity", unit_of_measurement: "%" };
+const TEMP = TEMPERATURE_C;
 
 function room(entity, name, extra = {}) {
   return { entity, name, short: name.slice(0, 2).toUpperCase(), ...extra };

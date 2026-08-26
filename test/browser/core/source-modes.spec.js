@@ -12,8 +12,9 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth, updateHass, waitForStableLayout } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
+const TEMP = TEMPERATURE_C;
 
 test("one room without a primary is a clickable headline and follows the show_rooms policy", async ({ page }) => {
   await gotoHarness(page);
@@ -147,7 +148,7 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
         { name: "Bedroom", short: "BE", entity: "sensor.bedroom_temperature" },
       ],
     },
-    { "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.7, { device_class: "temperature", unit_of_measurement: "°C" }) }
+    { "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.7, TEMPERATURE_C) }
   );
   const card = page.locator(`#${cardId}`);
 
@@ -176,8 +177,8 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
       ],
     },
     {
-      "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.8, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.ba_temperatur": mkStateObj("sensor.ba_temperatur", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.az_temperatur": mkStateObj("sensor.az_temperatur", 28.8, TEMPERATURE_C),
+      "sensor.ba_temperatur": mkStateObj("sensor.ba_temperatur", "unavailable", TEMPERATURE_C),
     }
   );
   const both = page.locator(`#${bothId}`);

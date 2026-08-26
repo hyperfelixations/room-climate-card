@@ -22,11 +22,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFrozenEnvironment, recordConsole, stableStringify, expectBaseline } = require("../helpers/characterization.js");
 const { st } = require("../helpers/characterization-scenarios.js");
+const { TEMPERATURE_C } = require("../fixtures/attributes.js");
 
 // Direct imports make the owning module of each timing contract explicit.
 let carouselTiming, easingMath;
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
+const C = TEMPERATURE_C;
 
 const HASS = {
   language: "en",

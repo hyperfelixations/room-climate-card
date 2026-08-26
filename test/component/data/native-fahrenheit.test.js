@@ -11,6 +11,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -32,7 +33,7 @@ test.after(() => {
 // ==== Pure single-unit cards (section 9.7: "reine C-, F- und K-Karte") ====
 
 test("pure Celsius card remains the identity-conversion control", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
   assert.equal(el._unit(), "°C");
@@ -86,7 +87,7 @@ test("pure Kelvin card: comfort/optimal bands are exact fromCanonical conversion
 test("mixed °C/°F/K rooms, no usable primary: canonically averaged correctly, display falls back to canonical (no single source unit to prefer)", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.c": mkState("sensor.c", 20, { device_class: "temperature", unit_of_measurement: "°C" }), // 20°C
+    "sensor.c": mkState("sensor.c", 20, TEMPERATURE_C), // 20°C
     "sensor.f": mkState("sensor.f", 71.6, { unit_of_measurement: "°F" }), // = 22°C
     "sensor.k": mkState("sensor.k", 295.15, { unit_of_measurement: "K" }), // = 22°C
   });
@@ -100,8 +101,8 @@ test("mixed °C/°F/K rooms, no usable primary: canonically averaged correctly, 
 test("Primary °F, rooms °C: display follows the usable primary's unit (section 9.4 point 1); room values convert for comparison/chips", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 72, { unit_of_measurement: "°F" }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 24, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -130,7 +131,7 @@ test("Primary unavailable, rooms in a compatible unit (all °F): room-consensus 
 // ==== -40°C = -40°F, end to end (section 9.7) ====
 
 test("-40°C = -40°F end to end: both cards resolve to the identical canonical value and round-trip display", () => {
-  const hassC = mkHass({ "sensor.avg": mkState("sensor.avg", -40, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hassC = mkHass({ "sensor.avg": mkState("sensor.avg", -40, TEMPERATURE_C) });
   const elC = env.createCard({ entity: "sensor.avg" }, hassC);
   const hassF = mkHass({ "sensor.avg": mkState("sensor.avg", -40, { unit_of_measurement: "°F" }) });
   const elF = env.createCard({ entity: "sensor.avg" }, hassF);

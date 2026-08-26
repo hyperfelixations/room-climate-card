@@ -10,6 +10,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const LONG_NAME = "Ein sehr sehr sehr langer Raumname der garantiert nicht in einen Chip passt";
 const LONG_SHORT = "XXXXXXXXXX";
@@ -17,9 +18,9 @@ const LONG_SHORT = "XXXXXXXXXX";
 test("a very long room name/short does not overflow its chip, and title/aria-label keep the full text", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
   };
   const cardId = await createCard(
     page,
@@ -57,9 +58,9 @@ test("a very long room name/short does not overflow its chip, and title/aria-lab
 test("a very long extreme-value room name does not overflow its card (.rtc-extreme-name/.rtc-extreme-label)", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 15, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 30, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 15, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 30, TEMPERATURE_C),
   };
   const cardId = await createCard(
     page,

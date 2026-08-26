@@ -11,6 +11,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // 3 rooms (not 2): removing one to trigger the focus-fallback test must
 // leave >=2 valid rooms, or roomsComparable itself flips false -- a
@@ -18,11 +19,11 @@ const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpe
 // patch path this file is actually testing.
 function fourAreaStates(overrides) {
   return {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r3": mkStateObj("sensor.r3", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
+    "sensor.r3": mkStateObj("sensor.r3", 19, TEMPERATURE_C),
     ...overrides,
   };
 }
@@ -55,7 +56,7 @@ test("a focused room chip keeps real browser focus across a value-only hass upda
   }, cardId);
   expect(await focusedEntity(page, cardId)).toBe("sensor.r1");
 
-  await updateHass(page, cardId, fourAreaStates({ "sensor.r1": mkStateObj("sensor.r1", 25, { device_class: "temperature", unit_of_measurement: "°C" }) }));
+  await updateHass(page, cardId, fourAreaStates({ "sensor.r1": mkStateObj("sensor.r1", 25, TEMPERATURE_C) }));
 
   expect(await focusedEntity(page, cardId)).toBe("sensor.r1");
   const { numText, expected } = await page.evaluate((id) => {
@@ -77,7 +78,7 @@ test("a focused average button keeps real browser focus across a value-only hass
   }, cardId);
   expect(await focusedEntity(page, cardId)).toBe("sensor.avg");
 
-  await updateHass(page, cardId, fourAreaStates({ "sensor.avg": mkStateObj("sensor.avg", 24, { device_class: "temperature", unit_of_measurement: "°C" }) }));
+  await updateHass(page, cardId, fourAreaStates({ "sensor.avg": mkStateObj("sensor.avg", 24, TEMPERATURE_C) }));
 
   expect(await focusedEntity(page, cardId)).toBe("sensor.avg");
 });

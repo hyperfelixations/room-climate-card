@@ -22,6 +22,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Reads the three scale labels once the card has finished re-measuring at its current
 // width. Four conditions, all observable, none of them a duration:
@@ -87,9 +88,9 @@ async function setWidth(page, cardId, widthPx) {
 test("a pure container resize (no hass update) re-resolves the optimal label via ResizeObserver", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 27, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 19, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 27, TEMPERATURE_C),
   };
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
 
@@ -116,7 +117,7 @@ test("a pure container resize (no hass update) re-resolves the optimal label via
 test("UI-03: a pure resize also re-resolves the rangeScale view's shared optimal label, not just its own 3 top labels", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 4, { unit_of_measurement: "°C", minimum: 19, maximum: 23 }),
   };
   const cardId = await createCard(
@@ -144,7 +145,7 @@ test("UI-03: a pure resize also re-resolves the rangeScale view's shared optimal
 
 test("disconnecting the card cleanly stops the ResizeObserver (no error on a subsequent resize of the detached node)", async ({ page }) => {
   await gotoHarness(page);
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C) };
   const cardId = await createCard(page, { entity: "sensor.avg" }, states);
   const errors = [];
   page.on("pageerror", (err) => errors.push(err));
@@ -167,9 +168,9 @@ test("disconnecting the card cleanly stops the ResizeObserver (no error on a sub
 test("cold load: the card renders correctly even though document.fonts.ready may still be pending at first paint", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
   };
   const errors = [];
   page.on("pageerror", (err) => errors.push(err));

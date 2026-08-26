@@ -22,6 +22,7 @@ const fs = require("node:fs");
 const { JSDOM } = require("jsdom");
 const { CARD_SOURCE_PATH } = require("../helpers/load-card.jsdom.js");
 const packageJson = require("../../package.json");
+const { CO2, TEMPERATURE_C } = require("../fixtures/attributes.js");
 
 const CARD_TAG = "room-climate-card";
 const source = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
@@ -103,7 +104,7 @@ test("the artifact's suggestion hook answers for climate entities and declines e
   const entry = window.customCards.find((card) => card.type === CARD_TAG);
   const hass = {
     states: {
-      "sensor.co2": { entity_id: "sensor.co2", state: "700", attributes: { device_class: "carbon_dioxide", unit_of_measurement: "ppm" } },
+      "sensor.co2": { entity_id: "sensor.co2", state: "700", attributes: CO2 },
       "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: {} },
     },
   };
@@ -124,7 +125,7 @@ test("the artifact's stub configuration prefers a real climate entity over the p
   const ctor = window.customElements.get(CARD_TAG);
   const hass = {
     states: {
-      "sensor.hall": { entity_id: "sensor.hall", state: "21.4", attributes: { device_class: "temperature", unit_of_measurement: "°C" } },
+      "sensor.hall": { entity_id: "sensor.hall", state: "21.4", attributes: TEMPERATURE_C },
     },
   };
   const stub = ctor.getStubConfig(hass, ["sensor.hall"], []);

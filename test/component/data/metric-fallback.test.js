@@ -28,6 +28,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { CO2, HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -44,8 +45,8 @@ test.after(() => {
 
 test("missing primary entity + valid humidity rooms -> metricType/comfort bounds resolve to humidity, not temperature", () => {
   const hass = mkHass({
-    "sensor.hum1": mkState("sensor.hum1", 55, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY),
+    "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.does_not_exist", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
   const data = el._computeViewModel();
@@ -58,8 +59,8 @@ test("missing primary entity + valid humidity rooms -> metricType/comfort bounds
 test("primary entity exists but carries neither device_class nor unit -> falls back to a room", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}), // exists, but no device_class/unit at all
-    "sensor.co2a": mkState("sensor.co2a", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.co2b": mkState("sensor.co2b", 720, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.co2a": mkState("sensor.co2a", 700, CO2),
+    "sensor.co2b": mkState("sensor.co2b", 720, CO2),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.co2b" }] }, hass);
   const data = el._computeViewModel();
@@ -131,8 +132,8 @@ test("Fahrenheit without device_class resolves to temperature, canonicalizes to 
 test("mixed room device_classes (1 vs 1 tie): no primary, no majority winner -> mixed_metric_kinds, never a chosen type", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.co2a": mkState("sensor.co2a", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.hum1": mkState("sensor.hum1", 55, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.co2a": mkState("sensor.co2a", 700, CO2),
+    "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.hum1" }] }, hass);
   const context = el._resolveMetricContext();
@@ -151,10 +152,10 @@ test("mixed room device_classes (1 vs 1 tie): no primary, no majority winner -> 
 test("mixed room device_classes (one kind outnumbers the other): still no majority winner -> mixed_metric_kinds", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.hum1": mkState("sensor.hum1", 40, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t3": mkState("sensor.t3", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.hum1": mkState("sensor.hum1", 40, HUMIDITY),
+    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 22, TEMPERATURE_C),
+    "sensor.t3": mkState("sensor.t3", 23, TEMPERATURE_C),
   });
   // Three temperature rooms outnumbering one humidity room must not decide
   // a winner by count — averaging temperature and humidity together (or
@@ -179,8 +180,8 @@ test("mixed room device_classes (one kind outnumbers the other): still no majori
 test("consistent room device_classes: consistent:true, no disagreement flagged", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 22, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -194,8 +195,8 @@ test("metricType and unit resolve together when the primary carries a stray unit
     // Primary entity has no device_class and a stray/irrelevant unit
     // (simulating a misconfigured or leftover entity) but no numeric value.
     "sensor.avg": mkState("sensor.avg", "unavailable", { unit_of_measurement: "hPa" }),
-    "sensor.hum1": mkState("sensor.hum1", 55, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY),
+    "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -213,9 +214,9 @@ test("metricType and unit resolve together when the primary carries a stray unit
 
 test("an invalid CO2 primary falls back to valid humidity rooms without mixing labels", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }), // 0 ppm: invalidWhen(value <= 0)
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.hum2": mkState("sensor.hum2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 0, CO2), // 0 ppm: invalidWhen(value <= 0)
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
+    "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -232,7 +233,7 @@ test("unavailable rooms do not participate in metric-kind consensus", () => {
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.t1": mkState("sensor.t1", "unavailable", { device_class: "temperature" }),
     "sensor.t2": mkState("sensor.t2", "unavailable", { device_class: "temperature" }),
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }, { entity: "sensor.hum1" }] },
@@ -249,8 +250,8 @@ test("unavailable rooms do not participate in metric-kind consensus", () => {
 test("rooms of different metric kinds are never averaged together", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.t1": mkState("sensor.t1", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.t1": mkState("sensor.t1", 22, TEMPERATURE_C),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.hum1" }] }, hass);
   const context = el._resolveMetricContext();
@@ -268,8 +269,8 @@ test("rooms of different metric kinds are never averaged together", () => {
 test("an unrecognized-unit primary falls back without displaying hPa as temperature", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 1013, { unit_of_measurement: "hPa" }), // no device_class, "hpa" not in METRIC_TYPE_BY_UNIT
-    "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 23, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -291,8 +292,8 @@ test("an unrecognized-unit primary falls back without displaying hPa as temperat
 test("device_class temperature with an unresolvable hPa unit is unusable", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 1013, { device_class: "temperature", unit_of_measurement: "hPa" }),
-    "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 23, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -307,7 +308,7 @@ test("device_class temperature with an unresolvable hPa unit is unusable", () =>
 test("a temperature room with an unresolvable unit is excluded and diagnosed", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 20, TEMPERATURE_C),
     "sensor.bad": mkState("sensor.bad", 1013, { device_class: "temperature", unit_of_measurement: "hPa" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.bad" }] }, hass);
@@ -326,7 +327,7 @@ test("a temperature room with an unresolvable unit is excluded and diagnosed", (
 
 test("a usable temperature primary still excludes a same-kind room with an invalid unit", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.bad": mkState("sensor.bad", 1013, { device_class: "temperature", unit_of_measurement: "hPa" }),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.bad" }] }, hass);
@@ -343,8 +344,8 @@ test("a usable temperature primary still excludes a same-kind room with an inval
 test("a temperature primary without a unit is unusable and falls back to room consensus", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature" }), // no unit_of_measurement at all
-    "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 20, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 24, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }] }, hass);
   const context = el._resolveMetricContext();
@@ -389,10 +390,10 @@ test("a no-data state retains metric-specific presentation when every entity lac
 
 test("a usable primary excludes and diagnoses type-foreign rooms", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.hum1": mkState("sensor.hum1", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.t1": mkState("sensor.t1", 20, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 24, TEMPERATURE_C),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }, { entity: "sensor.hum1" }] },
@@ -419,10 +420,10 @@ test("a usable primary excludes and diagnoses type-foreign rooms", () => {
 test("room consensus canonicalizes mixed units of the same metric before aggregation", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.t1": mkState("sensor.t1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.t2": mkState("sensor.t2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.t1": mkState("sensor.t1", 20, TEMPERATURE_C),
+    "sensor.t2": mkState("sensor.t2", 24, TEMPERATURE_C),
     // 71.6°F === 22°C exactly: (71.6-32)*5/9 = 22
-    "sensor.t3": mkState("sensor.t3", 71.6, { device_class: "temperature", unit_of_measurement: "°F" }),
+    "sensor.t3": mkState("sensor.t3", 71.6, TEMPERATURE_F),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.t1" }, { entity: "sensor.t2" }, { entity: "sensor.t3" }] },
@@ -451,8 +452,8 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
 
   const hassA = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.co2a": mkState("sensor.co2a", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.hum1": mkState("sensor.hum1", 55, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.co2a": mkState("sensor.co2a", 700, CO2),
+    "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY),
   });
   el.hass = hassA;
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.hum1" }] });
@@ -462,8 +463,8 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
   // underlying misconfiguration must not re-warn.
   const hassB = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.co2a": mkState("sensor.co2a", 705, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.hum1": mkState("sensor.hum1", 56, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.co2a": mkState("sensor.co2a", 705, CO2),
+    "sensor.hum1": mkState("sensor.hum1", 56, HUMIDITY),
   });
   el.hass = hassB;
   assert.equal(warnings.length, 1, "an unchanged mixed_metric_kinds diagnosis must not spam the console on every hass update");
@@ -472,9 +473,9 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
   // pair of disagreeing kinds) must warn again.
   const hassC = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.co2a": mkState("sensor.co2a", "unavailable", { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.hum1": mkState("sensor.hum1", 56, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.t1": mkState("sensor.t1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.co2a": mkState("sensor.co2a", "unavailable", CO2),
+    "sensor.hum1": mkState("sensor.hum1", 56, HUMIDITY),
+    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
   });
   el.hass = hassC;
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.hum1" }, { entity: "sensor.t1" }] });

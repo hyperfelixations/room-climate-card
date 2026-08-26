@@ -20,6 +20,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Direct imports make the owner of each option-resolution contract explicit.
 let optionSchemas, viewState;
@@ -30,7 +31,7 @@ test.before(async () => {
   optionSchemas = await import("../../../src/config/option-schemas.js");
   viewState = await import("../../../src/presentation/view-model/view-state.js");
   env = createTestEnvironment();
-  el = env.createCard({ entity: "sensor.avg" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) }));
+  el = env.createCard({ entity: "sensor.avg" }, mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) }));
 });
 test.after(() => {
   env.cleanupAll();

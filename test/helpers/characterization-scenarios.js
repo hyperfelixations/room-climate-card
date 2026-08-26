@@ -21,6 +21,7 @@
 // in _render() incorporates last_updated, so a live `new Date()` would make
 // the captured markup depend on when the suite ran.
 
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../fixtures/attributes.js");
 const FIXED_TS = "2026-07-24T05:00:00Z";
 
 function st(entityId, state, attributes) {
@@ -33,12 +34,11 @@ function st(entityId, state, attributes) {
   };
 }
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
-const F = { device_class: "temperature", unit_of_measurement: "°F" };
-const K = { device_class: "temperature", unit_of_measurement: "K" };
-const RH = { device_class: "humidity", unit_of_measurement: "%" };
-const CO2 = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
-const PM = { device_class: "pm25", unit_of_measurement: "µg/m³" };
+const C = TEMPERATURE_C;
+const F = TEMPERATURE_F;
+const K = TEMPERATURE_K;
+const RH = HUMIDITY;
+const PM = PM25;
 
 // Seven rooms with stable, spread-out Celsius values (two outside the 20-24
 // comfort band in each direction, so subtitle/comfort counting/extrema/spread

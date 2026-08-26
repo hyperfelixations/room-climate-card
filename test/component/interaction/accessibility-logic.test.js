@@ -18,6 +18,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../../helpers/gestures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -30,9 +31,9 @@ test.after(() => {
 
 function twoViewCard() {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   return env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
 }
@@ -107,7 +108,7 @@ test("pointercancel mid-drag also updates accessibility to the frozen position (
 });
 
 test("a single-view card (no rotator) uses .rtc-rotator-solo, not the .rtc-view carousel markup at all — nothing for _updateViewAccessibility() to touch", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   assert.equal(el.shadowRoot.querySelectorAll(".rtc-view").length, 0);
   assert.ok(el.shadowRoot.querySelector(".rtc-rotator-solo"));

@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 // The render paths, imported from the source module so the test names the same
@@ -26,14 +27,14 @@ test.after(() => {
 });
 
 test("ROB-01: a thrown _computeViewModel() does not commit the render signature, so an identical retry actually re-renders", () => {
-  const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hassA);
   // A repeat of the identical hass push is skipped, which is what proves the first
   // render committed. Asserted through the render path rather than by reading the
   // signature string: the path is the property that actually matters.
   assert.equal(el._render(), RENDER_PATH.SKIPPED, "an unchanged repeat must be skipped, so the first render committed");
 
-  const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, TEMPERATURE_C) });
   // The real production compute entry point, not the legacy-DTO adapter: _render()
   // calls _computeViewModel(), and a test that failed the adapter instead would stop
   // proving anything the moment the adapter is removed.
@@ -78,7 +79,7 @@ test("DOM-01: the no-data icon updates on a pure partial update (metric mode cha
 });
 
 test("LIFE-01: setConfig() clears an in-progress pointer gesture and the render it deferred", () => {
-  const C = { device_class: "temperature", unit_of_measurement: "°C" };
+  const C = TEMPERATURE_C;
   const el = env.createCard(
     { entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] },
     mkHass({
@@ -116,9 +117,9 @@ test("setConfig() preserves the active view across a structural rebuild when its
   // config.start_view then the first active view once it
   // doesn't.
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 20, maximum: 23 }),
   });
   const el = env.createCard(
@@ -166,9 +167,9 @@ test("setConfig() preserves the active view across a structural rebuild when its
 
 test("setConfig() falls back to config.start_view (not the first active view) when the previous view key vanishes and start_view is configured", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 20, maximum: 23 }),
   });
   const el = env.createCard(
@@ -188,7 +189,7 @@ test("a font-ready promise rejection does not produce an unhandled rejection (th
   // document.fonts.ready is stubbed to resolve immediately by the jsdom
   // loader; this test only asserts that a normal render with the stub in
   // place completes without throwing, exercising that code path at all.
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   await Promise.resolve(); // let the document.fonts.ready.then()/.catch() chain settle
   assert.ok(el.shadowRoot.querySelector(".rtc-root"));
@@ -199,9 +200,9 @@ test("a font-ready promise rejection does not produce an unhandled rejection (th
 
 test("a full render and a partial update each compute exactly one view model", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "A", short: "AA", entity: "sensor.r1" }, { name: "B", short: "BB", entity: "sensor.r2" }] },
@@ -224,8 +225,8 @@ test("a full render and a partial update each compute exactly one view model", (
 
   // A structural rebuild: a second room appearing changes the markup itself.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 23, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
   });
   assert.equal(viewModelCalls, 2);
   assert.ok(el.shadowRoot.querySelector(".rtc-scale-view"), "and the card still rendered");
@@ -233,7 +234,7 @@ test("a full render and a partial update each compute exactly one view model", (
 });
 
 test("_computeViewModel returns the current structured view model", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
   assert.equal(data.empty, false);
@@ -245,7 +246,7 @@ test("_computeViewModel returns the current structured view model", () => {
 });
 
 test("the signature fast path returns before any view model is computed", () => {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   let calls = 0;
   const real = el._computeViewModel.bind(el);

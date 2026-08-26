@@ -17,6 +17,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
+const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 async function shot(page, cardId, name, width = 400) {
   // Waits on the layout mechanism rather than on a duration — see setCardWidth(). A
@@ -111,7 +112,7 @@ test.describe("visual golden: narrow trend arrow and Scale footer per mode", () 
 
 test("visual golden: no-data state", async ({ page }) => {
   await gotoHarness(page);
-  const states = { "sensor.avg": mkStateObj("sensor.avg", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", "unavailable", TEMPERATURE_C) };
   const cardId = await createCard(page, { entity: "sensor.avg" }, states);
   await shot(page, cardId, "no-data-state.png");
 });
@@ -119,7 +120,7 @@ test("visual golden: no-data state", async ({ page }) => {
 test.describe("visual golden: 1/2/3/4 views", () => {
   test("1 view (avg only)", async ({ page }) => {
     await gotoHarness(page);
-    const states = { "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) };
+    const states = { "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C) };
     const cardId = await createCard(page, { entity: "sensor.avg" }, states);
     await shot(page, cardId, "views-1.png");
   });
@@ -127,9 +128,9 @@ test.describe("visual golden: 1/2/3/4 views", () => {
   test("2 views (avg + rooms)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
     };
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
     await shot(page, cardId, "views-2.png");
@@ -138,7 +139,7 @@ test.describe("visual golden: 1/2/3/4 views", () => {
   test("3 views (avg + range + rooms)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 3, {
         unit_of_measurement: "°C",
         minimum: 20,
@@ -146,8 +147,8 @@ test.describe("visual golden: 1/2/3/4 views", () => {
         minimum_zeitpunkt: "2026-07-21T05:00:00+00:00",
         maximum_zeitpunkt: "2026-07-21T15:00:00+00:00",
       }),
-      "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
     };
     const cardId = await createCard(
       page,
@@ -160,7 +161,7 @@ test.describe("visual golden: 1/2/3/4 views", () => {
   test("4 views (avg + range + rangeScale + rooms)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 3, {
         unit_of_measurement: "°C",
         minimum: 20,
@@ -168,8 +169,8 @@ test.describe("visual golden: 1/2/3/4 views", () => {
         minimum_zeitpunkt: "2026-07-21T05:00:00+00:00",
         maximum_zeitpunkt: "2026-07-21T15:00:00+00:00",
       }),
-      "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
     };
     const cardId = await createCard(
       page,
@@ -188,14 +189,14 @@ test.describe("visual golden: 1/2/3/4 views", () => {
 test("visual golden: narrow width (320px)", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r3": mkStateObj("sensor.r3", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r4": mkStateObj("sensor.r4", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r5": mkStateObj("sensor.r5", 22.5, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r6": mkStateObj("sensor.r6", 20.5, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r7": mkStateObj("sensor.r7", 23.5, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
+    "sensor.r3": mkStateObj("sensor.r3", 19, TEMPERATURE_C),
+    "sensor.r4": mkStateObj("sensor.r4", 25, TEMPERATURE_C),
+    "sensor.r5": mkStateObj("sensor.r5", 22.5, TEMPERATURE_C),
+    "sensor.r6": mkStateObj("sensor.r6", 20.5, TEMPERATURE_C),
+    "sensor.r7": mkStateObj("sensor.r7", 23.5, TEMPERATURE_C),
   };
   const rooms = [1, 2, 3, 4, 5, 6, 7].map((i) => ({ name: `Room ${i}`, entity: `sensor.r${i}` }));
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states);
@@ -216,7 +217,7 @@ test.describe("visual golden: the card the README advertises", () => {
     { name: "Office", short: "OF", entity: "sensor.office", value: 23.1 },
     { name: "Bathroom", short: "BA", entity: "sensor.bathroom", value: 24.0 },
   ];
-  const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
+  const TEMP = TEMPERATURE_C;
 
   async function createHeroCard(page) {
     const states = { "sensor.house": mkStateObj("sensor.house", 22.4, TEMP) };
@@ -259,9 +260,9 @@ test("visual golden: dark color scheme", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
   };
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
   await shot(page, cardId, "dark-mode.png");
@@ -270,9 +271,9 @@ test("visual golden: dark color scheme", async ({ page }) => {
 test("visual golden: German (longer strings than English)", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
   };
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, "de");
   await shot(page, cardId, "german.png");
@@ -288,9 +289,9 @@ test.describe("visual golden: long-/short-form label architecture", () => {
   test("Polish scale.optimalLabel at 320px (co2, the mode with a left-anchored optimal band)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r1": mkStateObj("sensor.r1", 650, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r2": mkStateObj("sensor.r2", 750, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+      "sensor.avg": mkStateObj("sensor.avg", 700, CO2),
+      "sensor.r1": mkStateObj("sensor.r1", 650, CO2),
+      "sensor.r2": mkStateObj("sensor.r2", 750, CO2),
     };
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, "pl");
     const card = page.locator(`#${cardId}`);
@@ -305,7 +306,7 @@ test.describe("visual golden: long-/short-form label architecture", () => {
   test("French rangeScale.currentLabel at 320px", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 20, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 9, { unit_of_measurement: "°C", minimum: 12, maximum: 21 }),
     };
     // Solo view (range_scale only, no carousel) so the screenshot actually
@@ -362,7 +363,7 @@ test.describe("visual golden: native Fahrenheit at normal and narrow widths", ()
 test("visual golden: rangeScale view with a collision-prone configuration (all three labels near-identical)", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 21.1, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 21.1, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 0.4, { unit_of_measurement: "°C", minimum: 20.9, maximum: 21.3 }),
   };
   const cardId = await createCard(
@@ -381,7 +382,7 @@ test("visual golden: rangeScale view with a collision-prone configuration (all t
 test("visual golden: rangeScale edge collision lifts max only while min remains lower", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 26, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 26, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 11.1, {
       unit_of_measurement: "°C",
       minimum: 14.9,
@@ -411,7 +412,7 @@ test("visual golden: rangeScale edge collision lifts max only while min remains 
 
 test("visual golden: PM2.5 rangeScale keeps the lifted min label fully painted", async ({ page }) => {
   await gotoHarness(page);
-  const metric = { device_class: "pm25", unit_of_measurement: "µg/m³" };
+  const metric = PM25;
   const states = {
     "sensor.avg": mkStateObj("sensor.avg", 2.6, metric),
     "sensor.range": mkStateObj("sensor.range", 13.2, {
@@ -462,9 +463,9 @@ test.describe("visual golden: null-view policy (collapse vs. localized hint)", (
   test("deliberately empty views: collapses the view area — no hint markup, no empty space artifact", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
     };
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [] }, states);
     const card = page.locator(`#${cardId}`);
@@ -476,7 +477,7 @@ test.describe("visual golden: null-view policy (collapse vs. localized hint)", (
 
   test("a requested-but-unavailable view (range_scale with no range_entity) shows the localized hint", async ({ page }) => {
     await gotoHarness(page);
-    const states = { "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) };
+    const states = { "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C) };
     const cardId = await createCard(page, { entity: "sensor.avg", views: [{ type: "range_scale", enabled: true }] }, states);
     const card = page.locator(`#${cardId}`);
     const hint = card.locator(".rtc-no-views");
@@ -489,10 +490,10 @@ test.describe("visual golden: null-view policy (collapse vs. localized hint)", (
 test.describe("visual golden: view-customizer band visibility (Teil 2, show_comfort_band/show_optimal_band)", () => {
   function bandFixture() {
     return {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-      "sensor.r1": mkStateObj("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
     };
   }
 
@@ -560,7 +561,7 @@ test.describe("visual golden: view-customizer band visibility (Teil 2, show_comf
 test.describe("visual golden: view-specific options", () => {
   function apc3Fixture() {
     return {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 3, {
         unit_of_measurement: "°C",
         minimum: 18,
@@ -568,8 +569,8 @@ test.describe("visual golden: view-specific options", () => {
         minimum_zeitpunkt: "2026-07-21T05:00:00+00:00",
         maximum_zeitpunkt: "2026-07-21T15:00:00+00:00",
       }),
-      "sensor.r1": mkStateObj("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r1": mkStateObj("sensor.r1", 19, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 25, TEMPERATURE_C),
     };
   }
 
@@ -618,11 +619,11 @@ test.describe("visual golden: adaptive outdoor scale and per-room markers", () =
   test("outdoor winter values use a compact data-following scale with off-axis bands hidden", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 3, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r1": mkStateObj("sensor.r1", -2, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 2, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r3": mkStateObj("sensor.r3", 5, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r4": mkStateObj("sensor.r4", 8, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 3, TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", -2, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 2, TEMPERATURE_C),
+      "sensor.r3": mkStateObj("sensor.r3", 5, TEMPERATURE_C),
+      "sensor.r4": mkStateObj("sensor.r4", 8, TEMPERATURE_C),
     };
     const cardId = await createCard(
       page,
@@ -652,11 +653,11 @@ test.describe("visual golden: adaptive outdoor scale and per-room markers", () =
   test("markers:all renders every room smaller than the emphasized average", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r1": mkStateObj("sensor.r1", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r3": mkStateObj("sensor.r3", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r4": mkStateObj("sensor.r4", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", 19, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 21, TEMPERATURE_C),
+      "sensor.r3": mkStateObj("sensor.r3", 23, TEMPERATURE_C),
+      "sensor.r4": mkStateObj("sensor.r4", 25, TEMPERATURE_C),
     };
     const cardId = await createCard(
       page,
@@ -699,8 +700,8 @@ test.describe("visual golden: headline shapes and headline widths", () => {
   test("a calculated consensus headline (no main entity)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.r1": mkStateObj("sensor.r1", 21.4, { device_class: "temperature", unit_of_measurement: "°C" }),
-      "sensor.r2": mkStateObj("sensor.r2", 23.2, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.r1": mkStateObj("sensor.r1", 21.4, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23.2, TEMPERATURE_C),
     };
     const cardId = await createCard(page, { rooms: CONSENSUS_ROOMS }, states);
     const card = page.locator(`#${cardId}`);
@@ -767,7 +768,7 @@ test.describe("visual golden: the shipped palettes", () => {
     const name = typeof palette === "string" ? palette : "single-color";
     test(name, async ({ page }) => {
       await gotoHarness(page);
-      const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+      const attributes = TEMPERATURE_C;
       const states = {
         "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
         "sensor.range": mkStateObj("sensor.range", 6, { ...attributes, minimum: 18, maximum: 27 }),
@@ -803,7 +804,7 @@ test.describe("visual golden: the subtitle", () => {
   for (const overflow of ["clip", "wrap"]) {
     test(overflow, async ({ page }) => {
       await gotoHarness(page);
-      const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+      const attributes = TEMPERATURE_C;
       const cardId = await createCard(
         page,
         {
@@ -831,7 +832,7 @@ test.describe("visual golden: the subtitle", () => {
 test("visual golden: a derived palette in dark mode", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoHarness(page);
-  const attributes = { device_class: "temperature", unit_of_measurement: "°C" };
+  const attributes = TEMPERATURE_C;
   const cardId = await createCard(
     page,
     {

@@ -10,11 +10,12 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 test("RangeScale footer renders in a real browser with zero rooms configured, and fits a narrow card without overflowing", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 21, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 5, {
       unit_of_measurement: "°C",
       minimum: 18,

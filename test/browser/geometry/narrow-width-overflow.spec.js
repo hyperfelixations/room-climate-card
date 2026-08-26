@@ -8,6 +8,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
+const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
 // DELIBERATELY CURATED, not the manifest's fifteen. These five are the typographic
@@ -82,10 +83,10 @@ const RANGE_SCALE_EXTRA = {
 
 function baseStates() {
   return {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 26 }),
-    "sensor.r1": mkStateObj("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkStateObj("sensor.r2", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkStateObj("sensor.r1", 20, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 24, TEMPERATURE_C),
   };
 }
 
@@ -177,7 +178,7 @@ test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
 test.describe(".rtc-avg-label stays inside its column whatever the room is called", () => {
   const LONG_NAME = "DASISTEINETESTKONFIGURATION";
   const singleRoomStates = () => ({
-    "sensor.az": mkStateObj("sensor.az", 28.6, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.az": mkStateObj("sensor.az", 28.6, TEMPERATURE_C),
   });
 
   for (const width of [320, 400, 600]) {
@@ -230,20 +231,20 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
   // CO2/PM2.5) to guarantee enough natural width in the first place.
   function coHass() {
     return {
-      "sensor.avg": mkStateObj("sensor.avg", 1200, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r1": mkStateObj("sensor.r1", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r2": mkStateObj("sensor.r2", 1200, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r3": mkStateObj("sensor.r3", 2000, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-      "sensor.r4": mkStateObj("sensor.r4", 950, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+      "sensor.avg": mkStateObj("sensor.avg", 1200, CO2),
+      "sensor.r1": mkStateObj("sensor.r1", 800, CO2),
+      "sensor.r2": mkStateObj("sensor.r2", 1200, CO2),
+      "sensor.r3": mkStateObj("sensor.r3", 2000, CO2),
+      "sensor.r4": mkStateObj("sensor.r4", 950, CO2),
     };
   }
   function pm25Hass() {
     return {
-      "sensor.avg": mkStateObj("sensor.avg", 24.6, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-      "sensor.r1": mkStateObj("sensor.r1", 8.3, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-      "sensor.r2": mkStateObj("sensor.r2", 24.6, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-      "sensor.r3": mkStateObj("sensor.r3", 41.2, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-      "sensor.r4": mkStateObj("sensor.r4", 15.9, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
+      "sensor.avg": mkStateObj("sensor.avg", 24.6, PM25),
+      "sensor.r1": mkStateObj("sensor.r1", 8.3, PM25),
+      "sensor.r2": mkStateObj("sensor.r2", 24.6, PM25),
+      "sensor.r3": mkStateObj("sensor.r3", 41.2, PM25),
+      "sensor.r4": mkStateObj("sensor.r4", 15.9, PM25),
     };
   }
   // 4 rooms stays within CO2/PM2.5's autoMaxColumns=5 (single row, the
@@ -446,7 +447,7 @@ test.describe(".rtc-avg-value stays inside its column", () => {
       const cardId = await createCard(
         page,
         { rooms: [{ entity: "sensor.az", name: "DASISTEINETESTKONFIGURATION" }] },
-        { "sensor.az": mkStateObj("sensor.az", 28.6, { device_class: "temperature", unit_of_measurement: "°C" }) }
+        { "sensor.az": mkStateObj("sensor.az", 28.6, TEMPERATURE_C) }
       );
       await setCardWidth(page, cardId, Number(width));
       const measured = await panelColumns(page, cardId);

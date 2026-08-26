@@ -24,8 +24,9 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
+const TEMP = TEMPERATURE_C;
 
 // A card with three rooms: one below the comfort band, one inside it, one above. That is the
 // smallest scenario in which every role is painted at once — the pill and the icon carry the

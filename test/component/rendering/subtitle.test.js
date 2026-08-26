@@ -21,6 +21,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -33,9 +34,9 @@ test.after(() => {
 
 test("comfort 20-24 with avg 23.9 names the room farthest from the average", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 23.9, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.cool": mkState("sensor.cool", 19.8, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.warm": mkState("sensor.warm", 24.2, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 23.9, TEMPERATURE_C),
+    "sensor.cool": mkState("sensor.cool", 19.8, TEMPERATURE_C),
+    "sensor.warm": mkState("sensor.warm", 24.2, TEMPERATURE_C),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
@@ -52,9 +53,9 @@ test("comfort 20-24 with avg 23.9 names the room farthest from the average", () 
 
 test("mirrored counterexample: warmest farther from avg than coolest -> names the warmest room", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 20.1, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.cool": mkState("sensor.cool", 19.8, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.warm": mkState("sensor.warm", 24.2, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 20.1, TEMPERATURE_C),
+    "sensor.cool": mkState("sensor.cool", 19.8, TEMPERATURE_C),
+    "sensor.warm": mkState("sensor.warm", 24.2, TEMPERATURE_C),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
@@ -68,9 +69,9 @@ test("mirrored counterexample: warmest farther from avg than coolest -> names th
 
 test("regression: exact tie at the extreme value names the same room as the warmest/coolest cards (alphabetically-last on a tie)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.az": mkState("sensor.az", 24.6, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.ku": mkState("sensor.ku", 24.6, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.az": mkState("sensor.az", 24.6, TEMPERATURE_C),
+    "sensor.ku": mkState("sensor.ku", 24.6, TEMPERATURE_C),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "Arbeitszimmer", entity: "sensor.az" }, { name: "Kueche", entity: "sensor.ku" }] },
@@ -85,9 +86,9 @@ test("regression: exact tie at the extreme value names the same room as the warm
 
 test("only one side outside comfort: names that side without a distance comparison", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.cool": mkState("sensor.cool", 19, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.warm": mkState("sensor.warm", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
+    "sensor.cool": mkState("sensor.cool", 19, TEMPERATURE_C),
+    "sensor.warm": mkState("sensor.warm", 22, TEMPERATURE_C),
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "CoolRoom", entity: "sensor.cool" }, { name: "WarmRoom", entity: "sensor.warm" }] },
@@ -100,9 +101,9 @@ test("only one side outside comfort: names that side without a distance comparis
 
 test("avg itself out of comfort: subtitle uses the aboveComfort/belowComfort wording, not the issue-room wording", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 26, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 25, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 27, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 26, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 25, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 27, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -113,9 +114,9 @@ test("avg itself out of comfort: subtitle uses the aboveComfort/belowComfort wor
 
 test("all rooms within comfort: subtitle reports the all-good case, no room named", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -131,7 +132,7 @@ test("all rooms within comfort: subtitle reports the all-good case, no room name
 // including the shorthand where the value IS the overflow mode.
 
 const OK_HASS = () =>
-  mkHass({ "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
 
 function headerOf(subtitle) {
   const el = env.createCard(subtitle === undefined ? { entity: "sensor.avg" } : { entity: "sensor.avg", subtitle }, OK_HASS());
@@ -182,7 +183,7 @@ test("a nonsense subtitle falls back instead of breaking the card", () => {
 test("a no-data explanation outranks a custom subtitle, and gives way again when data returns", () => {
   const el = env.createCard(
     { entity: "sensor.avg", subtitle: { text: "Ground floor", overflow: "wrap" } },
-    mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }) })
+    mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", TEMPERATURE_C) })
   );
   assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The value is currently unavailable.");
   // The overflow choice is the user's either way — a long explanation is exactly when
@@ -199,7 +200,7 @@ test("a no-data explanation outranks a custom subtitle, and gives way again when
 test("a removed subtitle still reappears to explain a card with no data", () => {
   const el = env.createCard(
     { entity: "sensor.avg", subtitle: "" },
-    mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", { device_class: "temperature", unit_of_measurement: "°C" }) })
+    mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", TEMPERATURE_C) })
   );
   assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The value is currently unavailable.");
   el.hass = OK_HASS();

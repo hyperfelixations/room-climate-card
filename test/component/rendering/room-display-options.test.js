@@ -13,6 +13,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -34,11 +35,11 @@ test.after(() => {
 // from both "name" and "value_asc".
 function fourRoomHass() {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.rc": mkState("sensor.rc", 24, { device_class: "temperature", unit_of_measurement: "°C" }), // Kitchen
-    "sensor.ra": mkState("sensor.ra", 18, { device_class: "temperature", unit_of_measurement: "°C" }), // Attic
-    "sensor.rd": mkState("sensor.rd", 26, { device_class: "temperature", unit_of_measurement: "°C" }), // Den
-    "sensor.rb": mkState("sensor.rb", 20, { device_class: "temperature", unit_of_measurement: "°C" }), // Bath
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.rc": mkState("sensor.rc", 24, TEMPERATURE_C), // Kitchen
+    "sensor.ra": mkState("sensor.ra", 18, TEMPERATURE_C), // Attic
+    "sensor.rd": mkState("sensor.rd", 26, TEMPERATURE_C), // Den
+    "sensor.rb": mkState("sensor.rb", 20, TEMPERATURE_C), // Bath
   });
 }
 
@@ -194,9 +195,9 @@ function oneRoomConfig(roomOverrides, extra) {
 
 function oneRoomHass() {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r0": mkState("sensor.r0", 24, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r0": mkState("sensor.r0", 24, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 20, TEMPERATURE_C),
   });
 }
 

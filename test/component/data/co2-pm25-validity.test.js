@@ -14,6 +14,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { CO2, HUMIDITY, PM25 } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -59,11 +60,11 @@ test("_isPhysicallyValid: humidity outside [0,100] is invalid", () => {
 
 test("a humidity room reading below 0% or above 100% is excluded from the room average, extrema, and comfort count", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 50, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.r1": mkState("sensor.r1", -5, { device_class: "humidity", unit_of_measurement: "%" }), // faulty sensor
-    "sensor.r2": mkState("sensor.r2", 40, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.r3": mkState("sensor.r3", 60, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.r4": mkState("sensor.r4", 105, { device_class: "humidity", unit_of_measurement: "%" }), // faulty sensor
+    "sensor.avg": mkState("sensor.avg", 50, HUMIDITY),
+    "sensor.r1": mkState("sensor.r1", -5, HUMIDITY), // faulty sensor
+    "sensor.r2": mkState("sensor.r2", 40, HUMIDITY),
+    "sensor.r3": mkState("sensor.r3", 60, HUMIDITY),
+    "sensor.r4": mkState("sensor.r4", 105, HUMIDITY), // faulty sensor
   });
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ name: "TooLow", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }, { name: "TooHigh", entity: "sensor.r4" }] },
@@ -78,9 +79,9 @@ test("a humidity room reading below 0% or above 100% is excluded from the room a
 
 test("a humidity primary (average) entity reading of -1% is rejected — falls back to the room average", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", -1, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.r1": mkState("sensor.r1", 40, { device_class: "humidity", unit_of_measurement: "%" }),
-    "sensor.r2": mkState("sensor.r2", 60, { device_class: "humidity", unit_of_measurement: "%" }),
+    "sensor.avg": mkState("sensor.avg", -1, HUMIDITY),
+    "sensor.r1": mkState("sensor.r1", 40, HUMIDITY),
+    "sensor.r2": mkState("sensor.r2", 60, HUMIDITY),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -91,10 +92,10 @@ test("a humidity primary (average) entity reading of -1% is rejected — falls b
 
 test("a CO2 room reading of exactly 0 is excluded from the room average, extrema, and comfort count", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r1": mkState("sensor.r1", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }), // stuck sensor
-    "sensor.r2": mkState("sensor.r2", 600, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r3": mkState("sensor.r3", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.avg": mkState("sensor.avg", 700, CO2),
+    "sensor.r1": mkState("sensor.r1", 0, CO2), // stuck sensor
+    "sensor.r2": mkState("sensor.r2", 600, CO2),
+    "sensor.r3": mkState("sensor.r3", 800, CO2),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ name: "Stuck", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }] }, hass);
   const data = el._computeViewModel();
@@ -106,10 +107,10 @@ test("a CO2 room reading of exactly 0 is excluded from the room average, extrema
 
 test("a negative PM2.5 room reading is excluded from the room average, extrema, and comfort count", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 10, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-    "sensor.r1": mkState("sensor.r1", -5, { device_class: "pm25", unit_of_measurement: "µg/m³" }), // faulty sensor
-    "sensor.r2": mkState("sensor.r2", 8, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
-    "sensor.r3": mkState("sensor.r3", 12, { device_class: "pm25", unit_of_measurement: "µg/m³" }),
+    "sensor.avg": mkState("sensor.avg", 10, PM25),
+    "sensor.r1": mkState("sensor.r1", -5, PM25), // faulty sensor
+    "sensor.r2": mkState("sensor.r2", 8, PM25),
+    "sensor.r3": mkState("sensor.r3", 12, PM25),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ name: "Faulty", entity: "sensor.r1" }, { name: "R2", entity: "sensor.r2" }, { name: "R3", entity: "sensor.r3" }] }, hass);
   const data = el._computeViewModel();
@@ -121,9 +122,9 @@ test("a negative PM2.5 room reading is excluded from the room average, extrema, 
 
 test("a CO2 primary (average) entity reading of 0 is rejected — falls back to the room average instead of displaying 0", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r1": mkState("sensor.r1", 600, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r2": mkState("sensor.r2", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.avg": mkState("sensor.avg", 0, CO2),
+    "sensor.r1": mkState("sensor.r1", 600, CO2),
+    "sensor.r2": mkState("sensor.r2", 800, CO2),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -134,9 +135,9 @@ test("a CO2 primary (average) entity reading of 0 is rejected — falls back to 
 
 test("all CO2 room readings physically invalid + no valid primary entity -> no-data state, not a crash or a 0/negative display", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", -1, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r1": mkState("sensor.r1", 0, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r2": mkState("sensor.r2", -10, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.avg": mkState("sensor.avg", -1, CO2),
+    "sensor.r1": mkState("sensor.r1", 0, CO2),
+    "sensor.r2": mkState("sensor.r2", -10, CO2),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   const data = el._computeViewModel();
@@ -152,9 +153,9 @@ test("all CO2 room readings physically invalid + no valid primary entity -> no-d
 // checks (range-and-spread.test.js), not the physical-plausibility filter.
 test("a CO2 trend value is not filtered by _isPhysicallyValid() (a negative trend is a legitimate falling rate, not an invalid reading)", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 700, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r1": mkState("sensor.r1", 600, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
-    "sensor.r2": mkState("sensor.r2", 800, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.avg": mkState("sensor.avg", 700, CO2),
+    "sensor.r1": mkState("sensor.r1", 600, CO2),
+    "sensor.r2": mkState("sensor.r2", 800, CO2),
     "sensor.trend": mkState("sensor.trend", -15, { unit_of_measurement: "ppm/h" }),
   });
   const el = env.createCard(

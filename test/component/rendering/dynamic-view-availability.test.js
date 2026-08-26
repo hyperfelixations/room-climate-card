@@ -11,6 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -23,10 +24,10 @@ test.after(() => {
 
 function threeViewHass() {
   return mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
 }
 
@@ -89,9 +90,9 @@ test("a bare pointerdown is invalidated by a hass-driven structural rebuild", ()
   // Pure hass-driven structural change (no setConfig()): rooms drop from 2
   // to 1, changing roomsComparable / view composition.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
   });
 
   assert.equal(el._interaction.pointer, null, "the stale pointer-down must be cleared by the structural rebuild, not carried over with pre-rebuild geometry");
@@ -110,10 +111,10 @@ test("a bare pointerdown does not block accessibility resync after a hass-driven
   el._handlePointerDown({ pointerId: 1, button: 0, clientX: 100, clientY: 50 });
 
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
 
   // Still 3 views (>=2) after this rebuild -> _applyAutoSlideStyles() must
@@ -140,9 +141,9 @@ test("a live availability cycle preserves a still-existing view without an extra
 
   // range_entity becomes unavailable -> "range" view disappears.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"], "range must be gone");
   assert.equal(el._views[el._activeView], "scale", "the still-existing previously-active view must be preserved");
@@ -168,7 +169,7 @@ test("a live change falls back to the first active view when the previous and st
   // (the previous key) and "extremes" (start_view) are both gone at once;
   // only "scale" is left.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
   });
   assert.deepEqual(Array.from(el._views), ["scale"], "range and extremes must both be gone, leaving only scale");
   assert.equal(el._activeView, 0, "falls through to the first (only) remaining active view once both the previous key and start_view are gone");
@@ -188,9 +189,9 @@ test("an available start_view wins over index 0 when the active view disappears"
 
   // Only range_entity disappears; rooms (hence "extremes") survive.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
   assert.equal(el._views[el._activeView], "extremes", "start_view must be consulted and win over the coincidental index-0 fallback ('scale')");
@@ -210,9 +211,9 @@ test("an available start_view wins over index 0 when the active view disappears"
 
 test("timers remain safe over a live 2-view -> 1-view -> 2-view cycle", () => {
   const hassTwoViews = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hassTwoViews);
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
@@ -220,7 +221,7 @@ test("timers remain safe over a live 2-view -> 1-view -> 2-view cycle", () => {
 
   // Rooms disappear -> "extremes" gone -> only "scale" left (1 view).
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
   });
   assert.deepEqual(Array.from(el._views), ["scale"]);
   assert.equal(el._carousel.resumeTimerHandle, null, "no resume timer may linger with <2 active views");
@@ -250,9 +251,9 @@ test("a non-first structural rebuild freezes visually on the resolved view inste
 
   // Pure hass-driven structural change (no setConfig()), NOT the first render.
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
   });
   const trackAfter = el.shadowRoot.querySelector(".rtc-track");
   assert.equal(trackAfter.classList.contains("rtc-manual"), true, "a non-first rebuild must freeze the track visually on _activeView, not immediately re-engage the wall-clock-driven synced animation");
@@ -288,9 +289,9 @@ test("the pre-config visual snapshot is released even if _render() throws mid-se
   // the release outside a finally, the stashed key would win here.
   const stillMounted = Array.from(el._views);
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 23, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
   });
   assert.deepEqual(Array.from(el._views), stillMounted.filter((key) => key !== "extremes"), "dropping to one room removes the extremes view");
   assert.ok(el._views.includes(el._views[el._activeView]), "the resolved active view must be one that actually exists");
@@ -308,9 +309,9 @@ test("a hass-driven structural change arriving mid-drag is applied after the dra
   assert.equal(el._isDragging, true, "the drag is live");
 
   el.hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
   assert.equal(el._renderController.isRenderPending, true, "the structural update must be deferred, not applied mid-drag");
   assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"], "the OLD structure must still be mounted while the drag is in progress");

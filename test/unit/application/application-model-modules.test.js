@@ -13,6 +13,7 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { stableStringify } = require("../../helpers/characterization.js");
+const { CO2, HUMIDITY, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../../fixtures/attributes.js");
 
 let entityModel;
 let measurementContext;
@@ -21,11 +22,10 @@ let aggregates;
 let cardDomainModel;
 let viewState;
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
-const F = { device_class: "temperature", unit_of_measurement: "°F" };
-const K = { device_class: "temperature", unit_of_measurement: "K" };
-const RH = { device_class: "humidity", unit_of_measurement: "%" };
-const CO2 = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
+const C = TEMPERATURE_C;
+const F = TEMPERATURE_F;
+const K = TEMPERATURE_K;
+const RH = HUMIDITY;
 
 const AUTO_POLICY = { source: "auto", profile: null, custom: null };
 // The card's own ramp, so these models stay comparable to the colours everywhere else.
@@ -160,7 +160,7 @@ test("validity is checked leniently, so a foreign-kind probe cannot throw", () =
 
 test("device_class wins over unit, and unit is the fallback", () => {
   const states = {
-    "sensor.byClass": st(21, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+    "sensor.byClass": st(21, CO2),
     "sensor.byUnit": st(21, { unit_of_measurement: "%" }),
     "sensor.neither": st(21, {}),
   };

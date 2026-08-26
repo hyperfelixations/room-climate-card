@@ -12,6 +12,7 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
+const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Common phone viewports plus the 460px container-query breakpoint.
 const WIDTHS = [360, 375, 390, 393, 412, 460];
@@ -85,10 +86,10 @@ function tempRooms() {
 }
 
 function tempStates(values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 24.5, { device_class: "temperature", unit_of_measurement: "°C" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 24.5, TEMPERATURE_C) };
   for (const room of tempRooms()) {
     const key = room.entity.split(".")[1];
-    states[room.entity] = mkStateObj(room.entity, values[key], { device_class: "temperature", unit_of_measurement: "°C" });
+    states[room.entity] = mkStateObj(room.entity, values[key], TEMPERATURE_C);
   }
   return states;
 }
@@ -115,7 +116,7 @@ test("temperature: an 8th room automatically wraps into a second, evenly-split r
   await gotoHarness(page);
   const rooms = [...tempRooms(), { entity: "sensor.extra", short: "EX" }];
   const states = tempStates(TEMP_VALUES);
-  states["sensor.extra"] = mkStateObj("sensor.extra", 22.9, { device_class: "temperature", unit_of_measurement: "°C" });
+  states["sensor.extra"] = mkStateObj("sensor.extra", 22.9, TEMPERATURE_C);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
   await setCardWidth(page, cardId, 390);
   const card = page.locator(`#${cardId}`);
@@ -144,10 +145,10 @@ function humidityRooms() {
 const HUMIDITY_VALUES = { hwz: 37.8, hwc: 35.5, hsz: 39.4, hfl: 41.0, hba: 42.2, hku: 43.1, haz: 38.6 };
 
 function humidityStates(values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 39, { device_class: "humidity", unit_of_measurement: "%" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 39, HUMIDITY) };
   for (const room of humidityRooms()) {
     const key = room.entity.split(".")[1];
-    states[room.entity] = mkStateObj(room.entity, values[key], { device_class: "humidity", unit_of_measurement: "%" });
+    states[room.entity] = mkStateObj(room.entity, values[key], HUMIDITY);
   }
   return states;
 }
@@ -173,9 +174,9 @@ function co2Rooms(count) {
 }
 
 function co2States(count, values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 1200, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 1200, CO2) };
   for (let i = 0; i < count; i++) {
-    states[`sensor.co${i}`] = mkStateObj(`sensor.co${i}`, values[i], { device_class: "carbon_dioxide", unit_of_measurement: "ppm" });
+    states[`sensor.co${i}`] = mkStateObj(`sensor.co${i}`, values[i], CO2);
   }
   return states;
 }
@@ -219,9 +220,9 @@ function pm25Rooms(count) {
 }
 
 function pm25States(count, values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 20, { device_class: "pm25", unit_of_measurement: "µg/m³" }) };
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 20, PM25) };
   for (let i = 0; i < count; i++) {
-    states[`sensor.pm${i}`] = mkStateObj(`sensor.pm${i}`, values[i], { device_class: "pm25", unit_of_measurement: "µg/m³" });
+    states[`sensor.pm${i}`] = mkStateObj(`sensor.pm${i}`, values[i], PM25);
   }
   return states;
 }
@@ -282,7 +283,7 @@ test("room short codes: a long explicit short (WOHNZ) is NOT guaranteed and stil
   await gotoHarness(page);
   const rooms = [...tempRooms().slice(0, 6), { entity: "sensor.long", short: "WOHNZ" }];
   const states = tempStates(TEMP_VALUES);
-  states["sensor.long"] = mkStateObj("sensor.long", 22.5, { device_class: "temperature", unit_of_measurement: "°C" });
+  states["sensor.long"] = mkStateObj("sensor.long", 22.5, TEMPERATURE_C);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
   await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
@@ -298,7 +299,7 @@ test("room short codes: a room with no configured short (long derived name) is N
   await gotoHarness(page);
   const rooms = [...tempRooms().slice(0, 6), { entity: "sensor.noname", name: "Gaestezimmer im Dachgeschoss" }];
   const states = tempStates(TEMP_VALUES);
-  states["sensor.noname"] = mkStateObj("sensor.noname", 21.3, { device_class: "temperature", unit_of_measurement: "°C" });
+  states["sensor.noname"] = mkStateObj("sensor.noname", 21.3, TEMPERATURE_C);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
   await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);

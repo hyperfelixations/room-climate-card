@@ -20,6 +20,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -30,7 +31,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
+const C = TEMPERATURE_C;
 
 function threeViewCard(overrides = {}) {
   return env.createCard(

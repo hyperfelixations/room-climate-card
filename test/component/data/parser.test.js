@@ -15,6 +15,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -26,7 +27,7 @@ test.after(() => {
 });
 
 function parseAsAvg(rawState) {
-  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", rawState, { device_class: "temperature", unit_of_measurement: "°C" }) });
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", rawState, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
   env.cleanup(el);
@@ -92,7 +93,7 @@ test("a number that is actually delivered as a JS number (not string) still work
   // states themselves are always strings, but this guards the underlying
   // _parseNum() contract that _getAttrNum() also relies on.
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);

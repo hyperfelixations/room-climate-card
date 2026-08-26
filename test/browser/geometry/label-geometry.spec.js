@@ -20,6 +20,7 @@ const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../hel
 
 // From the manifest — see test/contracts/product-surface.js.
 const { LANGUAGES } = require("../../contracts/product-surface.js");
+const { CO2, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 // Widths cover the supported 280-500 px range. Below that range, some long-label
 // combinations cannot fit without exceeding the solver's layout assumptions.
 const WIDTHS = [280, 320, 380, 420, 500];
@@ -134,7 +135,7 @@ test.describe("rangeScale: the 3-label solver never overlaps, across value confi
       test(`${caseName} / ${lang}`, async ({ page }) => {
         await gotoHarness(page);
         const states = {
-          "sensor.avg": mkStateObj("sensor.avg", v.avg, { device_class: "temperature", unit_of_measurement: "°C" }),
+          "sensor.avg": mkStateObj("sensor.avg", v.avg, TEMPERATURE_C),
           "sensor.range": mkStateObj("sensor.range", Math.abs(v.max - v.min), { unit_of_measurement: "°C", minimum: v.min, maximum: v.max }),
         };
         const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, lang);
@@ -176,7 +177,7 @@ test.describe("label reading order follows displayed values, not raw anchor posi
     test(caseName, async ({ page }) => {
       await gotoHarness(page);
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", v.current, { device_class: "temperature", unit_of_measurement: "°C" }),
+        "sensor.avg": mkStateObj("sensor.avg", v.current, TEMPERATURE_C),
         "sensor.range": mkStateObj("sensor.range", Math.abs(v.max - v.min), { unit_of_measurement: "°C", minimum: v.min, maximum: v.max }),
       };
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
@@ -210,7 +211,7 @@ test.describe("grouped and thousands-separated numbers sort correctly", () => {
     test(caseName, async ({ page }) => {
       await gotoHarness(page);
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", v.current, { device_class: "carbon_dioxide", unit_of_measurement: "ppm" }),
+        "sensor.avg": mkStateObj("sensor.avg", v.current, CO2),
         "sensor.range": mkStateObj("sensor.range", Math.abs(v.max - v.min), { unit_of_measurement: "ppm", minimum: v.min, maximum: v.max }),
       };
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
@@ -256,7 +257,7 @@ test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads 
     test(caseName, async ({ page }) => {
       await gotoHarness(page);
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", v.current, { device_class: "temperature", unit_of_measurement: "°C" }),
+        "sensor.avg": mkStateObj("sensor.avg", v.current, TEMPERATURE_C),
         "sensor.range": mkStateObj("sensor.range", v.max - v.min, { unit_of_measurement: "°C", minimum: v.min, maximum: v.max }),
       };
       const cardId = await createCard(
@@ -300,7 +301,7 @@ test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads 
 test("rangeScale: a narrow side interval lifts only the colliding historical label(s) before ellipsis", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 20, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 20, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 9, { unit_of_measurement: "°C", minimum: 12, maximum: 21 }),
   };
   // German's "jetzt" remains one of the longest supported rangeScale
@@ -337,7 +338,7 @@ test("rangeScale: a narrow side interval lifts only the colliding historical lab
 test("rangeScale screenshot regression: current === max lifts max only; min stays lower and the bar remains value-derived", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 26, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 26, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 11.1, {
       unit_of_measurement: "°C",
       minimum: 14.9,
@@ -403,7 +404,7 @@ test("rangeScale screenshot regression: current === max lifts max only; min stay
 test("rangeScale mirrored edge regression: current === min lifts min only without clipping its i-dot; max remains lower", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 10, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 10, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 16, {
       unit_of_measurement: "°C",
       minimum: 10,
@@ -460,7 +461,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
     test(caseName, async ({ page }) => {
       await gotoHarness(page);
       const states = {
-        "sensor.avg": mkStateObj("sensor.avg", v.avg, { device_class: "temperature", unit_of_measurement: "°C" }),
+        "sensor.avg": mkStateObj("sensor.avg", v.avg, TEMPERATURE_C),
         "sensor.range": mkStateObj("sensor.range", Math.abs(v.max - v.min), { unit_of_measurement: "°C", minimum: v.min, maximum: v.max }),
       };
       const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
@@ -488,7 +489,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
   test("min === current === max: reads left-to-right as min | current | max", async ({ page }) => {
     await gotoHarness(page);
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 0, { unit_of_measurement: "°C", minimum: 21, maximum: 21 }),
     };
     const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
@@ -507,7 +508,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
     // must be packed to the LEFT of the fixed current label, preserving
     // min < max order between themselves.
     const states = {
-      "sensor.avg": mkStateObj("sensor.avg", 30, { device_class: "temperature", unit_of_measurement: "°C" }),
+      "sensor.avg": mkStateObj("sensor.avg", 30, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
     };
     const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "en");
@@ -529,7 +530,7 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
 test("hidden comfort/optimal bands also omit their labels while scale-edge labels stay pinned to the row edges", async ({ page }) => {
   await gotoHarness(page);
   const states = {
-    "sensor.avg": mkStateObj("sensor.avg", 22, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
   };
   const cardId = await createCard(
     page,
@@ -769,7 +770,7 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
   // label that leaves its own view is painted over the one beside it.
   test("in a carousel the comfort label never reaches into the neighbouring view", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
-    const attributes = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
+    const attributes = CO2;
     const cardId = await createCard(
       page,
       {

@@ -11,6 +11,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -337,8 +338,8 @@ test("trend live updates: direction, footer text, visibility, and ARIA patch wit
 test("trend footer: visibility options and RangeScale keep the rate out of every non-Scale footer", () => {
   const rooms = [{ entity: "sensor.r1" }, { entity: "sensor.r2" }];
   const roomStates = {
-    "sensor.r1": mkState("sensor.r1", 21, { device_class: "temperature", unit_of_measurement: "°C" }),
-    "sensor.r2": mkState("sensor.r2", 23, { device_class: "temperature", unit_of_measurement: "°C" }),
+    "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   };
   const hidden = trendCard(
     "temperature",

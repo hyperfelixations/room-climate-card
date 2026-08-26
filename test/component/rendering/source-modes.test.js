@@ -16,6 +16,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
+const { HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -27,8 +28,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-const TEMP = { device_class: "temperature", unit_of_measurement: "°C" };
-const HUMIDITY = { device_class: "humidity", unit_of_measurement: "%" };
+const TEMP = TEMPERATURE_C;
 
 function state(entity, value, attributes = TEMP) {
   return mkState(entity, value, attributes);
@@ -129,7 +129,7 @@ const cases = [
     config: { rooms: [room("sensor.c", "C"), room("sensor.f", "F")] },
     states: {
       "sensor.c": state("sensor.c", 20),
-      "sensor.f": state("sensor.f", 68, { device_class: "temperature", unit_of_measurement: "°F" }),
+      "sensor.f": state("sensor.f", 68, TEMPERATURE_F),
     },
     expected: { empty: false, source: "calculated", entity: "", roomIndex: null, label: "Home avg.", chips: true, comparable: true, value: 20, unit: "°C" },
   },

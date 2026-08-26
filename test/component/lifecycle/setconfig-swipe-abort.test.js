@@ -22,6 +22,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../../helpers/gestures.js");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 // The render paths, imported from the source module so the assertions name the same
@@ -42,7 +43,7 @@ const BASE_CONFIG = {
   rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
 };
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
+const C = TEMPERATURE_C;
 
 // A fresh hass with a given average. `offsetMs` moves last_updated so a repeat push
 // with the same value is still a new state as far as the render signature is concerned.

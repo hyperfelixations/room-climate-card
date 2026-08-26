@@ -15,8 +15,9 @@
 
 const { test, expect } = require("@playwright/test");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
+const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-const C = { device_class: "temperature", unit_of_measurement: "°C" };
+const C = TEMPERATURE_C;
 
 function states(average = 22, { room2 = 23, unavailable = false } = {}) {
   if (unavailable) return { "sensor.avg": mkStateObj("sensor.avg", "unavailable", C) };
