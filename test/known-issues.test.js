@@ -171,6 +171,73 @@ expectedFailure("BUG-09", () => {
   }
 });
 
+// BUG-10 — found by the metamorphic relations in test/property/metamorphic.property.test.js,
+// which compare two cards derived from one description rather than checking one card against
+// itself. Every single-card invariant passes on both sides of this: the blank card is
+// perfectly self-consistent, it is simply blank for no good reason.
+//
+// The trigger needs BOTH halves. Rooms that disagree about what they measure, AND a primary
+// entity whose state cannot be read. Either alone is handled correctly: uniform rooms keep
+// working when the primary goes offline, and a usable primary settles a disagreement.
+expectedFailure("BUG-10", () => {
+  const humidity = { state: 50, deviceClass: { value: "humidity" }, unit: { value: "%" } };
+  const rooms = [{ state: 21 }, { state: 23 }, humidity];
+
+  for (const state of ["unavailable", "unknown", "not a number"]) {
+    const built = buildScenario({ metric: "temperature", primary: { state }, rooms });
+    env.withCard(built.config, built.hass, (card) => {
+      const model = card._computeViewModel();
+      assert.equal(
+        model.empty,
+        false,
+        `the primary reads "${state}", and its device_class still says temperature — the two ` +
+          `temperature rooms are usable and the card showed nothing`
+      );
+      assert.equal((model.roomMarkers || []).length, 2, `two usable temperature rooms, ${state}`);
+    });
+  }
+});
+
+test("BUG-10's neighbourhood: each half of the trigger on its own is handled correctly", () => {
+  const humidity = { state: 50, deviceClass: { value: "humidity" }, unit: { value: "%" } };
+
+  // Uniform rooms and an unusable primary: the rooms carry the card, which is right.
+  const uniform = buildScenario({
+    metric: "temperature",
+    primary: { state: "unavailable" },
+    rooms: [{ state: 21 }, { state: 23 }],
+  });
+  env.withCard(uniform.config, uniform.hass, (card) => {
+    const model = card._computeViewModel();
+    assert.equal(model.empty, false, "uniform rooms survive an unavailable primary");
+    assert.equal(model.roomMarkers.length, 2);
+  });
+
+  // Rooms that disagree and a primary that can be read: the primary settles it, which is
+  // also right — and is exactly the arbitration the defect above fails to reach for.
+  const arbitrated = buildScenario({
+    metric: "temperature",
+    primary: { state: 22 },
+    rooms: [{ state: 21 }, { state: 23 }, humidity],
+  });
+  env.withCard(arbitrated.config, arbitrated.hass, (card) => {
+    const model = card._computeViewModel();
+    assert.equal(model.empty, false);
+    assert.equal(model.roomMarkers.length, 2, "the humidity room is ignored and the others are not");
+  });
+
+  // And with no primary configured at all there genuinely is nobody to arbitrate, so giving
+  // up is correct. This is the case the fix must NOT change.
+  const noArbiter = buildScenario({
+    metric: "temperature",
+    primary: null,
+    rooms: [{ state: 21 }, humidity],
+  });
+  env.withCard(noArbiter.config, noArbiter.hass, (card) => {
+    assert.equal(card._computeViewModel().empty, true, "nobody can say which metric the card is about");
+  });
+});
+
 test("BUG-09's neighbourhood: the same mistake one level down IS refused by name", () => {
   const built = buildScenario({ rooms: [{}] });
   assert.throws(

@@ -10,6 +10,16 @@
 # that usually reports on nothing is one nobody opens. Once a week is often enough to find a
 # regression while the change that caused it is still recent.
 #
+# TWO SWEEPS RUN HERE, and they ask different questions. The model sweep throws one described
+# dashboard at the card and checks that the card is self-consistent. The METAMORPHIC sweep
+# derives a second dashboard from the first and checks that the difference between the two
+# cards is the difference that was asked for — which is the only way to catch a card that is
+# not wrong, merely worse than it should be.
+#
+# They get different case counts because a metamorphic case costs about three times a model
+# one: it builds the card at least twice, and some relations apply a sequence of
+# configurations to it. Measured on this suite, roughly 15 ms and 48 ms per case.
+#
 # WHAT A FAILURE HERE MEANS. The run prints a SHRUNK case: a minimal scenario description in
 # plain JSON, small enough to read and directly usable as a fixture. Paste it into
 # scenario(…) in a hand-written test, and the finding is reproducible forever after — the
@@ -34,6 +44,10 @@ on:
         description: "How many randomly described dashboards to try"
         required: false
         default: "50000"
+      metamorphic_cases:
+        description: "How many of those to also compare against a derived dashboard"
+        required: false
+        default: "20000"
 
 permissions:
   contents: read
@@ -60,6 +74,7 @@ jobs:
 
       - name: Sweep
         env:
-          # The scheduled run has no inputs, so the fallback is what the weekly sweep uses.
+          # The scheduled run has no inputs, so the fallbacks are what the weekly sweep uses.
           ROOM_CLIMATE_CARD_FUZZ_CASES: ${{ github.event.inputs.cases || '50000' }}
+          ROOM_CLIMATE_CARD_METAMORPHIC_CASES: ${{ github.event.inputs.metamorphic_cases || '20000' }}
         run: npm run test:fuzz:run
