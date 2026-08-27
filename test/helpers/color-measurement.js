@@ -143,12 +143,22 @@ function measureRamp(palette) {
   const middle = palette.below.length;
   const fromMiddle = ramp.map((hex) => deltaE(ramp[middle], hex));
 
+  // TWO READINGS OF "IT KEEPS GOING OUTWARDS", and the difference is a step that stands still.
+  //
+  // `monotone` asks that every step be STRICTLY further from the middle than the one before —
+  // what a ramp with room to move owes. `neverReturns` allows a step to stay where it is, which
+  // is the honest answer for a wing with nowhere left to go: nothing is paler than white, so a
+  // white ramp's pale wing repeats itself rather than turning round. What neither allows is a
+  // wing that comes BACK towards the middle, which is a ramp that has folded over.
   let monotone = true;
+  let neverReturns = true;
   for (let index = middle + 1; index < ramp.length; index++) {
     if (fromMiddle[index] <= fromMiddle[index - 1]) monotone = false;
+    if (fromMiddle[index] < fromMiddle[index - 1] - 1e-9) neverReturns = false;
   }
   for (let index = middle - 1; index >= 0; index--) {
     if (fromMiddle[index] <= fromMiddle[index + 1]) monotone = false;
+    if (fromMiddle[index] < fromMiddle[index + 1] - 1e-9) neverReturns = false;
   }
 
   return {
@@ -156,6 +166,7 @@ function measureRamp(palette) {
     highWing: fromMiddle[ramp.length - 1],
     ends: deltaE(ramp[0], ramp[ramp.length - 1]),
     monotone,
+    neverReturns,
     minStep: smallestNeighbourStep(ramp),
     onLight: Math.min(...ramp.map((hex) => contrastRatio(hex, LIGHT_CARD))),
     onDark: Math.min(...ramp.map((hex) => contrastRatio(hex, DARK_CARD))),

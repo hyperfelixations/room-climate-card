@@ -401,6 +401,9 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const classification = domainModel.classification.average;
   const tone = buildTone({
     classification,
+    // What the card is painted on, so the pill and the icon can thin their own tint where it
+    // would otherwise swallow the colour — see tone-legibility.js. The colour does not move.
+    surface: domainModel.surface,
     // config.icon wins outright; then the active profile's own icon; then the
     // metric's stable default, so a kind without icon tiers is never forced into a
     // semantically dubious icon family.
@@ -559,6 +562,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       comfort: domainModel.comfort,
       unit,
       texts,
+      surface: domainModel.surface,
     })
   );
 

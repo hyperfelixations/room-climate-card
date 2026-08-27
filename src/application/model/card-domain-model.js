@@ -96,6 +96,10 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   if (context.averageSource === null) {
     return {
       empty: true,
+      // What the card is painted on. Carried because the presentation layer paints a colour on
+      // a tint of itself in three places and has to know what is underneath that tint — see
+      // domain/classification/tone-legibility.js. This layer is the only one that has it.
+      surface,
       // Which sources the card actually refers to. Carried rather than recomputed
       // downstream — see where it is resolved above.
       topology,
@@ -214,6 +218,8 @@ export function buildCardDomainModel({ states, config, context, language, surfac
 
   return {
     empty: false,
+    // See the note on the no-data branch above.
+    surface,
     topology,
     metric: {
       kind: metricKind,

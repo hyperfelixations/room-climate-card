@@ -22,7 +22,7 @@
 // The screenshot is deliberately NOT a golden. A golden would freeze the pixels; the point
 // of this one is that a human looks at it.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
@@ -143,20 +143,6 @@ test("every role's background is the one the browser actually composites", async
     expect(entry.alpha, name).toBeCloseTo(0.2, 3);
   }
 
-  // 3 — and a room chip's mark is an 18% tint over the chip's own 10% one.
-  const chip = await paintedWith(page, cardId, ".rtc-room-chip", "background");
-  const mark = await page.evaluate((id) => {
-    const chips = document.getElementById(id).shadowRoot.querySelectorAll(".rtc-room-top *");
-    for (const element of chips) {
-      const background = getComputedStyle(element).backgroundColor;
-      if (background && background !== "rgba(0, 0, 0, 0)") return { background, color: getComputedStyle(element).color };
-    }
-    return null;
-  }, cardId);
-  expect(mark, "a room chip paints a coloured mark").not.toBeNull();
-  expect(chip.alpha).toBeCloseTo(0.1, 3);
-  expect(mark.background).toMatch(/0\.18\)$/);
-
   // 4 — the roles, given the same surface, produce exactly those backgrounds. This is the
   // assertion the whole file exists for: the model and the paint agree.
   const modelled = await page.evaluate(
@@ -164,15 +150,62 @@ test("every role's background is the one the browser actually composites", async
       const roles = await import("/src/domain/classification/paint-roles.js");
       const point = roles.pointOf(cardColour, textColour);
       const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
+      // Through backgroundsFor() rather than off the role object: the header icon declares
+      // that it shares the status pill's measurement rather than restating it, so it has no
+      // background function of its own — see `mirrors` in paint-roles.js.
+      const backgroundOf = (id) => roles.backgroundsFor(byId(id), toneColour, point)[0];
       return {
-        marker: byId("marker").background(toneColour, point),
-        toneLabel: byId("toneLabel").background(toneColour, point),
-        toneIcon: byId("toneIcon").background(toneColour, point),
+        marker: backgroundOf("marker"),
+        toneLabel: backgroundOf("toneLabel"),
+        toneIcon: backgroundOf("toneIcon"),
         bandForeground: roles.foregroundFor(byId("toneBand"), toneColour, point),
       };
     },
     [card, surface.text, tone]
   );
+
+  // 4a — AND THE THINNER TINT IS THE ONE THE MODEL COMPUTES. The chip mark's weight is no
+  // longer a constant: where a colour comes close enough to the chip that its own tint would
+  // swallow the mark, the tint gets out of the way rather than the colour moving — there is one
+  // colour per score on the card, and it is the same one the scale marker paints with. See
+  // domain/classification/tone-legibility.js.
+  //
+  // Both halves are read off the element rather than assumed, because WHICH backdrop applies is
+  // itself a decision the card makes: a room outside the comfort band sits on a tint of its own
+  // colour, one inside sits on the neutral chip.
+  const painted = await page.evaluate((id) => {
+    const chip = document.getElementById(id).shadowRoot.querySelector(".rtc-room-chip");
+    for (const element of chip.querySelectorAll(".rtc-room-top *")) {
+      const background = getComputedStyle(element).backgroundColor;
+      if (background && background !== "rgba(0, 0, 0, 0)") {
+        return { markBackground: background, roomColor: chip.style.getPropertyValue("--room-color"), roomBackground: chip.style.getPropertyValue("--room-bg") };
+      }
+    }
+    return null;
+  }, cardId);
+  expect(painted, "a room chip paints a coloured mark").not.toBeNull();
+
+  const paintedAlpha = Number(painted.markBackground.match(/rgba?\(([^)]+)\)/)[1].split(",")[3] ?? 1);
+  expect(paintedAlpha).toBeLessThanOrEqual(0.18 + 1e-9);
+
+  const modelledAlpha = await page.evaluate(
+    async ([cardColour, textColour, roomColour, roomBackground]) => {
+      const [roles, colour, tone, fit] = await Promise.all([
+        import("/src/domain/classification/paint-roles.js"),
+        import("/src/core/color.js"),
+        import("/src/domain/classification/tone-legibility.js"),
+        import("/src/domain/classification/palette-fit.js"),
+      ]);
+      const point = roles.pointOf(cardColour, textColour);
+      const outsideTheBand = roomBackground.startsWith("rgba");
+      const backdrop = outsideTheBand ? colour.compositeOver(roomColour, roles.TINT_ALPHAS.chipOutBackground, point.card) : point.chipNeutral;
+      return tone.legibleTintAlpha(roomColour, backdrop, roles.TINT_ALPHAS.chipMark, fit.requiredSeparationOf("chipMark"));
+    },
+    [card, surface.text, painted.roomColor, painted.roomBackground]
+  );
+  // To two digits, because Chromium reports a composited alpha quantised to 1/255 — a value the
+  // card wrote as 0.164 comes back as 0.165.
+  expect(paintedAlpha).toBeCloseTo(modelledAlpha, 2);
 
   const compose = (base, alpha, over) => {
     const parse = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
@@ -205,7 +238,7 @@ const BRACKET = [
   ["teal", "toneLabel", "comfortably readable"],
 ];
 
-test("the bracketing cards, rendered for a person to look at", async ({ page }) => {
+test("the bracketing cards, rendered for a person to look at", async ({ page }, testInfo) => {
   await gotoHarness(page);
   await page.setViewportSize({ width: 900, height: 1400 });
 
@@ -227,7 +260,8 @@ test("the bracketing cards, rendered for a person to look at", async ({ page }) 
 
   // Not a golden: the file is written so it can be opened and judged, and it is regenerated
   // on every run rather than compared against a stored copy.
-  await page.locator("#stage").screenshot({ path: "test-results/paint-role-calibration.png" });
+  const plate = await page.locator("#stage").screenshot();
+  await testInfo.attach("paint-role-calibration", { body: plate, contentType: "image/png" });
 
   // What the plate is being checked against, asserted so the run still fails if the verdicts
   // and the picture ever part company.

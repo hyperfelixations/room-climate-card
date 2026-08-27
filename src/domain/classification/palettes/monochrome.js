@@ -36,7 +36,8 @@
 // comfortable on both card backgrounds. Naming a colour is a choice, and this file keeps
 // it rather than overruling it.
 
-import { hexToOklch, oklabDistance, oklchToHex } from "../../../core/oklch.js";
+import { hexToOklch, oklchToHex } from "../../../core/oklch.js";
+import { MIN_STEP, WING_STEPS, mix, pathLength, placeAlong } from "./geometry.js";
 
 // Where each wing is headed, in Oklab lightness.
 //
@@ -53,8 +54,8 @@ const PALE_ANCHOR = 0.76;
 const DEEP_ANCHOR = 0.5;
 const MIN_TRAVEL = 0.08;
 // Absolute stops, so an extreme base cannot send the ramp out of the space entirely.
-const LIGHTNESS_CEILING = 0.96;
-const LIGHTNESS_FLOOR = 0.1;
+export const LIGHTNESS_CEILING = 0.96;
+export const LIGHTNESS_FLOOR = 0.1;
 
 // What each wing does to colourfulness, as a factor on the base colour's own chroma.
 // Pale washes out, deep intensifies — and because both are PROPORTIONAL, a base with no
@@ -66,58 +67,119 @@ const LIGHTNESS_FLOOR = 0.1;
 const PALE_CHROMA = 0.25;
 const DEEP_CHROMA = 1.5;
 
-// The reach of every built-in profile, so a profile and a full-length generated palette
-// map one to one and the middle of one is the middle of the other.
-const MAX_STEPS = 5;
+// THE MOST COLOURFULNESS THIS HUE CAN HOLD AT THIS LIGHTNESS. Asked of the conversion itself
+// rather than modelled: oklchToHex() resolves an out-of-gamut colour by reducing chroma at
+// fixed lightness and fixed hue, so what comes back from an impossible request IS the limit.
+function chromaCeiling(lightness, hue) {
+  return hexToOklch(oklchToHex({ lightness, chroma: 0.5, hue })).chroma;
+}
 
-// How far apart two neighbouring steps have to look before the ramp is allowed to claim
-// them as two steps. In Oklab units, where the distance is the perceived difference (see
-// oklabDistance); several times what counts as just noticeable.
-const MIN_STEP = 0.04;
-
-// One wing: up to MAX_STEPS colours running outwards from the base towards `endLightness`
-// and `endChroma`.
+// Where a wing is headed in colourfulness, given the base it starts from — and never further
+// than the space can go.
 //
-// THE LENGTH IS NOT FIXED, and that is a feature rather than a concession. `gold` is
-// already so light that five distinguishable steps do not fit above it, and `white` has
-// no room at all — so they get three and none. Faking the steps would mean five colours a
-// reader cannot tell apart, which is worse than three they can; and a palette may have
-// wings of different lengths, including empty ones, so nothing downstream has to be told
-// about this. Fewer steps means bigger gaps, so the longest length that still clears
-// MIN_STEP everywhere is the answer, and it is found by trying from the top.
-function wing(base, baseHex, endLightness, endChroma) {
-  const at = (t) =>
-    oklchToHex({
-      lightness: base.lightness + (endLightness - base.lightness) * t,
-      chroma: base.chroma + (endChroma - base.chroma) * t,
-      hue: base.hue,
-    });
+// THE CLAMP IS WHAT KEEPS THE PATH FROM DOUBLING BACK. The deep wing asks for half again the
+// base's chroma, and at the dark end that is routinely more than sRGB holds. Unclamped, the
+// interpolation walks towards a colour that does not exist, the conversion pulls each step
+// back to the edge of the gamut by a different amount, and the painted path wanders instead of
+// travelling. Measured on `palette: navy`, that put two of its five deep steps 0.6 apart in
+// CIEDE2000 while the ends of the same wing were 3.5 apart — a ramp with a stutter in it.
+// Aiming at a colour that exists removes the wander at the source.
+const endChromaFor = (base, side, lightness) =>
+  Math.min(base.chroma * (side === "pale" ? PALE_CHROMA : DEEP_CHROMA), chromaCeiling(lightness, base.hue));
+const endOf = (base, side, lightness) => ({ lightness, chroma: endChromaFor(base, side, lightness), hue: base.hue });
 
-  for (let steps = MAX_STEPS; steps >= 1; steps -= 1) {
-    const colors = Array.from({ length: steps }, (_, index) => at((index + 1) / steps));
-    let previous = baseHex;
-    const separated = colors.every((color) => {
-      const far = oklabDistance(previous, color) >= MIN_STEP;
-      previous = color;
-      return far;
-    });
-    if (separated) return colors;
+// ONE WING: WING_STEPS colours running outwards from the base to `endLightness`, spaced by what
+// a reader SEES rather than by the interpolation parameter — see placeAlong() in geometry.js.
+//
+// THE LENGTH IS FIXED — see WING_STEPS there too. What is not fixed is how far the wing
+// travels, and that is where the room a colour has shows up instead: `white` has nothing paler
+// than itself, so its five pale steps are five whites. That is the honest picture of a colour
+// with nowhere to go, and it renders exactly as the empty wing it replaces did — every reading
+// below optimal shows the colour that was named.
+//
+// Whether the steps can be told apart is judged where something can be done about it:
+// palettes/legible.js aims the endpoints against the background the card is really on, and
+// refuses a ramp tighter than the one it started from.
+export function monochromeWing(base, side, endLightness) {
+  const end = endOf(base, side, endLightness);
+  return placeAlong(base, end, WING_STEPS).map((t) => oklchToHex(mix(base, end, t)));
+}
+
+// WHERE THE TWO WINGS ARE HEADED for a given base, as the generator would choose it left to
+// itself. Separated out because it is now a DEFAULT rather than the only possibility: a ramp
+// that has to survive an unusual background may need its wings aimed somewhere else, and the
+// caller that knows the background is the one that can say where (see palettes/legible.js).
+//
+// Kept as one function so that "what this generator would do on its own" has exactly one
+// definition, and an adapted ramp is visibly the same construction with different endpoints.
+// HOW MANY PLACES TO TRY when a wing has to reach further than its anchor.
+const REACH_CANDIDATES = 16;
+
+// AN ANCHOR IS A FLOOR, NOT A TARGET.
+//
+// The anchors say where a wing is AIMED, and that was enough while a wing could shorten itself
+// when it ran out of room. With the length fixed it is not: a wing that travels a tenth of the
+// lightness range still has to fit five steps into it. `palette: blue` is the case — #0000FF
+// already sits below the deep anchor, so its deep wing aimed only MIN_TRAVEL further and came
+// back as five blues 1.5 apart in CIEDE2000, which is one colour written five times.
+//
+// So a wing that is aimed too close is pushed outwards until the path it walks is long enough
+// to hold its five steps MIN_STEP apart, or until it reaches the edge of the space.
+//
+// OVERRIDING AN ANCHOR COSTS SOMETHING, which is why the push stops as soon as the steps fit.
+// The anchors sit at the edges of the band that stays readable on both card backgrounds, so a
+// wing that reaches past one has a far end that is dim on one of them — and the card then
+// repairs it against the background it is really on, which may move the named colour.
+//
+// ELEVEN STEPS DO NOT FIT INSIDE THAT BAND, and that is the whole of it. The band is 0.26 of
+// the lightness range wide; eleven steps a reader can separate need about half of it again. So
+// a derived ramp cannot be tuned to both canonical backgrounds at once, and the honest split is
+// this: the generator gives the best ramp it can without knowing the background, and
+// palettes/legible.js tunes it to the one the card is actually on.
+//
+// The reach was calibrated by sweeping it against both things it trades off — how well the
+// ramp reads, and how often the colour the user named survives adaptation on the two canonical
+// cards:
+//
+//   reach   median tightest step   ramps with an unreadable pair   named colour kept (white / dark)
+//   0.10          2.40                        41                        83 / 118
+//   0.13          2.72                        33                        83 / 115
+//   0.16          3.16                        34                        83 / 115
+//   0.20          3.74                        32                        83 / 114
+//
+// The named colour barely notices, and the ramp does — so the wing takes the room.
+function reachedOut(base, side, aim, limit) {
+  const wanted = WING_STEPS * MIN_STEP;
+  if (pathLength(base, endOf(base, side, aim)) >= wanted) return aim;
+  let furthest = aim;
+  for (let step = 1; step <= REACH_CANDIDATES; step += 1) {
+    furthest = aim + (limit - aim) * (step / REACH_CANDIDATES);
+    if (pathLength(base, endOf(base, side, furthest)) >= wanted) break;
   }
-  return [];
+  return furthest;
+}
+
+export function monochromeAnchors(base) {
+  const pale = Math.max(base.lightness, Math.min(LIGHTNESS_CEILING, Math.max(PALE_ANCHOR, base.lightness + MIN_TRAVEL)));
+  const deep = Math.min(base.lightness, Math.max(LIGHTNESS_FLOOR, Math.min(DEEP_ANCHOR, base.lightness - MIN_TRAVEL)));
+  return {
+    pale: reachedOut(base, "pale", pale, Math.max(base.lightness, LIGHTNESS_CEILING)),
+    deep: reachedOut(base, "deep", deep, Math.min(base.lightness, LIGHTNESS_FLOOR)),
+  };
 }
 
 // The palette a base colour implies. Total: every hex produces a palette, and what counts
 // as a valid base is the caller's decision, not this file's.
-export function monochromePalette(baseHex, id = "monochrome") {
+//
+// `anchors` overrides where the wings are headed, in Oklab lightness. Omitted — which is
+// every call the card makes on its own — the generator picks them itself and produces exactly
+// what it always did. A caller may aim a wing at a lightness on EITHER side of the base: on a
+// background where nothing paler than the base can be seen, a pale wing that runs downwards
+// into the washed-out is still plainly the pale wing, because the deep wing runs downwards
+// into the saturated and the two never look alike.
+export function monochromePalette(baseHex, id = "monochrome", anchors = null) {
   const base = hexToOklch(baseHex);
-  const paleLightness = Math.max(
-    base.lightness,
-    Math.min(LIGHTNESS_CEILING, Math.max(PALE_ANCHOR, base.lightness + MIN_TRAVEL))
-  );
-  const deepLightness = Math.min(
-    base.lightness,
-    Math.max(LIGHTNESS_FLOOR, Math.min(DEEP_ANCHOR, base.lightness - MIN_TRAVEL))
-  );
+  const { pale: paleLightness, deep: deepLightness } = anchors || monochromeAnchors(base);
   return {
     id,
     // The base colour itself, passed through rather than round-tripped through Oklab. A
@@ -125,7 +187,7 @@ export function monochromePalette(baseHex, id = "monochrome") {
     // promise; the promise is that `palette: teal` puts #008080 on the card. The caller
     // hands over an already-normalized hex (see parseColorToken in core/color.js).
     optimal: baseHex,
-    above: wing(base, baseHex, deepLightness, base.chroma * DEEP_CHROMA),
-    below: wing(base, baseHex, paleLightness, base.chroma * PALE_CHROMA),
+    above: monochromeWing(base, "deep", deepLightness),
+    below: monochromeWing(base, "pale", paleLightness),
   };
 }

@@ -145,7 +145,17 @@ export const PAINT_ROLES = Object.freeze([
   Object.freeze({
     id: "toneIcon",
     what: "the header icon: a 22px thin-stroked glyph on a 20% tint of ITSELF",
-    background: (color, point) => compositeOver(color, TONE_SOFT_ALPHA, point.card),
+    // THE SAME MEASUREMENT AS THE PILL, said once. Both put the colour at full strength on
+    // `var(--tone-soft)` — the same 20% tint over the same card — and both ask for the same
+    // separation, because nothing that was looked at separated a 22px glyph from a 12px word.
+    // Measured over 14 palettes on 9 backgrounds, the two judgements were identical in all
+    // 1206 step/role pairs.
+    //
+    // `mirrors` says that rather than repeating the recipe. The role KEEPS ITS OWN ID, so the
+    // report still names the icon separately and a future stylesheet change can part the two
+    // by giving this role a background of its own; what it does not do is compute the same
+    // number twice on every step of every render.
+    mirrors: "toneLabel",
     factor: ROLE_FACTORS.toneIcon,
     selfTinted: true,
   }),
@@ -166,16 +176,42 @@ export const PAINT_ROLES = Object.freeze([
   }),
 ]);
 
+// The role whose recipe this one actually uses. Its own, unless it mirrors another.
+//
+// Resolved here rather than at every call site, so `mirrors` stays an optimisation and never
+// becomes a shape a caller has to know about: ask any role for its foreground and you get one.
+function recipeOf(role) {
+  return role.mirrors ? PAINT_ROLES.find((other) => other.id === role.mirrors) : role;
+}
+
 // A role paints the colour itself unless it says otherwise.
 export function foregroundFor(role, color, point) {
-  return role.foreground ? role.foreground(color, point) : color;
+  const recipe = recipeOf(role);
+  return recipe.foreground ? recipe.foreground(color, point) : color;
 }
 
 // Every background this role paints on at one surface point. Usually one; the chip mark has
 // two, because a room inside the comfort band and one outside it sit on different chips.
 export function backgroundsFor(role, color, point) {
-  return role.backgrounds ? role.backgrounds(color, point) : [role.background(color, point)];
+  const recipe = recipeOf(role);
+  return recipe.backgrounds ? recipe.backgrounds(color, point) : [recipe.background(color, point)];
 }
+
+// Checked at MODULE LOAD, like the palette registry and for the same reason: a mirror that
+// points at nothing, at itself, or at a role that has not been judged yet would produce an
+// undefined judgement on a real card, and the honest moment to find that out is the build.
+// The order matters because the evaluator walks PAINT_ROLES once and copies the judgement it
+// already has.
+PAINT_ROLES.forEach((role, index) => {
+  if (!role.mirrors) return;
+  const target = PAINT_ROLES.findIndex((other) => other.id === role.mirrors);
+  if (target < 0) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}", which does not exist`);
+  if (target >= index) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}", which is not judged before it`);
+  const source = PAINT_ROLES[target];
+  if (source.mirrors) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}", which is itself a mirror`);
+  if (source.factor !== role.factor) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}" but asks for a different separation`);
+  if (source.selfTinted !== role.selfTinted) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}" across the two kinds of role`);
+});
 
 export const PAINT_ROLE_IDS = Object.freeze(PAINT_ROLES.map((role) => role.id));
 
@@ -222,4 +258,32 @@ export function pointOf(card, text = null) {
 // The points of a surface, in the order the samples were read.
 export function pointsOf(surface) {
   return surface.samples.map((card) => pointOf(card, surface.text));
+}
+
+// A colour has to be handed to backgroundsFor(), and a PALETTE role never reads it. Named
+// rather than inlined so that the fact is stated where it is relied on.
+const COLOUR_IS_NOT_READ = "#000000";
+
+// THE PALETTE QUESTION AS ONE LIST AND ONE NUMBER: every background a palette colour is
+// painted on, and the separation it must keep from all of them.
+//
+// The reduction is a property of the two roles rather than a convenient simplification.
+// `accent` and `marker` both paint the colour at FULL STRENGTH, both on something the colour
+// does not tint, and both at factor 1.0 — so "can this colour be seen as a palette colour
+// here" really is "is it far enough from every one of these". Tests hold the roles to that
+// shape, so the reduction cannot quietly stop being true.
+//
+// This is what lets a transformation search for a repair without evaluating a whole report
+// per candidate: the search uses this, and the finished answer is checked against the report.
+export function paletteDemandOf(surface, threshold) {
+  const points = pointsOf(surface);
+  const backgrounds = new Set();
+  let required = 0;
+  for (const role of PALETTE_ROLES) {
+    required = Math.max(required, threshold * role.factor);
+    for (const point of points) {
+      for (const background of backgroundsFor(role, COLOUR_IS_NOT_READ, point)) backgrounds.add(background);
+    }
+  }
+  return { backgrounds: Object.freeze([...backgrounds]), required };
 }

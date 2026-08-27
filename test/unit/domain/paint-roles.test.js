@@ -131,12 +131,47 @@ test("a role is either painted on something it cannot influence, or on a tint of
   }
 });
 
+test("the header icon is the status pill measured once, not twice", () => {
+  // MEASURED, not assumed: over 14 palettes on 9 backgrounds — 1206 step/role pairs — the two
+  // judgements were identical in every single one. Both paint the colour at full strength on
+  // the same 20% tint of itself over the card, and both ask for the same separation; nothing
+  // about a 22px glyph and a 12px word separated them when the factors were bracketed on
+  // rendered cards.
+  //
+  // So the icon DECLARES that it is the pill rather than arriving at the same answer by
+  // running the same arithmetic a second time. The report keeps both names, because a
+  // stylesheet change could still part them — and this test is what would notice.
+  const icon = byId("toneIcon");
+  assert.equal(icon.mirrors, "toneLabel", "the icon says whose measurement it shares");
+  assert.equal(icon.background, undefined, "and therefore brings no background of its own");
+  assert.equal(icon.foreground, undefined);
+  assert.equal(icon.factor, byId("toneLabel").factor);
+
+  const surfaces = [["#FFFFFF", "#212121"], ["#1C1C1C", "#E1E1E1"], ["#808080", null], ["#C8B400", null], ["#FA8072", null]];
+  let compared = 0;
+  for (const id of ["pastel", "vivid", "color-vision", "signal"]) {
+    for (const [card, text] of surfaces) {
+      const report = fit.evaluatePaletteFit(palettes.paletteForName(id), roles.surfaceOf([card], text));
+      for (const step of [...report.steps, report.invalid]) {
+        const strip = (judged) => ({ ...judged, role: null });
+        assert.deepEqual(strip(step.roles.toneIcon), strip(step.roles.toneLabel), id + " on " + card + ", " + step.key);
+        compared += 1;
+      }
+    }
+  }
+  assert.ok(compared > 200, "only " + compared + " pairs compared");
+});
+
 test("every role states what it is and needs a defensible amount of separation", () => {
   for (const role of roles.PAINT_ROLES) {
     assert.match(role.id, /^[a-zA-Z]+$/);
     assert.ok(role.what.length > 20, `${role.id}: say what it is`);
     assert.ok(role.factor > 0 && role.factor <= 2, `${role.id}: factor ${role.factor}`);
-    assert.equal(typeof role.background === "function" || typeof role.backgrounds === "function", true, role.id);
+    // Either it brings its own recipe, or it names the role whose recipe it shares. A role
+    // with neither would measure against undefined.
+    const hasOwnRecipe = typeof role.background === "function" || typeof role.backgrounds === "function";
+    assert.equal(hasOwnRecipe || typeof role.mirrors === "string", true, role.id);
+    assert.equal(hasOwnRecipe && typeof role.mirrors === "string", false, role.id + ": a mirror does not also bring its own");
   }
   // The ordering the rendered cards actually support, and no more. A large area fill is the
   // easiest thing on the card to see; small text on a tint of itself is the hardest. Nothing
@@ -226,14 +261,56 @@ test("a colour on a card it cannot be seen on fails in every role at once", () =
   }
 });
 
-test("a step's worst role is the one a method would have to fix first", () => {
-  const report = fit.evaluatePaletteFit(palettes.paletteForColor("lime"), LIGHT());
-  for (const step of report.steps) {
+test("each verdict summarises its own roles, and never the other side's", () => {
+  // THE DEFECT THIS PINS DOWN. `fits` has always meant the palette question, and `deficit`
+  // and `margin` sat beside it while being computed over all seven roles. Because a
+  // self-tinted role fails almost everywhere, that made `margin` zero on steps that were
+  // comfortably fine — measured, every step of pastel on #808080 reported margin 0, and a
+  // transformation asking "how far may I move this before I break something that works"
+  // could not get an answer out of the report at all.
+  //
+  // Now each axis summarises itself. The two are never added, and neither is silently read
+  // for the other.
+  const lime = fit.evaluatePaletteFit(palettes.paletteForColor("lime"), LIGHT());
+  for (const step of lime.steps) {
+    assert.ok(
+      roles.PALETTE_ROLES.some((role) => role.id === step.worstRole),
+      step.key + ": " + step.worstRole + " is not a palette role"
+    );
     const worst = step.roles[step.worstRole];
-    for (const judged of Object.values(step.roles)) {
-      assert.ok(judged.deficit <= worst.deficit + 1e-12, `${step.key}: ${judged.role} is worse than ${step.worstRole}`);
+    for (const role of roles.PALETTE_ROLES) {
+      assert.ok(step.roles[role.id].deficit <= worst.deficit + 1e-12, step.key + ": " + role.id + " is worse than " + step.worstRole);
     }
+
+    assert.ok(
+      roles.SELF_TINTED_ROLES.some((role) => role.id === step.worstSelfTintRole),
+      step.key + ": " + step.worstSelfTintRole + " is not a self-tinted role"
+    );
+    const worstTint = step.roles[step.worstSelfTintRole];
+    for (const role of roles.SELF_TINTED_ROLES) {
+      assert.ok(step.roles[role.id].deficit <= worstTint.deficit + 1e-12, step.key + ": " + role.id + " is worse than " + step.worstSelfTintRole);
+    }
+
+    assert.equal(step.fits, step.deficit === 0, step.key + ": fits and deficit are one statement");
+    assert.equal(step.selfTintFits, step.selfTintDeficit === 0, step.key + ": and so are their counterparts");
   }
+});
+
+test("a passing step reports the room it still has, even while its own pill fails", () => {
+  // The measured case: on white every pastel step passes the palette question while some of
+  // them fail the recipe. The palette-axis margin still has to be a real number there,
+  // because that is what says how far the ramp may travel before it breaks something that
+  // works today.
+  const onWhite = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), LIGHT());
+  assert.equal(onWhite.fits, true);
+  assert.equal(onWhite.selfTintFits, false, "some of its steps really are unreadable as a chip mark");
+  for (const step of onWhite.steps) {
+    assert.equal(step.deficit, 0, step.key);
+    assert.ok(step.margin > 0, step.key + ": a passing step must say how much room is left");
+  }
+  const failing = onWhite.steps.filter((step) => !step.selfTintFits);
+  assert.ok(failing.length > 0);
+  for (const step of failing) assert.ok(step.selfTintDeficit > 0, step.key);
 });
 
 test("a role reports the worst point of a gradient, not the first", () => {

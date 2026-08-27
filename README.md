@@ -600,12 +600,9 @@ whole way. A color with no hue of its own — `gray`, `white`, `black` — gives
 grayscale ramp, which stays readable with any kind of color vision.
 
 Not every color has room in both directions: nothing is paler than `white`, and
-`gold` is already so light that only a couple of paler steps fit. The ramp is
-then shorter on that side.
-
-One honest limitation: pick something very dark or very pale and its far end
-will be hard to read on one of the two dashboard themes. Every ramp keeps at
-least a couple of steps that read well on both.
+`gold` is already so light that its palest steps sit close together. Both
+directions are the same length, so a side with nowhere left to go repeats the
+color it ended on.
 
 Two or three colors, joined by hyphens, give you a ramp that travels between
 them:
@@ -630,6 +627,13 @@ single color wins over the hyphenated form. That matters for five CSS colors you
 can spell either way: `orangered` is one color, `orange-red` is a ramp from
 orange to red. The same goes for `blueviolet`, `greenyellow`, `limegreen` and
 `yellowgreen`.
+
+Whichever you pick, the card fits it to the background it is standing on. A
+dark theme, a light theme, a card you have colored yourself — the ramp moves
+just far enough to be read there, in brightness and saturation only, so `teal`
+arrives as teal. That covers the four palettes above and every ramp built from
+a color you name. A palette you write out yourself is used exactly as you
+typed it.
 
 #### Writing your own
 

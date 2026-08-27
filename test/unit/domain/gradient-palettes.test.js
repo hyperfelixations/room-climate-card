@@ -32,6 +32,8 @@ let parseColorToken;
 let CSS_COLOR_NAMES;
 let hexToOklch;
 let oklabDistance;
+// CIEDE2000, which is neither of the two instruments the generators use — see the spacing test.
+const { deltaE } = require("../../helpers/color-measurement.js");
 
 test.before(async () => {
   ({ gradientPalette, MAX_GRADIENT_COLORS } = await import("../../../src/domain/classification/palettes/gradient.js"));
@@ -110,52 +112,95 @@ test("an achromatic end borrows the hue of the other, rather than travelling to 
   }
 });
 
+test("every spelling gives eleven steps, whatever colours were named", () => {
+  // A derived palette answers the card's own classification profiles, which run from -5 to +5,
+  // so the two map one to one — see WING_STEPS in palettes/geometry.js. The length never
+  // depends on the colours: it is the same eleven for two ends a reader can barely separate as
+  // for two at opposite corners of the space.
+  for (const spec of ["blue-red", "red-orange", "teal-teal", "black-white", "gold-khaki", "blue-green-red", "red-white-green"]) {
+    const palette = from(spec);
+    assert.equal(palette.below.length, 5, spec + ": below");
+    assert.equal(palette.above.length, 5, spec + ": above");
+  }
+});
+
 test("the steps are spaced by what a reader sees, not by the interpolation parameter", () => {
-  // The regression guard for the gamut-corner defect. Measured over every ordered pair and
-  // green-centred triple of a representative set: before the fix the worst ramp had a step
-  // 4.6 times its smallest and 94 combinations were past 3; after it, none is.
+  // The regression guard for the gamut-corner defect. sRGB holds far more chroma at some hues
+  // and lightnesses than at others, and a colour like `blue` sits on a corner of it: stepping
+  // away by equal parameter costs almost all of its chroma in the first step and very little
+  // afterwards. Measured over every ordered pair and green-centred triple of a representative
+  // set, the worst ramp had a step 4.6 times its smallest before the fix.
+  //
+  // A WING WHOSE TWO ENDS ARE THE SAME COLOUR IS SKIPPED, because there is no spacing to be
+  // even about — `red-green-green` has nowhere to go on one side, and five steps that all
+  // stand on the named colour is the honest answer rather than a defect.
+  //
+  // MEASURED WITH CIEDE2000, which is neither of the two instruments the card itself uses. The
+  // generator spaces by screenDistance — the plain Oklab distance overstates the dark end, and
+  // spacing by it put a step of `black-gray` 28 times its smallest. Asserting in either of the
+  // card's own instruments would only prove the implementation agrees with itself.
   const NAMES = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "gray", "teal", "navy", "gold", "orange", "purple", "lime", "pink", "brown", "olive", "maroon", "salmon", "indigo", "turquoise", "crimson", "khaki"];
   let worst = { ratio: 0, spec: null };
   let measured = 0;
   for (const first of NAMES) {
     for (const last of NAMES) {
       if (first === last) continue;
-      for (const spec of [`${first}-${last}`, `${first}-green-${last}`]) {
-        const ramp = rampOf(from(spec));
-        if (ramp.length < 3) continue;
-        const gaps = ramp.slice(1).map((hex, index) => oklabDistance(ramp[index], hex));
-        const ratio = Math.max(...gaps) / Math.min(...gaps);
-        measured += 1;
-        if (ratio > worst.ratio) worst = { ratio, spec };
+      for (const spec of [first + "-" + last, first + "-green-" + last]) {
+        const palette = from(spec);
+        for (const wing of [palette.below, palette.above]) {
+          const path = [palette.optimal, ...wing];
+          const gaps = path.slice(1).map((hex, index) => deltaE(path[index], hex));
+          if (Math.max(...gaps) < 1) continue;
+          measured += 1;
+          const ratio = Math.max(...gaps) / Math.max(Math.min(...gaps), 1e-9);
+          if (ratio > worst.ratio) worst = { ratio, spec };
+        }
       }
     }
   }
-  assert.ok(measured > 1000, `only ${measured} combinations measured`);
-  assert.ok(worst.ratio <= 3.2, `${worst.spec} has a step ${worst.ratio.toFixed(1)} times its smallest`);
+  assert.ok(measured > 1000, "only " + measured + " wings measured");
+  // Measured at 5.3 (`magenta-black`, whose path crosses the region where a lit room flattens
+  // everything). Spacing by the plain Oklab distance instead reads 28.2 on the same table.
+  assert.ok(worst.ratio <= 5.5, worst.spec + " has a step " + worst.ratio.toFixed(1) + " times its smallest");
 });
 
-test("no ramp ever contains two steps a reader cannot tell apart", () => {
-  // The wing shortens rather than emitting a step nobody can see — and unlike the
-  // monochrome generator, shortening here does not move the named end: the same two colours
-  // are simply reached in fewer, larger steps.
-  for (const spec of ["blue-red", "red-orange", "gold-khaki", "teal-turquoise", "blue-green-red", "salmon-pink"]) {
+test("two colours a reader can separate give eleven steps a reader can separate", () => {
+  // WHAT THE GENERATOR CAN AND CANNOT PROMISE, and the line moved. It used to shorten a wing
+  // rather than emit a step nobody can see; now the length is fixed, so the same two ends are
+  // reached in five steps however close together that puts them. What is still true is that
+  // ends far enough apart carry eleven steps a reader can separate.
+  //
+  // The bar is the tightest pair the card already ships — `palette: black` puts #0C0C0C beside
+  // #000000 at 1.9 — with room to spare. `blue-red` is the binding case at 2.6, because
+  // CIEDE2000 compresses hard in the blues.
+  for (const spec of ["blue-red", "gold-navy", "teal-crimson", "blue-green-red", "black-white"]) {
     const ramp = rampOf(from(spec));
     for (let index = 1; index < ramp.length; index += 1) {
       assert.ok(
-        oklabDistance(ramp[index - 1], ramp[index]) >= 0.04,
-        `${spec}: ${ramp[index - 1]} and ${ramp[index]} are indistinguishable`
+        deltaE(ramp[index - 1], ramp[index]) >= 2.5,
+        spec + ": " + ramp[index - 1] + " and " + ramp[index] + " are indistinguishable"
       );
     }
   }
+
+  // And two ends a reader can barely separate give eleven steps they cannot. The ramp is not
+  // lying about that — it is what was asked for, spread over the tiers it has to fill.
+  const close = rampOf(from("red-orangered"));
+  assert.equal(close.length, 11);
+  assert.ok(
+    close.slice(1).every((hex, index) => deltaE(close[index], hex) < 1),
+    "two colours this close cannot give eleven separable steps"
+  );
 });
 
-test("two colours that render alike give a palette in one colour rather than invented steps", () => {
-  // The degenerate input. `optimal` is still exactly what was named, so the promise holds;
-  // there is simply nowhere to go from it.
+test("two colours that render alike give a ramp that stands on the colour that was named", () => {
+  // The degenerate input. `optimal` is exactly what was named and every step is that colour,
+  // because there is nowhere to go from it — which paints the same card the empty wings used
+  // to, since an empty wing mapped every reading to the middle.
   const palette = from("teal-teal");
   assert.equal(palette.optimal, "#008080");
-  assert.deepEqual(palette.below, []);
-  assert.deepEqual(palette.above, []);
+  assert.deepEqual(palette.below, ["#008080", "#008080", "#008080", "#008080", "#008080"]);
+  assert.deepEqual(palette.above, ["#008080", "#008080", "#008080", "#008080", "#008080"]);
 });
 
 // ============================================ every combination =================

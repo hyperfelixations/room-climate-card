@@ -138,19 +138,25 @@ test("below runs pale and above runs deep, in both lightness and colourfulness",
 
 // The whole table, not a sample: a generator that worked for the colours someone thought
 // to try is not a generator.
-test("every one of the 148 names produces a usable ramp", () => {
+test("every one of the 148 names produces a ramp of eleven steps that never turns back", () => {
+  // ELEVEN STEPS, ALWAYS. A derived palette is the card's own answer to the card's own
+  // classification profiles, which run from -5 to +5, so the two map one to one — see
+  // WING_STEPS in palettes/geometry.js. Only a palette somebody wrote out, or one of the four
+  // the card ships, may have a different shape.
   let weakest = Infinity;
   let weakestName = "";
   for (const [name, hex] of Object.entries(CSS_COLOR_NAMES)) {
     const palette = monochromePalette(hex, name);
     assert.doesNotThrow(() => assertPalette(palette, name), name);
-    assert.ok(palette.above.length + palette.below.length >= 3, `${name}: a ramp needs steps`);
-    assert.equal(measureRamp(palette).monotone, true, `${name}: every step out is further from the middle`);
+    assert.equal(palette.below.length, 5, name + ": below");
+    assert.equal(palette.above.length, 5, name + ": above");
+    assert.equal(measureRamp(palette).neverReturns, true, name + ": a step comes back towards the middle");
     for (const wing of [palette.below, palette.above]) {
       let previous = palette.optimal;
       for (const step of wing) {
         const gap = deltaE(previous, step);
-        if (gap < weakest) {
+        // A wing with nowhere to go repeats itself, and that is measured separately below.
+        if (gap > 0 && gap < weakest) {
           weakest = gap;
           weakestName = name;
         }
@@ -158,11 +164,38 @@ test("every one of the 148 names produces a usable ramp", () => {
       }
     }
   }
-  // Stated as a floor rather than an exact number, because it is a property of the
-  // method. The single weakest case is `black`, where CIEDE2000 and Oklab disagree about
-  // how far apart two near-blacks look; even there the step is above the ~1 that counts
-  // as noticeable, and every other name sits above 3.
-  assert.ok(weakest > 1.5, `the weakest step is ${weakestName} at ${weakest.toFixed(1)}`);
+  // The weakest step of any wing THAT TRAVELS. Stated as a floor rather than an exact number,
+  // because it is a property of the method rather than of one colour. What a wing with no room
+  // does instead is the subject of its own test below.
+  assert.ok(weakest > 0.3, "the weakest travelling step is " + weakestName + " at " + weakest.toFixed(2));
+});
+
+test("a ramp spends the room it has evenly, rather than jumping and then crawling", () => {
+  // The gamut-corner defect, in the single-colour generator this time. sRGB holds far more
+  // chroma at some hues and lightnesses than at others, and `blue` (#0000FF) sits on a corner
+  // of it: stepping away by equal parameter used to cost almost all of its chroma in the first
+  // step and very little afterwards. While a wing could shorten itself that stayed hidden;
+  // with the length fixed it showed up as a ramp with a stutter in it.
+  //
+  // Two changes answer it, both in the generator: the steps are placed at even shares of the
+  // path as it will be PAINTED (placeAlong in geometry.js), and the wing aims at a colour the
+  // gamut can actually hold. Measured over the whole table, that took the worst ratio from
+  // 30-to-1 down to where it is asserted here.
+  let worst = { ratio: 0, name: null };
+  for (const [name, hex] of Object.entries(CSS_COLOR_NAMES)) {
+    const palette = monochromePalette(hex, name);
+    for (const wing of [palette.below, palette.above]) {
+      const path = [palette.optimal, ...wing];
+      const gaps = path.slice(1).map((step, index) => deltaE(path[index], step));
+      // A wing with nowhere to go has no spacing to be even about.
+      if (Math.max(...gaps) < 1) continue;
+      const ratio = Math.max(...gaps) / Math.max(Math.min(...gaps), 1e-6);
+      if (ratio > worst.ratio) worst = { ratio, name };
+    }
+  }
+  // Measured at 4.3 (`lavender`, whose pale wing has almost no room and whose deep wing has
+  // plenty). Before the two changes above the same measurement read 9.7.
+  assert.ok(worst.ratio <= 4.5, worst.name + " has a step " + worst.ratio.toFixed(1) + " times its smallest");
 });
 
 // A grey has no hue, so there is no direction to take from it. Inventing one produced a
@@ -174,7 +207,7 @@ test("a colour with no hue gives a greyscale, without a special case for it", ()
     for (const hex of [...palette.below, palette.optimal, ...palette.above]) {
       assert.ok(hexToOklch(hex).chroma < 0.005, `${name}: ${hex} must carry no colour`);
     }
-    assert.equal(measureRamp(palette).monotone, true, `${name}: still a ramp`);
+    assert.equal(measureRamp(palette).neverReturns, true, name + ": still a ramp");
   }
   // A greyscale is the one ramp every kind of colour vision reads identically, which is
   // why it is worth having at all: the ordering survives when the hue does not.
@@ -185,19 +218,24 @@ test("a colour with no hue gives a greyscale, without a special case for it", ()
 });
 
 // The honest consequence of anchoring at the named colour: `white` has nothing paler and
-// `black` has nothing deeper. A wing of five identical whites would be worse than no wing
-// at all, and the palette contract allows an empty one — so that is what they get.
-test("a colour at the very edge gets the wing it can have, and not the other", () => {
+// `black` has nothing deeper. The wing is still there and still five steps long, because the
+// profile it answers to has five tiers on that side — it simply has nowhere to travel, so its
+// steps are all the colour that was named. That is what the card painted before too: a reading
+// below optimal on `palette: white` showed white, because an empty wing mapped to the middle.
+test("a colour at the very edge gets a wing that stands still rather than a wing that lies", () => {
   const white = monochromePalette(CSS_COLOR_NAMES.white, "white");
-  assert.deepEqual(white.below, [], "nothing is paler than white");
-  assert.ok(white.above.length >= 4, "but there is plenty of room downwards");
+  assert.deepEqual(white.below, ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"], "nothing is paler than white");
+  assert.equal(new Set(white.above).size, 5, "but there is plenty of room downwards");
 
   const black = monochromePalette(CSS_COLOR_NAMES.black, "black");
-  assert.deepEqual(black.above, [], "nothing is deeper than black");
-  assert.ok(black.below.length >= 4);
+  assert.deepEqual(black.above, ["#000000", "#000000", "#000000", "#000000", "#000000"], "nothing is deeper than black");
+  assert.equal(new Set(black.below).size, 5);
 
-  // And a colour merely NEAR the edge gets a shorter wing rather than a fake one.
-  assert.ok(monochromePalette(CSS_COLOR_NAMES.gold, "gold").below.length < 5);
+  // And a colour merely NEAR the edge spends what room it has on all five steps, which is what
+  // makes them close together rather than what makes them few.
+  const gold = monochromePalette(CSS_COLOR_NAMES.gold, "gold");
+  assert.equal(gold.below.length, 5);
+  assert.equal(new Set(gold.below).size, 5, "five different colours, however little room there was");
 });
 
 // WHAT A GENERATED RAMP DOES NOT PROMISE, written down as a test so nobody has to guess
@@ -226,19 +264,52 @@ test("every ramp keeps at least two steps that work on both card backgrounds", (
   assert.ok(fewest >= 2, `${fewestName} only manages ${fewest}`);
 });
 
-// And the reason the ramp stops where it stops: both wings aim at the edges of the band
-// that stays readable on both backgrounds, rather than at the edges of the colour space.
-// Only a base that already lies outside that band takes its ramp outside it.
-test("a ramp stays inside the readable lightness band unless its base colour does not", () => {
+// And the reason the ramp stops where it stops. Both wings AIM at the edges of the band that
+// stays readable on both card backgrounds rather than at the edges of the colour space — but
+// the aim is a floor rather than a target: a wing whose five steps would not fit inside it
+// reaches further out, as far as the absolute stops the generator keeps. `palette: blue` is
+// the case that needs it, sitting below the deep anchor to begin with.
+test("a ramp aims at the readable band, and goes past it only when its steps would not fit", () => {
+  const CEILING = 0.96;
+  const FLOOR = 0.1;
+  // One step of an 8-bit channel in Oklab lightness. A wing that travels in chroma alone still
+  // moves its round-tripped lightness by a fraction of one, which is not the wing changing
+  // sides.
+  const QUANTISATION = 0.005;
   for (const [name, hex] of Object.entries(CSS_COLOR_NAMES)) {
     const base = hexToOklch(hex).lightness;
-    for (const step of monochromePalette(hex, name).below) {
-      assert.ok(hexToOklch(step).lightness <= Math.max(0.77, base + 0.09), `${name}: ${step} runs too pale`);
+    const palette = monochromePalette(hex, name);
+    for (const step of palette.below) {
+      const lightness = hexToOklch(step).lightness;
+      assert.ok(lightness <= Math.max(CEILING, base) + QUANTISATION, name + ": " + step + " runs past the ceiling");
+      assert.ok(lightness >= base - QUANTISATION, name + ": " + step + " is not on the pale side");
     }
-    for (const step of monochromePalette(hex, name).above) {
-      assert.ok(hexToOklch(step).lightness >= Math.min(0.49, base - 0.09), `${name}: ${step} runs too deep`);
+    for (const step of palette.above) {
+      const lightness = hexToOklch(step).lightness;
+      assert.ok(lightness >= Math.min(FLOOR, base) - QUANTISATION, name + ": " + step + " runs past the floor");
+      assert.ok(lightness <= base + QUANTISATION, name + ": " + step + " is not on the deep side");
     }
   }
+
+  // THE AIM IS A FLOOR AND NOT A TARGET, which is two claims. A wing never stops SHORT of its
+  // anchor — that is what makes the anchor an aim at all. And a good share of them stop exactly
+  // there, which is what makes it more than a formality: measured over the table, 40 of the 148
+  // pale wings and 85 of the 148 deep ones end within a rounding step of their anchor, and the
+  // rest reach further because five steps would not otherwise fit between them and the middle.
+  let atTheAim = 0;
+  for (const [name, hex] of Object.entries(CSS_COLOR_NAMES)) {
+    const base = hexToOklch(hex).lightness;
+    const palette = monochromePalette(hex, name);
+    const paleAim = Math.max(base, Math.min(CEILING, Math.max(0.76, base + 0.08)));
+    const deepAim = Math.min(base, Math.max(FLOOR, Math.min(0.5, base - 0.08)));
+    const pale = hexToOklch(palette.below[4]).lightness;
+    const deep = hexToOklch(palette.above[4]).lightness;
+    assert.ok(pale >= paleAim - QUANTISATION, name + ": the pale wing stopped short of its anchor");
+    assert.ok(deep <= deepAim + QUANTISATION, name + ": the deep wing stopped short of its anchor");
+    if (Math.abs(pale - paleAim) < QUANTISATION * 4) atTheAim += 1;
+    if (Math.abs(deep - deepAim) < QUANTISATION * 4) atTheAim += 1;
+  }
+  assert.ok(atTheAim > 100, "only " + atTheAim + " of 296 wings end at their anchor");
 });
 
 // ------------------------------------------------------------- lookup ----

@@ -120,32 +120,55 @@ function judgeRole(color, role, points, threshold) {
   });
 }
 
-// EVERY ROLE FOR ONE STEP, plus the summary a caller that does not care about roles needs.
+// The worst of a GROUP of roles: most in trouble, or — when nothing is in trouble — least
+// room left. Both readings matter, and they are the same comparison: a method that moves the
+// ramp needs to know which role would break first, whether or not anything is broken yet.
+function worstOf(roles, group) {
+  let worst = null;
+  for (const role of group) {
+    const judged = roles[role.id];
+    if (!worst) worst = judged;
+    else if (judged.deficit > worst.deficit) worst = judged;
+    else if (judged.deficit === worst.deficit && judged.margin < worst.margin) worst = judged;
+  }
+  return worst;
+}
+
+// EVERY ROLE FOR ONE STEP, plus a summary PER AXIS.
 //
-// `worstRole` is where this colour is in the most trouble — and, when nothing is in trouble,
-// where it has the least room left. Both readings matter: a method that moves the whole ramp
-// needs to know which role would break first.
+// TWO SUMMARIES, NOT ONE, for exactly the reason there are two verdicts. A single summary
+// over all seven roles sat beside `fits` — which has always meant the palette question alone
+// — and reported the recipe's trouble under a palette name. Measured, that made `margin`
+// zero on every step of pastel on #808080 including the ones with room to spare, so the one
+// number a transformation needs ("how far may I move this before I break something that
+// works") could not be read out of the report at all.
+//
+// Each axis now answers for itself, and neither can be mistaken for the other.
 function judgeStep(step, points, threshold) {
   const roles = {};
-  let worstRole = null;
   for (const role of PAINT_ROLES) {
-    const judged = judgeRole(step.color, role, points, threshold);
-    roles[role.id] = judged;
-    if (!worstRole) worstRole = judged;
-    else if (judged.deficit > worstRole.deficit) worstRole = judged;
-    else if (judged.deficit === worstRole.deficit && judged.margin < worstRole.margin) worstRole = judged;
+    // A mirroring role is the same measurement under another name — see paint-roles.js. It
+    // keeps its own id so the report stays granular, and costs nothing to report.
+    roles[role.id] = role.mirrors
+      ? Object.freeze({ ...roles[role.mirrors], role: role.id })
+      : judgeRole(step.color, role, points, threshold);
   }
+  const worstPalette = worstOf(roles, PALETTE_ROLES);
+  const worstSelfTint = worstOf(roles, SELF_TINTED_ROLES);
   return {
     ...step,
     roles: Object.freeze(roles),
     // The palette question: can this colour be seen where it is painted on something it does
     // not tint. This is what `fits` has always meant and what adaptation acts on.
     fits: PALETTE_ROLES.every((role) => roles[role.id].fits),
+    worstRole: worstPalette.role,
+    deficit: worstPalette.deficit,
+    margin: worstPalette.margin,
     // The recipe question, kept apart so the two are never added together — see paint-roles.js.
     selfTintFits: SELF_TINTED_ROLES.every((role) => roles[role.id].fits),
-    worstRole: worstRole.role,
-    deficit: worstRole.deficit,
-    margin: worstRole.margin,
+    worstSelfTintRole: worstSelfTint.role,
+    selfTintDeficit: worstSelfTint.deficit,
+    selfTintMargin: worstSelfTint.margin,
   };
 }
 
@@ -295,7 +318,13 @@ function bandsFor(samples, threshold) {
 // is told. Same reasoning as the band memo below.
 let lastReport = null;
 
-function reportKeyFor(palette, surface, threshold) {
+// The values an answer about this palette on this surface depends on, and nothing else.
+//
+// Exported because adaptation.js has to memoize on exactly the same thing: a strategy
+// evaluates candidates, so the report memo below is the wrong one to lean on — it holds the
+// last candidate rather than the question. Two spellings of "what this depends on" would be
+// two places for a stale answer to come from.
+export function fitKeyFor(palette, surface, threshold) {
   return [
     threshold,
     surface.samples.join(","),
@@ -306,6 +335,18 @@ function reportKeyFor(palette, surface, threshold) {
     (palette.above || []).join(","),
     palette.invalid || "",
   ].join("|");
+}
+
+// HOW MUCH SEPARATION ONE PLACE ASKS OF A COLOUR, which is the threshold scaled by that
+// place's own factor — see paint-roles.js for why a nine-pixel chip mark and a large band are
+// not the same question.
+//
+// Exported because the roles are not only measured, they are also PAINTED, and the code that
+// paints them has to know the same number. Two spellings of it would be a calibration that
+// drifts.
+export function requiredSeparationOf(roleId, threshold = VISIBILITY_THRESHOLD) {
+  const role = PAINT_ROLES.find((candidate) => candidate.id === roleId);
+  return threshold * role.factor;
 }
 
 export function evaluatePaletteFit(palette, surface, { threshold = VISIBILITY_THRESHOLD } = {}) {
@@ -330,7 +371,7 @@ export function evaluatePaletteFit(palette, surface, { threshold = VISIBILITY_TH
     };
   }
 
-  const key = reportKeyFor(palette, resolved, threshold);
+  const key = fitKeyFor(palette, resolved, threshold);
   if (lastReport && lastReport.key === key) return lastReport.value;
 
   const points = pointsOf(resolved);
