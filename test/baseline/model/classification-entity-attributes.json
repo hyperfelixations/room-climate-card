@@ -132,6 +132,7 @@
   "tone": {
     "color": "#3fa7d6",
     "icon": "mdi:thermometer",
+    "ink": "#3fa7d6",
     "label": "Server level",
     "profileId": null,
     "score": 7,

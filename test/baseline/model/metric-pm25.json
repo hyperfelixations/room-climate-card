@@ -130,6 +130,7 @@
   "tone": {
     "color": "#9DA85A",
     "icon": "mdi:weather-hazy",
+    "ink": "#97A254",
     "label": "Slightly elevated",
     "profileId": "indoor",
     "score": 1,

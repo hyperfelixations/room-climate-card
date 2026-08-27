@@ -232,6 +232,7 @@
   "tone": {
     "color": "#79A86C",
     "icon": "mdi:home-thermometer",
+    "ink": "#79A86C",
     "label": "Optimal",
     "profileId": "indoor",
     "score": 0,

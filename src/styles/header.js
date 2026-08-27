@@ -30,7 +30,7 @@ export const HEADER_CSS = `        .rtc-header {
         .rtc-icon-badge ha-icon {
           width: 22px;
           height: 22px;
-          color: var(--tone-color);
+          color: var(--tone-ink);
         }
 
         .rtc-title-block {

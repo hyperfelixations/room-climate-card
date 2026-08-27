@@ -1,121 +1,221 @@
 "use strict";
 
-// THE SECOND REPAIR: making a word readable on a tint of its own colour, without changing the
-// colour.
+// THE ONE MECHANIC, AND WHAT IT IS NOT ALLOWED TO DO.
 //
-// The card paints one colour per score. The scale marker, the accent line, the status pill,
-// the header icon and a room chip's mark are all that same colour, and the palette repair next
-// door decides whether it moves. What happens HERE is the other half: three of those places
-// paint the colour on a tint of ITSELF, and when that tint swallows the colour the answer is a
-// thinner tint rather than a different colour.
+// Three places on the card paint a palette colour at full strength on a tint of ITSELF: the
+// status pill, the header icon and a room chip's direction mark. They share one way of being
+// painted, so the adjustment is worked out ONCE and applied to all three unchanged — this file
+// is about that one computation. That the three actually receive the same answer is a question
+// about the assembled card and lives in test/component/rendering/tone-and-chip-legibility.test.js.
+//
+// The invariants below are the whole specification, and each one has a case behind it rather
+// than a hypothesis:
+//
+//   hue never moves          the colour must still be the colour the marker shows
+//   both directions, thrice  lighter and darker, more and less saturated, thinner and
+//                            stronger tint — the answer depends on the colour, not on a rule
+//                            of thumb about which way to go
+//   nothing already fine     a comfortable colour comes back by identity, so a card that never
+//                            had a problem is bit for bit what it was
+//   no reaching for contrast the caps exist because the cheapest way to pass any threshold is
+//                            near-black text on an opaque fill, and that is not this card
+//   a margin, not a boundary the floor is the role's own separation; the answer clears a
+//                            target ABOVE it, so it does not sit where "passes" and "is
+//                            comfortable to read" part company
+//
+// Every colour below is one an actual palette produces. The mechanic runs AFTER the palette
+// adaptation, so a colour that reaches it has already been made readable as a marker — feeding
+// it raw ramp ends would test a case the card cannot present.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
 let tone;
-let color;
 let oklch;
+let color;
+let paletteFit;
 let roles;
 
 test.before(async () => {
   tone = await import("../../../src/domain/classification/tone-legibility.js");
-  color = await import("../../../src/core/color.js");
   oklch = await import("../../../src/core/oklch.js");
+  color = await import("../../../src/core/color.js");
+  paletteFit = await import("../../../src/domain/classification/palette-fit.js");
   roles = await import("../../../src/domain/classification/paint-roles.js");
 });
 
-// What the status pill asks of a colour: twelve-pixel text at weight 900 on a tint of itself.
-const PILL_ALPHA = 0.2;
-const separationAt = (hex, alpha, backdrop) =>
-  oklch.screenDistance(hex, color.compositeOver(hex, alpha, backdrop));
+const LIGHT = "#FFFFFF";
+const DARK = "#1C1C1C";
 
-test("a colour the recipe already suits keeps the tint it was given", () => {
-  // The common case, and the one worth keeping exact: a card whose colours are comfortable
-  // looks precisely as it always did, down to the alpha in its custom properties.
-  const required = 0.232;
-  for (const [hex, backdrop] of [["#17A93F", "#FFFFFF"], ["#3B58CF", "#1C1C1C"], ["#CC2B2B", "#FFFFFF"]]) {
-    assert.equal(
-      tone.legibleTintAlpha(hex, backdrop, PILL_ALPHA, required),
-      PILL_ALPHA,
-      hex + " on " + backdrop + " reads at the default already"
-    );
+// What the mechanic itself is measured on: the colour on a tint of itself over the card.
+function separationOf(recipe, paletteColor, card) {
+  const search = tone.TINT_SEARCH;
+  const tint = search.structuralTint + (1 - search.structuralTint) * search.recipeTint * recipe.tintFactor;
+  return oklch.screenDistance(recipe.ink, color.compositeOver(paletteColor, tint, card));
+}
+
+test("the hue never moves, on any colour, on either theme", () => {
+  // The hard invariant. A repair that bends the hue has not repaired the pill, it has replaced
+  // the colour — and the marker beside it would still be the old one.
+  const hues = [];
+  for (const card of [LIGHT, DARK]) {
+    for (const hex of ["#FFFF00", "#FFD700", "#00FF00", "#0020A3", "#008080", "#FF1493", "#B7B7B7", "#FFA500"]) {
+      const recipe = tone.legibleTintRecipe(hex, card);
+      if (recipe.ink === hex) continue;
+      const before = oklch.hexToOklch(hex);
+      const after = oklch.hexToOklch(recipe.ink);
+      // Achromatic colours have no hue to preserve — their angle is rounding noise, and both
+      // ends of the comparison would be noise.
+      if (before.chroma < 0.01 || after.chroma < 0.01) continue;
+      hues.push([hex, card, Math.abs(after.hue - before.hue)]);
+    }
+  }
+  assert.ok(hues.length >= 6, `only ${hues.length} colours moved at all`);
+  for (const [hex, card, drift] of hues) {
+    // The round trip through Oklch and back to eight-bit channels is exact to well under a
+    // degree; anything larger is a hue that was deliberately moved.
+    assert.ok(drift < 1, `${hex} on ${card} drifted ${drift.toFixed(2)}° of hue`);
   }
 });
 
-test("a colour its own tint swallows gets a thinner tint, and only as thin as it takes", () => {
-  // The case the whole thing exists for. `palette: lime` on a light dashboard: the ramp reads,
-  // the pill does not, and the colour is not what is wrong.
-  const required = 0.232;
-  const cases = [
-    ["#00FF00", "#FFFFFF", "the middle of a lime ramp on a light card"],
-    ["#C0A752", "#FFFFFF", "the gold step of pastel on white"],
-    ["#A7A4A1", "#FFFFFF", "the near-neutral middle of color-vision on white"],
-  ];
-  for (const [hex, backdrop, why] of cases) {
-    assert.ok(separationAt(hex, PILL_ALPHA, backdrop) < required, why + ": it really is unreadable at 0.20");
-    const alpha = tone.legibleTintAlpha(hex, backdrop, PILL_ALPHA, required);
-    assert.ok(alpha < PILL_ALPHA, why + ": the tint had to come down");
-    assert.ok(separationAt(hex, alpha, backdrop) >= required - 1e-6, why + ": and it now reads");
+test("lightening wins where lightening is the smaller move", () => {
+  // `palette: yellow` at its deep end on the dark theme: a dark olive on near-black. There is
+  // nowhere darker to go that helps, and the answer goes up.
+  const recipe = tone.legibleTintRecipe("#686800", DARK);
+  const before = oklch.hexToOklch("#686800");
+  const after = oklch.hexToOklch(recipe.ink);
+  assert.ok(after.lightness > before.lightness, `${recipe.ink} is not lighter than #686800`);
+});
 
-    // AS THIN AS IT TAKES AND NO THINNER. Anything appreciably thicker must still fail, or the
-    // repair took more of the tint than it needed to.
-    const barelyThicker = Math.min(PILL_ALPHA, alpha + 0.01);
-    if (barelyThicker > alpha) {
+test("darkening wins where darkening is the smaller move", () => {
+  // The same palette at its own middle on the light theme, which is the case the supervisor
+  // reported: bright yellow text on a pale yellow tint over a white card.
+  const recipe = tone.legibleTintRecipe("#DFDF00", LIGHT);
+  const before = oklch.hexToOklch("#DFDF00");
+  const after = oklch.hexToOklch(recipe.ink);
+  assert.ok(after.lightness < before.lightness, `${recipe.ink} is not darker than #DFDF00`);
+});
+
+test("saturation moves in whichever direction is part of the smaller answer", () => {
+  // Both directions occur, and neither is a rule: pure yellow loses chroma on the way down
+  // because the gamut has none to give at that lightness, and a washed-out yellow gains it.
+  const deeper = oklch.hexToOklch(tone.legibleTintRecipe("#FFFF00", LIGHT).ink);
+  assert.ok(deeper.chroma < oklch.hexToOklch("#FFFF00").chroma, "pure yellow kept its chroma");
+
+  const richer = oklch.hexToOklch(tone.legibleTintRecipe("#F9FC9F", LIGHT).ink);
+  assert.ok(richer.chroma > oklch.hexToOklch("#F9FC9F").chroma, "a washed-out yellow gained no chroma");
+});
+
+test("the tint moves in both directions too, and thinning it is not the default", () => {
+  const thinner = tone.legibleTintRecipe("#FDFE5B", LIGHT);
+  assert.ok(thinner.tintFactor < 1, `expected a thinner tint, got ${thinner.tintFactor}`);
+
+  // Upwards is the one that looks like a mistake and is not: with the ink moved away from the
+  // colour, a STRONGER tint of the original colour is further from the ink, not closer.
+  const stronger = tone.legibleTintRecipe("#00001B", DARK);
+  assert.ok(stronger.tintFactor > 1, `expected a stronger tint, got ${stronger.tintFactor}`);
+
+  // And it is not reached for first. Over a whole ramp on the light theme the tint stays at
+  // its designed weight far more often than it moves — the pill keeps the soft fill the card
+  // is supposed to have, and the ink does the work.
+  // The ramp `palette: yellow` actually produces on a white card, after the palette
+  // adaptation has already made its steps readable as markers.
+  const ramp = ["#A3A57F", "#C7C96C", "#ECED44", "#FFFF00", "#DFDF00", "#C1C100", "#A3A300", "#858500", "#686800"];
+  const untouched = ramp.filter((hex) => tone.legibleTintRecipe(hex, LIGHT).tintFactor === 1).length;
+  assert.ok(untouched >= ramp.length / 2, `the tint moved on ${ramp.length - untouched} of ${ramp.length}`);
+});
+
+test("a colour that is already comfortable comes back untouched", () => {
+  for (const hex of ["#686800", "#858500", "#A3A300"]) {
+    const recipe = tone.legibleTintRecipe(hex, LIGHT);
+    assert.equal(recipe.ink, hex, `${hex} was moved for no reason`);
+    assert.equal(recipe.tintFactor, 1);
+  }
+});
+
+test("with nothing to measure against, nothing is claimed", () => {
+  // Every caller that has no surface — and there are several, including the whole render path
+  // before the card has been painted once.
+  assert.deepEqual({ ...tone.legibleTintRecipe("#FFFF00", null) }, { ink: "#FFFF00", tintFactor: 1 });
+  assert.deepEqual({ ...tone.legibleTintRecipe(null, LIGHT) }, { ink: null, tintFactor: 1 });
+});
+
+test("it clears a margin above the floor rather than sitting on it", () => {
+  const floor = paletteFit.requiredSeparationOf("chipMark");
+  const target = floor * tone.TINT_SEARCH.comfort;
+  assert.ok(tone.TINT_SEARCH.comfort > 1, "the target must be above the floor, or this is the floor");
+
+  let checked = 0;
+  for (const card of [LIGHT, DARK]) {
+    for (const hex of ["#FFFF00", "#DFDF00", "#FFD700", "#0020A3", "#B7B7B7", "#FF1493", "#00FF00"]) {
+      const recipe = tone.legibleTintRecipe(hex, card);
+      const separation = separationOf(recipe, hex, card);
+      assert.ok(separation >= target - 1e-9, `${hex} on ${card} reached only ${separation.toFixed(3)} of ${target.toFixed(3)}`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 14);
+});
+
+test("it does not reach for contrast it was not asked for", () => {
+  // The trivial answer to every legibility question is black text on an opaque fill. The caps
+  // are what forbid it, and this is the assertion that they are doing so: nothing lands at the
+  // ends of the lightness range, and no tint is taken past what the search may spend.
+  const search = tone.TINT_SEARCH;
+  const maxFactor = 1 + search.tintCapUp * search.tintStep;
+  const minFactor = Math.max(0, 1 - search.tintCapDown * search.tintStep);
+  for (const card of [LIGHT, DARK, "#808080"]) {
+    for (const hex of ["#FFFF00", "#FFD700", "#00FF00", "#0020A3", "#008080", "#FF1493", "#B7B7B7", "#FFFFFF", "#000000"]) {
+      const recipe = tone.legibleTintRecipe(hex, card);
+      const before = oklch.hexToOklch(hex);
+      const after = oklch.hexToOklch(recipe.ink);
+      // The tolerance is the gamut round trip, not slack in the cap: oklchToHex() resolves an
+      // out-of-gamut request by pulling chroma in at fixed lightness and hue, and the eight-bit
+      // result reads back a thousandth or two away from what was asked for.
       assert.ok(
-        separationAt(hex, barelyThicker, backdrop) < required,
-        why + ": " + barelyThicker.toFixed(3) + " would also have worked, so " + alpha.toFixed(3) + " overshot"
+        Math.abs(after.lightness - before.lightness) <= search.lightnessCap * search.lightnessStep + 0.01,
+        `${hex} on ${card} moved ${(after.lightness - before.lightness).toFixed(3)} of lightness`
       );
+      assert.ok(recipe.tintFactor <= maxFactor + 1e-9 && recipe.tintFactor >= minFactor - 1e-9, `factor ${recipe.tintFactor}`);
     }
   }
 });
 
-test("a colour that cannot be read even with no tint at all takes the thinnest tint there is", () => {
-  // The honest limit. At alpha 0 the pill has no fill and the colour sits on the card itself,
-  // so the most this can ever reach is the separation the colour has from the card — and the
-  // pill asks for nearly half again what a scale marker does. A colour between those two bars
-  // is readable as a marker and not as a word.
-  //
-  // What the repair does there is still the best it can: the thinnest tint, which is never
-  // worse than the default and is as close as the recipe gets.
-  const required = 0.232;
-  const hex = "#ECED44";
-  const backdrop = "#FFFFFF";
-  assert.ok(separationAt(hex, 0, backdrop) < required, "even with no tint this cannot be read");
-  assert.equal(tone.legibleTintAlpha(hex, backdrop, PILL_ALPHA, required), 0);
-});
-
-test("the same question always gives the same answer", () => {
-  const once = tone.legibleTintAlpha("#00FF00", "#FFFFFF", PILL_ALPHA, 0.232);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    assert.equal(tone.legibleTintAlpha("#00FF00", "#FFFFFF", PILL_ALPHA, 0.232), once);
+test("the same question always gives the same answer, and the same frozen object shape", () => {
+  const once = tone.legibleTintRecipe("#FFFF00", LIGHT);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const again = tone.legibleTintRecipe("#FFFF00", LIGHT);
+    assert.equal(again.ink, once.ink);
+    assert.equal(again.tintFactor, once.tintFactor);
   }
+  assert.equal(Object.isFrozen(once), true, "a recipe is shared across three places and must not be editable");
 });
 
-test("the alpha never leaves the range between the floor and the recipe's own default", () => {
-  // Two bounds and both matter. Above the default would be a card inventing a heavier tint than
-  // the design asked for; below zero is not a tint.
-  for (const hex of ["#FFFFFF", "#000000", "#808080", "#00FF00", "#000080", "#FFD700"]) {
-    for (const backdrop of ["#FFFFFF", "#1C1C1C", "#808080"]) {
-      for (const required of [0.1, 0.232, 0.9]) {
-        const alpha = tone.legibleTintAlpha(hex, backdrop, PILL_ALPHA, required);
-        assert.ok(alpha >= 0 && alpha <= PILL_ALPHA, hex + " on " + backdrop + " at " + required + ": " + alpha);
-      }
-    }
-  }
+test("a table is built once for a palette and reused by value", () => {
+  const surface = roles.surfaceOf([LIGHT], "#212121");
+  const colors = ["#FFFF00", "#DFDF00", "#A3A300"];
+  const first = tone.tintRecipesFor(colors, surface);
+  assert.equal(tone.tintRecipesFor([...colors], surface), first, "the same colours and surface must not rebuild");
+  assert.notEqual(tone.tintRecipesFor(colors, roles.surfaceOf([DARK], "#E1E1E1")), first, "a different background must");
+  assert.notEqual(tone.tintRecipesFor([...colors, "#000000"], surface), first, "a different palette must");
 });
 
-test("the three places that need this are exactly the roles that paint on a tint of themselves", () => {
-  // The map and the repair have to agree about which places are in question. A role that starts
-  // painting the colour on a tint of itself and is not repaired here would be a place the card
-  // knows it cannot read and does nothing about.
-  const selfTinted = roles.SELF_TINTED_ROLES.map((role) => role.id).sort();
-  assert.deepEqual(selfTinted, ["chipMark", "metricCard", "toneBand", "toneIcon", "toneLabel"]);
+test("a colour nobody prepared a recipe for is left exactly as it is", () => {
+  // A tier that named its own hex, an integration's value_color, a caller with no surface. The
+  // card leaves colours it was GIVEN alone, here as everywhere else.
+  const surface = roles.surfaceOf([LIGHT], "#212121");
+  const recipes = tone.tintRecipesFor(["#FFFF00"], surface);
+  assert.deepEqual({ ...tone.tintRecipeFor(recipes, "#123456") }, { ink: "#123456", tintFactor: 1 });
+  assert.deepEqual({ ...tone.tintRecipeFor(null, "#123456") }, { ink: "#123456", tintFactor: 1 });
+});
 
-  // Of those, the optimal band tints its FOREGROUND rather than its background — a thinner band
-  // is a fainter band, so lowering its alpha would make it harder to see rather than easier.
-  // The extremes card is the one left over, and it is a separate question the backlog carries.
-  const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
-  assert.equal(typeof byId("toneBand").foreground, "function", "the band tints what it paints, not what it paints on");
-  assert.equal(byId("toneLabel").foreground, undefined);
-  assert.equal(byId("chipMark").foreground, undefined);
+test("the whole table for a palette costs a few milliseconds, once", () => {
+  // It runs once per palette and surface and never during a later render, so a few
+  // milliseconds is the right budget — but "a few" has to be a number somebody checked.
+  const surface = roles.surfaceOf(["#808080"], null);
+  const ramp = ["#3A8B8B", "#4A9B9B", "#5AABAB", "#008080", "#007070", "#006060", "#005050", "#B7B7B7", "#FFFF00", "#0020A3", "#FF1493", "#7F8792"];
+  const started = process.hrtime.bigint();
+  tone.tintRecipesFor(ramp, surface);
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(ms < 250, `a full table took ${ms.toFixed(0)} ms`);
 });

@@ -132,6 +132,7 @@
   "tone": {
     "color": "#44cc66",
     "icon": "mdi:thermometer",
+    "ink": "#44cc66",
     "label": "Custom optimal",
     "profileId": "custom",
     "score": 3,

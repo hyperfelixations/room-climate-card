@@ -47,6 +47,14 @@ let resolveUnitProfileKey;
 let normalizeUnitToken;
 let palettes;
 
+// WHAT THE CARD IS STANDING ON, because the pipeline's answer depends on it and the element's
+// answer does too. Home Assistant's own default light background is what the element resolves
+// to when nothing readable has been painted — which is exactly the situation the DTO baselines
+// were captured in. Leaving it out would not make this test purer; it would make it a
+// characterization of a card that is nowhere, and the same baselines are produced through the
+// element in model.test.js.
+let PAINTED_ON;
+
 test.before(async () => {
   ({ resolveMeasurementContext } = await import("../../src/application/model/measurement-context.js"));
   ({ buildCardDomainModel } = await import("../../src/application/model/card-domain-model.js"));
@@ -64,6 +72,9 @@ test.before(async () => {
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
   ({ normalizeUnitToken } = await import("../../src/domain/units/unit-token.js"));
   palettes = await import("../../src/domain/classification/palettes/registry.js");
+  const { SURFACE_BACKGROUNDS } = await import("../../src/domain/classification/surface.js");
+  const { surfaceOf } = await import("../../src/domain/classification/paint-roles.js");
+  PAINTED_ON = surfaceOf([SURFACE_BACKGROUNDS.light]);
 });
 
 // The same collaborators the composition root injects, assembled here by hand so
@@ -111,7 +122,7 @@ function runPipeline(scenario) {
   const config = normalizeConfig(scenario.config, configCollaborators());
   const context = resolveMeasurementContext(hass.states, config);
   const language = resolveLanguage(config.language, hass);
-  const domainModel = buildCardDomainModel({ states: hass.states, config, context, language });
+  const domainModel = buildCardDomainModel({ states: hass.states, config, context, language, surface: PAINTED_ON });
   const texts = buildTexts(config, hass, context.unit, domainModel.metric.kind);
   const viewModel = buildCardViewModel({ domainModel, config, texts });
   return { context, domainModel, viewModel, data: toLegacyData(viewModel) };
@@ -133,7 +144,7 @@ test("the pipeline never mutates the config or the hass states it is given", () 
 
     const context = resolveMeasurementContext(hass.states, config);
     const language = resolveLanguage(config.language, hass);
-    const domainModel = buildCardDomainModel({ states: hass.states, config, context, language });
+    const domainModel = buildCardDomainModel({ states: hass.states, config, context, language, surface: PAINTED_ON });
     toLegacyData(buildCardViewModel({ domainModel, config, texts: buildTexts(config, hass, context.unit, domainModel.metric.kind) }));
 
     assert.equal(stableStringify(config), configBefore, `${scenario.name}: config must not be mutated`);

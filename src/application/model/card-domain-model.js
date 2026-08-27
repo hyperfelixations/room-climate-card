@@ -33,6 +33,8 @@
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { adaptPalette } from "../../domain/classification/palettes/adaptation.js";
+import { tintRecipesFor } from "../../domain/classification/tone-legibility.js";
+import { NEUTRAL_COLOR } from "../../domain/classification/palettes/registry.js";
 import {
   classificationPolicyOf,
   paletteOf,
@@ -60,6 +62,19 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   // palettes the card built itself, never to one written out in YAML. See adaptPalette() in
   // domain/classification/palettes/adaptation.js.
   const palette = adaptPalette(paletteOf(config), surface);
+  // AND THE SECOND QUESTION, asked in the same breath and for every score at once: how each of
+  // those colours has to be painted where it lands on a tint of ITSELF. Worked out here rather
+  // than where it is used, because here is where the palette and the surface are both in hand
+  // and because a score change must not cost a search — see tone-legibility.js.
+  //
+  // Every colour the card COMPOSES: the whole ramp, the invalid colour, and the neutral one it
+  // shows when there is nothing to classify. A colour the card was GIVEN — a tier that named
+  // its own hex, an integration's value_color — is left alone here exactly as the palette
+  // adaptation leaves it alone.
+  const tintRecipes = tintRecipesFor(
+    [...palette.below, palette.optimal, ...palette.above, palette.invalid, NEUTRAL_COLOR],
+    surface
+  );
   const metricKind = effectiveMetricKind(context);
   // The same configuration-only classification the measurement context branched on.
   // Resolved once here and carried out on the model. It stopped being a pure function
@@ -96,10 +111,11 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   if (context.averageSource === null) {
     return {
       empty: true,
-      // What the card is painted on. Carried because the presentation layer paints a colour on
-      // a tint of itself in three places and has to know what is underneath that tint — see
-      // domain/classification/tone-legibility.js. This layer is the only one that has it.
+      // What the card is painted on, and the answer that was worked out from it. Both carried
+      // because the presentation layer paints a colour on a tint of itself in three places and
+      // may neither measure nor recompute — see domain/classification/tone-legibility.js.
       surface,
+      tintRecipes,
       // Which sources the card actually refers to. Carried rather than recomputed
       // downstream — see where it is resolved above.
       topology,
@@ -220,6 +236,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
     empty: false,
     // See the note on the no-data branch above.
     surface,
+    tintRecipes,
     topology,
     metric: {
       kind: metricKind,

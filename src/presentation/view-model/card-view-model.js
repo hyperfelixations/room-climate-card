@@ -33,10 +33,14 @@ import { rgba } from "../../core/color.js";
 
 const PLACEHOLDER_STATUSES = new Set([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE]);
 
+// The tone of NOTHING TO SAY. It carries the neutral colour at both names because there is no
+// classification behind it to adjust: the card chose this grey precisely so it can be read on
+// either theme, and measured, the mechanic leaves it alone on both.
 function buildNeutralTone(icon, texts) {
   return {
     label: texts.t("status.noData"),
     color: NO_DATA_COLOR,
+    ink: NO_DATA_COLOR,
     score: null,
     zone: "neutral",
     source: "availability",
@@ -405,9 +409,9 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const classification = domainModel.classification.average;
   const tone = buildTone({
     classification,
-    // What the card is painted on, so the pill and the icon can thin their own tint where it
-    // would otherwise swallow the colour — see tone-legibility.js. The colour does not move.
-    surface: domainModel.surface,
+    // The one adjustment, already worked out for every score this palette can show — see
+    // tone-legibility.js. Looked up here, never computed: a score change must not cost a search.
+    tintRecipes: domainModel.tintRecipes,
     // config.icon wins outright; then the active profile's own icon; then the
     // metric's stable default, so a kind without icon tiers is never forced into a
     // semantically dubious icon family.
@@ -566,7 +570,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       comfort: domainModel.comfort,
       unit,
       texts,
-      surface: domainModel.surface,
+      tintRecipes: domainModel.tintRecipes,
     })
   );
 

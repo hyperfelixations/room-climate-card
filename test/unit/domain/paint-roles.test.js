@@ -47,7 +47,11 @@ const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
 // answers for it. A property with no entry here is a place a palette colour lands that
 // nothing is measuring, which is the failure this guard exists to prevent.
 const PROPERTY_OWNERS = {
-  "--tone-color": "accent, toneLabel and toneIcon",
+  "--tone-color": "accent",
+  // The same colour as --tone-color wherever nothing had to be adjusted, and a hue-locked
+  // variant of it where the colour could not be read on its own tint — see tone-legibility.js.
+  // The two roles answer for it either way: what they measure is what is painted here.
+  "--tone-ink": "toneLabel and toneIcon",
   "--tone-soft": "the background of toneLabel and toneIcon",
   "--tone-band": "toneBand",
   "--marker-color": "marker",

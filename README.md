@@ -633,8 +633,13 @@ Whichever you pick, the card fits it to the background it is standing on. A
 dark theme, a light theme, a card you have colored yourself — the ramp moves
 just far enough to be read there, in brightness and saturation only, so `teal`
 arrives as teal. That covers the four palettes above and every ramp built from
-a color you name. A palette you write out yourself is used exactly as you
-typed it.
+a color you name; a palette you write out yourself keeps the ramp you typed.
+
+Three small places put a color on a soft tint of itself: the status pill in the
+top right, the icon badge, and the little mark on a room chip. Where that would
+swallow the color, the text takes a slightly deeper or lighter shade of the same
+color so it stays readable. The scale, the room chips and the line across the
+top always show the color itself.
 
 #### Writing your own
 

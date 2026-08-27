@@ -12,9 +12,7 @@
 // translated.
 
 import { rgba } from "../../core/color.js";
-import { requiredSeparationOf } from "../../domain/classification/palette-fit.js";
-import { legibleTintAlpha } from "../../domain/classification/tone-legibility.js";
-import { pointOf } from "../../domain/classification/paint-roles.js";
+import { tintRecipeFor } from "../../domain/classification/tone-legibility.js";
 
 // The four alphas the tone is derived at. Named because each one appears in both a
 // render path and a patch path, and a silent drift between the two would be a
@@ -47,37 +45,38 @@ export function numericTone(classification, texts) {
   };
 }
 
-// HOW HEAVY THE SOFT TINT MAY BE for this colour on this card.
-//
-// The status pill and the icon badge both put the colour at full strength on `--tone-soft`,
-// which is a tint of that same colour. As the colour approaches the card, the text and its own
-// background converge — so where the default weight would swallow the colour, the tint gets out
-// of the way instead. The colour itself never moves: it is the one colour this score has, and
-// it is the same one the scale marker and the accent line paint with.
-//
-// With no surface to measure against — which is every caller that does not have one — the
-// default stands, exactly as it always did.
-function softAlphaFor(color, surface) {
-  const card = surface?.samples?.[0];
-  if (!card) return TONE_SOFT_ALPHA;
-  return legibleTintAlpha(color, pointOf(card, surface.text).card, TONE_SOFT_ALPHA, requiredSeparationOf("toneLabel"));
-}
-
-export function buildTone({ classification, icon, texts, surface = null }) {
+export function buildTone({ classification, icon, texts, tintRecipes = null }) {
+  // THE ONE ADJUSTMENT, looked up rather than worked out. The status pill and the icon badge
+  // both put the colour at full strength on `--tone-soft`, which is a tint of that same
+  // colour, so as the colour approaches the card the text and its own background converge.
+  // What to do about it was decided once for every score in the domain — see
+  // domain/classification/tone-legibility.js — and the chip mark gets the identical answer.
+  //
+  // With nothing prepared, which is every caller that has no surface, the adjustment is the
+  // identity and the tone is exactly what it always was.
+  const recipe = tintRecipeFor(tintRecipes, classification.color);
   return {
     label: toneLabel(classification, texts),
     color: classification.color,
+    // The colour as the two self-tinted places in the header paint it: same hue, moved only
+    // as far as being readable on its own tint required. `color` above is untouched, and it
+    // is what the scale marker and the accent line use.
+    ink: recipe.ink,
     score: classification.score,
     zone: classification.zone,
     source: classification.source,
     profileId: classification.profileId,
     icon,
-    soft: rgba(classification.color, softAlphaFor(classification.color, surface)),
+    soft: rgba(classification.color, TONE_SOFT_ALPHA * recipe.tintFactor),
   };
 }
 
 // The card root's own custom properties. One string, built once per render and
 // reused by the patch path, so the two can never disagree.
 export function toneStyleDeclaration(tone) {
-  return `--tone-color:${tone.color};--tone-soft:${tone.soft};--tone-border:${rgba(tone.color, TONE_BORDER_ALPHA)};--tone-band:${rgba(tone.color, TONE_BAND_ALPHA)};`;
+  // `--tone-color` is the palette's colour and stays it: the accent line and the average's
+  // focus ring are painted with it and are not on a tint of themselves. `--tone-ink` is the
+  // pill's and the icon's, and the border follows the ink rather than the colour so the pill
+  // reads as one object rather than an outline in one shade around text in another.
+  return `--tone-color:${tone.color};--tone-ink:${tone.ink};--tone-soft:${tone.soft};--tone-border:${rgba(tone.ink, TONE_BORDER_ALPHA)};--tone-band:${rgba(tone.color, TONE_BAND_ALPHA)};`;
 }

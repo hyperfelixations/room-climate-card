@@ -73,6 +73,7 @@
   "tone": {
     "color": "#67A7AE",
     "icon": "mdi:thermometer-low",
+    "ink": "#61A1A8",
     "label": "Fresh",
     "profileId": "outdoor",
     "score": -2,

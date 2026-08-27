@@ -5,10 +5,8 @@
 // only reorders those chips. Average, extrema, spread, comfort counting and the
 // subtitle always use every valid room.
 
-import { compositeOver, rgba } from "../../core/color.js";
-import { requiredSeparationOf } from "../../domain/classification/palette-fit.js";
-import { legibleTintAlpha } from "../../domain/classification/tone-legibility.js";
-import { pointOf } from "../../domain/classification/paint-roles.js";
+import { rgba } from "../../core/color.js";
+import { tintRecipeFor } from "../../domain/classification/tone-legibility.js";
 import { isTwoUpperLetterLabel, UNAVAILABLE_TEXT } from "../../core/text.js";
 import { autoRoomColumnsFor } from "./metric-meta.js";
 import { NO_DATA_COLOR } from "./tone.js";
@@ -137,22 +135,7 @@ export function buildRoomLayout({ declaredRooms, config, metricKind, language })
 // HOW HEAVY THE MARK'S OWN TINT MAY BE, on the chip it actually sits on.
 //
 // The direction glyph is nine-pixel text at weight 900 painted on a tint of its own colour, and
-// it is the smallest thing on the card carrying a palette colour. A room outside the comfort
-// band sits on a chip that is itself a tint of that colour; one inside sits on the neutral
-// chip. Both are worked out here rather than guessed, from the same composition the measurement
-// uses — see pointOf() in domain/classification/paint-roles.js.
-//
-// With no surface to measure against the default stands, which is what every caller that does
-// not have one gets.
-function markAlphaFor(color, out, surface) {
-  const card = surface?.samples?.[0];
-  if (!card) return CHIP_MARK_ALPHA;
-  const point = pointOf(card, surface.text);
-  const chip = out ? compositeOver(color, CHIP_OUT_BG_ALPHA, point.card) : point.chipNeutral;
-  return legibleTintAlpha(color, chip, CHIP_MARK_ALPHA, requiredSeparationOf("chipMark"));
-}
-
-export function buildRoomChipModel({ room, color, comfort, unit, texts, surface = null }) {
+export function buildRoomChipModel({ room, color, comfort, unit, texts, tintRecipes = null }) {
   if (room.placeholder) {
     const title = texts.t("availability.roomNoData", { name: room.name });
     return {
@@ -175,16 +158,24 @@ export function buildRoomChipModel({ room, color, comfort, unit, texts, surface 
     };
   }
   const out = room.value < comfort.min || room.value > comfort.max;
+  // THE SAME ADJUSTMENT THE PILL GETS, looked up by colour. The mark is the third place that
+  // paints a palette colour on a tint of itself, so it takes the identical answer rather than
+  // one worked out for itself — one score, one colour, wherever it appears.
+  //
+  // `--room-color` is read by the mark and by nothing else (styles/rooms.js), so it carries
+  // the ink; the chip's own fill and border below stay the palette colour, because they are
+  // not painted on themselves.
+  const recipe = tintRecipeFor(tintRecipes, color);
   return {
     room,
     entity: room.entity,
     index: room.index,
     displayLabel: room.displayLabel,
     shortGuaranteed: room.shortGuaranteed,
-    color,
+    color: recipe.ink,
     mark: room.value > comfort.max ? "↑" : room.value < comfort.min ? "↓" : "•",
     out,
-    markBackground: rgba(color, markAlphaFor(color, out, surface)),
+    markBackground: rgba(color, CHIP_MARK_ALPHA * recipe.tintFactor),
     background: out ? rgba(color, CHIP_OUT_BG_ALPHA) : "var(--rtc-chip-bg)",
     border: out ? rgba(color, CHIP_OUT_BORDER_ALPHA) : "var(--rtc-hairline)",
     valueText: texts.fmt(room.value),

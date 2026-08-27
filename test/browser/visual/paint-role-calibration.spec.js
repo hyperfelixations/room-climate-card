@@ -164,21 +164,25 @@ test("every role's background is the one the browser actually composites", async
     [card, surface.text, tone]
   );
 
-  // 4a — AND THE THINNER TINT IS THE ONE THE MODEL COMPUTES. The chip mark's weight is no
-  // longer a constant: where a colour comes close enough to the chip that its own tint would
-  // swallow the mark, the tint gets out of the way rather than the colour moving — there is one
-  // colour per score on the card, and it is the same one the scale marker paints with. See
-  // domain/classification/tone-legibility.js.
+  // 4a — AND WHAT THE CHIP MARK PAINTS IS THE ADJUSTMENT THE MODEL COMPUTED. Neither the mark's
+  // colour nor its tint weight is a constant any more: where a palette colour would be
+  // swallowed by a tint of itself, ONE adjustment is worked out for the whole ramp and applied
+  // to the pill, the icon and this mark alike. See domain/classification/tone-legibility.js.
   //
-  // Both halves are read off the element rather than assumed, because WHICH backdrop applies is
-  // itself a decision the card makes: a room outside the comfort band sits on a tint of its own
-  // colour, one inside sits on the neutral chip.
+  // Read off the live element rather than assumed, and both halves of the adjustment at once:
+  // `--room-color` is the mark's ink, and `--room-mark-bg` is the tint underneath it — an rgba
+  // of the PALETTE colour, which is how the palette colour is recovered here whichever chip the
+  // mark happens to be sitting on.
   const painted = await page.evaluate((id) => {
     const chip = document.getElementById(id).shadowRoot.querySelector(".rtc-room-chip");
     for (const element of chip.querySelectorAll(".rtc-room-top *")) {
       const background = getComputedStyle(element).backgroundColor;
       if (background && background !== "rgba(0, 0, 0, 0)") {
-        return { markBackground: background, roomColor: chip.style.getPropertyValue("--room-color"), roomBackground: chip.style.getPropertyValue("--room-bg") };
+        return {
+          markBackground: background,
+          roomColor: chip.style.getPropertyValue("--room-color").trim(),
+          markTint: chip.style.getPropertyValue("--room-mark-bg").trim(),
+        };
       }
     }
     return null;
@@ -186,26 +190,27 @@ test("every role's background is the one the browser actually composites", async
   expect(painted, "a room chip paints a coloured mark").not.toBeNull();
 
   const paintedAlpha = Number(painted.markBackground.match(/rgba?\(([^)]+)\)/)[1].split(",")[3] ?? 1);
-  expect(paintedAlpha).toBeLessThanOrEqual(0.18 + 1e-9);
+  const paletteColour = (() => {
+    const [red, green, blue] = painted.markTint.match(/rgba?\(([^)]+)\)/)[1].split(",").map((part) => Number(part.trim()));
+    return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  })();
 
-  const modelledAlpha = await page.evaluate(
-    async ([cardColour, textColour, roomColour, roomBackground]) => {
-      const [roles, colour, tone, fit] = await Promise.all([
+  const recipe = await page.evaluate(
+    async ([cardColour, textColour, colourOfTheStep]) => {
+      const [roles, tone] = await Promise.all([
         import("/src/domain/classification/paint-roles.js"),
-        import("/src/core/color.js"),
         import("/src/domain/classification/tone-legibility.js"),
-        import("/src/domain/classification/palette-fit.js"),
       ]);
       const point = roles.pointOf(cardColour, textColour);
-      const outsideTheBand = roomBackground.startsWith("rgba");
-      const backdrop = outsideTheBand ? colour.compositeOver(roomColour, roles.TINT_ALPHAS.chipOutBackground, point.card) : point.chipNeutral;
-      return tone.legibleTintAlpha(roomColour, backdrop, roles.TINT_ALPHAS.chipMark, fit.requiredSeparationOf("chipMark"));
+      const answer = tone.legibleTintRecipe(colourOfTheStep, point.card);
+      return { ink: answer.ink, alpha: roles.TINT_ALPHAS.chipMark * answer.tintFactor };
     },
-    [card, surface.text, painted.roomColor, painted.roomBackground]
+    [card, surface.text, paletteColour]
   );
+  expect(painted.roomColor.toUpperCase()).toBe(recipe.ink.toUpperCase());
   // To two digits, because Chromium reports a composited alpha quantised to 1/255 — a value the
   // card wrote as 0.164 comes back as 0.165.
-  expect(paintedAlpha).toBeCloseTo(modelledAlpha, 2);
+  expect(paintedAlpha).toBeCloseTo(recipe.alpha, 2);
 
   const compose = (base, alpha, over) => {
     const parse = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
