@@ -343,6 +343,10 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
     noData: { hintKind: noData.kind },
     tone,
     toneStyle: toneStyleDeclaration(tone),
+    // Whether the shell draws the bar across its top edge. Carried on both view models
+    // because one shell renders both states, and a no-data card that looked different from
+    // the card beside it would be an inconsistency nobody reports and everybody notices.
+    accentLine: Boolean(config.accent_line),
     header: { icon, title, ...headerSubtitle, statusLabel },
     average: {
       value: null,
@@ -578,6 +582,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     tone,
     // The card root's own custom properties, built once and reused by the patch path.
     toneStyle: toneStyleDeclaration(tone),
+    // See buildNoDataViewModel() for why both view models carry it.
+    accentLine: Boolean(config.accent_line),
     // The header's four slots, referencing the same strings rather than recomputing
     // them — a cohesive group for the renderer, not a second copy.
     header: { icon: tone.icon, title, ...headerSubtitle, statusLabel: tone.label },

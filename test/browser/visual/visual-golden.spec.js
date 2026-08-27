@@ -843,3 +843,29 @@ test("visual golden: a derived palette in dark mode", async ({ page }) => {
   );
   await shot(page, cardId, "palette-blue-dark.png", 400);
 });
+
+// The card without the bar across its top edge. Only the "off" case gets a picture: the
+// default is already in every other golden in this file, and it is pinned byte for byte by
+// the DOM characterization baselines besides. What this one has to show is that removing the
+// line leaves nothing behind — no gap where it was, no substitute border, the same top corner
+// radius the bottom corners have.
+test("visual golden: accent_line false", async ({ page }) => {
+  await gotoHarness(page);
+  const attributes = TEMPERATURE_C;
+  const cardId = await createCard(
+    page,
+    {
+      entity: "sensor.avg",
+      accent_line: false,
+      auto_slide: false,
+      rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
+      views: [{ type: "scale" }],
+    },
+    {
+      "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+      "sensor.r1": mkStateObj("sensor.r1", 19.8, attributes),
+      "sensor.r2": mkStateObj("sensor.r2", 24.3, attributes),
+    }
+  );
+  await shot(page, cardId, "accent-line-off.png", 400);
+});

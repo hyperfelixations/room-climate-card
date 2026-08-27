@@ -148,6 +148,10 @@ export function normalizeConfig(config, collaborators) {
     icon: optionalString(userConfig.icon),
     decimals: decimalsOverride(userConfig.decimals),
     language: normalizeLanguage(userConfig.language, isSupportedLanguage),
+    // The 3px bar across the top edge of the card. On by default and read as "off" only for
+    // a literal `false`, the same tolerant reading auto_slide and swipe use: a cosmetic
+    // option with a typo in it keeps the card looking the way it always has.
+    accent_line: userConfig.accent_line !== false,
     hide_footer: userConfig.hide_footer === true,
     rotation_seconds: positiveSeconds(userConfig.rotation_seconds, DEFAULT_CONFIG.rotation_seconds, 1, 3600),
     slide_seconds: positiveSeconds(userConfig.slide_seconds, DEFAULT_CONFIG.slide_seconds, 0.1, 10),

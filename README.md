@@ -235,7 +235,7 @@ Which layouts show chips:
 value. They are tappable, but a value the card cannot read is left out of every
 calculation.
 
-#### Carousel, footers, and actions
+#### Card chrome, carousel, and actions
 
 | Option | Default | What it does |
 | --- | --- | --- |
@@ -244,6 +244,7 @@ calculation.
 | `rotation_seconds` | `14` | Seconds a view remains visible before automatic movement. Accepted range: `1`–`3600`. |
 | `slide_seconds` | `1` | Duration of the slide transition. Accepted range: `0.1`–`10`. |
 | `hide_footer` | `false` | `true` hides both footers at once. Use the per-view `footer` option to hide only one of them. |
+| `accent_line` | `true` | The colored bar along the top edge of the card, in the color of the current reading. `false` leaves it out. |
 | `tap_action` | `more-info` | What a tap on the large value or a chip does. |
 | `hold_action` | `more-info` | The same for a long press. |
 | `views` | automatic | Chooses which views appear, in which order, with which options. Write it and it is the full list — see [Views](#views). |

@@ -72,6 +72,18 @@ function subtitleOverflowAttribute(viewModel) {
   return viewModel.header.subtitleOverflow === "wrap" ? ` data-subtitle="wrap"` : "";
 }
 
+// The bar across the top edge, and the whitespace that follows it.
+//
+// Both, together, because the indentation inside these template literals is shipped markup:
+// emitting the node and its trailing blank line as ONE piece is what makes the default byte
+// for byte what it has always been, and what makes its absence a clean absence rather than a
+// blank line where an element used to be. `accent_line: false` therefore leaves the header as
+// the first thing inside the content root — the card ends at its top edge the way it ends at
+// its bottom one, with nothing put in the line's place.
+function accentLineMarkup(viewModel) {
+  return viewModel.accentLine ? `<div class="rtc-top-line"></div>\n\n          ` : "";
+}
+
 export function cardStructureSignature(viewModel, viewRenderers) {
   const parts = [
     `state:${viewModel.empty ? "no-data" : "data"}`,
@@ -123,9 +135,7 @@ export function renderCardBody(context, viewModel, viewRenderers) {
   // button exists to fall back to instead.
   return `
         <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${subtitleOverflowAttribute(viewModel)} style="${viewModel.toneStyle}" tabindex="-1">
-          <div class="rtc-top-line"></div>
-
-          <div class="rtc-header">
+          ${accentLineMarkup(viewModel)}<div class="rtc-header">
             <div class="rtc-icon-badge" aria-hidden="true">
               <ha-icon icon="${escapeHtml(viewModel.header.icon)}"></ha-icon>
             </div>
