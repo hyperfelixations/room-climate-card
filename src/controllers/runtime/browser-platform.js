@@ -307,6 +307,29 @@ export function createBrowserPlatform(getDocument) {
       return () => target.removeEventListener("visibilitychange", listener);
     },
 
+    // The browser's own light/dark switch, and through it a Home Assistant theme set to
+    // follow the system. Mirrors onVisibilityChange(): the unsubscribe closes over the media
+    // query list that was actually subscribed to, so a caller cannot detach a listener it did
+    // not attach. A realm without matchMedia hands back an unsubscribe that does nothing,
+    // rather than null — there is nothing for a caller to decide about a source that simply
+    // does not exist here, and a null would make every call site ask.
+    onColorSchemeChange: (listener) => {
+      const query = viewOf()?.matchMedia?.("(prefers-color-scheme: dark)");
+      if (!query || typeof query.addEventListener !== "function") return () => {};
+      query.addEventListener("change", listener);
+      return () => query.removeEventListener("change", listener);
+    },
+
+    // null rather than a stub when unsupported, for the same reason createResizeObserver is:
+    // the caller has to decide what it does without one, and a silently inert observer would
+    // hide that decision. Realm-correct through the element's own view, like every other
+    // constructor here — an observer from another realm would watch the wrong document.
+    createMutationObserver: (callback) => {
+      const view = viewOf();
+      if (!view || typeof view.MutationObserver !== "function") return null;
+      return new view.MutationObserver(callback);
+    },
+
     // null rather than a stub when unsupported: the caller has to decide what a card
     // without resize observation does, and a silently inert observer would hide that.
     createResizeObserver: (callback) => {

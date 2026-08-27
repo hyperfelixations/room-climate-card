@@ -19,6 +19,8 @@ function createFakePlatform(options = {}) {
   const timers = new Map();
   const frames = new Map();
   const visibilityListeners = new Set();
+  const colorSchemeListeners = new Set();
+  const mutationObservers = [];
   let hidden = Boolean(options.hidden);
   let reducedMotion = Boolean(options.reducedMotion);
   let currentFontsReady = options.fontsReady ?? null;
@@ -55,6 +57,35 @@ function createFakePlatform(options = {}) {
     onVisibilityChange(listener) {
       visibilityListeners.add(listener);
       return () => visibilityListeners.delete(listener);
+    },
+
+    onColorSchemeChange(listener) {
+      // Null-shaped the way the adapter is: a realm without matchMedia hands back an
+      // unsubscribe that does nothing, so a caller never has to ask which it got.
+      if (options.noColorScheme) return () => {};
+      colorSchemeListeners.add(listener);
+      return () => colorSchemeListeners.delete(listener);
+    },
+
+    // Records what was observed WITH ITS OPTIONS, because "it watches the root element" and
+    // "it watches the root element's attributes without its subtree" are different claims and
+    // only the second one is cheap.
+    createMutationObserver(callback) {
+      if (options.noMutationObserver) return null;
+      const observer = {
+        callback,
+        observed: [],
+        disconnected: false,
+        observe(target, observeOptions) {
+          observer.observed.push({ target, options: observeOptions });
+        },
+        disconnect() {
+          observer.disconnected = true;
+        },
+        takeRecords: () => [],
+      };
+      mutationObservers.push(observer);
+      return observer;
     },
 
     createResizeObserver(callback) {
@@ -127,6 +158,9 @@ function createFakePlatform(options = {}) {
     emitVisibilityChange() {
       for (const listener of [...visibilityListeners]) listener();
     },
+    emitColorSchemeChange() {
+      for (const listener of [...colorSchemeListeners]) listener();
+    },
     // Runs every pending animation frame callback exactly once.
     flushFrames() {
       const pending = [...frames.entries()];
@@ -152,6 +186,8 @@ function createFakePlatform(options = {}) {
     },
     pendingFrameCount: () => frames.size,
     visibilityListenerCount: () => visibilityListeners.size,
+    colorSchemeListenerCount: () => colorSchemeListeners.size,
+    mutationObservers,
     observers,
     calls,
   });

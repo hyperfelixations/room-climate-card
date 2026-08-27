@@ -81,6 +81,7 @@ import { buildStyles } from "../styles/index.js";
 import { createBrowserPlatform } from "../controllers/runtime/browser-platform.js";
 import { createCarouselController } from "../controllers/runtime/carousel-runtime.js";
 import { createResizeRuntime } from "../controllers/runtime/resize-runtime.js";
+import { createSurfaceWatch } from "../controllers/runtime/surface-watch.js";
 import { createInteractionRuntime } from "../controllers/runtime/interaction-runtime.js";
 import { createActionRuntime } from "../controllers/runtime/action-runtime.js";
 import { createRenderController } from "../controllers/render/render-controller.js";
@@ -177,6 +178,24 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._resize = createResizeRuntime({
         platform: this._platform,
         onMeasure: () => this._resolveViewLayouts(this._renderController.lastViewModel),
+      });
+
+      // A theme switch, an operating system flipping to dark, a card-mod rule repainting
+      // this one card — none of them changes an entity or the configuration, so none of
+      // them would otherwise bring the card back to look at what it is standing on. The
+      // watch supplies the occasion; _render()'s data signature decides whether anything
+      // actually changed, which is why an unrelated attribute costs one string comparison.
+      this._surfaceWatch = createSurfaceWatch({
+        platform: this._platform,
+        onChange: () => {
+          try {
+            this._render();
+          } catch (err) {
+            // Same contract as set hass(): a background change must not turn a theme
+            // switch into a thrown listener that takes the dashboard with it.
+            console.error(`${CARD_NAME}: render failed`, err);
+          }
+        },
       });
 
       // Hands a user action to Home Assistant. Gets neither hass nor this element:
@@ -420,6 +439,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._startRotation();
       this._catchUpDeferredRender();
       this._bindResizeObserver();
+      // A card can come back into a different document, a different dashboard or a
+      // different theme than the one it left, and nothing about that arrives as an update.
+      // Costs one signature comparison when it came back onto the same ground.
+      this._render();
     }
 
     // Pays a render deferred by a gesture that the disconnect then ended.
@@ -1027,6 +1050,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // sync paused itself while hidden. The platform hands back the unsubscribe, so
       // the pair can never disagree about what was attached.
       this._unlistenVisibility = this._platform.onVisibilityChange(this._boundVisibilityChange);
+      // Also outside the shadow root, and for the same kind of reason: what the card is
+      // painted ON is decided by the document around it, not by anything inside it.
+      this._surfaceWatch.observe(this);
       this._eventsBound = true;
     }
 
@@ -1042,6 +1068,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this.shadowRoot.removeEventListener("contextmenu", this._boundContextMenu);
       this._unlistenVisibility?.();
       this._unlistenVisibility = null;
+      this._surfaceWatch.disconnect();
       this._eventsBound = false;
     }
 
