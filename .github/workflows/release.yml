@@ -184,11 +184,16 @@ jobs:
       - name: Check bundle syntax
         run: npm run check:run
 
-      - name: Run unit tests
-        run: npm run test:unit:run
+      - name: Run the complete Node test suite
+        run: npm run test:node:run
 
-      - name: Run fuzz tests
-        run: npm run test:fuzz:run
+      - name: Run an additional release property sweep
+        env:
+          ROOM_CLIMATE_CARD_FUZZ_CASES: "2500"
+          ROOM_CLIMATE_CARD_METAMORPHIC_CASES: "1200"
+          ROOM_CLIMATE_CARD_FUZZ_SEED: ${{ github.run_id }}
+          ROOM_CLIMATE_CARD_METAMORPHIC_SEED: ${{ github.run_id }}
+        run: npm run test:property:run
 
       # Provenance for the characterization corpus. The digest covers every committed
       # model/DOM/style baseline, so the draft can state which frozen evidence the
@@ -282,8 +287,8 @@ jobs:
             throw "The downloaded bundle checksum does not match the tested bundle."
           }
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox webkit
 
       - name: Run browser tests once without retries
         run: npm run test:browser:run -- --retries=0

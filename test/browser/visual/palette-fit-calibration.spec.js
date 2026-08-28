@@ -18,7 +18,7 @@
 // The screenshot is deliberately NOT a golden. A golden would freeze the pixels; the point
 // of this one is that a human looks at it when the threshold changes.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
 const { BORDERLINE, VISIBLE, INVISIBLE } = require("../../fixtures/palette-fit-calibration.js");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");

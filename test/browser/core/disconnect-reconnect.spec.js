@@ -12,7 +12,7 @@
 // `window.__card` first. Every test listens for `pageerror`: the failure this file
 // guards against is silent — the card simply stops updating.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

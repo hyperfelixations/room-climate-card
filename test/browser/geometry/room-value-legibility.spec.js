@@ -10,7 +10,7 @@
 // letter short codes remain fully visible; longer labels retain ellipsis.
 // Average values are covered separately as a regression guard.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

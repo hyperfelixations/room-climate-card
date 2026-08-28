@@ -34,6 +34,10 @@ export function sortRoomsByValue(rooms, language) {
 export function buildRoomModels({ config, context, toDisplay }) {
   const participatingByEntity = new Map(context.participatingRooms.map((model) => [model.entityId, model]));
   const declared = [];
+  // Stryker disable next-line ArrayDeclaration: replacing the empty fallback with a
+  // one-element array cannot change the result. The single element is a string, so
+  // participatingByEntity.get(room.entity) is a lookup for `undefined`, which the map never
+  // holds, and the `if (!model) continue` below leaves the loop having done nothing.
   for (const [index, room] of (config.rooms || []).entries()) {
     const model = participatingByEntity.get(room.entity);
     if (!model) continue;
@@ -72,7 +76,12 @@ export function computeComfortCounts(rooms, comfort, roomsComparable) {
 export function computeSpread({ attributeValue, roomsComparable, coolest, warmest }) {
   // A negative room-to-room range is physically impossible; treat it exactly like
   // a missing attribute.
-  const attrSpread = attributeValue !== null && attributeValue >= 0 ? attributeValue : null;
+  // A missing attribute needs no guard of its own, and it is worth knowing why rather than
+  // writing one that does nothing: JavaScript coerces both sides of a relational comparison,
+  // so `null >= 0` is TRUE and the expression hands back `attributeValue`, which is `null` —
+  // the same answer the false branch gives. `undefined` and `NaN` fail the comparison and
+  // reach `null` directly. All three therefore fall through to the computed spread below.
+  const attrSpread = attributeValue >= 0 ? attributeValue : null;
   const computedSpread = roomsComparable ? warmest.value - coolest.value : 0;
   return attrSpread !== null ? attrSpread : computedSpread;
 }

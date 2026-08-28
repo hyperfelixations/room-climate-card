@@ -32,12 +32,13 @@ const { buildScenario } = require("../fixtures/scenario.js");
 const { generateDescription } = require("./generators.js");
 const { checkModel, checkRendered } = require("./properties.js");
 const { shrink, sizeOf } = require("./shrink.js");
-const { knownIssueFor } = require("../known-issues.js");
+const { classifyViolations } = require("../known-issues.js");
+const { readCount, readSeed, formatSeed, writePropertyReport } = require("./run-config.js");
 
-const DEFAULT_SEED = 0xc1a6e;
+const DEFAULT_SEED = readSeed("ROOM_CLIMATE_CARD_FUZZ_SEED", 0xc1a6e);
 // Small and deterministic for the ordinary run; a big run is one environment variable away
 // and belongs in a scheduled job, not in everyone's pre-commit loop.
-const CASES = Number(process.env.ROOM_CLIMATE_CARD_FUZZ_CASES || 400);
+const CASES = readCount("ROOM_CLIMATE_CARD_FUZZ_CASES", 400);
 
 // The card is talkative about bad configuration, and that talk is a FEATURE tested
 // elsewhere (characterization-diagnostics). Here it would bury the result, so it is
@@ -107,7 +108,7 @@ function runCase(description) {
 
   try {
     const model = card._computeViewModel();
-    const violations = checkModel(model);
+    const violations = checkModel(model, { states: scenario.states });
     const html = card.shadowRoot ? card.shadowRoot.innerHTML : "";
     violations.push(...checkRendered(card.shadowRoot, html));
     return { outcome: model.empty ? "empty" : "rendered", violations, model };
@@ -123,35 +124,52 @@ function runCase(description) {
 // unrelated refusal is not a smaller version of the same bug, it is a different bug, and
 // following it produces a minimal case that does not demonstrate what was found. The first
 // large run did exactly that.
-function violationKinds(result) {
-  return new Set(result.violations.map((violation) => violation.split(":")[0]));
+function violationSignature(violations) {
+  return JSON.stringify([...violations].sort());
+}
+
+function unknownViolations(result) {
+  return classifyViolations(result.violations).unknown;
 }
 
 function describeFailure(seed, description, violations) {
   // Shrink before reporting: a twelve-room card with six configuration keys tells nobody
   // anything, and the minimised description is a fixture that can be pasted into a test.
   const before = sizeOf(description);
-  const wanted = violationKinds({ violations });
-  const { description: minimal, steps } = shrink(description, (candidate) => {
-    const kinds = violationKinds(withQuietConsole(() => runCase(candidate)));
-    // Still the same failure — every kind the original showed is still shown.
-    for (const kind of wanted) if (!kinds.has(kind)) return false;
-    return true;
-  });
+  const wanted = violationSignature(violations);
+  let minimal;
+  let steps;
+  try {
+    ({ description: minimal, steps } = shrink(description, (candidate) => {
+      const result = withQuietConsole(() => runCase(candidate));
+      return violationSignature(unknownViolations(result)) === wanted;
+    }));
+  } catch (error) {
+    // Reporting must never replace the finding with a secondary infrastructure error. The
+    // unshrunk JSON is still a deterministic reproducer and the shrinker failure is evidence
+    // to fix, so preserve both in the assertion that the developer will actually see.
+    return [
+      `seed 0x${seed.toString(16)} violated ${violations.length} invariant(s):`,
+      ...violations.map((violation) => `  - ${violation}`),
+      `shrinking failed after a ${before.rooms}-room/${before.configKeys}-key input: ${error && error.message}`,
+      "unshrunk description (paste into scenario(…) to reproduce):",
+      JSON.stringify(description, null, 2),
+    ].join("\n");
+  }
   const after = sizeOf(minimal);
-  const stillFailing = withQuietConsole(() => runCase(minimal));
+  const stillFailing = unknownViolations(withQuietConsole(() => runCase(minimal)));
   return [
     `seed 0x${seed.toString(16)} violated ${violations.length} invariant(s):`,
     ...violations.map((violation) => `  - ${violation}`),
     `shrunk in ${steps} steps from ${before.rooms} rooms/${before.configKeys} config keys` +
       ` to ${after.rooms} rooms/${after.configKeys} config keys:`,
-    `  - ${stillFailing.violations.join("\n  - ")}`,
+    `  - ${stillFailing.join("\n  - ")}`,
     "minimal description (paste into scenario(…) to reproduce):",
     JSON.stringify(minimal, null, 2),
   ].join("\n");
 }
 
-test(`the card survives ${CASES} randomly described dashboards`, async () => {
+test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
   const seedRng = new SeededRandom(DEFAULT_SEED);
   const outcomes = { rendered: 0, empty: 0, refused: 0, threw: 0, unbuildable: 0 };
   const failures = [];
@@ -168,9 +186,14 @@ test(`the card survives ${CASES} randomly described dashboards`, async () => {
         const result = runCase(description);
         outcomes[result.outcome] += 1;
         if (!result.violations.length) continue;
-        const known = knownIssueFor(result.violations);
-        if (known) knownDefects.set(known.id, (knownDefects.get(known.id) || 0) + 1);
-        else failures.push({ seed, description, violations: result.violations });
+        const classified = classifyViolations(result.violations);
+        for (const issueId of new Set(classified.known.map(({ issue }) => issue.id))) {
+          // Count generated CASES, not the several model locations that may expose one
+          // defect. Otherwise a copied room value makes the census look more frequent than
+          // the actual failing input population.
+          knownDefects.set(issueId, (knownDefects.get(issueId) || 0) + 1);
+        }
+        if (classified.unknown.length) failures.push({ seed, description, violations: classified.unknown });
       }
     });
     await yieldToEventLoop();
@@ -185,6 +208,15 @@ test(`the card survives ${CASES} randomly described dashboards`, async () => {
     (knownDefects.size
       ? ` | known defects reproduced: ${[...knownDefects].map(([id, count]) => `${id}×${count}`).join(", ")}`
       : "");
+  t.diagnostic(`property seed ${formatSeed(DEFAULT_SEED)} | ${census}`);
+  writePropertyReport("model", {
+    seed: DEFAULT_SEED,
+    seedHex: formatSeed(DEFAULT_SEED),
+    cases: CASES,
+    outcomes,
+    knownDefects: Object.fromEntries(knownDefects),
+    unknownFailureCount: failures.length,
+  });
 
   if (failures.length) {
     // One shrunk example PER DISTINCT KIND of failure, not just the first one found. A run
@@ -192,7 +224,7 @@ test(`the card survives ${CASES} randomly described dashboards`, async () => {
     // hidden until the first is fixed.
     const byKind = new Map();
     for (const failure of failures) {
-      const signature = [...violationKinds(failure)].sort().join("+");
+      const signature = violationSignature(failure.violations);
       if (!byKind.has(signature)) byKind.set(signature, failure);
     }
     const reports = [...byKind.values()].map((failure) =>
@@ -208,24 +240,6 @@ test(`the card survives ${CASES} randomly described dashboards`, async () => {
 
   assert.equal(outcomes.threw, 0, `outcomes: ${census}`);
   assert.equal(outcomes.unbuildable, 0, `outcomes: ${census}`);
-});
-
-// ------------------------------------------------- the run tests what it claims to --
-
-test(`the generated population is the one this run means to test (${CASES} cases)`, async () => {
-  const seedRng = new SeededRandom(DEFAULT_SEED);
-  const outcomes = { rendered: 0, empty: 0, refused: 0, threw: 0, unbuildable: 0 };
-
-  for (let start = 0; start < CASES; start += YIELD_EVERY) {
-    withQuietConsole(() => {
-      for (let index = start; index < Math.min(start + YIELD_EVERY, CASES); index++) {
-        outcomes[runCase(generateDescription(seedRng.int(0, 0x7fffffff))).outcome] += 1;
-      }
-    });
-    await yieldToEventLoop();
-  }
-
-  const census = JSON.stringify(outcomes);
   const share = (name) => (100 * outcomes[name]) / CASES;
 
   // THE BANDS, and why each one is where it is.

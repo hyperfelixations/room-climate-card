@@ -2,13 +2,13 @@
 
 // RangeScale's localized daily footer. Text
 // content/data-selection correctness (span/min/max/timestamps and hide_footer)
-// is covered in test/unit/range-and-spread.test.js
+// is covered in test/component/rendering/range-and-spread.test.js
 // via jsdom (no real layout needed for that). This file's job is the one
 // thing jsdom can't verify: with REAL text metrics, at a narrow card width,
 // the footer still fits without being clipped/overflowing its container —
 // and that it renders at all in a real browser with zero rooms configured.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

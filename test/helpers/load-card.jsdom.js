@@ -2,8 +2,8 @@
 
 // Runs the built distribution artifact (dist/room-climate-card.js — a
 // dependency-free browser IIFE with no exports, exactly the bytes Home
-// Assistant loads) inside a fresh jsdom window per test file, so unit tests
-// can instantiate the real custom element and call its real methods directly.
+// Assistant loads) inside a fresh jsdom window per test file, so component,
+// contract and property tests can instantiate the real custom element.
 //
 // Testing the ARTIFACT rather than the sources is deliberate: it is the only
 // thing users ever execute, and it keeps the whole suite honest about the
@@ -26,16 +26,22 @@
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const test = require("node:test");
 const { JSDOM } = require("jsdom");
 
+const environmentCleanups = new Set();
+test.afterEach(() => {
+  for (const cleanup of environmentCleanups) cleanup();
+});
+
 // The single place in the test suite that knows where the built artifact
-// lives. Everything else (including test/unit/i18n.test.js, which loads the
-// bundle a second time to observe its module-load self-check) imports this
-// constant rather than rebuilding the path.
+// lives. Everything else (including test/component/data/i18n.test.js, which
+// loads the bundle a second time to observe its module-load self-check)
+// imports this constant rather than rebuilding the path.
 const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "dist", "room-climate-card.js");
 if (!fs.existsSync(CARD_SOURCE_PATH)) {
   throw new Error(
-    `Missing build artifact ${CARD_SOURCE_PATH}. Run "npm run build" (it is generated from src/ and committed).`
+    `Missing build artifact ${CARD_SOURCE_PATH}. Run "npm run build" (it is generated from src/ and not committed).`
   );
 }
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
@@ -121,6 +127,11 @@ function createTestEnvironment() {
   function cleanupAll() {
     for (const el of Array.from(liveCards)) cleanup(el);
   }
+
+  // The environment owns every card it creates, including one stranded by an assertion
+  // before a hand-written cleanup line. The module-level afterEach hook is registered while
+  // the test file is still being declared; environments join its cleanup registry here.
+  environmentCleanups.add(cleanupAll);
 
   // Create, use, and clean up — even when the body throws.
   //

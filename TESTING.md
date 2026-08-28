@@ -15,10 +15,17 @@ what must pass before a commit — no exceptions, and see [Known defects](#known
 that rule survives contact with a bug nobody is fixing yet.
 
 ```bash
-npm run test:unit
+npm run test:node
 ```
 
-The fast half: build plus every Node test, about ten seconds. What you run while working.
+The non-browser half: build plus every Node layer. Use `npm run test:unit` only for the direct
+ES-module unit layer; its name is deliberately narrower than `test:node`.
+
+Install the browser binaries once with `npm run test:install`. The command installs Chromium,
+Firefox and WebKit without trying to mutate operating-system packages; CI runner images own
+their system dependencies. A `spawn UNKNOWN` when a project starts means that engine arrived
+only partly — run the installer again rather than reading it as a browser the card cannot
+support.
 
 ## The layers, and what a failure in each one means
 
@@ -33,14 +40,14 @@ locatable. `test/architecture/suite-structure.test.js` enforces every rule below
 | `test/architecture/` | the layering rules `src/` obeys, and the rules this suite obeys | the design has eroded, even though everything still works |
 | `test/characterization/` | frozen recordings of what the card produced | something **changed**; whether that is a bug is for you to decide — see [POLICY.md](test/characterization/POLICY.md) |
 | `test/property/` | generated populations, the invariants that hold over all of them, and the relations that hold between two cards | an input nobody thought of breaks something, or the card discards data it could have used |
-| `test/browser/` | a real Chromium, because the question needs one | real geometry, fonts, pointers or pixels disagree |
+| `test/browser/` | real browser engines; Chromium owns the complete suite, Firefox and WebKit own a defined core | real geometry, fonts, pointers, pixels or the cross-engine public surface disagree |
 
 `test/unit/` and `test/component/` are subdivided further — by `src` layer and by concern
 respectively — so that a directory listing is a map rather than an inventory.
 
-Shared material lives in three places and is never a test itself:
+Shared material lives in three directories and is never a test itself:
 
-- `test/contracts/product-surface.js` — the **one** hand-written statement of what the card
+- `test/manifests/product-surface.js` — the **one** hand-written statement of what the card
   supports: fifteen languages, four metrics, four views, the palette keys. Generic matrices
   import it; a curated subset (five typographically extreme languages, say) stays local and
   says in a comment that it is curated.
@@ -57,20 +64,32 @@ Shared material lives in three places and is never a test itself:
 ```bash
 npm run test:file -- test/unit/domain/palette-fit.test.js
 npm run test:name -- "the verdict changes exactly once" test/unit/domain/palette-fit.test.js
-npm run test:contracts
+npm run test:unit
+npm run test:component
+npm run test:contract
+npm run test:architecture
+npm run test:characterization
 npm run test:property
 npm run test:known-issues
+npm run test:browser:accessibility
+npm run test:browser:core
+npm run test:browser:geometry
+npm run test:browser:interaction
+npm run test:browser:visual
+npm run test:browser:cross-engine
 npm run test:browser:file -- test/browser/visual/visual-golden.spec.js
 npm run test:browser:ui
 ```
 
 `test:file` and `test:name` take anything `node --test` takes, so a directory glob works too.
-`test:browser:ui` opens Playwright's inspector, which is the fastest way to understand a
-geometry failure.
+Each public layer command builds first. The matching internal `*:run` command skips that build
+and exists for a pipeline that already produced its own bundle. `test:browser:ui` opens
+Playwright's inspector, which is the fastest way to understand a geometry failure.
 
 When a Node test fails, the reporter prints the message, the expected/actual comparison, the
-cause of a wrapped error, a trimmed stack, and anything the run wrote to stderr. If you still
-need more, `npm run test:unit:verbose` uses Node's own reporter.
+cause of a wrapped error, a trimmed stack, the full nested suite path, and anything the run
+wrote to stderr. Explicit `undefined` values remain visible in comparisons. If you still need
+more, `npm run test:node:verbose` uses Node's own reporter.
 
 ## Writing a test
 
@@ -93,9 +112,15 @@ Existing tests often write entity attributes out by hand instead. That is fine w
 is *about* those exact attributes; prefer the builder for everything else, and do not rewrite
 old tests wholesale just to adopt it.
 
-**Give the file a header.** Four lines minimum, and the structure test enforces it. Say what
-the file covers and why it is separate from its neighbours — the second half is the part that
-saves the next person from adding a fifth file for the same subject.
+Put a test under the owner whose failure it explains, and open the file with a header that
+says what it covers — and, where it was split out of a larger file, where its boundary to the
+neighbour runs. That header is enforced as a floor of four comment lines, because a split file
+inherits none of the reason it exists apart from its neighbour and the next reader cannot
+recover that reason from the code.
+
+Cohesion, dependency direction and ownership determine whether a file should be split; line
+counts and arbitrary size targets do not. Beyond the header floor, the architecture suite
+enforces directory and dependency contracts, not stylistic quotas.
 
 ## The property layer
 
@@ -142,28 +167,85 @@ by a wrong precondition looks exactly like one that holds.
 
 ```bash
 npm run test:property                                            # both deterministic runs
-ROOM_CLIMATE_CARD_FUZZ_CASES=25000 npm run test:fuzz:run         # a real model sweep
-ROOM_CLIMATE_CARD_METAMORPHIC_CASES=15000 npm run test:fuzz:run  # a real metamorphic sweep
+ROOM_CLIMATE_CARD_FUZZ_CASES=25000 npm run test:property:run         # a real model sweep
+ROOM_CLIMATE_CARD_METAMORPHIC_CASES=15000 npm run test:property:run  # a real metamorphic sweep
 ```
 
 The two counts are separate because a metamorphic case builds the card at least twice and costs
 about three times a model case — measured at 48 ms against 15 ms.
 
-A failure prints a **shrunk** case: the same failure, reduced to the smallest description that
-still causes it, as plain JSON you can paste into `scenario(…)`. The seed is not needed
-afterwards.
+A failure prints a **locally minimized** case as lossless JSON, including values such as
+`NaN` and `-0`. The shrinker accepts a candidate only when it reproduces the same exact unknown
+violation signature, and verifies the final candidate again. Paste that description into
+`scenario(…)`; keep the reported seed to replay the complete population as well.
 
-A large sweep also runs [weekly in CI](.github/workflows/property.yml).
+A large sweep also runs [weekly in CI](.github/workflows/property.yml). Its default seeds come
+from the workflow `run_id`: rerunning the same workflow is stable, while a new weekly run
+explores a new population. A manually supplied seed always wins. Each sweep publishes JSON
+reports with its seed, case count, outcome census, applied metamorphic relations and observed
+known defects.
+
+## Browser matrix
+
+`npm run test:browser` runs the complete Playwright matrix:
+
+- Chromium runs all `core`, `interaction`, `geometry`, `accessibility` and `visual` specs.
+- Firefox and WebKit run only `availability`, `public-surface-smoke` and `source-modes` from
+  `test/browser/core/`.
+
+The smaller cross-engine scope checks public registration and source modes without pretending
+that one browser's pixel geometry is another's. Golden screenshots and pixel geometry remain
+Chromium-owned. `playwright.config.js` fixes the worker count at two and uses no global retry;
+the few timing tests that justify a retry own and explain it locally.
 
 ## Golden screenshots
 
-54 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
+55 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
 budget of 200 differing pixels. Absolute rather than a ratio on purpose: rendering noise does
 not scale with image area, and a ratio quietly gave a large screenshot a thousand-pixel
 allowance — under which seven baselines depicted a caption the card had stopped drawing.
 
 Re-record with `npx playwright test --update-snapshots=all`, then **look at every changed
 image**. Never widen the budget to make a diff go away.
+
+Calibration specs attach their generated image to the Playwright report with
+`testInfo.attach()`. They do not leave a temporary picture behind and assume somebody saw it;
+open the report artifact and inspect the attachment.
+
+## Coverage
+
+`npm run coverage` measures three independent layers and then merges them:
+
+- direct-source unit coverage;
+- Node bundle/component coverage mapped through Rollup source maps;
+- Chromium browser coverage collected by the shared Playwright fixture.
+
+Every report is normalized to `src/`; `dist/` is never presented as a product source. Each
+layer and the merge writes LCOV, JSON and a text summary under `coverage/`.
+
+Before it reports anything, the merge checks the INVENTORY: every `.js` file under `src/` has
+to appear in each of the three layers and in the merge, and the run fails naming the files if
+one does not. This is not pedantry about counts. Istanbul reports only the files it was handed,
+so a module no layer executed does not show up as 0% — it does not show up at all, and every
+percentage below is quietly computed over a smaller product than the one that ships. The merge
+then enforces the calibrated floor of 98% statements, 97% branches, 75% functions and 98%
+lines. CI uploads the complete folder.
+
+## Mutation testing
+
+A mutation test changes one thing in the product code on purpose and runs the tests. If the
+mutant lives, no test noticed the difference: the line was executed but not checked.
+
+`npm run test:mutation:dry-run` validates the runner; `npm run test:mutation` mutates only the
+critical classification boundary, metric-resolution and aggregate modules named in
+`stryker.config.mjs`. The scope is narrow on purpose — the command runner has no per-test
+coverage to narrow the work with, so a wide scope buys running time rather than answers.
+
+**The floor is 100%.** Anything lower cannot tell a provably equivalent mutant from one that
+was simply never tested, so it would pass the next real survivor as readily as the known ones.
+Exactly one mutant is excused, by name, at the line it sits on and for one mutator only, with
+the argument written beside it; every other mutation of that same line still has to die.
+Weekly CI publishes the JSON and HTML reports under `reports/mutation/`.
 
 ## Known defects
 
@@ -184,9 +266,11 @@ Read `test/known-issues.js` to find out what is currently broken on purpose.
 [`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push and pull request —
 Node tests and browser tests — deliberately without `needs:` between them, because a failure in
 one says nothing about the other. Both build the bundle themselves, so no job can report green
-against an artifact it did not produce. Coverage is published as an artifact and never enforced;
-the Playwright report is kept whatever the outcome, because a *flaky* result is a pass whose
-evidence is the first thing to be thrown away.
+against an artifact it did not produce. The browser job installs all three engines, runs the
+complete Chromium suite while collecting source-normalized coverage, then runs the defined
+Firefox/WebKit core without repeating Chromium. It always keeps both coverage and Playwright
+reports.
 
-[`property.yml`](.github/workflows/property.yml) sweeps both large generated populations once a
-week, and can be started by hand with a case count for each.
+[`property.yml`](.github/workflows/property.yml) sweeps both large generated populations and
+runs the narrow mutation scope once a week. It can be started by hand with a case count and
+optional seed for each property population.

@@ -15,7 +15,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { scenario, buildScenario, describeScenario, DEVICE_CLASS_KEY, UNIT_KEY } = require("./scenario.js");
-const { METRICS, METRIC_KINDS } = require("../contracts/product-surface.js");
+const { METRICS, METRIC_KINDS } = require("../manifests/product-surface.js");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 
 let env;
@@ -179,6 +179,9 @@ test("hass can arrive without the fields a card expects", () => {
   for (const theme of ["dark", "light"]) {
     assert.deepEqual(buildScenario({ rooms: [{}], theme }).hass.themes, { darkMode: theme === "dark" });
   }
+
+  const themeGap = buildScenario({ rooms: [{}], theme: "dark", hassGaps: ["themes"] }).hass;
+  assert.equal("themes" in themeGap, false, "a declared theme does not override the missing-themes environment axis");
 });
 
 test("a built scenario carries a description that rebuilds it exactly", () => {

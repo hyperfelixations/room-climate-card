@@ -49,6 +49,27 @@ const DEFAULT_PALETTE_ID = "pastel";
 // absence of one.
 const CLASSIFICATION_ZONES = ["optimal", "comfort", "outside", "invalid"];
 
+// Public YAML shapes. These lists are deliberately independent of the normalizers: the
+// generator consumes them and the architecture suite prevents another complete copy from
+// silently becoming a second source of truth.
+const TOP_LEVEL_CONFIG_KEYS = [
+  "entity", "rooms", "range_entity", "trend_entity", "classification", "palette",
+  "title", "subtitle", "entity_label", "icon", "decimals", "language", "room_sort",
+  "room_label", "show_rooms", "unavailable_values", "room_columns", "room_rows",
+  "auto_slide", "swipe", "rotation_seconds", "slide_seconds", "hide_footer",
+  "tap_action", "hold_action", "views", "start_view",
+];
+const ROOM_KEYS = ["entity", "name", "short", "tap_action", "hold_action"];
+const VIEW_ENTRY_KEYS = ["type", "enabled", "options"];
+const VIEW_OPTIONS = {
+  range: { show_time: "bool" },
+  range_scale: { show_comfort_band: "bool", show_optimal_band: "bool", footer: ["compact", "detailed", false] },
+  scale: { show_comfort_band: "bool", show_optimal_band: "bool", footer: "bool", markers: ["average", "extremes", "all"] },
+  extremes: { show_value: "bool" },
+};
+const ACTION_TYPES = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
+const CUSTOM_CLASSIFICATION_KEYS = ["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"];
+
 module.exports = {
   LANGUAGES,
   DEFAULT_LANGUAGE,
@@ -59,4 +80,10 @@ module.exports = {
   SHIPPED_PALETTE_IDS,
   DEFAULT_PALETTE_ID,
   CLASSIFICATION_ZONES,
+  TOP_LEVEL_CONFIG_KEYS,
+  ROOM_KEYS,
+  VIEW_ENTRY_KEYS,
+  VIEW_OPTIONS,
+  ACTION_TYPES,
+  CUSTOM_CLASSIFICATION_KEYS,
 };

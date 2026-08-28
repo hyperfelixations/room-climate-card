@@ -8,7 +8,7 @@
 // name, so the ellipsis stays accessibility-safe. Also covers
 // .rtc-extreme-name/.rtc-extreme-label, which got the same CSS treatment.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

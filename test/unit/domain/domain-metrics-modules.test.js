@@ -336,6 +336,35 @@ test("the ambiguity table is what decides, not a list of exceptions", () => {
   assert.equal(resolution.metricKindFromUnitAlone("parsecs"), null);
 });
 
+test("the Home Assistant unit ambiguity table preserves every owning device class", () => {
+  assert.deepEqual(resolution.DEVICE_CLASSES_BY_UNIT, {
+    "°C": ["temperature"],
+    "°F": ["temperature"],
+    K: ["temperature"],
+    "%": ["humidity"],
+    ppm: [
+      "carbon_dioxide",
+      "carbon_monoxide",
+      "nitrogen_dioxide",
+      "ozone",
+      "volatile_organic_compounds_parts",
+    ],
+    "µg/m³": [
+      "absolute_humidity",
+      "carbon_monoxide",
+      "nitrogen_dioxide",
+      "nitrogen_monoxide",
+      "ozone",
+      "pm1",
+      "pm10",
+      "pm25",
+      "pm4",
+      "sulphur_dioxide",
+      "volatile_organic_compounds",
+    ],
+  });
+});
+
 // A declared device_class always wins, so nothing changes for a sensor that has one.
 test("a declared device class is unaffected by the unit rule", () => {
   assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS.carbon_dioxide, "co2");

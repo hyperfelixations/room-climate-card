@@ -10,4 +10,10 @@ dist/
 
 # Local agent routing
 /AGENTS.md
+
+# Measured, not stored: every one of these is written by a script that can be run again.
+# coverage/ holds the three layers and their merge, reports/ the mutation run’s HTML and
+# JSON, and .stryker-tmp/ the sandboxes Stryker copies the project into while it works.
 coverage/
+reports/
+.stryker-tmp/

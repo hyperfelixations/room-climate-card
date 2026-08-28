@@ -9,7 +9,7 @@
 // and the tests would go on passing against a card nobody has.
 //
 // DERIVED FROM THE MANIFEST, NOT RESTATED. Every constant below is built from METRICS in
-// ../contracts/product-surface.js, which is the suite's single statement of what the card
+// ../manifests/product-surface.js, which is the suite's single statement of what the card
 // supports. Restating "°C" here would only move the duplication one file further away.
 //
 // WHAT DELIBERATELY STAYS INLINE. A fixture whose whole purpose is to be WRONG — a
@@ -21,7 +21,7 @@
 // The shape matches what the card reads off a Home Assistant state object, so these go
 // straight into mkStateObj(…) and into a `scenario()` description alike.
 
-const { METRICS } = require("../contracts/product-surface.js");
+const { METRICS } = require("../manifests/product-surface.js");
 
 // One metric, spelled the way a correctly configured sensor spells it.
 function attributesFor(metric, unit) {

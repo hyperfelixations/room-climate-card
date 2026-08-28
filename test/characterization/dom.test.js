@@ -3,7 +3,7 @@
 // Characterization of rendered shadow-DOM markup, verbatim.
 //
 // The card builds its DOM from template strings and then patches it in place.
-// The browser layer (test/browser/visual-golden.spec.js) owns the VISUAL
+// The browser layer (test/browser/visual/visual-golden.spec.js) owns the VISUAL
 // contract with real Chromium screenshots; what it cannot see is the markup
 // itself — class names, attribute order, ARIA labels, title tooltips,
 // data-* hooks, inline CSS custom properties, hidden flags, and the exact

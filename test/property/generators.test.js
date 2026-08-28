@@ -17,7 +17,7 @@ const { SeededRandom } = require("../helpers/seeded-random.js");
 const { generateDescription, weighted, WEIGHTS, OPTION_PRESENCE, ENUMS, OTHER_DOMAIN_UNITS } = require("./generators.js");
 const V = require("./vocabulary.js");
 const { describeScenario } = require("../fixtures/scenario.js");
-const { METRICS, METRIC_KINDS, LANGUAGES, VIEWS } = require("../contracts/product-surface.js");
+const { METRICS, METRIC_KINDS, LANGUAGES, VIEWS } = require("../manifests/product-surface.js");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -218,15 +218,18 @@ test("every optional configuration key is generated, at roughly the rate declare
   // a refactor dropped it, or a weight went to zero — takes a whole configuration path out of
   // the run without failing anything else.
   for (const [key, expected] of Object.entries(OPTION_PRESENCE)) {
-    if (key === "misspelledKey" || key === "view_options") continue; // measured separately below
+    if (key === "misspelledKey") continue; // measured separately below
     const actual = configShare(key);
     assert.ok(actual > expected / 3, `${key} appears in only ${(100 * actual).toFixed(1)} % of cards`);
     assert.ok(actual < expected * 3 + 0.05, `${key} appears in ${(100 * actual).toFixed(1)} % of cards, far above its weight`);
   }
 });
 
-test("view options and misspelled top-level keys both occur", () => {
-  assert.ok(configShare("view_options") > 0.05, "per-view options are never configured");
+test("view options are nested in entries, and misspelled top-level keys occur", () => {
+  const entries = valuesOf("views").filter(Array.isArray).flat();
+  assert.ok(entries.some((entry) => entry && typeof entry === "object" && entry.options), "per-view options are never configured");
+  assert.ok(entries.some((entry) => entry && typeof entry === "object" && "enabled" in entry), "views[].enabled is never configured");
+  assert.equal(configShare("view_options"), 0, "the generator invented the unsupported top-level view_options key");
   const misspelled = population.filter((description) =>
     Object.keys(description.config).some((key) => V.MISSPELLED_CONFIG_KEYS.includes(key))
   );
@@ -266,12 +269,14 @@ test("subtitle is generated in every shape it accepts, including both reserved w
 });
 
 test("actions are generated valid, unknown, misspelled and malformed", () => {
-  const actions = [...valuesOf("tap_action"), ...valuesOf("hold_action")];
+  const roomActions = population.flatMap((description) => description.rooms.flatMap((room) => [room.tap_action, room.hold_action]));
+  const actions = [...valuesOf("tap_action"), ...valuesOf("hold_action"), ...roomActions].filter((value) => value !== undefined);
   assert.ok(actions.length > 40, `only ${actions.length} actions`);
   const named = actions.filter((value) => value && typeof value === "object" && typeof value.action === "string");
   assert.ok(named.some((value) => V.VALID_ACTIONS.includes(value.action)), "no valid action is ever generated");
   assert.ok(named.some((value) => !V.VALID_ACTIONS.includes(value.action)), "no unknown action is ever generated");
   assert.ok(actions.some((value) => !value || typeof value !== "object"), "no malformed action is ever generated");
+  assert.ok(population.some((description) => description.rooms.some((room) => room.hold_action !== undefined)), "room hold_action is never generated");
 });
 
 test("views are generated in every shape, including a list that omits scale", () => {
@@ -292,6 +297,8 @@ test("palettes are generated in every shape the card accepts, and several it doe
   const palettes = valuesOf("palette");
   assert.ok(palettes.length > 100, `only ${palettes.length} palettes`);
   assert.ok(palettes.some((value) => typeof value === "string"), "no palette is ever named");
+  assert.ok(palettes.some((value) => typeof value === "string" && value.split("-").length === 2), "no two-colour gradient is generated");
+  assert.ok(palettes.some((value) => typeof value === "string" && value.split("-").length === 3), "no three-colour gradient is generated");
   assert.ok(palettes.some((value) => typeof value === "number"), "a numeric colour scalar is never generated");
   const written = palettes.filter((value) => value && typeof value === "object" && !Array.isArray(value));
   assert.ok(written.length > 5, "a palette is never written out in YAML");
@@ -303,11 +310,16 @@ test("palettes are generated in every shape the card accepts, and several it doe
 test("classification overrides are generated, including a ramp that breaks the score contract", () => {
   const overrides = valuesOf("classification");
   assert.ok(overrides.length > 20, `only ${overrides.length} classification overrides`);
-  assert.ok(overrides.some((value) => "source" in value), "the source form never occurs");
-  assert.ok(overrides.some((value) => typeof value.profile === "string"), "a named profile never occurs");
+  assert.ok(overrides.some((value) => value && typeof value === "object" && "source" in value), "the source form never occurs");
+  assert.ok(overrides.some((value) => typeof value === "string"), "a named profile never occurs");
   assert.ok(
-    overrides.some((value) => value.profile && typeof value.profile === "object" && Array.isArray(value.profile.tiers)),
+    overrides.some((value) => value && value.source === "custom" && Array.isArray(value.tiers) && value.tiers.length > 0),
     "a written-out tier ramp never occurs"
+  );
+  assert.equal(
+    overrides.some((value) => value && value.profile && typeof value.profile === "object"),
+    false,
+    "custom tiers are nested under the nonexistent classification.profile object"
   );
 });
 
@@ -345,10 +357,7 @@ test("different seeds describe different cards", () => {
 test("every generated description is plain JSON, so it can be printed and shrunk", () => {
   for (const description of population.slice(0, 300)) {
     const round = JSON.parse(JSON.stringify(description));
-    // NaN and -0 do not survive JSON, and both are deliberately generated. What must survive
-    // is the STRUCTURE — a case that cannot be printed cannot be reported.
-    assert.equal(typeof round, "object");
-    assert.ok(Array.isArray(round.rooms));
+    assert.deepEqual(round, description, "JSON round-trip changed a generated failure description");
   }
 });
 
@@ -400,6 +409,10 @@ test("hass is usually complete, and every gap in it is reachable", () => {
   for (const gap of V.HASS_GAPS) assert.ok(seen.has(gap), `hass never arrived without ${gap}`);
   const themed = population.filter((description) => description.theme).length / SAMPLE;
   assert.ok(themed > 0.005, `a theme is never declared: ${themed}`);
+  const combined = population.filter(
+    (description) => description.theme && (description.hassGaps || []).length > 0
+  ).length;
+  assert.ok(combined > 0, "theme and hass gaps are mutually exclusive, so their interaction is never tested");
 });
 
 test("sometimes one sensor is both the average and a room", () => {

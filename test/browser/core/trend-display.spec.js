@@ -11,7 +11,7 @@
 // The Fahrenheit case is here for the same reason: a converted RATE is a different number
 // from a converted reading, and it must appear in the scale footer and nowhere else.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 
 const MODES = {

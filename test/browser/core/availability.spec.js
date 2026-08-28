@@ -11,7 +11,7 @@
 // Timers and clickability are the reason this file exists: both are invisible to a model
 // test, and both are how an outage used to leave a card quietly broken.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { HUMIDITY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

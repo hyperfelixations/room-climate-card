@@ -54,7 +54,7 @@
 // behaviour. A relation about what a card PRESERVES has nothing to say about a card that was
 // showing nothing.
 
-const { METRICS } = require("../contracts/product-surface.js");
+const { METRICS } = require("../manifests/product-surface.js");
 const { buildScenario } = require("../fixtures/scenario.js");
 
 // A reading the card and JavaScript agree is a number.

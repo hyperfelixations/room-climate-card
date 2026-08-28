@@ -4,7 +4,7 @@
 // no-data state, 1-4 views, supported languages and RangeScale collisions.
 // Uses Playwright's built-in
 // toHaveScreenshot(), which on the FIRST run writes baseline PNGs into
-// test/browser/visual-golden.spec.js-snapshots/ (committed alongside the
+// test/browser/visual/visual-golden.spec.js-snapshots/ (committed alongside the
 // test as the reference) and on every subsequent run pixel-diffs against
 // them, failing if the rendered output drifts unexpectedly.
 //
@@ -15,7 +15,7 @@
 // width, light+dark, and one non-English language as a sanity check that
 // longer translated strings don't visibly break layout.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

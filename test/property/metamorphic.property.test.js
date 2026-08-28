@@ -30,10 +30,11 @@ const { buildScenario } = require("../fixtures/scenario.js");
 const { generateDescription } = require("./generators.js");
 const { RELATIONS, observe } = require("./metamorphic.js");
 const { shrink, sizeOf } = require("./shrink.js");
-const { knownIssueFor } = require("../known-issues.js");
+const { classifyViolations } = require("../known-issues.js");
+const { readCount, readSeed, formatSeed, writePropertyReport } = require("./run-config.js");
 
-const DEFAULT_SEED = 0x5eed1;
-const CASES = Number(process.env.ROOM_CLIMATE_CARD_METAMORPHIC_CASES || 300);
+const DEFAULT_SEED = readSeed("ROOM_CLIMATE_CARD_METAMORPHIC_SEED", 0x5eed1);
+const CASES = readCount("ROOM_CLIMATE_CARD_METAMORPHIC_CASES", 300);
 
 // Every relation applies a sequence to ONE card, so a card is built per sequence rather than
 // per description — see model.property.test.js for why the loop yields to the event loop.
@@ -131,9 +132,10 @@ function checkRelation(relation, description) {
 
 function report(relation, seed, description, violations) {
   const before = sizeOf(description);
+  const wanted = JSON.stringify([...violations].sort());
   const { description: minimal, steps } = shrink(description, (candidate) => {
     const result = withQuietConsole(() => checkRelation(relation, candidate));
-    return result.applied && result.violations.length > 0;
+    return result.applied && JSON.stringify([...result.violations].sort()) === wanted;
   });
   const after = sizeOf(minimal);
   const still = withQuietConsole(() => checkRelation(relation, minimal));
@@ -149,7 +151,7 @@ function report(relation, seed, description, violations) {
   ].join("\n");
 }
 
-test(`every metamorphic relation holds across ${CASES} randomly described dashboards`, async () => {
+test(`every metamorphic relation holds across ${CASES} randomly described dashboards`, async (t) => {
   const seedRng = new SeededRandom(DEFAULT_SEED);
   const applied = new Map(RELATIONS.map((relation) => [relation.name, 0]));
   const failures = [];
@@ -171,17 +173,30 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
           // One report per relation is enough to act on, and a hundred of the same one buries
           // everything else.
           if (!result.violations.length) continue;
-          const known = knownIssueFor(result.violations);
-          if (known) {
-            knownDefects.set(known.id, (knownDefects.get(known.id) || 0) + 1);
-          } else if (!failures.some((failure) => failure.relation === relation)) {
-            failures.push({ relation, seed, description, violations: result.violations });
+          const classified = classifyViolations(result.violations);
+          for (const { issue } of classified.known) {
+            knownDefects.set(issue.id, (knownDefects.get(issue.id) || 0) + 1);
+          }
+          if (classified.unknown.length && !failures.some((failure) => failure.relation === relation)) {
+            failures.push({ relation, seed, description, violations: classified.unknown });
           }
         }
       }
     });
     await yieldToEventLoop();
   }
+
+  const appliedCounts = Object.fromEntries(applied);
+  const appliedSummary = [...applied].map(([name, count]) => `${name}: ${count}`).join(" | ");
+  t.diagnostic(`metamorphic seed ${formatSeed(DEFAULT_SEED)} | ${appliedSummary}`);
+  writePropertyReport("metamorphic", {
+    seed: DEFAULT_SEED,
+    seedHex: formatSeed(DEFAULT_SEED),
+    cases: CASES,
+    applied: appliedCounts,
+    knownDefects: Object.fromEntries(knownDefects),
+    unknownFailureCount: failures.length,
+  });
 
   if (failures.length) {
     const text = failures.map((failure) => withQuietConsole(() => report(failure.relation, failure.seed, failure.description, failure.violations)));
@@ -192,6 +207,13 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
   // that accidentally excludes everything looks exactly like a passing run.
   const never = [...applied].filter(([, count]) => count === 0).map(([name]) => name);
   assert.deepEqual(never, [], `these relations never applied to any generated case, so they tested nothing: ${never.join("; ")}`);
+  const minimumApplications = Math.max(2, Math.floor(CASES * 0.005));
+  const starved = [...applied].filter(([, count]) => count < minimumApplications);
+  assert.deepEqual(
+    starved,
+    [],
+    `relations below the minimum population of ${minimumApplications}: ${starved.map(([name, count]) => `${name}=${count}`).join("; ")}`
+  );
 
   // The registered defects this run walked into. Asserted rather than merely printed: BUG-10
   // is the reason this file exists, and a run that stopped reproducing it would mean either

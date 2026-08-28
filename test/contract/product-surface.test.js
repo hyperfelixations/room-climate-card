@@ -2,7 +2,7 @@
 
 // THE ONE PLACE the hand-written product surface is compared with the code.
 //
-// Every other generic matrix in the suite imports test/contracts/product-surface.js and
+// Every other generic matrix in the suite imports test/manifests/product-surface.js and
 // trusts it. That trust is only worth something because this file exists: it is the single
 // seam where an independent statement of what the card supports meets what the card
 // actually registers, and a mismatch here means one of the two is wrong.
@@ -14,7 +14,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const surface = require("./product-surface.js");
+const surface = require("../manifests/product-surface.js");
 
 let i18nRegistry;
 let locales;
@@ -22,6 +22,7 @@ let metricDefinitions;
 let viewState;
 let paletteRegistry;
 let zones;
+let actions;
 
 test.before(async () => {
   i18nRegistry = await import("../../src/i18n/registry.js");
@@ -30,6 +31,7 @@ test.before(async () => {
   viewState = await import("../../src/presentation/view-model/view-state.js");
   paletteRegistry = await import("../../src/domain/classification/palettes/registry.js");
   zones = await import("../../src/domain/classification/zones.js");
+  actions = await import("../../src/config/actions.js");
 });
 
 // ------------------------------------------------------------------- languages --
@@ -119,4 +121,18 @@ test("the shipped palettes are exactly those the manifest names", () => {
 
 test("the classification zones are exactly those the manifest claims", () => {
   assert.deepEqual([...zones.CLASSIFICATION_ZONES].sort(), [...surface.CLASSIFICATION_ZONES].sort());
+});
+
+test("the Home Assistant action allowlist matches the public surface", () => {
+  assert.deepEqual(actions.allowedActionTypes().sort(), [...surface.ACTION_TYPES].sort());
+});
+
+test("every view's option keys match the public surface", () => {
+  for (const definition of viewState.VIEW_DEFINITIONS) {
+    assert.deepEqual(
+      Object.keys(definition.optionsSchema).sort(),
+      Object.keys(surface.VIEW_OPTIONS[definition.key]).sort(),
+      definition.key
+    );
+  }
 });

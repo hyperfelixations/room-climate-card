@@ -11,7 +11,7 @@
 // visible happens: the card simply stops responding, and no test that only checks the
 // final index would have noticed.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

@@ -9,14 +9,14 @@
 // cases belong in visual-golden.spec.js). Fixed seed for a reproducible CI
 // run, same 0xC1A6E default as the jsdom property test.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { SeededRandom } = require("../../helpers/seeded-random.js");
 
 const SEED = 0xc1a6e;
 const ITERATIONS = 30;
-// From the manifest — see test/contracts/product-surface.js.
-const { LANGUAGES } = require("../../contracts/product-surface.js");
+// From the manifest — see test/manifests/product-surface.js.
+const { LANGUAGES } = require("../../manifests/product-surface.js");
 const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 const MODES = {
   temperature: { attributes: TEMPERATURE_C, low: -20, high: 45 },

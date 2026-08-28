@@ -33,6 +33,15 @@ test("a freshly created environment holds no cards", () => {
   assert.equal(env.liveCardCount(), 0);
 });
 
+test("a live card is owned until the end of its test", () => {
+  env.createCard(built.config, built.hass);
+  assert.equal(env.liveCardCount(), 1);
+});
+
+test("the failure-safe test boundary releases an unclaimed card", () => {
+  assert.equal(env.liveCardCount(), 0, "a card survived into the next test");
+});
+
 test("createCard registers the card, cleanup releases it", () => {
   const before = env.liveCardCount();
   const el = env.createCard(built.config, built.hass);

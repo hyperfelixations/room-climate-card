@@ -68,10 +68,8 @@ test("a predicate that depends on a misspelled attribute keeps the misspelling",
   assert.equal(description.rooms.length, 1);
 });
 
-test("a predicate nothing satisfies leaves the case alone", () => {
-  const { description, steps } = shrink(BIG, () => false);
-  assert.deepEqual(description, BIG, "a case that cannot be reduced must come back unchanged");
-  assert.ok(steps > 0, "the shrinker should still have tried");
+test("a non-reproducing input is rejected instead of being reported as a counterexample", () => {
+  assert.throws(() => shrink(BIG, () => false), /does not reproduce/);
 });
 
 test("shrinking is bounded, even against a predicate that always says yes", () => {
@@ -84,14 +82,22 @@ test("shrinking is bounded, even against a predicate that always says yes", () =
 });
 
 test("a candidate the builder refuses is skipped rather than returned", () => {
-  // The predicate throws for anything with rooms; the shrinker must not treat a thrown
+  // The predicate throws for a two-room candidate; the shrinker must not treat a thrown
   // predicate as "still fails" and hand back a case that cannot even be built.
   const explodes = (description) => {
-    if ((description.rooms || []).length > 0) throw new Error("cannot evaluate");
-    return true;
+    if ((description.rooms || []).length === 2) throw new Error("cannot evaluate");
+    return dependsOnOneRoom(description);
   };
   const { description } = shrink(BIG, explodes);
-  assert.equal((description.rooms || []).length, 0);
+  assert.ok(dependsOnOneRoom(description));
+  assert.notEqual((description.rooms || []).length, 2);
+});
+
+test("lossy JSON values are rejected before they can change a failure", () => {
+  assert.throws(
+    () => shrink({ rooms: [{ state: NaN }], config: {} }, () => true),
+    /not lossless JSON/
+  );
 });
 
 test("every candidate is a valid description, for any generated case", () => {

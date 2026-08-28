@@ -2,14 +2,14 @@
 
 // Real Chromium confirms that
 // keyed DOM-patching actually preserves keyboard focus, not just node
-// object identity in jsdom (test/unit/keyed-dom-patching.test.js covers the
+// object identity in jsdom (test/component/interaction/keyed-dom-patching.test.js covers the
 // full Pflichtmatrix there) — a genuine browser's focus/activeElement
 // semantics (including how a shadow root's own activeElement is exposed)
 // are the real-world claim under test, and jsdom's approximation, while
 // good enough for the exhaustive matrix, isn't a substitute for one
 // end-to-end confirmation against real Chromium.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

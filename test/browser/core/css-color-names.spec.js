@@ -12,7 +12,7 @@
 // rather than a restatement of the first, which is the only kind of check worth having
 // over a table of constants.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness } = require("../../helpers/browser-helpers.js");
 
 test("every CSS colour name in the table is the colour the browser says it is", async ({ page }) => {

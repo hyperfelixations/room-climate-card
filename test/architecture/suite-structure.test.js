@@ -21,7 +21,7 @@
 //   characterization/ frozen recordings of what the card produced, with a policy.
 //   property/       generated populations and the invariants that must hold over them.
 //   browser/        a real browser, because the question needs one.
-//   contracts/ fixtures/ helpers/   shared material, and never tests themselves.
+//   manifests/ fixtures/ helpers/  shared material, and never tests themselves.
 //
 // The rules below are the ones that can actually be checked. They are deliberately few: a
 // structure test that encodes taste rather than consequences is one people route around.
@@ -32,10 +32,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const TEST_DIR = path.join(__dirname, "..");
+const ROOT = path.join(TEST_DIR, "..");
 
 // Every directory that may hold test files, and what a file there is allowed to be. A
 // directory not listed here fails the first test, so adding one is a decision somebody makes
 // on purpose rather than a folder that appears.
+//
+// manifests/, fixtures/ and helpers/ are deliberately absent as TEST directories: they hold
+// shared material, and a test file appearing in one of them is itself the failure. fixtures/
+// is the one exception, and it is listed, because two fixtures are large enough to be worth
+// testing on their own terms.
 const TEST_DIRECTORIES = {
   "unit/core": { bundle: false, needsSrc: true },
   "unit/config": { bundle: false, needsSrc: true },
@@ -50,7 +56,6 @@ const TEST_DIRECTORIES = {
   "component/rendering": { bundle: true, needsSrc: false },
   "component/data": { bundle: true, needsSrc: false },
   contract: { bundle: null, needsSrc: false },
-  contracts: { bundle: null, needsSrc: false },
   architecture: { bundle: null, needsSrc: false },
   characterization: { bundle: null, needsSrc: false },
   property: { bundle: null, needsSrc: false },
@@ -59,6 +64,10 @@ const TEST_DIRECTORIES = {
   // about the PRODUCT rather than about any one layer and a reader should trip over it.
   "": { bundle: null, needsSrc: false },
 };
+
+// The only file the root of test/ may hold. Named rather than counted, so that the next file
+// dropped there has to be argued for in this list instead of arriving quietly.
+const ROOT_TESTS = ["known-issues.test.js"];
 
 const BROWSER_DIRECTORIES = ["core", "interaction", "geometry", "accessibility", "visual"];
 
@@ -85,6 +94,27 @@ const nodeTests = walk(TEST_DIR, (name) => name.endsWith(".test.js")).filter(
 );
 const browserSpecs = walk(path.join(TEST_DIR, "browser"), (name) => name.endsWith(".spec.js"));
 
+const scripts = JSON.parse(read(path.join(ROOT, "package.json"))).scripts || {};
+
+// Every local file this one pulls in, transitively.
+//
+// The point is the word TRANSITIVELY. A rule that reads one file is satisfied by moving the
+// forbidden require one step away into a helper, and then the rule is decoration: it passes
+// while the thing it forbids happens on every run. Resolving the graph is the difference
+// between a rule about spelling and a rule about behaviour.
+//
+// Only relative specifiers are followed. A package name is not this suite's file and cannot
+// reach the bundle unless one of these files asks it to.
+function localDependencies(entry, seen = new Set()) {
+  const resolved = fs.existsSync(entry) && fs.statSync(entry).isFile() ? entry : `${entry}.js`;
+  if (!fs.existsSync(resolved) || seen.has(resolved)) return seen;
+  seen.add(resolved);
+  for (const match of read(resolved).matchAll(/require\(\s*["'](\.[^"']+)["']\s*\)/g)) {
+    localDependencies(path.resolve(path.dirname(resolved), match[1]), seen);
+  }
+  return seen;
+}
+
 // ----------------------------------------------------------------- where things live --
 
 test("every test file sits in a directory the suite knows about", () => {
@@ -101,11 +131,72 @@ test("every test file sits in a directory the suite knows about", () => {
   );
 });
 
+test("the known-issue reproduction is the only root-level test", () => {
+  // The root is registered as a directory so that ONE file may live there, and that opening
+  // is exactly wide enough to be abused. A second root-level test would be a file that
+  // belongs to some layer and skipped the decision about which.
+  const atRoot = nodeTests.map(relative).filter((rel) => !rel.includes("/")).sort();
+  assert.deepEqual(atRoot, [...ROOT_TESTS].sort(), `the root of test/ holds: ${atRoot.join(", ")}`);
+});
+
 test("every browser spec sits in one of the browser directories", () => {
   const strays = browserSpecs
     .map(relative)
     .filter((rel) => !BROWSER_DIRECTORIES.includes(rel.split("/")[1]));
   assert.deepEqual(strays, [], strays.join("\n  "));
+});
+
+test("every browser ownership directory has a focused public and pipeline command", () => {
+  // A directory nobody can run on its own is a directory nobody runs. Each one carries two
+  // scripts on purpose: the public name builds first, and the `:run` name does not, so a
+  // pipeline that has already built can call the second without paying for a second build —
+  // while a person who has not built cannot accidentally test yesterday's bundle.
+  const missing = [];
+  for (const directory of BROWSER_DIRECTORIES) {
+    for (const suffix of ["", ":run"]) {
+      const name = `test:browser:${directory}${suffix}`;
+      if (!scripts[name]) missing.push(name);
+    }
+  }
+  assert.deepEqual(missing, [], `package.json has no ${missing.join(", ")}`);
+
+  for (const directory of BROWSER_DIRECTORIES) {
+    assert.match(
+      scripts[`test:browser:${directory}:run`],
+      new RegExp(`test/browser/${directory}\\b`),
+      `test:browser:${directory}:run does not point at its own directory`
+    );
+  }
+});
+
+test("the cross-engine core has an explicit command and installer ownership", () => {
+  // Firefox and WebKit run a named CORE rather than the whole suite, and that decision only
+  // survives if three pieces stay together: the projects that define the core, the command
+  // that runs it, and the installer that fetches the engines it needs. Any one of them going
+  // missing turns the cross-engine promise into a run that quietly does nothing.
+  const config = read(path.join(ROOT, "playwright.config.js"));
+  for (const project of ["firefox-core", "webkit-core"]) {
+    assert.match(config, new RegExp(`name:\\s*["']${project}["']`), `playwright.config.js defines no ${project} project`);
+    assert.match(
+      scripts["test:browser:cross-engine:run"],
+      new RegExp(`--project=${project}`),
+      `test:browser:cross-engine:run does not run ${project}`
+    );
+  }
+  for (const engine of ["chromium", "firefox", "webkit"]) {
+    assert.match(scripts["test:install"], new RegExp(`\\b${engine}\\b`), `test:install does not fetch ${engine}`);
+  }
+});
+
+test("every browser spec uses the coverage-aware Playwright fixture", () => {
+  // The fixture is the ONE seam through which a browser run reports what it executed. A spec
+  // that imports @playwright/test directly still passes and still proves what it claims, and
+  // is invisible to coverage — which makes the coverage number quietly wrong rather than
+  // obviously wrong. So the import is the rule.
+  const offenders = browserSpecs
+    .filter((file) => /require\(\s*["']@playwright\/test["']\s*\)/.test(read(file)))
+    .map(relative);
+  assert.deepEqual(offenders, [], `these specs bypass test/helpers/playwright.js:\n  ${offenders.join("\n  ")}`);
 });
 
 test("no registered directory is empty", () => {
@@ -124,18 +215,24 @@ test("no registered directory is empty", () => {
 
 // ------------------------------------------------------------- what a layer may touch --
 
-test("a unit test imports src directly and never loads the bundle", () => {
+test("a unit test reaches src directly and never reaches the bundle, even through a helper", () => {
   // This is the rule that gives `unit/` its meaning. A test that loads the bundle is testing
   // the assembled card however carefully it is written, and its failure will name a
   // behaviour rather than a function — which is a component test, and belongs next door.
+  //
+  // Asked of the whole require graph rather than of the file's own text: a require moved one
+  // step into a helper loads the bundle just as thoroughly, and a rule that misses that is a
+  // rule which can be satisfied by looking away.
   const offenders = [];
   for (const file of nodeTests) {
     const rel = relative(file);
     const rules = TEST_DIRECTORIES[directoryOf(rel)];
     if (!rules || rules.bundle !== false) continue;
-    const code = read(file);
-    if (/load-card\.jsdom/.test(code)) offenders.push(`${rel} loads the bundle`);
-    if (rules.needsSrc && !/["']\.\.\/\.\.\/\.\.\/src\//.test(code)) {
+    const viaBundle = [...localDependencies(file)].filter((dependency) => /load-card\.jsdom/.test(dependency));
+    if (viaBundle.length) {
+      offenders.push(`${rel} reaches the bundle through ${viaBundle.map(relative).join(", ")}`);
+    }
+    if (rules.needsSrc && !/["']\.\.\/\.\.\/\.\.\/src\//.test(read(file))) {
       offenders.push(`${rel} imports nothing from src, so there is no unit under test`);
     }
   }
@@ -159,7 +256,7 @@ test("helpers and fixtures are material, not tests", () => {
   // A `test()` hiding in a helper runs wherever the helper is required, which is everywhere,
   // and reports under whichever file happened to pull it in.
   const offenders = [];
-  for (const directory of ["helpers", "fixtures", "contracts", "property"]) {
+  for (const directory of ["helpers", "fixtures", "manifests", "property"]) {
     const dir = path.join(TEST_DIR, directory);
     for (const full of walk(dir, (name) => name.endsWith(".js") && !name.endsWith(".test.js"))) {
       if (/^\s*test\(/m.test(read(full))) offenders.push(relative(full));
@@ -178,14 +275,21 @@ test("every test file contains at least one test", () => {
 test("nothing is focused, and nothing is skipped without saying why", () => {
   // `.only` silently reduces a run to one file and passes. A skip is sometimes right — but a
   // skip with no reason beside it is indistinguishable from a test somebody gave up on.
+  //
+  // The reason has to sit on the line immediately above and to start with SKIP:. "Any comment
+  // within the four lines above" was the earlier form of this rule, and it was satisfied by
+  // the tail of whatever prose happened to precede the skip.
   const offenders = [];
   for (const file of [...nodeTests, ...browserSpecs]) {
     const code = read(file);
     if (/\btest\.only\(|\bdescribe\.only\(|\bit\.only\(/.test(code)) offenders.push(`${relative(file)}: .only`);
-    for (const [index, line] of code.split("\n").entries()) {
+    const lines = code.split("\n");
+    for (const [index, line] of lines.entries()) {
       if (!/\btest\.skip\(|\bdescribe\.skip\(|\bit\.skip\(/.test(line)) continue;
-      const context = code.split("\n").slice(Math.max(0, index - 4), index).join("\n");
-      if (!/\/\//.test(context)) offenders.push(`${relative(file)}:${index + 1}: skip with no comment above it`);
+      const previous = lines[index - 1] || "";
+      if (!/^\s*\/\/\s*SKIP:\s+\S/.test(previous)) {
+        offenders.push(`${relative(file)}:${index + 1}: skip needs an immediate // SKIP: reason`);
+      }
     }
   }
   assert.deepEqual(offenders, [], offenders.join("\n  "));
@@ -193,8 +297,12 @@ test("nothing is focused, and nothing is skipped without saying why", () => {
 
 test("every test file explains itself before its first test", () => {
   // A header comment is the difference between a suite somebody can change and a suite
-  // somebody is afraid of. Enforced as a floor, not a style: four lines is enough to say what
-  // the file is for and why it exists separately from its neighbours.
+  // somebody is afraid of, and it matters most exactly where it is easiest to skip: a file
+  // split out of a larger one inherits none of the reason it exists apart from its
+  // neighbour, and the next reader cannot recover that reason from the code.
+  //
+  // A floor, not a style: four lines is enough to say what the file covers and where its
+  // boundary runs. Nothing here judges what the lines say — that is what review is for.
   const thin = [];
   for (const file of [...nodeTests, ...browserSpecs]) {
     const head = read(file).split(/^\s*(?:test|const test)\b/m)[0];
@@ -206,27 +314,45 @@ test("every test file explains itself before its first test", () => {
 
 // -------------------------------------------------------------- the shared material --
 
+// One statement of the product surface, and one place it may be written out in full. A test
+// that copies a complete list has made a second statement, and the two will part company —
+// which is not a prediction: it happened to the language list six times over.
+//
+// The manifest's own test is the exception, because comparing the manifest against the card
+// is exactly what it is for.
+function completeCopiesOf(values) {
+  const offenders = [];
+  for (const file of [...nodeTests, ...browserSpecs]) {
+    const rel = relative(file);
+    if (rel === "contract/product-surface.test.js") continue;
+    const code = read(file);
+    const complete = values.every((entry) => new RegExp(`["']${entry}["']`).test(code));
+    if (complete && !/product-surface/.test(code)) offenders.push(rel);
+  }
+  return offenders;
+}
+
 test("the product surface manifest is the only complete language list in the suite", () => {
   // Six copies of this list used to exist, and the git history shows what that cost: Ukrainian
   // had to be chased through several commits, and one list was still at eleven languages
   // afterwards. A curated SUBSET is fine and stays local; a full copy is the thing that rots.
-  const { LANGUAGES } = require("../contracts/product-surface.js");
-  const offenders = [];
-  for (const file of [...nodeTests, ...browserSpecs]) {
-    const rel = relative(file);
-    if (rel === "contracts/product-surface.test.js") continue;
-    const code = read(file);
-    const complete = LANGUAGES.every((code2) => new RegExp(`["']${code2}["']`).test(code));
-    if (complete && !/product-surface/.test(code)) {
-      offenders.push(`${rel} writes out every supported language instead of importing the manifest`);
-    }
-  }
-  assert.deepEqual(offenders, [], offenders.join("\n  "));
+  const { LANGUAGES } = require("../manifests/product-surface.js");
+  const offenders = completeCopiesOf(LANGUAGES);
+  assert.deepEqual(
+    offenders,
+    [],
+    `these write out every supported language instead of importing the manifest:\n  ${offenders.join("\n  ")}`
+  );
 });
 
-test("the suite is big enough to be worth this, and small enough to read", () => {
-  // Not a rule so much as a tripwire: if the count moves a long way in either direction
-  // without anyone noticing, one of the assumptions in this file has stopped holding.
-  assert.ok(nodeTests.length > 50, `only ${nodeTests.length} node test files`);
-  assert.ok(browserSpecs.length > 10, `only ${browserSpecs.length} browser specs`);
+test("the product surface manifest is the only complete top-level configuration list", () => {
+  // The same failure mode one layer up, and the more expensive one: a stale copy of the
+  // configuration keys does not turn red when a key is added — it silently stops covering it.
+  const { TOP_LEVEL_CONFIG_KEYS } = require("../manifests/product-surface.js");
+  const offenders = completeCopiesOf(TOP_LEVEL_CONFIG_KEYS);
+  assert.deepEqual(
+    offenders,
+    [],
+    `these write out every top-level configuration key instead of importing the manifest:\n  ${offenders.join("\n  ")}`
+  );
 });

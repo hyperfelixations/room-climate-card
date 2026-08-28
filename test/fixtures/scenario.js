@@ -26,7 +26,7 @@
 // is a real mistake a real user makes, and the card's behaviour there is worth knowing. It
 // also lets the shrinker pull one axis back to normal at a time.
 
-const { METRICS, METRIC_KINDS, DEFAULT_LANGUAGE } = require("../contracts/product-surface.js");
+const { METRICS, METRIC_KINDS, DEFAULT_LANGUAGE } = require("../manifests/product-surface.js");
 
 const DEVICE_CLASS_KEY = "device_class";
 const UNIT_KEY = "unit_of_measurement";
@@ -37,6 +37,10 @@ const TYPICAL_VALUE = { temperature: 21, humidity: 45, co2: 700, pm25: 8 };
 
 // Room values spread around the typical one so coldest and warmest actually differ.
 const ROOM_SPREAD = { temperature: 1.5, humidity: 6, co2: 180, pm25: 3 };
+
+function withoutUndefined(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
+}
 
 // ------------------------------------------------------------------ description --
 
@@ -62,7 +66,7 @@ function describeEntity(raw, { metric, id, index, defaults }) {
   const spread = ROOM_SPREAD[metric];
   const fallbackValue =
     index === null ? typical : Math.round((typical + spread * (((index % 5) - 2) / 2)) * 100) / 100;
-  return {
+  return withoutUndefined({
     id: source.id === undefined ? id : source.id,
     // false means the entity is configured but absent from hass.states — the "entity not
     // found" path, which is not the same as `unavailable`.
@@ -79,7 +83,7 @@ function describeEntity(raw, { metric, id, index, defaults }) {
     // Per-room action overrides, passed through to the room entry as written.
     tap_action: source.tap_action,
     hold_action: source.hold_action,
-  };
+  });
 }
 
 function describeScenario(raw) {
@@ -115,7 +119,7 @@ function describeScenario(raw) {
     source.primary === null
       ? null
       : describeEntity(source.primary, { metric, id: "sensor.avg", index: null, defaults });
-  return {
+  return withoutUndefined({
     metric,
     defaults,
     extras,
@@ -130,7 +134,7 @@ function describeScenario(raw) {
     // Merged over the generated configuration, last. Anything the card accepts goes here:
     // palette, views, view options, subtitle, actions, custom profiles.
     config: source.config ? { ...source.config } : {},
-  };
+  });
 }
 
 // ----------------------------------------------------------------------- building --
@@ -214,7 +218,7 @@ function buildScenario(raw) {
   if (!gaps.has("callService")) hass.callService = () => {};
   // Absent unless asked for: the builder used to omit `themes` entirely, so "no themes" is
   // what every existing test means and has to keep meaning.
-  if (description.theme) hass.themes = { darkMode: description.theme === "dark" };
+  if (description.theme && !gaps.has("themes")) hass.themes = { darkMode: description.theme === "dark" };
 
   return { config, states, hass, language: description.language, description };
 }

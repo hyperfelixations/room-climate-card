@@ -70,7 +70,19 @@ module.exports = defineConfig({
       maxDiffPixels: 200,
     },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "firefox-core",
+      testMatch: /core[\\/](?:availability|public-surface-smoke|source-modes)\.spec\.js/,
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "webkit-core",
+      testMatch: /core[\\/](?:availability|public-surface-smoke|source-modes)\.spec\.js/,
+      use: { ...devices["Desktop Safari"] },
+    },
+  ],
   webServer: {
     command: `node test/helpers/static-server.js`,
     port: PORT,

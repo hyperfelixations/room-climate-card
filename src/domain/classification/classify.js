@@ -47,8 +47,8 @@ export function deviationSpanOf(profile) {
     if (tier.color) continue;
     const score = tier.score;
     if (!Number.isInteger(score)) continue;
-    if (score > above) above = score;
-    if (-score > below) below = -score;
+    above = Math.max(above, score);
+    below = Math.max(below, -score);
   }
   return { above, below };
 }

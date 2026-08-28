@@ -12,7 +12,7 @@
 // far more precisely. These are the statements that are true of ALL of them — which is why
 // they are worth checking against inputs nobody thought of.
 
-const { VIEWS } = require("../contracts/product-surface.js");
+const { VIEWS } = require("../manifests/product-surface.js");
 
 const EPSILON = 1e-9;
 
@@ -21,19 +21,22 @@ const EPSILON = 1e-9;
 // ending in "Pos" — of which there were none, so it checked nothing at all. Positions live
 // under average.position, scale.markerPositions, extremes and roomMarkers[].position, and
 // only a recursive walk can see them.
-function* walk(value, path = "", parentKey = "", depth = 0) {
-  if (depth > 24) return; // the model is not deep; this is a guard against a cycle, not a limit
+function* walk(value, path = "", parentKey = "", ancestors = new WeakSet()) {
   yield { path, value, parentKey };
   if (value === null || typeof value !== "object") return;
+  if (ancestors.has(value)) return;
+  ancestors.add(value);
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index++) {
-      yield* walk(value[index], `${path}[${index}]`, parentKey, depth + 1);
+      yield* walk(value[index], `${path}[${index}]`, parentKey, ancestors);
     }
+    ancestors.delete(value);
     return;
   }
   for (const key of Object.keys(value)) {
-    yield* walk(value[key], path ? `${path}.${key}` : key, key, depth + 1);
+    yield* walk(value[key], path ? `${path}.${key}` : key, key, ancestors);
   }
+  ancestors.delete(value);
 }
 
 function inRange(number, low, high) {
@@ -52,13 +55,67 @@ function inRange(number, low, high) {
 // The allowance is written as one exact path rather than "skip the unit profile", so a
 // non-finite number appearing anywhere else in that profile still fails.
 const PERMITTED_NON_FINITE = /^metric\.displayUnitProfile\.dynamicDisplaySteps\[\d+\]\.maxSpan$/;
+const ROOM_VALUE_PATH = /^(?:rooms\.visible\[\d+\]\.value|rooms\.chips\[\d+\]\.room\.value|rooms\.chipRows\[\d+\]\.chips\[\d+\]\.room\.value|extremes\.(?:coolest|warmest)\.value|roomMarkers\[\d+\]\.value)$/;
+const FAHRENHEIT_UNITS = new Set(["°f", "f", "fahrenheit"]);
 
-function everyNumberIsFinite(model) {
+function finiteFahrenheitState(states, entityId) {
+  const state = states && entityId ? states[entityId] : null;
+  const rawValue = state ? Number(state.state) : NaN;
+  const rawUnit = state && state.attributes ? state.attributes.unit_of_measurement : null;
+  const normalizedUnit = String(rawUnit || "").normalize("NFKC").trim().toLowerCase();
+  return Number.isFinite(rawValue) && FAHRENHEIT_UNITS.has(normalizedUnit);
+}
+
+function hasFahrenheitConversionOverflow(model, states) {
+  const comparableRooms = Array.isArray(model.roomMarkers) ? model.roomMarkers : [];
+  const visibleRooms = model.rooms && Array.isArray(model.rooms.visible) ? model.rooms.visible : [];
+  if ([...comparableRooms, ...visibleRooms].some(
+    (room) => !Number.isFinite(room.value) && finiteFahrenheitState(states, room.entity)
+  )) {
+    return true;
+  }
+  const average = model.average;
+  return Boolean(
+    average &&
+      !Number.isFinite(average.value) &&
+      finiteFahrenheitState(states, average.entity)
+  );
+}
+
+function everyNumberIsFinite(model, context = {}) {
   const violations = [];
+  const roomValues = Array.isArray(model.roomMarkers)
+    ? model.roomMarkers.map((marker) => marker.value)
+    : [];
+  const hasNonFiniteRoomInput = roomValues.some(
+    (value) => typeof value === "number" && !Number.isFinite(value)
+  );
+  const fahrenheitConversionOverflow = hasFahrenheitConversionOverflow(model, context.states);
   for (const { path, value } of walk(model)) {
     if (typeof value !== "number" || Number.isFinite(value)) continue;
     if (PERMITTED_NON_FINITE.test(path)) continue;
-    violations.push(`${path || "<root>"} is ${String(value)}`);
+    let provenance = "";
+    if (path === "average.value") {
+      const source = model.average && model.average.source ? model.average.source : "unknown";
+      if (source === "calculated") {
+        const inputs = roomValues.length > 0 && roomValues.every(Number.isFinite)
+          ? "finite room inputs"
+          : fahrenheitConversionOverflow
+            ? "a finite Fahrenheit entity state overflowed during conversion"
+            : "a non-finite room input";
+        provenance = ` (source ${source}; ${inputs})`;
+      } else {
+        const conversion = fahrenheitConversionOverflow
+          ? "; a finite Fahrenheit entity state overflowed during conversion"
+          : "";
+        provenance = ` (source ${source}${conversion})`;
+      }
+    } else if (fahrenheitConversionOverflow && ROOM_VALUE_PATH.test(path)) {
+      provenance = " (a finite Fahrenheit entity state overflowed during conversion)";
+    } else if (path === "spread" && fahrenheitConversionOverflow && hasNonFiniteRoomInput) {
+      provenance = " (derived from a finite Fahrenheit entity state that overflowed during conversion)";
+    }
+    violations.push(`${path || "<root>"} is ${String(value)}${provenance}`);
   }
   return violations;
 }
@@ -180,8 +237,8 @@ function comfortCountsAddUp(model) {
   if (parts.length !== 3) return violations;
   const total = parts.reduce((sum, n) => sum + n, 0);
   const roomCount = Array.isArray(model.roomMarkers) ? model.roomMarkers.length : 0;
-  if (total > roomCount) {
-    violations.push(`comfort counts total ${total} but there are only ${roomCount} rooms with values`);
+  if (total !== roomCount) {
+    violations.push(`comfort counts total ${total} but there are ${roomCount} rooms with values`);
   }
   for (const [key, count] of Object.entries(comfort)) {
     if (typeof count === "number" && key !== "min" && key !== "max" && count < 0) {
@@ -251,10 +308,10 @@ const MODEL_INVARIANTS = {
 };
 
 // Runs every model invariant and returns a flat list of "name: violation" strings.
-function checkModel(model) {
+function checkModel(model, context = {}) {
   const violations = [];
   for (const [name, invariant] of Object.entries(MODEL_INVARIANTS)) {
-    for (const violation of invariant(model)) violations.push(`${name}: ${violation}`);
+    for (const violation of invariant(model, context)) violations.push(`${name}: ${violation}`);
   }
   return violations;
 }

@@ -7,7 +7,7 @@
 // should happen). These baselines assert ACTUAL behaviour verbatim — every
 // number, every whitespace character of the rendered markup, every byte of
 // the emitted CSS. That is deliberately over-specified: during a pure
-// an unintended change is exactly what must fail, even when it
+// refactoring, an unintended change is exactly what must fail, even when it
 // would look harmless to a behavioural assertion.
 //
 // Visual/layout contracts are NOT duplicated here — test/browser/
@@ -36,6 +36,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createTestEnvironment } = require("./load-card.jsdom.js");
+const { normalizeForBaseline, stableStringify } = require("./baseline-serialization.js");
 
 // Fixed wall clock for every capture. 1750000000000 = 2025-06-15T14:26:40Z.
 // Chosen only for being a round, reproducible constant; the card's phase math
@@ -72,32 +73,6 @@ function recordConsole(env) {
       view.console.error = original.error;
     },
   };
-}
-
-// Rewrites a value into something JSON can represent losslessly-enough for a
-// baseline diff, with a stable key order. Cross-realm safe: only Object.keys/
-// Array.isArray are used, never instanceof.
-function normalizeForBaseline(value) {
-  if (typeof value === "function") return "[Function]";
-  if (value === undefined) return "[undefined]";
-  if (typeof value === "number") {
-    if (Number.isNaN(value)) return "[NaN]";
-    if (value === Infinity) return "[Infinity]";
-    if (value === -Infinity) return "[-Infinity]";
-    if (Object.is(value, -0)) return "[-0]";
-    return value;
-  }
-  if (Array.isArray(value)) return value.map(normalizeForBaseline);
-  if (value && typeof value === "object") {
-    const out = {};
-    for (const key of Object.keys(value).sort()) out[key] = normalizeForBaseline(value[key]);
-    return out;
-  }
-  return value;
-}
-
-function stableStringify(value) {
-  return `${JSON.stringify(normalizeForBaseline(value), null, 2)}\n`;
 }
 
 function sha256(text) {

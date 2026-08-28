@@ -25,7 +25,7 @@
 // from the identical instant, with no dependency on how long the
 // page.evaluate() round-trip itself takes.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

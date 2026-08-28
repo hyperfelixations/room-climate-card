@@ -49,7 +49,11 @@ function usefulStack(stack) {
 // what turns "Values have same structure but are not reference-equal" into something a
 // person can act on.
 function comparison(error) {
-  if (!error || error.expected === undefined || error.actual === undefined) return "";
+  if (
+    !error ||
+    !Object.prototype.hasOwnProperty.call(error, "expected") ||
+    !Object.prototype.hasOwnProperty.call(error, "actual")
+  ) return "";
   const show = (value) => {
     try {
       return typeof value === "string" ? JSON.stringify(value) : require("node:util").inspect(value, { depth: 4 });
@@ -74,10 +78,38 @@ module.exports = async function* compactReporter(source) {
   // Only shown when something failed. On a green run it is noise, and keeping the green path
   // cheap to read is half the point of this reporter.
   const stderrLines = [];
+  const tests = new Map();
   let failures = 0;
+
+  const keyOf = (file, testId) => `${file || "<unknown>"}\0${testId}`;
+  const fullName = (data) => {
+    if (data.testId === undefined) return data.name;
+    const names = [];
+    let current = tests.get(keyOf(data.file, data.testId));
+    const seen = new Set();
+    while (current && !seen.has(current.testId)) {
+      seen.add(current.testId);
+      names.unshift(current.name);
+      if (current.parentId === undefined) break;
+      current = tests.get(keyOf(current.file || data.file, current.parentId));
+    }
+    if (!names.length || names[names.length - 1] !== data.name) names.push(data.name);
+    return names.join(" › ");
+  };
 
   for await (const event of source) {
     switch (event.type) {
+      case "test:start":
+        if (event.data.testId !== undefined) {
+          tests.set(keyOf(event.data.file, event.data.testId), {
+            name: event.data.name,
+            file: event.data.file,
+            testId: event.data.testId,
+            parentId: event.data.parentId,
+          });
+        }
+        break;
+
       case "test:stderr":
         stderrLines.push(String(event.data.message).trimEnd());
         break;
@@ -86,7 +118,7 @@ module.exports = async function* compactReporter(source) {
         failures += 1;
         const { name, file, line, column, details } = event.data;
         const where = file ? ` (${file}:${line}:${column})` : "";
-        yield `FAIL ${name}${where}\n`;
+        yield `FAIL ${fullName(event.data)}${where}\n`;
 
         const error = details && details.error;
         if (error) {
@@ -125,3 +157,6 @@ module.exports = async function* compactReporter(source) {
     yield indentOf(stderrLines.join("\n"), "  ") + "\n";
   }
 };
+
+module.exports.comparison = comparison;
+module.exports.usefulStack = usefulStack;

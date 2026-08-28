@@ -13,7 +13,7 @@
 // sees, so usually it is the instrument.
 //
 // HOW IT WAS CHECKED. Every borderline pair below is rendered as a swatch by
-// test/browser/palette-fit-calibration.spec.js and was looked at. A visibility claim nobody
+// test/browser/visual/palette-fit-calibration.spec.js and was looked at. A visibility claim nobody
 // has looked at is not a claim.
 //
 // REVIEWED, AND THE VERDICTS HOLD. Every row below was looked at in the rendered swatches.

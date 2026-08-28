@@ -33,6 +33,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+function isFahrenheitConversionOverflowViolation(violation) {
+  return /^everyNumberIsFinite: (?:average\.value|rooms\.visible\[\d+\]\.value|rooms\.chips\[\d+\]\.room\.value|rooms\.chipRows\[\d+\]\.chips\[\d+\]\.room\.value|extremes\.(?:coolest|warmest)\.value|roomMarkers\[\d+\]\.value|spread) is -?Infinity .*finite Fahrenheit entity state .*overflowed during conversion/.test(
+    violation
+  );
+}
+
 // Every entry must carry an id, a one-line summary a person can act on, the area of the
 // product it lives in, and the date it was found. The id is the link to the internal
 // backlog; nothing here is a substitute for that entry.
@@ -55,9 +61,8 @@ const KNOWN_ISSUES = [
     // going NaN with nothing else wrong. The second clause is an `every` rather than a
     // `some` on purpose: a NaN position accompanied by any other kind of violation is a
     // different finding and must still be reported as new.
-    fingerprint: (violations) =>
-      violations.some((violation) => /spread is Infinity|calc\(NaN%|"\)" is expected/.test(violation)) ||
-      violations.every((violation) => /everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation)),
+    matchesViolation: (violation) =>
+      /everyNumberIsFinite: spread is Infinity$|calc\(NaN%|"\)" is expected|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
   },
   {
     id: "BUG-07",
@@ -71,7 +76,22 @@ const KNOWN_ISSUES = [
     foundBy: "test/property/model.property.test.js",
     // Distinct from BUG-06: no span is involved, a single room is enough, and what goes
     // non-finite is the VALUE rather than a position derived from a spread.
-    fingerprint: (violations) => violations.some((violation) => /\.value is -?Infinity/.test(violation)),
+    matchesViolation: isFahrenheitConversionOverflowViolation,
+  },
+  {
+    id: "BUG-11",
+    area: "application/model measurement-context",
+    discovered: "2026-08-27",
+    summary:
+      "A room-consensus average can overflow even though every room value is finite: two " +
+      "readings of 1e308 are added before division, so the calculated headline becomes " +
+      "Infinity. The card should reject an unusable aggregate or compute the mean without " +
+      "overflowing its intermediate sum.",
+    foundBy: "test/property/model.property.test.js, seed 0x3382a0c6",
+    matchesViolation: (violation) =>
+      /everyNumberIsFinite: average\.value is -?Infinity \(source calculated; finite room inputs\)|aggregatesStayWithinTheirInputs: average -?Infinity lies outside its rooms/.test(
+        violation
+      ),
   },
   {
     id: "BUG-08",
@@ -123,42 +143,56 @@ const KNOWN_ISSUES = [
     // account for the loss — see the preconditions in test/property/metamorphic.js. A future
     // violation of either is BUG-10 or a new defect of the same class, and either way it
     // belongs here rather than in a run that has gone red for an unrelated reason.
-    fingerprint: (violations) =>
-      violations.some((violation) =>
-        /^emptied by an unusable room:|^rooms dropped when an unusable one was added:|^rooms lost when only the primary went unavailable:|^the whole card emptied when only the primary went unavailable,/.test(
-          violation
-        )
+    matchesViolation: (violation) =>
+      /^emptied by an unusable room:|^rooms dropped when an unusable one was added:|^metric kind changed from .+ to .+|^rooms lost when only the primary went unavailable:|^the whole card emptied when only the primary went unavailable,/.test(
+        violation
       ),
   },
 ];
 
-// Which registered defect a set of property violations reproduces, if any.
-function knownIssueFor(violations) {
-  return KNOWN_ISSUES.find((issue) => typeof issue.fingerprint === "function" && issue.fingerprint(violations)) || null;
+// Partition violations one by one. A known symptom can never make an unrelated violation
+// disappear merely because both occurred in the same generated case.
+function classifyViolations(violations) {
+  const known = [];
+  const unknown = [];
+  for (const violation of violations) {
+    const issue = KNOWN_ISSUES.find(
+      (candidate) => typeof candidate.matchesViolation === "function" && candidate.matchesViolation(violation)
+    );
+    if (issue) known.push({ issue, violation });
+    else unknown.push(violation);
+  }
+  return { known, unknown };
 }
 
 const BY_ID = new Map(KNOWN_ISSUES.map((issue) => [issue.id, issue]));
 
-// Registers a reproduction that MUST fail. Same signature as test(), except that the body
-// failing is the pass condition.
-function expectedFailure(id, body) {
+function isExpectedReproductionFailure(error, matcher) {
+  if (typeof matcher === "function") return matcher(error) === true;
+  return Boolean(
+    error &&
+      error.code === "ERR_ASSERTION" &&
+      matcher instanceof RegExp &&
+      matcher.test(String(error.message || ""))
+  );
+}
+
+// Registers a reproduction that MUST fail with the identifying assertion for this defect.
+// Setup, harness and unrelated assertion failures are deliberately rethrown.
+function expectedFailure(id, matcher, body) {
   const issue = BY_ID.get(id);
   if (!issue) {
     throw new Error(`known-issues: "${id}" has no entry in KNOWN_ISSUES — add one before registering a reproduction`);
   }
   const headline = issue.summary.length > 70 ? `${issue.summary.slice(0, 67).trimEnd()}…` : issue.summary;
   test(`${id} (known defect, expected to fail): ${headline}`, async () => {
-    let passed = false;
     try {
       await body();
-      passed = true;
-    } catch {
-      // Failing is the expected outcome. Nothing to report: the summary above already says
-      // what is wrong, and the backlog entry says the rest.
+    } catch (error) {
+      if (isExpectedReproductionFailure(error, matcher)) return;
+      throw error;
     }
-    assert.equal(
-      passed,
-      false,
+    assert.fail(
       `${id} no longer reproduces — the defect appears to be FIXED.\n` +
         `Remove its entry from test/known-issues.js, turn this reproduction into an ordinary ` +
         `test, and close ${id} in the internal RCC backlog.`
@@ -166,4 +200,4 @@ function expectedFailure(id, body) {
   });
 }
 
-module.exports = { KNOWN_ISSUES, expectedFailure, knownIssueFor };
+module.exports = { KNOWN_ISSUES, classifyViolations, expectedFailure, isExpectedReproductionFailure };

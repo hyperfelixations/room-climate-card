@@ -170,7 +170,7 @@ const MISSPELLED_CONFIG_KEYS = [
 // --------------------------------------------------------------------- values --
 
 // Numbers that are numbers only in the sense that `typeof` agrees.
-const ABSURD_NUMBERS = [1000, -1000, 1e9, -1e9, 1e308, -1e308, 5e-324, -0, 0.1 + 0.2, 2 ** 53 + 1, Math.PI];
+const ABSURD_NUMBERS = [1000, -1000, 1e9, -1e9, 1e308, -1e308, 5e-324, "-0", 0.1 + 0.2, 2 ** 53 + 1, Math.PI];
 
 // States that are not numbers at all. Every one of these has been seen in a real
 // `hass.states`: an unrendered template gives "", a decimal comma gives "1,5", a sensor that

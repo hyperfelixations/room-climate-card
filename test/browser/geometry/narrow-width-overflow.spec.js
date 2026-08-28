@@ -6,7 +6,7 @@
 // information, so metric-specific auto-max-columns must create additional rows when
 // horizontal space is insufficient.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

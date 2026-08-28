@@ -7,7 +7,7 @@
 // room-climate-card.js). Real width measurement (jsdom has no layout
 // engine -- getBoundingClientRect() always returns zeros there, see
 // test/helpers/load-card.jsdom.js's own header comment) is covered in
-// test/browser/label-geometry.spec.js instead; this file covers the two
+// test/browser/geometry/label-geometry.spec.js instead; this file covers the two
 // things jsdom CAN verify: _resolveLabelForm()'s pure control flow, and the
 // TRANSLATIONS content itself.
 
@@ -86,8 +86,8 @@ test("_resolveLabelForm: reverts a previously-shortened element back to the long
 
 // ==== TRANSLATIONS content: the actual fixes ====
 
-// From the manifest — see test/contracts/product-surface.js.
-const { LANGUAGES } = require("../../contracts/product-surface.js");
+// From the manifest — see test/manifests/product-surface.js.
+const { LANGUAGES } = require("../../manifests/product-surface.js");
 
 test("every language declares scale.comfortLabelShort/scale.optimalLabelShort/rangeScale.currentLabelShort", () => {
   for (const lang of LANGUAGES) {

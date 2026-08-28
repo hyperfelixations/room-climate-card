@@ -20,7 +20,7 @@
 // the values it vouches for. That atomicity is this file's entire subject, and splitting
 // it across two round-trips would give it up to save a little code.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

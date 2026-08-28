@@ -14,7 +14,7 @@
 // jsdom paints nothing, so what these can reach is the LAST rung of the ladder and the
 // plumbing around it. The live reading — a card-mod colour applied after the first paint, a
 // gradient, a translucent card composited onto its parent — needs a real CSSOM and lives in
-// test/browser/palette-fit-calibration.spec.js.
+// test/browser/visual/palette-fit-calibration.spec.js.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -52,7 +52,7 @@ test("the surface is read once and reused until it changes", () => {
 test("with no theme and nothing painted, the answer is Home Assistant's own default", () => {
   // jsdom paints nothing, so this exercises the last rung of the ladder rather than the
   // first. The live reading — including a card-mod override applied after the first paint —
-  // needs a real CSSOM and lives in test/browser/palette-fit-calibration.spec.js.
+  // needs a real CSSOM and lives in test/browser/visual/palette-fit-calibration.spec.js.
   const built = scenario().rooms(1).build();
   const card = env.createCard(built.config, built.hass);
   // normalize() because the card runs in its own V8 realm and assert/strict compares

@@ -95,7 +95,7 @@
 // from quietly emptying the run.
 
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 
 // One rendered frame at 60 Hz. A sample whose transform is older than that

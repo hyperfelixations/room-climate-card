@@ -38,10 +38,12 @@ export default {
     // The IIFE needs an explicit strict-mode prologue; source-module strictness alone
     // does not state that contract in the generated bundle.
     strict: true,
-    // No source map: HACS downloads only .js files from dist/, so a .map would
+    // No source map in the product build: HACS downloads only .js files from dist/, so a .map would
     // never reach the browser and its sourceMappingURL would 404 on every
     // dashboard load. The unminified bundle is its own debugging aid.
-    sourcemap: false,
+    // Coverage builds opt into an inline map; the environment flag is owned by test tooling
+    // and never used by the release workflow.
+    sourcemap: process.env.ROOM_CLIMATE_CARD_COVERAGE === "1" ? "inline" : false,
     // Suppresses the extra indentation level Rollup would otherwise add for
     // the IIFE wrapper, so the bundled code keeps the indentation it has in
     // src/. That is a readability choice only — with several modules the

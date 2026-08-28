@@ -113,7 +113,7 @@ test("Fahrenheit without device_class resolves to temperature, canonicalizes to 
     Math.abs(context.averageSource.canonicalValue - 200 / 9) < 1e-9,
     "72°F must canonicalize to (72-32)*5/9 ≈ 22.22°C internally, not pass through raw"
   );
-  // Native Fahrenheit display (see test/unit/native-fahrenheit.test.js
+  // Native Fahrenheit display (see test/component/data/native-fahrenheit.test.js
   // for the full suite): the view model projects the canonical value back
   // into the resolved display unit — °F here, since the usable primary
   // itself reports °F — so data.average.value reads 72 again, not the canonical

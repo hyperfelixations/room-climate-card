@@ -1,4 +1,4 @@
-# The large property sweep, once a week.
+# The expensive generated and mutation checks, once a week.
 #
 # WHY IT IS NOT IN CI. The pull-request run is small and fixed-seed on purpose: a check that
 # draws different cards every time will eventually fail on a change that did not cause it, and
@@ -20,16 +20,22 @@
 # one: it builds the card at least twice, and some relations apply a sequence of
 # configurations to it. Measured on this suite, roughly 15 ms and 48 ms per case.
 #
-# WHAT A FAILURE HERE MEANS. The run prints a SHRUNK case: a minimal scenario description in
-# plain JSON, small enough to read and directly usable as a fixture. Paste it into
-# scenario(…) in a hand-written test, and the finding is reproducible forever after — the
-# seed is not needed and neither is this workflow.
+# WHAT A PROPERTY FAILURE HERE MEANS. The run prints a locally minimized scenario description
+# in lossless JSON, small enough to read and directly usable as a fixture. Every accepted
+# shrink step and the final result reproduce the same exact violation signature. Paste it into
+# scenario(…) in a hand-written test. The JSON report records the exact seed and census too,
+# so the original population can be replayed before the reduced regression is added.
 #
 # Defects that are already understood do not fail this job: they are listed in
-# test/known-issues.js with a fingerprint, counted in the run's census, and reproduced
+# test/known-issues.js with per-violation matchers, counted in the run's census, and reproduced
 # deterministically by test/known-issues.test.js in every ordinary CI run.
+#
+# MUTATION IS SEPARATE. It asks whether the direct unit owners notice a changed branch or
+# boundary in three high-value domain/application modules. Running it in parallel keeps a
+# slow mutation cycle from hiding the property result, and its machine-readable and HTML
+# reports are kept even when its 98% semantic quality floor fails.
 
-name: Weekly property sweep
+name: Weekly deep test sweeps
 
 on:
   schedule:
@@ -48,6 +54,12 @@ on:
         description: "How many of those to also compare against a derived dashboard"
         required: false
         default: "20000"
+      seed:
+        description: "Optional unsigned 32-bit model seed (decimal or 0x-prefixed)"
+        required: false
+      metamorphic_seed:
+        description: "Optional unsigned 32-bit metamorphic seed (decimal or 0x-prefixed)"
+        required: false
 
 permissions:
   contents: read
@@ -75,6 +87,46 @@ jobs:
       - name: Sweep
         env:
           # The scheduled run has no inputs, so the fallbacks are what the weekly sweep uses.
+          # run_id changes for a new workflow run but stays fixed for its reruns: new weeks
+          # explore new populations, while rerunning one failure remains reproducible.
           ROOM_CLIMATE_CARD_FUZZ_CASES: ${{ github.event.inputs.cases || '50000' }}
           ROOM_CLIMATE_CARD_METAMORPHIC_CASES: ${{ github.event.inputs.metamorphic_cases || '20000' }}
-        run: npm run test:fuzz:run
+          ROOM_CLIMATE_CARD_FUZZ_SEED: ${{ github.event.inputs.seed || github.run_id }}
+          ROOM_CLIMATE_CARD_METAMORPHIC_SEED: ${{ github.event.inputs.metamorphic_seed || github.run_id }}
+          ROOM_CLIMATE_CARD_PROPERTY_REPORT_DIR: test-results/property
+        run: npm run test:property:run
+
+      - name: Upload property reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: property-reports
+          path: test-results/property/
+          retention-days: 30
+
+  mutation:
+    name: Mutation quality
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Critical domain mutation tests
+        run: npm run test:mutation
+
+      - name: Upload mutation reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mutation-reports
+          path: reports/mutation/
+          retention-days: 30

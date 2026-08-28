@@ -15,7 +15,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const A = require("./attributes.js");
-const { METRICS, METRIC_KINDS } = require("../contracts/product-surface.js");
+const { METRICS, METRIC_KINDS } = require("../manifests/product-surface.js");
 
 test("every named pair says what the manifest says", () => {
   for (const [name, attributes] of Object.entries(A.ALL)) {

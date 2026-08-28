@@ -194,6 +194,11 @@ test("a profile's reach counts only the tiers that take a palette colour", () =>
     { above: 1, below: 0 }
   );
   assert.deepEqual(deviationSpanOf({ tiers: [{ score: 2.5 }] }), { above: 0, below: 0 }, "a non-distance is ignored");
+  assert.deepEqual(
+    deviationSpanOf({ tiers: [{ score: -3 }, { score: -1 }, { score: 2 }, { score: 1 }] }),
+    { above: 2, below: 3 },
+    "later, smaller distances cannot shrink either wing",
+  );
 });
 
 // ------------------------------------------------------------- anchoring ---

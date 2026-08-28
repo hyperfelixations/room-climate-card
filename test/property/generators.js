@@ -28,7 +28,14 @@
 // paste into a hand-written test unchanged.
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
-const { METRICS, METRIC_KINDS, LANGUAGES, PALETTE_KEYS, VIEWS } = require("../contracts/product-surface.js");
+const {
+  METRICS,
+  METRIC_KINDS,
+  LANGUAGES,
+  PALETTE_KEYS,
+  VIEWS,
+  VIEW_OPTIONS,
+} = require("../manifests/product-surface.js");
 const V = require("./vocabulary.js");
 
 // --------------------------------------------------------------------- the tables --
@@ -71,23 +78,6 @@ const ENUMS = {
   show_rooms: ["auto", true, false],
   unavailable_values: ["show", "hide"],
   subtitle_overflow: ["clip", "wrap"],
-};
-
-// Per-view options, exactly as the view definitions declare them.
-const VIEW_OPTIONS = {
-  range: { show_time: "bool" },
-  range_scale: {
-    show_comfort_band: "bool",
-    show_optimal_band: "bool",
-    footer: ["compact", "detailed", false],
-  },
-  scale: {
-    show_comfort_band: "bool",
-    show_optimal_band: "bool",
-    footer: "bool",
-    markers: ["average", "extremes", "all"],
-  },
-  extremes: { show_value: "bool" },
 };
 
 // ---------------------------------------------------------------------- the weights --
@@ -161,10 +151,9 @@ const WEIGHTS = {
   // What the `hass` object is missing. A complete one nearly always, because an incomplete
   // one is a moment rather than a state — but it is a moment every card lives through.
   hassShape: [
-    [88, "complete"],
+    [91, "complete"],
     [6, "oneGap"],
     [3, "twoGaps"],
-    [3, "themed"],
   ],
   // ---- card shape ----
   roomCount: [
@@ -251,7 +240,6 @@ const OPTION_PRESENCE = {
   start_view: 0.08,
   tap_action: 0.1,
   hold_action: 0.07,
-  view_options: 0.14,
   classification: 0.08,
   range_entity: 0.1,
   trend_entity: 0.08,
@@ -295,7 +283,7 @@ function numberValue(rng, low, high) {
     case "huge":
       return rng.pick([1e6, 1e12, Number.MAX_SAFE_INTEGER, 1e308]);
     case "notANumber":
-      return rng.pick(["3", "three", "", null, true, NaN, []]);
+      return rng.pick(["3", "three", "", null, true, "NaN", []]);
     default:
       return rng.number(low, high, 1);
   }
@@ -430,6 +418,9 @@ function generatePalette(rng) {
         123456,
         8000,
         0,
+        "blue-red",
+        "blue-green-red",
+        "#1DB85D-#FD9808",
       ]);
     case "written":
       // A palette written out in YAML is a CUSTOM palette: the card must never adapt it to
@@ -471,7 +462,14 @@ function generateViews(rng) {
       const shuffled = [...VIEWS].sort(() => rng.float() - 0.5);
       const chosen = shuffled.slice(0, count);
       // Sometimes as objects with options rather than bare strings — both are accepted.
-      return chosen.map((type) => (rng.bool(0.25) ? { type, options: generateViewOptions(rng, type) } : type));
+      return chosen.map((type) => {
+        if (!rng.bool(0.4)) return type;
+        return {
+          type,
+          ...(rng.bool(0.45) ? { enabled: rng.pick([true, false, "auto"]) } : {}),
+          ...(rng.bool(0.75) ? { options: generateViewOptions(rng, type) } : {}),
+        };
+      });
     }
     case "duplicated":
       return [rng.pick(VIEWS), rng.pick(VIEWS), rng.pick(VIEWS)];
@@ -537,39 +535,35 @@ function generateSubtitle(rng) {
   }
 }
 
-function generateClassification(rng) {
+function generateClassification(rng, metric) {
   // The heaviest configuration surface the card has. Generated in the shapes that matter:
   // a source override, a named profile, and a written-out tier ramp — including one that
   // breaks the ramp contract, which must be refused rather than silently coloured wrong.
+  const validCustom = {
+    source: "custom",
+    unit: METRICS[metric].canonicalUnit,
+    comparison: rng.bool(0.5) ? ">=" : ">",
+    bands: { comfort: { min: 20, max: 80 }, optimal: { min: 40, max: 60 } },
+    scale: { min: 0, max: 100, step: 5 },
+    tiers: [
+      { min: 80, score: 1, level: "high", zone: "outside" },
+      { min: 40, score: 0, level: "ok", zone: "optimal" },
+      { default: true, score: -1, level: "low", zone: "outside" },
+    ],
+  };
   switch (rng.int(0, 4)) {
     case 0:
-      return { source: rng.pick(["auto", "entity", "card", V.typo(rng, "entity")]) };
+      return rng.pick(["indoor", "outdoor", "fridge", V.typo(rng, "indoor")]);
     case 1:
-      return { profile: rng.pick(["celsius", "fahrenheit", "indoor", V.typo(rng, "celsius"), 42]) };
+      return { source: rng.pick(["auto", "entity", "profile", "card", V.typo(rng, "entity")]), profile: rng.pick(["indoor", "outdoor", "fridge", 42]) };
     case 2:
-      return {
-        profile: {
-          tiers: [
-            { min: 26, score: 2, level: "warm", zone: "outside" },
-            { min: 20, score: 0, level: "ok", zone: "optimal" },
-            { score: -2, level: "cold", zone: "outside" },
-          ],
-        },
-      };
+      return validCustom;
     case 3:
       // A ramp whose scores do not descend. The card refuses this; before it did, an
       // optimal reading could be painted in the most extreme colour of the palette.
-      return {
-        profile: {
-          tiers: [
-            { min: 26, score: 1, level: "warm", zone: "outside" },
-            { min: 20, score: 5, level: "ok", zone: "optimal" },
-            { score: -1, level: "cold", zone: "outside" },
-          ],
-        },
-      };
+      return { ...validCustom, tiers: validCustom.tiers.map((tier, index) => index === 1 ? { ...tier, score: 5 } : tier) };
     default:
-      return { profile: { bands: { comfort: { min: 20, max: 24 }, optimal: { min: 21, max: 23 } } } };
+      return { source: "custom", unit: METRICS[metric].canonicalUnit, tiers: [] };
   }
 }
 
@@ -599,7 +593,7 @@ function generateLanguage(rng) {
 
 // Everything that is not an entity: the rest of the YAML surface, each key an independent
 // coin flip so that COMBINATIONS happen rather than one option at a time.
-function generateConfig(rng) {
+function generateConfig(rng, metric) {
   const config = {};
   const has = (key) => rng.bool(OPTION_PRESENCE[key]);
 
@@ -622,7 +616,7 @@ function generateConfig(rng) {
   if (has("start_view")) config.start_view = enumValue(rng, VIEWS);
   if (has("tap_action")) config.tap_action = generateAction(rng);
   if (has("hold_action")) config.hold_action = generateAction(rng);
-  if (has("classification")) config.classification = generateClassification(rng);
+  if (has("classification")) config.classification = generateClassification(rng, metric);
   if (has("range_entity")) config.range_entity = rng.pick(["sensor.range", "sensor.missing", "", 42]);
   if (has("trend_entity")) config.trend_entity = rng.pick(["sensor.trend", "sensor.missing", "", 42]);
   if (has("misspelledKey")) config[rng.pick(V.MISSPELLED_CONFIG_KEYS)] = rng.pick(["vivid", true, 1, []]);
@@ -658,19 +652,24 @@ function auxiliaryEntities(rng, config, metric) {
 // What Home Assistant hands the card, and what it sometimes does not. See the note beside
 // hassGaps in test/fixtures/scenario.js for why each of these is a state a card really meets.
 function generateHassShape(rng) {
+  let shape;
   switch (weighted(rng, WEIGHTS.hassShape)) {
     case "oneGap":
-      return { hassGaps: [rng.pick(V.HASS_GAPS)] };
+      shape = { hassGaps: [rng.pick(V.HASS_GAPS)] };
+      break;
     case "twoGaps": {
       const first = rng.pick(V.HASS_GAPS);
       const second = rng.pick(V.HASS_GAPS.filter((gap) => gap !== first));
-      return { hassGaps: [first, second] };
+      shape = { hassGaps: [first, second] };
+      break;
     }
-    case "themed":
-      return { theme: rng.bool(0.5) ? "dark" : "light" };
     default:
-      return {};
+      shape = {};
   }
+  // Theme and missing fields are independent properties of Home Assistant's environment.
+  // Keeping them exclusive made `theme + no themes API` structurally unreachable.
+  if (rng.bool(0.03)) shape.theme = rng.bool(0.5) ? "dark" : "light";
+  return shape;
 }
 
 function generateDescription(seedOrRng) {
@@ -703,18 +702,15 @@ function generateDescription(seedOrRng) {
     if (weighted(rng, WEIGHTS.roomName) === "awkward") room.name = rng.pick(V.AWKWARD_TEXT);
     if (rng.bool(0.12)) room.short = rng.pick(["R1", "", "LongShortName", 42, null]);
     if (rng.bool(0.06)) room.tap_action = generateAction(rng);
+    if (rng.bool(0.05)) room.hold_action = generateAction(rng);
     rooms.push(room);
   }
 
-  const config = generateConfig(rng);
+  const config = generateConfig(rng, metric);
   const palette = generatePalette(rng);
   if (palette !== undefined) config.palette = palette;
   const views = generateViews(rng);
   if (views !== undefined) config.views = views;
-  if (rng.bool(OPTION_PRESENCE.view_options)) {
-    const type = rng.pick(VIEWS);
-    config.view_options = { [rng.bool(0.85) ? type : V.typo(rng, type)]: generateViewOptions(rng, type) };
-  }
 
   const description = {
     metric,

@@ -17,10 +17,10 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// From the manifest — see test/contracts/product-surface.js. The comparison of the
+// From the manifest — see test/manifests/product-surface.js. The comparison of the
 // manifest against the registry itself lives in product-surface.test.js; what this file
 // does with the list is ask the translation modules about each language in turn.
-const { LANGUAGES: EXPECTED_LANGUAGES } = require("../../contracts/product-surface.js");
+const { LANGUAGES: EXPECTED_LANGUAGES } = require("../../manifests/product-surface.js");
 
 let locales;
 let formatters;

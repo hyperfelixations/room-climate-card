@@ -1,8 +1,8 @@
 # CI for the standalone room-climate-card repository.
 #
 # Two independent jobs, deliberately with no `needs:` between them. They answer different
-# questions — "is the logic right" and "does it behave in a real browser" — and a failure in
-# one says nothing about the other. Chaining them would hide the browser result on every unit
+# questions — "are the Node layers right" and "does it behave in real browsers" — and a failure in
+# one says nothing about the other. Chaining them would hide the browser result on every Node
 # failure, exactly when knowing both is most useful.
 #
 # Both jobs build the bundle themselves. That repeats one Rollup build, which is cheap, and it
@@ -14,9 +14,9 @@
 #   * it does not run a large property sweep. That belongs in the weekly job (property.yml) so
 #     that a pull request stays fast and, more importantly, DETERMINISTIC — a check that fails
 #     on a different seed every time is a check nobody trusts.
-#   * it does not gate on coverage. The number is published as an artifact and read by people;
-#     turning it into a threshold would mostly measure how much of the bundle jsdom happens to
-#     execute, which is not a quality anyone is trying to improve.
+#   * it does not run mutation testing. That narrowly scoped but slower semantic check belongs
+#     beside the weekly property sweep. Coverage here is source-normalized across direct unit,
+#     bundle and Chromium layers and does enforce its calibrated merged quality floor.
 
 name: CI
 
@@ -32,6 +32,8 @@ permissions:
 
 jobs:
   unit:
+    # Keep the established check name: branch-protection rules outside this repository may
+    # refer to it. The command itself runs every Node layer, not only direct unit tests.
     name: Code & Unit Tests
     runs-on: windows-latest
     timeout-minutes: 20
@@ -53,7 +55,7 @@ jobs:
       # gets produced. Every later step loads that artifact, so this has to come first.
       #
       # The steps after it deliberately use the internal *:run scripts. The public commands
-      # (npm run check / test:unit) build first themselves, which is what makes them safe to
+      # (npm run check / test:node) build first themselves, which is what makes them safe to
       # run on their own — but in a pipeline that would repeat the same Rollup build for no
       # added guarantee.
       - name: Build the bundle from src/
@@ -67,26 +69,13 @@ jobs:
       #
       # The property run used to be listed again as a separate step, which executed it TWICE
       # per job for no additional evidence — the glob already matched the file.
-      - name: Unit, component, contract and property tests
-        run: npm run test:unit:run
-
-      # Published, never enforced. See the header.
-      - name: Coverage report
-        if: always()
-        run: npm run coverage
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-lcov
-          path: coverage/lcov.info
-          retention-days: 14
+      - name: All Node test layers
+        run: npm run test:node:run
 
   browser:
     name: Browser Tests
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
@@ -104,11 +93,25 @@ jobs:
       - name: Build the bundle from src/
         run: npm run build
 
-      - name: Install Playwright's Chromium
-        run: npx playwright install chromium
+      - name: Install Playwright browsers
+        run: npx playwright install chromium firefox webkit
 
-      - name: Browser tests (Playwright)
-        run: npm run test:browser:run
+      - name: Source-normalized coverage across unit, bundle and browser layers
+        run: npm run coverage
+
+      # coverage already executes the complete Chromium-owned browser suite. Run only the
+      # deliberately smaller Firefox/WebKit core here; invoking the full Playwright matrix
+      # first would repeat every Chromium spec without adding evidence.
+      - name: Firefox and WebKit core
+        run: npm run test:browser:cross-engine:run
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-layers
+          path: coverage/
+          retention-days: 14
 
       # A FLAKY result is a pass, and it is also the result whose evidence is most likely to be
       # thrown away: the job succeeds, so a `failure()` condition never fires and the trace from

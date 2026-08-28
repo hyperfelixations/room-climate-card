@@ -8,7 +8,7 @@
 // default seed used across the standard test run is 0xC1A6E (see
 // randomized-extremes.property.test.js), with ROOM_CLIMATE_CARD_FUZZ_SEEDS
 // available for ad-hoc additional-seed runs through the package.json
-// `test:fuzz` script.
+// `test:property` script.
 
 function mulberry32(seed) {
   let a = seed >>> 0;

@@ -17,9 +17,14 @@
 // always a real counterexample, never a guess.
 
 const { describeScenario } = require("../fixtures/scenario.js");
+const { isDeepStrictEqual } = require("node:util");
 
 function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+  const copy = JSON.parse(JSON.stringify(value));
+  if (!isDeepStrictEqual(copy, value)) {
+    throw new TypeError("property description is not lossless JSON; refusing to corrupt the counterexample while shrinking");
+  }
+  return copy;
 }
 
 // Every one-step reduction of a description, roughly largest first. Order matters only for
@@ -128,6 +133,9 @@ function* entityReductions(description, where) {
 // there to keep a pathological case from running for minutes.
 function shrink(description, stillFails, { maxSteps = 200 } = {}) {
   let best = clone(description);
+  if (stillFails(best) !== true) {
+    throw new Error("shrink: the supplied description does not reproduce the requested failure");
+  }
   let steps = 0;
   let improved = true;
 
@@ -152,6 +160,9 @@ function shrink(description, stillFails, { maxSteps = 200 } = {}) {
     }
   }
 
+  if (stillFails(best) !== true) {
+    throw new Error("shrink: the locally minimized description no longer reproduces the requested failure");
+  }
   return { description: best, steps };
 }
 

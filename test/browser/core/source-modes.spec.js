@@ -10,7 +10,7 @@
 // The last test is the one that earns the file - a mistyped room entity must not turn a
 // one-room card into a two-room card, which is a layout question and looks fine in a model.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth, updateHass, waitForStableLayout } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

@@ -13,7 +13,7 @@
 // proves each part still works in isolation, and says nothing about whether the parts
 // are still wired to each other. This is that check.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 

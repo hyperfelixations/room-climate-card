@@ -11,7 +11,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
-const { LANGUAGES } = require("../../contracts/product-surface.js");
+const { LANGUAGES } = require("../../manifests/product-surface.js");
 const { CO2, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;

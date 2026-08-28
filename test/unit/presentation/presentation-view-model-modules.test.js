@@ -12,45 +12,13 @@ process.env.TZ = "UTC";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { cfg, minimalDomainModel, stubTexts } = require("../../fixtures/presentation-models.js");
 
 let metricMeta;
 let roomLayout;
 let scaleViewModel;
 let cardViewModel;
 let legacyData;
-let viewContent;
-
-// A translator that echoes its key and vars, so an assertion can see exactly which
-// key was used and with which values — far more diagnostic than comparing against
-// real German text.
-function stubTexts(overrides = {}) {
-  return {
-    language: "en",
-    t: (key, vars) => (vars ? `${key}(${JSON.stringify(vars)})` : key),
-    fmt: (value, digits) => `fmt:${value}:${digits ?? "auto"}`,
-    fmtWithUnit: (value, digits, withSpace) => `unit:${value}:${digits ?? "auto"}:${withSpace === false ? "nospace" : "space"}`,
-    formatTime: (isoString) => (isoString ? `time:${isoString}` : null),
-    ...overrides,
-  };
-}
-
-function cfg(overrides = {}) {
-  return {
-    entity: "sensor.avg",
-    rooms: [],
-    title: null,
-    entity_label: null,
-    icon: null,
-    room_label: "auto",
-    room_sort: "value_asc",
-    room_columns: null,
-    room_rows: null,
-    show_rooms: "auto",
-    unavailable_values: "show",
-    views: null,
-    ...overrides,
-  };
-}
 
 function roomModel(index, name, short, value) {
   return { name, short, entity: `sensor.r${index}`, tap_action: null, hold_action: null, index, value };
@@ -62,7 +30,6 @@ test.before(async () => {
   scaleViewModel = await import("../../../src/presentation/view-model/scale-view-model.js");
   cardViewModel = await import("../../../src/presentation/view-model/card-view-model.js");
   legacyData = require("../../helpers/legacy-dto.js");
-  viewContent = await import("../../../src/presentation/view-model/view-content/index.js");
 });
 
 // ------------------------------------------------------------ metric meta --
@@ -253,43 +220,6 @@ test("two markers closer than the overlap threshold are nudged apart, not reposi
 });
 
 // ------------------------------------------------------- card view model --
-
-function minimalDomainModel(overrides = {}) {
-  return {
-    empty: false,
-    // The model resolves this and the view model reads it rather than recomputing —
-    // deciding it needs `states`, which the presentation layer does not have. A fixture
-    // therefore has to state which sources its card refers to, exactly as the real
-    // model would (see resolveSourceTopology()).
-    topology: { kind: "primaryOnly", headlineEntity: "sensor.avg", roomIndex: null },
-    metric: { kind: "temperature", canonicalUnit: "°C", unit: "°C", displayUnitProfile: { key: "celsius" } },
-    context: { diagnostics: [], consistent: true, excludedRoomIds: [], sourceKind: "primary", sourceEntity: "sensor.avg" },
-    average: { value: 22, source: "sensor", entity: "sensor.avg", roomIndex: null },
-    rooms: { declared: [], byValue: [], count: 0, comparable: false, missing: 0 },
-    roomColors: {},
-    extremes: null,
-    comfort: { min: 20, max: 24, inComfort: 0, tooWarm: 0, tooCool: 0 },
-    optimal: { min: 21, max: 23 },
-    scaleConfig: {
-      comfort: { min: 20, max: 24 },
-      optimal: { min: 21, max: 23 },
-      scale: { min: 19, max: 25 },
-      step: 1,
-      oneSided: false,
-      headroom: undefined,
-      anchorScale: true,
-    },
-    spread: 0,
-    range: { hasRange: false, state: null, min: null, max: null, minTimestamp: null, maxTimestamp: null, minColor: null, maxColor: null, rangeScaleAvailable: false },
-    trend: { value: null, unit: null, model: null },
-    classification: {
-      average: { color: "#79A86C", level: null, levelKey: "level.optimal", score: 6, zone: "optimal", source: "builtin", profileId: "indoor" },
-      profileIcon: "mdi:thermometer",
-    },
-    subtitle: { kind: "inComfort", missingRooms: 0 },
-    ...overrides,
-  };
-}
 
 test("the title and average label prefer the configured overrides", () => {
   const texts = stubTexts();
@@ -616,110 +546,4 @@ test("the legacy adapter zeroes the range-scale positions when that view is off"
   assert.equal(data.rangeCurrentPos, 0);
   assert.equal(data.rangeMinPos, 0);
   assert.equal(data.rangeMaxPos, 0);
-});
-
-// ------------------------------------------------- lazy view content models --
-
-// The daily-range scale is AVAILABLE whenever the range entity reports a usable
-// min/max pair, but it is off unless a views: list explicitly asks for it. Building its
-// axis, its three markers and its decluttered labels for a view nobody requested is
-// work with no observable result, so the pipeline skips it unless requested.
-//
-// The axis therefore arrives as a thunk. These tests call buildViewContent() directly
-// with a counting thunk, which is the only way to prove a negative like this.
-function sharedFor(overrides = {}) {
-  const texts = stubTexts();
-  const geometry = {
-    scaleMin: 19, scaleMax: 25, comfortLeft: 0, comfortWidth: 100, comfortVisible: true, comfortCenter: 50,
-    optimalLeft: 25, optimalWidth: 50, optimalVisible: true, optimalCenter: 50, optimalMin: 21, optimalMax: 23,
-    displayStep: 1, markerPositions: { avg: 50, current: 50, min: 10, max: 90 },
-    boundaryLabels: { min: "19", max: "25" },
-  };
-  return {
-    metricKind: "temperature",
-    unit: "°C",
-    texts,
-    comfort: { min: 20, max: 24, inComfort: 1, tooWarm: 0, tooCool: 1 },
-    optimal: { min: 21, max: 23 },
-    spread: 2,
-    hideFooter: false,
-    rangeEntity: "sensor.range",
-    average: { value: 22, label: "Average", hasLabel: true, position: 50, color: "#79A86C" },
-    rooms: { comparable: true, count: 2, byValue: [] },
-    roomColors: {},
-    extremes: null,
-    roomMarkers: [],
-    range: { hasRange: true, state: 5, min: 18, max: 25, minTime: "06:10", maxTime: "15:20", minColor: "#1", maxColor: "#2" },
-    trend: { value: null, unit: null, model: null, text: "" },
-    scale: geometry,
-    geometry,
-    ...overrides,
-  };
-}
-
-function stateWith(keys) {
-  return {
-    keys,
-    entries: [],
-    collapsed: keys.length === 0,
-    hasRangeScale: keys.includes("range_scale"),
-    options: {
-      range: { show_time: true },
-      range_scale: { show_comfort_band: true, show_optimal_band: true, footer: "detailed" },
-      scale: { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" },
-      extremes: { show_value: true },
-    },
-  };
-}
-
-test("an available but not activated range-scale view builds no geometry at all", () => {
-  let axisBuilds = 0;
-  const shared = sharedFor({
-    buildRangeScaleAxis: () => {
-      axisBuilds += 1;
-      return sharedFor().geometry;
-    },
-  });
-  const byKey = viewContent.buildViewContent({ shared, viewState: stateWith(["scale"]) });
-  assert.equal(axisBuilds, 0, "the axis builder must not be called for an inactive view");
-  assert.equal(byKey.range_scale, null);
-  assert.ok(byKey.scale, "the active view is still built");
-});
-
-test("an activated range-scale view builds its geometry exactly once", () => {
-  let axisBuilds = 0;
-  const shared = sharedFor({
-    buildRangeScaleAxis: () => {
-      axisBuilds += 1;
-      return sharedFor().geometry;
-    },
-  });
-  const byKey = viewContent.buildViewContent({ shared, viewState: stateWith(["range_scale", "scale"]) });
-  assert.equal(axisBuilds, 1, "once, not once per marker or per label");
-  assert.ok(byKey.range_scale);
-  assert.equal(byKey.range_scale.markers.min.position, 10);
-  assert.equal(byKey.range_scale.topLabels.current.position, 50);
-});
-
-test("every inactive view gets a null content model, and the key set is complete", () => {
-  const byKey = viewContent.buildViewContent({ shared: sharedFor({ buildRangeScaleAxis: () => sharedFor().geometry }), viewState: stateWith([]) });
-  assert.deepEqual(Object.keys(byKey).sort(), ["extremes", "range", "range_scale", "scale"]);
-  assert.deepEqual(Object.values(byKey), [null, null, null, null]);
-});
-
-test("the whole view model omits the range-scale geometry when the view is off, even when the data allows it", () => {
-  const available = minimalDomainModel({
-    range: { hasRange: true, state: 5, min: 18, max: 25, minTimestamp: null, maxTimestamp: null, minColor: "#1", maxColor: "#2", rangeScaleAvailable: true },
-  });
-  const off = cardViewModel.buildCardViewModel({ domainModel: available, config: cfg(), texts: stubTexts() });
-  assert.equal(off.rangeScale, null, "available is not the same as requested");
-  assert.equal(off.views.byKey.range_scale, null);
-
-  const on = cardViewModel.buildCardViewModel({
-    domainModel: available,
-    config: cfg({ views: [{ type: "range_scale", enabled: true, options: {} }] }),
-    texts: stubTexts(),
-  });
-  assert.ok(on.rangeScale, "and requested is what builds it");
-  assert.ok(on.views.byKey.range_scale.markers.min);
 });
