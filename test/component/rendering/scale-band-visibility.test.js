@@ -84,16 +84,16 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
 
 // ==== data.views.options resolution ====
 
-// The assertions below include footer and marker defaults (footer:true/
-// markers:"extremes" for scale, footer:"detailed" for range_scale) alongside the
+// The assertions below include footer and marker defaults (show_footer:true and
+// footer:true/markers:"extremes" for scale, footer:"detailed" for range_scale) alongside the
 // band flags this file itself is about, since data.views.options.<view> is a
 // single fully-resolved object returned by resolveViewOptions().
 
 test("data.views.options: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
   const data = el._computeViewModel();
-  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" });
-  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: true, footer: "detailed" });
+  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: true, show_optimal_band: true, show_footer: true, footer: true, markers: "extremes" });
+  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: true, show_footer: true, footer: "detailed" });
   env.cleanup(el);
 });
 
@@ -107,7 +107,7 @@ const COMBINATIONS = [
 for (const combo of COMBINATIONS) {
   test(`data.views.options: scale resolves explicit options ${JSON.stringify(combo)}`, () => {
     const el = env.createCard(baseConfig({ views: [{ type: "scale", options: combo }] }), twoRoomStates());
-    assert.deepEqual(normalize(el._computeViewModel().views.options.scale), { ...combo, footer: true, markers: "extremes" });
+    assert.deepEqual(normalize(el._computeViewModel().views.options.scale), { ...combo, show_footer: true, footer: true, markers: "extremes" });
     env.cleanup(el);
   });
 }
@@ -127,8 +127,8 @@ test("data.views.options: scale and range_scale resolve independently in the sam
     })
   );
   const data = el._computeViewModel();
-  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: false, show_optimal_band: true, footer: true, markers: "extremes" });
-  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: false, footer: "detailed" });
+  assert.deepEqual(normalize(data.views.options.scale), { show_comfort_band: false, show_optimal_band: true, show_footer: true, footer: true, markers: "extremes" });
+  assert.deepEqual(normalize(data.views.options.range_scale), { show_comfort_band: true, show_optimal_band: false, show_footer: true, footer: "detailed" });
   env.cleanup(el);
 });
 

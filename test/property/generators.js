@@ -77,8 +77,13 @@ const ENUMS = {
   room_label: ["auto", "short", "name"],
   show_rooms: ["auto", true, false],
   unavailable_values: ["show", "hide"],
-  subtitle_overflow: ["clip", "wrap"],
+  header_overflow: ["clip", "wrap"],
+  show_rooms_part: ["auto", true, false],
 };
+
+// The parts of the show: block that are simple switches. `rooms` is generated separately,
+// because it is the one with a third answer.
+const SHOW_SWITCH_KEYS = ["accent_line", "icon", "title", "subtitle", "entity_label", "pill", "panel", "unavailable_rooms"];
 
 // ---------------------------------------------------------------------- the weights --
 
@@ -237,6 +242,8 @@ const OPTION_PRESENCE = {
   room_label: 0.1,
   show_rooms: 0.12,
   unavailable_values: 0.1,
+  accent_line: 0.08,
+  show: 0.16,
   start_view: 0.08,
   tap_action: 0.1,
   hold_action: 0.07,
@@ -514,20 +521,52 @@ function generateAction(rng) {
   }
 }
 
-function generateSubtitle(rng) {
+// The show: block, in the shapes a person actually produces on the way to a working card.
+//
+// Two things make this worth generating rather than writing down: the block can be reached
+// with a half-typed value at every keystroke, and it OVERLAPS with three older top-level keys
+// whose combinations are where a precedence rule breaks. The card with both spellings and
+// contradictory answers is generated on purpose.
+function generateShow(rng) {
+  switch (rng.int(0, 5)) {
+    case 0:
+      // Not an object at all, which is what `show:` alone produces in YAML.
+      return rng.pick([null, "yes", 42, [], true]);
+    case 1:
+      // One part, correctly named, correctly valued — the ordinary case.
+      return { [rng.pick(SHOW_SWITCH_KEYS)]: boolValue(rng) };
+    case 2:
+      // A part with a value that is not a boolean.
+      return { [rng.pick(SHOW_SWITCH_KEYS)]: rng.pick(["yes", "no", 0, 1, "", null]) };
+    case 3:
+      // A key nobody meant to write, next to one that was.
+      return { [V.typo(rng, rng.pick(SHOW_SWITCH_KEYS))]: true, [rng.pick(SHOW_SWITCH_KEYS)]: false };
+    case 4:
+      return { rooms: rng.pick([...ENUMS.show_rooms_part, "alway", "", 1]) };
+    default: {
+      // Several parts at once, which is the combination the layout has to survive.
+      const block = {};
+      for (const key of SHOW_SWITCH_KEYS) if (rng.bool(0.4)) block[key] = boolValue(rng);
+      if (rng.bool(0.3)) block.rooms = rng.pick(ENUMS.show_rooms_part);
+      return block;
+    }
+  }
+}
+
+function generateHeaderLine(rng) {
   // Three shapes, and the two words that are reserved. `subtitle: clip` sets the WRAPPING;
   // `subtitle: Ground floor` sets the TEXT. Getting one of those two words slightly wrong
   // therefore changes the meaning completely — `clipp` is text, `clip` is a mode — which is
-  // exactly the kind of thing worth generating.
+  // exactly the kind of thing worth generating. The title takes the same four shapes.
   switch (rng.int(0, 5)) {
     case 0:
-      return rng.pick(ENUMS.subtitle_overflow);
+      return rng.pick(ENUMS.header_overflow);
     case 1:
-      return V.typo(rng, rng.pick(ENUMS.subtitle_overflow));
+      return V.typo(rng, rng.pick(ENUMS.header_overflow));
     case 2:
       return rng.pick(V.AWKWARD_TEXT);
     case 3:
-      return { text: rng.pick(V.AWKWARD_TEXT), overflow: enumValue(rng, ENUMS.subtitle_overflow) };
+      return { text: rng.pick(V.AWKWARD_TEXT), overflow: enumValue(rng, ENUMS.header_overflow) };
     case 4:
       return rng.pick(["", " ", null, 42, true, [], { text: 1 }, { overflow: "clip" }, { text: "x", nope: 1 }]);
     default:
@@ -597,10 +636,12 @@ function generateConfig(rng, metric) {
   const config = {};
   const has = (key) => rng.bool(OPTION_PRESENCE[key]);
 
-  if (has("title")) config.title = rng.pick(V.AWKWARD_TEXT);
+  // The title takes the subtitle's shape, so it is generated the same way — including the
+  // two reserved words, which mean the overflow mode here as well.
+  if (has("title")) config.title = generateHeaderLine(rng);
   if (has("entity_label")) config.entity_label = rng.pick(V.AWKWARD_TEXT);
   if (has("icon")) config.icon = rng.pick(["mdi:thermometer", "mdi:nonexistent-icon", "", "thermometer", 42]);
-  if (has("subtitle")) config.subtitle = generateSubtitle(rng);
+  if (has("subtitle")) config.subtitle = generateHeaderLine(rng);
   if (has("decimals")) config.decimals = numberValue(rng, 0, 3);
   if (has("hide_footer")) config.hide_footer = boolValue(rng);
   if (has("auto_slide")) config.auto_slide = boolValue(rng);
@@ -613,6 +654,8 @@ function generateConfig(rng, metric) {
   if (has("room_label")) config.room_label = enumValue(rng, ENUMS.room_label);
   if (has("show_rooms")) config.show_rooms = enumValue(rng, ENUMS.show_rooms);
   if (has("unavailable_values")) config.unavailable_values = enumValue(rng, ENUMS.unavailable_values);
+  if (has("accent_line")) config.accent_line = boolValue(rng);
+  if (has("show")) config.show = generateShow(rng);
   if (has("start_view")) config.start_view = enumValue(rng, VIEWS);
   if (has("tap_action")) config.tap_action = generateAction(rng);
   if (has("hold_action")) config.hold_action = generateAction(rng);
@@ -745,7 +788,8 @@ module.exports = {
   generateDescription,
   generateConfig,
   generateAction,
-  generateSubtitle,
+  generateHeaderLine,
+  generateShow,
   generateViews,
   weighted,
   WEIGHTS,

@@ -65,7 +65,7 @@ function buildDisplayRooms(domainModel, config) {
       continue;
     }
     const availability = availabilityByIndex.get(index);
-    if (config.unavailable_values !== "show" || !PLACEHOLDER_STATUSES.has(availability?.status)) continue;
+    if (!config.show.unavailable_rooms || !PLACEHOLDER_STATUSES.has(availability?.status)) continue;
     displayed.push({
       ...configured,
       index,
@@ -152,7 +152,11 @@ function buildAverage({ domainModel, config, topology, texts, tone, position, tr
   // Carried as its own fact rather than left for each consumer to re-derive from an
   // empty string. The renderer omits the whole element when it is false, which makes
   // this a STRUCTURAL property — see cardStructureSignature().
-  const hasLabel = label !== "";
+  //
+  // `entity_label: ""` and `show.entity_label: false` are two ways of asking for the same
+  // absent node and meet here. The tooltip wording below reads the same boolean on purpose:
+  // a tooltip that opened with a caption nobody can see would name a thing that is not there.
+  const hasLabel = label !== "" && config.show.entity_label;
   const valueText = texts.fmtWithUnit(value);
 
   // A calculated average gets its own tooltip wording: it is not a reading of the
@@ -244,7 +248,26 @@ const REASON_TEXTS = {
 function buildHeaderSubtitle(config, automatic, { forced = null } = {}) {
   const own = config.subtitle?.text;
   const text = forced !== null ? forced : own === null || own === undefined ? automatic : own;
-  return { subtitle: text, hasSubtitle: text !== "", subtitleOverflow: config.subtitle?.overflow || "clip" };
+  // TWO ROADS TO THE SAME ABSENT NODE, collapsed here into one boolean: `subtitle: ""`
+  // says the line has nothing to say, `show.subtitle: false` says it should not be drawn,
+  // and the renderer needs one answer rather than two facts to combine.
+  //
+  // The one exception is the forced line. A card showing `--` with no reason given would
+  // withhold the one fact its reader needs, so the no-data explanation outranks the switch —
+  // and it is temporary by definition, since it disappears the moment data returns.
+  const hasSubtitle = text !== "" && (forced !== null || config.show.subtitle);
+  return { subtitle: text, hasSubtitle, subtitleOverflow: config.subtitle?.overflow || "clip" };
+}
+
+// The title, in the same shape and by the same rules as the line under it.
+//
+// `title:` unwritten means the card names itself after what it measures; `title: ""` means
+// the line has nothing to say; `show.title: false` means it should not be drawn. The last
+// two produce the same absent node, which is why they meet here rather than at the renderer.
+function buildHeaderTitle(config, automatic) {
+  const own = config.title?.text;
+  const text = own === null || own === undefined ? automatic : own;
+  return { title: text, hasTitle: text !== "" && config.show.title, titleOverflow: config.title?.overflow || "wrap" };
 }
 
 function buildNoDataSubtitle({ domainModel, headline, texts }) {
@@ -309,10 +332,11 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
 // No data is a normal card shell, not a separate error component. It uses the
 // same header, headline and keyed room-grid contracts as the data state, with a
 // deliberately collapsed view area and neutral presentation values.
-function buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta }) {
+function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta }) {
+  const title = headerTitle.title;
   const headline = noDataHeadlineSource(domainModel, config, topology);
   const label = resolveHeadlineLabel({ config, topology, roomIndex: headline.roomIndex, texts });
-  const hasLabel = label !== "";
+  const hasLabel = label !== "" && config.show.entity_label;
   const headlineExists = headline.entity && headline.status !== AVAILABILITY.MISSING;
   const statusLabel = texts.t("status.noData");
   const tooltip = hasLabel
@@ -333,9 +357,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
   const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, metricKind, language: texts.language });
   const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
   const showChips =
-    config.show_rooms !== "never" &&
+    config.show.rooms !== "never" &&
     chips.length >= 1 &&
-    (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology));
+    (config.show.rooms === "always" || !chipsWouldDuplicateHeadline(topology));
 
   return {
     empty: true,
@@ -350,8 +374,16 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, title, met
     // Whether the shell draws the bar across its top edge. Carried on both view models
     // because one shell renders both states, and a no-data card that looked different from
     // the card beside it would be an inconsistency nobody reports and everybody notices.
-    accentLine: Boolean(config.accent_line),
-    header: { icon, title, ...headerSubtitle, statusLabel },
+    accentLine: config.show.accent_line,
+    // Whether the middle block — the headline and the views beside it — is drawn at all.
+    // Hiding it is visual only: every room still feeds the extrema, the comfort count and
+    // the spread, exactly as a hidden chip grid does.
+    hasPanel: config.show.panel,
+    // What the card says when the `show:` block has left it with nothing to draw. Carried
+    // as finished text because a renderer never translates; whether it is USED is a question
+    // about which nodes exist, and that is the shell's to answer.
+    hiddenHint: texts.t("layout.nothingShown"),
+    header: { icon, ...headerTitle, ...headerSubtitle, statusLabel, hasIcon: config.show.icon, hasPill: config.show.pill },
     average: {
       value: null,
       valueText: UNAVAILABLE_TEXT,
@@ -398,10 +430,11 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const topology = domainModel.topology;
   const metricKind = domainModel.metric.kind;
   const meta = metricKind ? metricMetaFor(metricKind) : null;
-  const title = config.title || (meta ? texts.t(meta.titleKey) : CARD_NAME);
+  const headerTitle = buildHeaderTitle(config, meta ? texts.t(meta.titleKey) : CARD_NAME);
+  const title = headerTitle.title;
 
   if (domainModel.empty) {
-    return buildNoDataViewModel({ domainModel, config, texts, topology, title, metricKind, meta });
+    return buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta });
   }
 
   const unit = domainModel.metric.unit;
@@ -587,10 +620,18 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     // The card root's own custom properties, built once and reused by the patch path.
     toneStyle: toneStyleDeclaration(tone),
     // See buildNoDataViewModel() for why both view models carry it.
-    accentLine: Boolean(config.accent_line),
+    accentLine: config.show.accent_line,
+    // Whether the middle block — the headline and the views beside it — is drawn at all.
+    // Hiding it is visual only: every room still feeds the extrema, the comfort count and
+    // the spread, exactly as a hidden chip grid does.
+    hasPanel: config.show.panel,
+    // What the card says when the `show:` block has left it with nothing to draw. Carried
+    // as finished text because a renderer never translates; whether it is USED is a question
+    // about which nodes exist, and that is the shell's to answer.
+    hiddenHint: texts.t("layout.nothingShown"),
     // The header's four slots, referencing the same strings rather than recomputing
     // them — a cohesive group for the renderer, not a second copy.
-    header: { icon: tone.icon, title, ...headerSubtitle, statusLabel: tone.label },
+    header: { icon: tone.icon, ...headerTitle, ...headerSubtitle, statusLabel: tone.label, hasIcon: config.show.icon, hasPill: config.show.pill },
     average: averageModel,
     rooms: {
       visible: layout.visible,
@@ -611,9 +652,9 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       // scale's markers — is unaffected by all three, because the rooms remain full
       // data sources whether or not they are drawn.
       showChips:
-        config.show_rooms !== "never" &&
+        config.show.rooms !== "never" &&
         chips.length >= 1 &&
-        (config.show_rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
+        (config.show.rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),
     },

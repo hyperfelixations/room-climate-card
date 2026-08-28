@@ -62,7 +62,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       showOptimalBand: options.show_optimal_band,
       // Deliberately NOT tied to rooms.comparable, unlike the main scale's footer: this
       // view must show its daily span with zero rooms configured.
-      footerText: options.footer === false || shared.hideFooter ? null : buildFooterText(shared, options.footer),
+      footerText: !options.show_footer || shared.hideFooter ? null : buildFooterText(shared, options.footer),
     }),
     topLabels: {
       current: {

@@ -355,3 +355,77 @@ test("BUG-08's neighbourhood: the other three metrics do reject their impossible
     });
   }
 });
+
+// BUG-12 — found by the metamorphic relation "a room the card cannot use changes nothing
+// else", which adds a room reporting a different metric to a card that was already showing
+// something and asks what moved.
+//
+// Nothing about the NUMBER moves: the value and its position on the scale are identical on
+// both sides. What moves is who the card says the number belongs to, and the caption and tap
+// target that follow from it.
+//
+// The two rooms below are deliberately different kinds of unusable. `sensor.room1` does not
+// exist at all, and the topology already ignores it — which is right, and is what keeps a
+// card stable while Home Assistant is still publishing states. `sensor.foreign` exists and
+// reports a temperature on a humidity card, so it can never contribute; the topology counts
+// it all the same.
+expectedFailure("BUG-12", /caption|single-room card/, () => {
+  const description = {
+    metric: "humidity",
+    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+    rooms: [
+      { id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+      { id: "sensor.room1", present: false, state: 50 },
+    ],
+  };
+  const withForeign = {
+    ...description,
+    rooms: [...description.rooms, { id: "sensor.foreign", state: 21, deviceClass: { value: "temperature" }, unit: { value: "°C" } }],
+  };
+
+  const sourceOf = (built) => {
+    let answer;
+    env.withCard(built.config, built.hass, (card) => {
+      const model = card._computeViewModel();
+      answer = { source: model.average.source, label: model.average.label, value: model.average.value };
+    });
+    return answer;
+  };
+
+  const before = sourceOf(buildScenario(description));
+  const after = sourceOf(buildScenario(withForeign));
+  assert.equal(before.source, "room", "the card refers to exactly one usable entity, and it is a room");
+  assert.equal(
+    after.source,
+    "room",
+    "a room the card can never use must not turn a single-room card into a whole-home card, " +
+      `but the caption moved from "${before.label}" to "${after.label}"`
+  );
+});
+
+test("BUG-12's neighbourhood: a room that does not exist at all is already ignored", () => {
+  // The half that behaves correctly, and the one the fix must not disturb: a configured room
+  // Home Assistant has never heard of leaves the card's identity alone.
+  const alone = buildScenario({
+    metric: "humidity",
+    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+    rooms: [{ id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } }],
+  });
+  const withMissing = buildScenario({
+    metric: "humidity",
+    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+    rooms: [
+      { id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+      { id: "sensor.nowhere", present: false, state: 50 },
+    ],
+  });
+  const sourceOf = (built) => {
+    let answer;
+    env.withCard(built.config, built.hass, (card) => {
+      answer = card._computeViewModel().average.source;
+    });
+    return answer;
+  };
+  assert.equal(sourceOf(alone), "room");
+  assert.equal(sourceOf(withMissing), "room", "an entity that does not exist does not change what the card is about");
+});

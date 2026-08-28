@@ -295,17 +295,60 @@ test("every view's options are resolved, active or not", () => {
   });
   assert.deepEqual(Object.keys(state.options).sort(), ["extremes", "range", "range_scale", "scale"]);
   assert.deepEqual(state.options.range, { show_time: true });
-  assert.deepEqual(state.options.scale, { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" });
-  assert.deepEqual(state.options.range_scale, { show_comfort_band: true, show_optimal_band: true, footer: "detailed" });
+  assert.deepEqual(state.options.scale, {
+    show_comfort_band: true,
+    show_optimal_band: true,
+    show_footer: true,
+    footer: true,
+    markers: "extremes",
+  });
+  assert.deepEqual(state.options.range_scale, {
+    show_comfort_band: true,
+    show_optimal_band: true,
+    show_footer: true,
+    footer: "detailed",
+  });
   assert.deepEqual(state.options.extremes, { show_value: true });
 });
 
 test("a configured option overrides its default and the rest keep theirs", () => {
   const state = viewState.buildViewState({
     availability: { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
-    config: { views: [{ type: "scale", enabled: true, options: { markers: "all", footer: false } }] },
+    config: { views: [{ type: "scale", enabled: true, options: { markers: "all", show_footer: false } }] },
   });
-  assert.deepEqual(state.options.scale, { show_comfort_band: true, show_optimal_band: true, footer: false, markers: "all" });
+  assert.deepEqual(state.options.scale, {
+    show_comfort_band: true,
+    show_optimal_band: true,
+    show_footer: false,
+    footer: true,
+    markers: "all",
+  });
+});
+
+test("the older footer:false folds onto show_footer, and the newer key wins when both are written", () => {
+  // The one legacy fold in this layer, and the reason it is here rather than in
+  // config/views.js: that module is schema-driven and deliberately knows nothing about what
+  // an option MEANS. The definitions do, and they are in this file's subject.
+  const resolve = (key, options) =>
+    viewState.resolveViewOptions(
+      viewState.VIEW_DEFINITIONS.find((definition) => definition.key === key),
+      options
+    );
+
+  const folded = resolve("range_scale", { footer: false });
+  assert.equal(folded.show_footer, false, "the older word still turns the footer off");
+  assert.equal(folded.footer, "detailed", "and stops being read as a form");
+
+  const explicit = resolve("range_scale", { show_footer: true, footer: false });
+  assert.equal(explicit.show_footer, true, "the newer key decides when both are written");
+  assert.equal(explicit.footer, "detailed");
+
+  const form = resolve("range_scale", { footer: "compact" });
+  assert.equal(form.show_footer, true, "a form alone says nothing about whether");
+  assert.equal(form.footer, "compact");
+
+  // The view with no footer at all is untouched by any of this.
+  assert.deepEqual(resolve("extremes", { footer: false }), { show_value: true });
 });
 
 test("the view definitions carry no render or update callback", () => {

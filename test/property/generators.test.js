@@ -238,7 +238,11 @@ test("view options are nested in entries, and misspelled top-level keys occur", 
 
 test("every enumerated option is written correctly, misspelled, and as the wrong type", () => {
   for (const [key, allowed] of Object.entries(ENUMS)) {
-    if (key === "subtitle_overflow") continue; // reached through subtitle, measured below
+    // Reached through the title and the subtitle rather than as a key of its own, and
+    // measured below where those two are.
+    if (key === "header_overflow") continue;
+    // Reached through the show: block, and measured with it.
+    if (key === "show_rooms_part") continue;
     const values = valuesOf(key);
     assert.ok(values.length > 20, `${key}: only ${values.length} samples`);
     assert.ok(values.some((value) => allowed.includes(value)), `${key}: never written correctly`);

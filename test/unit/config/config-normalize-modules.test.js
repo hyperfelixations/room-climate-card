@@ -145,11 +145,11 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.auto_slide, true);
   assert.equal(result.swipe, true);
   assert.equal(result.hide_footer, false);
-  assert.equal(result.show_rooms, "auto");
-  assert.equal(result.unavailable_values, "show");
+  assert.equal(result.show.rooms, "auto");
+  assert.equal(result.show.unavailable_rooms, true);
   assert.equal(result.language, "auto");
   assert.equal(result.views, null);
-  assert.deepEqual(result._viewsDiagnostics, []);
+  assert.deepEqual(result._configDiagnostics, []);
   assert.deepEqual(result.classification, { source: "auto", profile: null, custom: null });
   assert.deepEqual(result.tap_action, { action: "more-info" });
   assert.deepEqual(result.hold_action, { action: "more-info" });
@@ -190,7 +190,9 @@ test("entity_label preserves the explicit empty-string sentinel", () => {
 });
 
 test("show_rooms maps the three public states and defaults everything else to auto", () => {
-  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", show_rooms: value }, COLLABORATORS).show_rooms;
+  // The older spelling of show.rooms, kept for the cards that already use it. It reaches
+  // the same three-state vocabulary; the block simply outranks it where both are written.
+  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", show_rooms: value }, COLLABORATORS).show.rooms;
   assert.equal(n("auto"), "auto");
   assert.equal(n(true), "always");
   assert.equal(n(false), "never");
@@ -199,11 +201,14 @@ test("show_rooms maps the three public states and defaults everything else to au
 });
 
 test("unavailable_values accepts show or hide and silently defaults invalid values", () => {
-  const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", unavailable_values: value }, COLLABORATORS).unavailable_values;
-  assert.equal(n("show"), "show");
-  assert.equal(n("hide"), "hide");
-  assert.equal(n("invalid"), "show");
-  assert.equal(n(true), "show");
+  // Likewise the older spelling of show.unavailable_rooms. The two words become one
+  // boolean here, which is why "hide" is the only value that turns the placeholders off.
+  const n = (value) =>
+    normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", unavailable_values: value }, COLLABORATORS).show.unavailable_rooms;
+  assert.equal(n("show"), true);
+  assert.equal(n("hide"), false);
+  assert.equal(n("invalid"), true);
+  assert.equal(n(true), true);
 });
 
 test("normalizeConfig() carries view diagnostics on the returned config", () => {
@@ -211,8 +216,8 @@ test("normalizeConfig() carries view diagnostics on the returned config", () => 
     { entity: "sensor.avg", views: [{ type: "scale", enabled: "yes" }] },
     COLLABORATORS
   );
-  assert.equal(result._viewsDiagnostics.length, 1);
-  assert.match(result._viewsDiagnostics[0], /invalid "enabled" value/);
+  assert.equal(result._configDiagnostics.length, 1);
+  assert.match(result._configDiagnostics[0], /invalid "enabled" value/);
 });
 
 test("normalizeConfig() never writes to the console", () => {

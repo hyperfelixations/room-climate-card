@@ -118,6 +118,7 @@ export const es = {
 
   "rotator.hint": "Desliza para cambiar de vista",
 
+  "layout.nothingShown": "Todas las partes de esta tarjeta están ocultas por show:.",
   "views.none": "No hay ninguna vista disponible.",
 
 };

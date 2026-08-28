@@ -123,6 +123,7 @@ export const pl = {
 
   "rotator.hint": "Przesuń, aby zmienić widok",
 
+  "layout.nothingShown": "Wszystkie elementy tej karty są ukryte przez show:.",
   "views.none": "Brak dostępnego widoku.",
 
 };

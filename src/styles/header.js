@@ -33,6 +33,43 @@ export const HEADER_CSS = `        .rtc-header {
           color: var(--tone-ink);
         }
 
+        /* A header that is missing a part needs the column it is missing to be missing too.
+           A grid column holding nothing is still a column: it brings its 11px gap, and the
+           title would start 11px from the left edge instead of at it.
+
+           One override per subset, and none for the full set — the ordinary card carries no
+           data-parts attribute at all and therefore meets none of these rules. The pill is
+           pushed to the right edge only where it lands in a stretching track; where it sits
+           in a content-sized track at the end of the row it is already there. */
+        .rtc-root[data-parts="icon title"] .rtc-header {
+          grid-template-columns: auto 1fr;
+        }
+
+        .rtc-root[data-parts="icon pill"] .rtc-header {
+          grid-template-columns: auto 1fr;
+        }
+
+        .rtc-root[data-parts="title pill"] .rtc-header {
+          grid-template-columns: 1fr auto;
+        }
+
+        .rtc-root[data-parts="icon"] .rtc-header {
+          grid-template-columns: auto;
+        }
+
+        .rtc-root[data-parts="title"] .rtc-header {
+          grid-template-columns: 1fr;
+        }
+
+        .rtc-root[data-parts="pill"] .rtc-header {
+          grid-template-columns: 1fr;
+        }
+
+        .rtc-root[data-parts="icon pill"] .rtc-status-pill,
+        .rtc-root[data-parts="pill"] .rtc-status-pill {
+          justify-self: end;
+        }
+
         .rtc-title-block {
           min-width: 0;
         }
@@ -42,6 +79,15 @@ export const HEADER_CSS = `        .rtc-header {
           font-weight: 920;
           line-height: 1.05;
           color: var(--primary-text-color);
+        }
+
+        /* title: clip — the mirror image of the subtitle's override below. The title wraps
+           by default and the subtitle clips by default, so each rule states the departure
+           from its own line's habit and neither touches the ordinary card. */
+        .rtc-root[data-title="clip"] .rtc-title {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .rtc-subtitle {

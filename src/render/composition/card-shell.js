@@ -72,6 +72,29 @@ function subtitleOverflowAttribute(viewModel) {
   return viewModel.header.subtitleOverflow === "wrap" ? ` data-subtitle="wrap"` : "";
 }
 
+// The same for the line above it, and mirrored: the title WRAPS by default, so `clip` is
+// the departure worth writing down. Two attributes rather than one shared value, because a
+// card may well want the title clipped and the subtitle wrapped.
+function titleOverflowAttribute(viewModel) {
+  return viewModel.header.titleOverflow === "clip" ? ` data-title="clip"` : "";
+}
+
+// WHICH HEADER PARTS EXIST, for the stylesheet to lay out the row with.
+//
+// The header is a three-column grid, and a column that holds nothing still brings its gap:
+// dropping the icon without saying so would leave the title 11px from the left edge instead
+// of at it. So the parts that ARE present travel to the CSS, which carries one override per
+// subset.
+//
+// Emitted only when something is missing, so the ordinary card's markup and the ordinary
+// card's cascade are both untouched — the same rule the two overflow attributes follow. The
+// value is built from the very booleans that decide the markup below, so there is no second
+// derivation that could drift from what was actually rendered.
+function headerPartsAttribute(parts) {
+  const present = ["icon", "title", "pill"].filter((name) => parts[name]);
+  return present.length === 3 ? "" : ` data-parts="${present.join(" ")}"`;
+}
+
 // The bar across the top edge, and the whitespace that follows it.
 //
 // Both, together, because the indentation inside these template literals is shipped markup:
@@ -95,6 +118,15 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     // Same reason as avgLabel: a patch can change the subtitle's text, it cannot create
     // or delete the node.
     `subtitle:${viewModel.header.hasSubtitle ? 1 : 0}`,
+    // And the same reason again for the rest of the parts the `show:` block governs. They
+    // are signed HERE rather than in structuralConfigSignature(), because a node the view
+    // model decides about belongs with the two above it — one mechanism for one kind of
+    // thing, so the two can never disagree about which of them is the truth.
+    `accentLine:${viewModel.accentLine ? 1 : 0}`,
+    `icon:${viewModel.header.hasIcon ? 1 : 0}`,
+    `title:${viewModel.header.hasTitle ? 1 : 0}`,
+    `pill:${viewModel.header.hasPill ? 1 : 0}`,
+    `panel:${viewModel.hasPanel ? 1 : 0}`,
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
   ];
@@ -130,33 +162,82 @@ export function renderCardBody(context, viewModel, viewRenderers) {
     ? `<div class="rtc-subtitle">${escapeHtml(viewModel.header.subtitle)}</div>`
     : "";
 
+  const parts = {
+    icon: viewModel.header.hasIcon,
+    // The block, not the line: a card with only a subtitle still needs the box that
+    // positions it, and a card with neither needs no column at all.
+    title: viewModel.header.hasTitle || viewModel.header.hasSubtitle,
+    pill: viewModel.header.hasPill,
+  };
+  const header = headerMarkup(viewModel, parts, subtitle);
+  const panel = mainPanelMarkup(context, viewModel, viewRenderers);
+
+  // NOTHING LEFT TO DRAW is a state the card has to say something about. An empty card is
+  // indistinguishable from a broken one, and the configuration that produced it is a
+  // handful of switches somebody can undo — so the card says which ones.
+  //
+  // The bar across the top does not count as content: it is three pixels of colour and
+  // makes no statement. Whether it is drawn is therefore not part of this question.
+  const body = header || panel || roomGrid
+    ? `${header}${panel}${roomGrid}`
+    : `<div class="rtc-nothing-shown">${escapeHtml(viewModel.hiddenHint)}</div>`;
+
   // tabindex="-1": out of the normal tab order, but focusable programmatically — the
   // last-resort focus fallback target when a focused element disappears and no average
   // button exists to fall back to instead.
   return `
-        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${subtitleOverflowAttribute(viewModel)} style="${viewModel.toneStyle}" tabindex="-1">
-          ${accentLineMarkup(viewModel)}<div class="rtc-header">
-            <div class="rtc-icon-badge" aria-hidden="true">
+        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${titleOverflowAttribute(viewModel)}${subtitleOverflowAttribute(viewModel)}${headerPartsAttribute(parts)} style="${viewModel.toneStyle}" tabindex="-1">
+          ${accentLineMarkup(viewModel)}${body}
+        </div>
+      `;
+}
+
+// The header row, and the blank line that follows it — one piece, for the reason
+// accentLineMarkup() gives: the indentation in these template literals is shipped markup,
+// and a part has to take its own separator with it or leave a hole where it used to be.
+//
+// The three children are joined rather than written out, which is what makes the default
+// provably unchanged: with all three present the join reproduces the same bytes the
+// hand-written template produced, and with one missing there is no leftover blank line.
+function headerMarkup(viewModel, parts, subtitle) {
+  const children = [];
+  if (parts.icon) {
+    children.push(`<div class="rtc-icon-badge" aria-hidden="true">
               <ha-icon icon="${escapeHtml(viewModel.header.icon)}"></ha-icon>
-            </div>
-
-            <div class="rtc-title-block">
-              <div class="rtc-title">${escapeHtml(viewModel.header.title)}</div>
-              ${subtitle}
-            </div>
-
-            <div class="rtc-status-pill">${escapeHtml(viewModel.header.statusLabel)}</div>
+            </div>`);
+  }
+  if (parts.title) {
+    const title = viewModel.header.hasTitle
+      ? `<div class="rtc-title">${escapeHtml(viewModel.header.title)}</div>
+              `
+      : "";
+    children.push(`<div class="rtc-title-block">
+              ${title}${subtitle}
+            </div>`);
+  }
+  if (parts.pill) {
+    children.push(`<div class="rtc-status-pill">${escapeHtml(viewModel.header.statusLabel)}</div>`);
+  }
+  if (!children.length) return "";
+  return `<div class="rtc-header">
+            ${children.join("\n\n            ")}
           </div>
 
-          <div class="rtc-main-panel">
+          `;
+}
+
+// The middle block: the headline and the views beside it, with the same trailing separator
+// rule. Hiding it is a layout decision only — every room still feeds the extrema, the
+// comfort count and the spread, exactly as a hidden chip grid does.
+function mainPanelMarkup(context, viewModel, viewRenderers) {
+  if (!viewModel.hasPanel) return "";
+  return `<div class="rtc-main-panel">
             <div class="rtc-average">${renderAverage(viewModel)}</div>
 
             ${renderViewArea(context, viewModel, viewRenderers)}
           </div>
 
-          ${roomGrid}
-        </div>
-      `;
+          `;
 }
 
 // The partial update: only text, colours, markers and the dynamic subsections change,
@@ -172,6 +253,8 @@ function patchShell(context, root, viewModel) {
     contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
     if (viewModel.header.subtitleOverflow === "wrap") contentRoot.setAttribute("data-subtitle", "wrap");
     else contentRoot.removeAttribute("data-subtitle");
+    if (viewModel.header.titleOverflow === "clip") contentRoot.setAttribute("data-title", "clip");
+    else contentRoot.removeAttribute("data-title");
   }
 
   const iconEl = root.querySelector(".rtc-icon-badge ha-icon");

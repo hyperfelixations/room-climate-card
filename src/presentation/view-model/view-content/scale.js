@@ -41,9 +41,8 @@ export function buildScaleViewContent(shared, options) {
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Deliberately tied to rooms.comparable: two of the three segments are statements
-      // about rooms. The global hide_footer and this view's own footer option are
-      // ANDed with it.
-      footerText: rooms.comparable && !hideFooter && options.footer !== false ? buildFooterText(shared) : null,
+      // about rooms. The global hide_footer and this view's own show_footer are ANDed with it.
+      footerText: rooms.comparable && !hideFooter && options.show_footer ? buildFooterText(shared) : null,
     }),
     // A PAIR of texts, not one, for the same reason the optimal label is a pair (see
     // view-content/scale-bar.js): which of the two fits is a question about rendered

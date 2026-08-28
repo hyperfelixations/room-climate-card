@@ -250,7 +250,7 @@ test("a non-array views value is diagnosed and falls back to registry defaults",
   );
   assert.equal(el._config.views, null, "an invalid views: value must normalize to the same null sentinel as 'not configured'");
   assert.ok(
-    el._config._viewsDiagnostics.some((d) => d.includes("views:") && d.includes("array")),
+    el._config._configDiagnostics.some((d) => d.includes("views:") && d.includes("array")),
     "the non-array value must be diagnosed"
   );
   const data = el._computeViewModel();
@@ -265,7 +265,7 @@ test("unparseable views entries are diagnosed and skipped while valid entries re
   );
   assert.equal(el._config.views.length, 1, "only the one genuinely parseable entry ('extremes') survives normalization");
   assert.equal(el._config.views[0].type, "extremes");
-  assert.equal(el._config._viewsDiagnostics.length, 4, "each of the 4 unparseable entries gets its own diagnostic");
+  assert.equal(el._config._configDiagnostics.length, 4, "each of the 4 unparseable entries gets its own diagnostic");
   const data = el._computeViewModel();
   assert.deepEqual(normalize(data.views.keys), ["extremes"]);
   env.cleanup(el);
@@ -279,7 +279,7 @@ test("an invalid enabled value is diagnosed and falls back to auto", () => {
   assert.equal(el._config.views.length, 1, "the entry itself must survive despite the bad enabled: value");
   assert.equal(el._config.views[0].enabled, "auto", "an unrecognized enabled: value falls back to 'auto', not true/false");
   assert.ok(
-    el._config._viewsDiagnostics.some((d) => d.includes("enabled") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.includes("enabled") && d.includes("scale")),
     "the invalid enabled: value must be diagnosed"
   );
   const data = el._computeViewModel();
@@ -309,7 +309,7 @@ test("an unknown options key is diagnosed once and stripped", () => {
   );
   assert.deepEqual(normalize(el._config.views[0].options), {}, "the unknown key must still be stripped, exactly as before");
   assert.ok(
-    el._config._viewsDiagnostics.some((d) => d.includes("options") && d.includes("bogus") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.includes("options") && d.includes("bogus") && d.includes("scale")),
     "the unknown options key must now be diagnosed"
   );
   env.cleanup(el);
@@ -322,7 +322,7 @@ test("a non-object options value is diagnosed and normalizes to an empty object"
   );
   assert.deepEqual(normalize(el._config.views[0].options), {}, "an invalid options: value must still normalize to {}, not drop the whole entry");
   assert.ok(
-    el._config._viewsDiagnostics.some((d) => d.includes("options") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.includes("options") && d.includes("scale")),
     "the invalid options: value must be diagnosed"
   );
   env.cleanup(el);
@@ -334,7 +334,7 @@ test("an omitted options field is not diagnosed", () => {
     fourViewHass()
   );
   assert.deepEqual(normalize(el._config.views[0].options), {});
-  assert.equal(el._config._viewsDiagnostics.length, 0, "omitting options: entirely must not itself produce a diagnostic");
+  assert.equal(el._config._configDiagnostics.length, 0, "omitting options: entirely must not itself produce a diagnostic");
   env.cleanup(el);
 });
 

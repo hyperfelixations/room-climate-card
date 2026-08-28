@@ -45,8 +45,6 @@ export function entityDataSignature({ config, states, language, activeViewIndex,
 // Everything that changes the MARKUP without changing the view list, and therefore
 // cannot be applied by patching.
 //
-//   accent_line            the bar across the top edge is a node, and a patch can change
-//                          text and colours but cannot create or delete one
 //   hide_footer            the footer markup exists or it does not
 //   rotation_seconds       the @keyframes breakpoint percentages are baked into
 //   slide_seconds          <style> at full-render time and cannot be patched
@@ -58,6 +56,12 @@ export function entityDataSignature({ config, states, language, activeViewIndex,
 //
 // The last entry is what makes this generic: every current and future structural view
 // option is covered without naming it here.
+//
+// WHAT IS DELIBERATELY NOT HERE: the `show:` block. Those parts are nodes the VIEW MODEL
+// decides about, and a node the view model decides about is signed by
+// cardStructureSignature(), next to the subtitle and the headline's caption, which have
+// worked that way all along. Naming them here as well would be a second mechanism for one
+// kind of thing — and the two would eventually disagree about which of them is the truth.
 export function structuralConfigSignature(config) {
-  return `${config.accent_line}|${config.hide_footer}|${config.rotation_seconds}|${config.slide_seconds}|${config.auto_slide}|${JSON.stringify(config.views)}`;
+  return `${config.hide_footer}|${config.rotation_seconds}|${config.slide_seconds}|${config.auto_slide}|${JSON.stringify(config.views)}`;
 }

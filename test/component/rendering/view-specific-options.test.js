@@ -108,7 +108,12 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
   env.cleanup(el);
 });
 
-test("optionsSchema: valid values for all 5 keys are honored, including footer:false", () => {
+test("optionsSchema: valid values for every key are honored, and footer:false folds onto show_footer", () => {
+  // `footer: false` is the older way of writing show_footer: false, from before the footer
+  // was split into whether it is drawn and which form it takes. It still says exactly that,
+  // and the fold happens once at resolveViewOptions() so that nothing downstream has to know
+  // there were ever two spellings — which is why `footer` comes back as its own default here
+  // rather than as `false`.
   const el = env.createCard(
     baseConfig({
       range_entity: "sensor.range",
@@ -123,11 +128,38 @@ test("optionsSchema: valid values for all 5 keys are honored, including footer:f
   );
   const data = el._computeViewModel();
   assert.equal(data.views.options.range.show_time, false);
-  assert.equal(data.views.options.range_scale.footer, false);
-  assert.equal(data.views.options.scale.footer, false);
+  assert.equal(data.views.options.range_scale.show_footer, false);
+  assert.equal(data.views.options.range_scale.footer, "detailed", "the word is left carrying only the form");
+  assert.equal(data.views.options.scale.show_footer, false);
+  assert.equal(data.views.options.scale.footer, true);
   assert.equal(data.views.options.scale.markers, "average");
   assert.equal(data.views.options.extremes.show_value, false);
   env.cleanup(el);
+});
+
+test("show_footer says whether, footer says which form, and the newer key decides when both are written", () => {
+  const options = (views) => env.createCard(baseConfig({ range_entity: "sensor.range", views }), rangeStates());
+
+  // The new spelling alone.
+  const off = options([{ type: "scale", options: { show_footer: false } }]);
+  assert.equal(off._computeViewModel().views.options.scale.show_footer, false);
+  assert.equal(internals.footerText(off, "scale"), null, "and no footer is drawn");
+  env.cleanup(off);
+
+  // Both, disagreeing. The block-beats-the-older-spelling rule of the show: block applies
+  // here too: a card that says show_footer: true means it, whatever the older word says.
+  const both = options([{ type: "range_scale", enabled: true, options: { show_footer: true, footer: false } }]);
+  const resolved = both._computeViewModel().views.options.range_scale;
+  assert.equal(resolved.show_footer, true, "the newer key decides");
+  assert.equal(resolved.footer, "detailed", "and the older word never reaches a consumer as a form");
+  env.cleanup(both);
+
+  // The form, on its own, with the footer left on.
+  const compact = options([{ type: "range_scale", enabled: true, options: { footer: "compact" } }]);
+  const compactOptions = compact._computeViewModel().views.options.range_scale;
+  assert.equal(compactOptions.show_footer, true);
+  assert.equal(compactOptions.footer, "compact");
+  env.cleanup(compact);
 });
 
 // ==== scale.markers ====

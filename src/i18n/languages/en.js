@@ -115,6 +115,7 @@ export const en = {
 
   "rotator.hint": "Swipe to switch between views",
 
+  "layout.nothingShown": "Every part of this card is hidden by its show: options.",
   "views.none": "No view available.",
 
 };

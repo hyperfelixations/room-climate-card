@@ -130,6 +130,7 @@ export const lv = {
 
   "rotator.hint": "Velciet, lai pārslēgtu skatus",
 
+  "layout.nothingShown": "Visas šīs kartes daļas ir paslēptas ar show:.",
   "views.none": "Nav pieejams neviens skats.",
 
 };

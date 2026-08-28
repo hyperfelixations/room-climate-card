@@ -121,6 +121,7 @@ export const fr = {
 
   "rotator.hint": "Balayez pour changer de vue",
 
+  "layout.nothingShown": "Tous les éléments de cette carte sont masqués par show:.",
   "views.none": "Aucune vue disponible.",
 
 };

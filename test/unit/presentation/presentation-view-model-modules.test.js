@@ -230,7 +230,7 @@ test("the title and average label prefer the configured overrides", () => {
 
   const overridden = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel(),
-    config: cfg({ title: "My title", entity_label: "My label" }),
+    config: cfg({ title: { text: "My title", overflow: "wrap" }, entity_label: "My label" }),
     texts,
   });
   assert.equal(overridden.title, "My title");
@@ -370,10 +370,10 @@ function cfgWithTwoRooms(overrides = {}) {
   });
 }
 
-test("show_rooms hides the chips without touching anything else", () => {
+test("hiding the chips touches nothing else", () => {
   const domainModel = withTwoRooms();
   const shown = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms(), texts: stubTexts() });
-  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms({ show_rooms: "never" }), texts: stubTexts() });
+  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms({ show: { rooms: "never" } }), texts: stubTexts() });
   assert.equal(shown.rooms.showChips, true);
   assert.equal(hidden.rooms.showChips, false);
   assert.equal(hidden.rooms.count, 2, "the rooms remain full data sources");

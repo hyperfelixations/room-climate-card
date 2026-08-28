@@ -115,6 +115,7 @@ export const de = {
 
   "rotator.hint": "Wischen, um zwischen den Ansichten zu wechseln",
 
+  "layout.nothingShown": "Alle Teile dieser Karte sind über show: ausgeblendet.",
   "views.none": "Keine Ansicht verfügbar.",
 
 };

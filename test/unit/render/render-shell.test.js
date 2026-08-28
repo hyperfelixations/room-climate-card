@@ -167,7 +167,10 @@ test("the shell resolves the layout of every view that declares one, and skips t
 test("the structure signature composes the shell's parts with each view's own", () => {
   const model = viewModel();
   const signature = cardShell.cardStructureSignature(model, registry.VIEW_RENDERERS);
-  assert.match(signature, /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|views:scale\|collapsed:0\|/);
+  assert.match(
+    signature,
+    /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|accentLine:1\|icon:1\|title:1\|pill:1\|panel:1\|views:scale\|collapsed:0\|/
+  );
   assert.match(signature, /scale:/, "the active view contributes its own part");
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
 });
@@ -293,7 +296,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
   const model = viewModel({
     title: payload,
     subtitle: payload,
-    header: { icon: payload, title: payload, subtitle: payload, hasSubtitle: true, subtitleOverflow: "clip", statusLabel: payload },
+    header: { ...viewModel().header, icon: payload, title: payload, subtitle: payload, statusLabel: payload },
     average: { ...viewModel().average, entity: payload, label: payload, tooltip: payload, ariaLabel: payload, unitText: payload },
     carousel: { hint: payload, noActiveViewsHint: payload },
     rooms: {

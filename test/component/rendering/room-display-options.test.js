@@ -70,13 +70,13 @@ test("integration: room_sort/room_label/show_rooms default correctly, invalid va
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.equal(el._config.room_sort, "value_asc");
   assert.equal(el._config.room_label, "auto");
-  assert.equal(el._config.show_rooms, "auto");
+  assert.equal(el._config.show.rooms, "auto");
   env.cleanup(el);
 
   const el2 = env.createCard(fourRoomConfig({ room_sort: "bogus", room_label: "bogus", show_rooms: "bogus" }), fourRoomHass());
   assert.equal(el2._config.room_sort, "value_asc", "invalid room_sort falls back to the default");
   assert.equal(el2._config.room_label, "auto", "invalid room_label falls back to the default");
-  assert.equal(el2._config.show_rooms, "auto", "an unrecognized show_rooms falls back to auto, like every other optional top-level enum");
+  assert.equal(el2._config.show.rooms, "auto", "an unrecognized show_rooms falls back to auto, like every other optional top-level enum");
   env.cleanup(el2);
 });
 

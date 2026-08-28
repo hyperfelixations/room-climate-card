@@ -391,7 +391,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // on every render anyway. Combines resolveActiveViews()'s own
       // unknown/duplicate-type diagnostics with _normalizeViewsConfig()'s
       // (non-array/unparseable-entry/invalid-enabled) diagnostics, carried
-      // forward on this._config._viewsDiagnostics (see _normalizeConfig()),
+      // forward on this._config._configDiagnostics (see _normalizeConfig()),
       // into one flat list.
       //
       // The dedup key is updated on every
@@ -403,7 +403,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // step (the key still held the first invalid config's value, so it
       // looked like a duplicate). Resetting the key on the valid step fixes
       // that: only a genuinely repeated diagnostics list is deduplicated.
-      const configDiagnostics = this._config?._viewsDiagnostics || [];
+      const configDiagnostics = this._config?._configDiagnostics || [];
       const { diagnostics: resolveDiagnostics } = resolveActiveViews(
         VIEW_DEFINITIONS,
         { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
@@ -522,7 +522,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // The same chip-visibility contract the view model applies, minus the parts that
       // need live data — `never` draws nothing, and in `auto` a lone room that IS the
       // headline gets no chip. A grid that will not be drawn must not inflate the hint.
-      const showRooms = this._config?.show_rooms ?? "auto";
+      const showRooms = this._config?.show?.rooms ?? "auto";
       // Same source rule the card itself applies, including the one part that needs
       // live state: an id Home Assistant does not know is not a source. Before the
       // first update there is nothing to ask, and the configuration alone decides —

@@ -115,6 +115,7 @@ export const zh = {
 
   "rotator.hint": "滑动以切换视图",
 
+  "layout.nothingShown": "此卡片的所有部分都已通过 show: 隐藏。",
   "views.none": "暂无可用视图。",
 
 };

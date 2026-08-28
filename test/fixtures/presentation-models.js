@@ -14,21 +14,40 @@ function stubTexts(overrides = {}) {
   };
 }
 
+// Which parts a card draws, as normalizeConfig() resolves them when nobody says otherwise.
+// Written out rather than imported so that a change to the defaults shows up here as a
+// deliberate edit instead of travelling silently into every presentation test.
+const SHOW_EVERYTHING = {
+  accent_line: true,
+  icon: true,
+  title: true,
+  subtitle: true,
+  entity_label: true,
+  pill: true,
+  panel: true,
+  rooms: "auto",
+  unavailable_rooms: true,
+};
+
+// A NORMALIZED config, which is what the presentation layer is handed — never raw YAML.
+// The `show` block is merged rather than replaced, so a test can name the one part it is
+// about (`cfg({ show: { pill: false } })`) without restating the other eight.
 function cfg(overrides = {}) {
+  const { show, ...rest } = overrides;
   return {
     entity: "sensor.avg",
     rooms: [],
-    title: null,
+    title: { text: null, overflow: "wrap" },
+    subtitle: { text: null, overflow: "clip" },
     entity_label: null,
     icon: null,
     room_label: "auto",
     room_sort: "value_asc",
     room_columns: null,
     room_rows: null,
-    show_rooms: "auto",
-    unavailable_values: "show",
     views: null,
-    ...overrides,
+    ...rest,
+    show: { ...SHOW_EVERYTHING, ...show },
   };
 }
 

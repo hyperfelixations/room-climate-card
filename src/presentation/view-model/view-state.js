@@ -33,12 +33,17 @@ export const VIEW_DEFINITIONS = [
     // scale's shape with different markers, so showing it unasked would be noise.
     defaultEnabled: () => false,
     // The band toggles suppress both the coloured band and its descriptive label,
-    // independently per view. footer has three states: "detailed" (with the min/max
-    // timestamps), "compact" (the same sentence without them), or false for no
-    // footer at all in THIS view — ANDed with the global hide_footer.
+    // independently per view.
+    //
+    // The footer is two questions, and it takes two keys because they are two questions:
+    // show_footer says WHETHER this view draws one, footer says WHICH FORM it takes —
+    // "detailed" with the min/max timestamps, "compact" without them. `footer: false` is the
+    // older way of writing show_footer: false and still works; resolveViewOptions() folds it
+    // over. Both are ANDed with the global hide_footer.
     optionsSchema: {
       show_comfort_band: boolOption(true),
       show_optimal_band: boolOption(true),
+      show_footer: boolOption(true),
       footer: enumOption("detailed", ["compact", "detailed", false]),
     },
   },
@@ -57,6 +62,10 @@ export const VIEW_DEFINITIONS = [
     optionsSchema: {
       show_comfort_band: boolOption(true),
       show_optimal_band: boolOption(true),
+      show_footer: boolOption(true),
+      // The older spelling of show_footer, kept for the cards that already use it and
+      // folded over by resolveViewOptions(). This view's footer has only one form, so
+      // unlike range_scale's there is no mode left for the word to carry.
       footer: boolOption(true),
       markers: enumOption("extremes", ["average", "extremes", "all"]),
     },
@@ -123,6 +132,20 @@ export function resolveViewOptions(definition, providedOptions) {
   for (const key of Object.keys(schema)) {
     const provided = providedOptions ? providedOptions[key] : undefined;
     resolved[key] = provided === undefined ? schema[key].default : provided;
+  }
+
+  // THE ONE LEGACY FOLD, and the reason it lives here rather than in config/views.js: that
+  // module is deliberately schema-driven and knows nothing about what any option MEANS,
+  // which is what keeps the view registry out of the configuration layer. This does know,
+  // because the definitions above are right here.
+  //
+  // `footer: false` said "no footer in this view" before the question was split into whether
+  // and which form. It still says that — unless show_footer was written too, in which case
+  // the newer key decides, exactly as the show: block outranks its own older spellings. The
+  // word then falls back to its default so that nothing downstream reads `false` as a form.
+  if (Object.prototype.hasOwnProperty.call(schema, "show_footer") && resolved.footer === false) {
+    if (!providedOptions || providedOptions.show_footer === undefined) resolved.show_footer = false;
+    resolved.footer = schema.footer.default;
   }
   return resolved;
 }

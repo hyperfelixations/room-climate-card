@@ -115,6 +115,7 @@ export const ja = {
 
   "rotator.hint": "スワイプして表示を切り替え",
 
+  "layout.nothingShown": "このカードのすべての要素が show: で非表示になっています。",
   "views.none": "利用可能な表示がありません。",
 
 };

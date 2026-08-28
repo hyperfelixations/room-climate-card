@@ -74,14 +74,14 @@ test("anything that is not false leaves the line alone", () => {
     // Both halves of the contract in one place: what the normalizer decided, and what the
     // card actually drew. A normalizer that said `true` while the shell drew nothing would
     // pass either assertion on its own.
-    assert.equal(card._config.accent_line, true, `accent_line: ${JSON.stringify(value)} normalizes to the default`);
+    assert.equal(card._config.show.accent_line, true, `accent_line: ${JSON.stringify(value)} normalizes to the default`);
     assert.ok(topLineOf(card), `accent_line: ${JSON.stringify(value)} must keep the default`);
     env.cleanup(card);
   }
 
   const off = scenario().rooms(2).config({ accent_line: false }).build();
   const card = env.createCard(off.config, off.hass);
-  assert.equal(card._config.accent_line, false, "only a literal false turns it off");
+  assert.equal(card._config.show.accent_line, false, "only a literal false turns it off");
   env.cleanup(card);
 });
 

@@ -118,6 +118,7 @@ export const nl = {
 
   "rotator.hint": "Swipe om tussen weergaven te wisselen",
 
+  "layout.nothingShown": "Alle onderdelen van deze kaart zijn verborgen via show:.",
   "views.none": "Geen weergave beschikbaar.",
 
 };

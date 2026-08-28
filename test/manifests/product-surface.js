@@ -55,16 +55,43 @@ const CLASSIFICATION_ZONES = ["optimal", "comfort", "outside", "invalid"];
 const TOP_LEVEL_CONFIG_KEYS = [
   "entity", "rooms", "range_entity", "trend_entity", "classification", "palette",
   "title", "subtitle", "entity_label", "icon", "decimals", "language", "room_sort",
-  "room_label", "show_rooms", "unavailable_values", "room_columns", "room_rows",
-  "auto_slide", "swipe", "rotation_seconds", "slide_seconds", "hide_footer",
+  "room_label", "show", "room_columns", "room_rows",
+  "auto_slide", "swipe", "rotation_seconds", "slide_seconds",
   "tap_action", "hold_action", "views", "start_view",
+  // Older spellings the card still accepts. Each is outranked by its entry in the show:
+  // block where both are written, and each is listed for removal at the next major.
+  // hide_footer is the exception on both counts: it is not in the block, because the footer
+  // is a view's own business, and it is the only way to turn every view's footer off at once.
+  "accent_line", "show_rooms", "unavailable_values", "hide_footer",
 ];
+
+// Which PARTS the card draws. Every one of them is a switch except `rooms`, which has a
+// third answer — chips unless they would only repeat the headline — and that answer is the
+// default, so it cannot be spelled as a boolean.
+const SHOW_KEYS = {
+  accent_line: "bool",
+  icon: "bool",
+  title: "bool",
+  subtitle: "bool",
+  entity_label: "bool",
+  pill: "bool",
+  panel: "bool",
+  rooms: ["auto", true, false],
+  unavailable_rooms: "bool",
+};
 const ROOM_KEYS = ["entity", "name", "short", "tap_action", "hold_action"];
 const VIEW_ENTRY_KEYS = ["type", "enabled", "options"];
 const VIEW_OPTIONS = {
   range: { show_time: "bool" },
-  range_scale: { show_comfort_band: "bool", show_optimal_band: "bool", footer: ["compact", "detailed", false] },
-  scale: { show_comfort_band: "bool", show_optimal_band: "bool", footer: "bool", markers: ["average", "extremes", "all"] },
+  range_scale: {
+    show_comfort_band: "bool",
+    show_optimal_band: "bool",
+    show_footer: "bool",
+    // Two questions, two keys: show_footer says whether, footer says which form. `false` is
+    // the older spelling of show_footer: false and is still accepted.
+    footer: ["compact", "detailed", false],
+  },
+  scale: { show_comfort_band: "bool", show_optimal_band: "bool", show_footer: "bool", footer: "bool", markers: ["average", "extremes", "all"] },
   extremes: { show_value: "bool" },
 };
 const ACTION_TYPES = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
@@ -81,6 +108,7 @@ module.exports = {
   DEFAULT_PALETTE_ID,
   CLASSIFICATION_ZONES,
   TOP_LEVEL_CONFIG_KEYS,
+  SHOW_KEYS,
   ROOM_KEYS,
   VIEW_ENTRY_KEYS,
   VIEW_OPTIONS,

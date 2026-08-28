@@ -148,6 +148,42 @@ const KNOWN_ISSUES = [
         violation
       ),
   },
+  {
+    id: "BUG-12",
+    area: "application/model source-topology",
+    discovered: "2026-08-28",
+    summary:
+      "The card's IDENTITY is decided by which room entities exist, not by which ones it can use. " +
+      "A card whose only usable source is a room that is also its primary is a single-room card: the " +
+      "headline carries that room's name and its tap action. Adding a room that reports a different " +
+      "metric — data the card excludes and never shows — makes it a whole-home card instead, so the " +
+      "headline's caption changes from the room's name to \"Home average\" and its tap target changes " +
+      "with it, while the number itself does not move at all. A room that is MISSING does not do this; " +
+      "only one that exists and is unusable does, which is the inconsistency.",
+    foundBy: "test/property/metamorphic.property.test.js",
+    // NARROW ON PURPOSE. `average moved` is also how a real value change would be reported,
+    // and that would be a different defect entirely — so the matcher parses both sides and
+    // accepts only the case where every NUMBER is identical and just the attribution moved
+    // from the room to the primary. Anything else stays unknown and turns the run red.
+    matchesViolation: (violation) => {
+      const parts = /^average moved from (\{.*\}) to (\{.*\})$/.exec(violation);
+      if (!parts) return false;
+      let before;
+      let after;
+      try {
+        before = JSON.parse(parts[1]);
+        after = JSON.parse(parts[2]);
+      } catch {
+        return false;
+      }
+      return (
+        before.source === "room" &&
+        after.source === "sensor" &&
+        before.value === after.value &&
+        before.position === after.position
+      );
+    },
+  },
 ];
 
 // Partition violations one by one. A known symptom can never make an unrelated violation

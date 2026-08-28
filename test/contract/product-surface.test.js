@@ -13,6 +13,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const surface = require("../manifests/product-surface.js");
 
@@ -23,6 +25,7 @@ let viewState;
 let paletteRegistry;
 let zones;
 let actions;
+let show;
 
 test.before(async () => {
   i18nRegistry = await import("../../src/i18n/registry.js");
@@ -32,6 +35,7 @@ test.before(async () => {
   paletteRegistry = await import("../../src/domain/classification/palettes/registry.js");
   zones = await import("../../src/domain/classification/zones.js");
   actions = await import("../../src/config/actions.js");
+  show = await import("../../src/config/show.js");
 });
 
 // ------------------------------------------------------------------- languages --
@@ -135,4 +139,33 @@ test("every view's option keys match the public surface", () => {
       definition.key
     );
   }
+});
+
+// -------------------------------------------------------- the top-level keys --
+
+test("the top-level keys the manifest claims are the ones the normalizer reads", () => {
+  // Asked of the SOURCE rather than of a normalized result, because a normalized result
+  // cannot answer it: a key the normalizer never looks at leaves no trace in the object it
+  // returns, so a configuration written with it would be silently ignored while the manifest
+  // went on promising it. `userConfig.<key>` is the one way the normalizer reaches the raw
+  // configuration, which makes scanning for that the same question stated exactly.
+  const source = fs.readFileSync(path.join(__dirname, "..", "..", "src", "config", "normalize-config.js"), "utf8");
+  const read = new Set([...source.matchAll(/\buserConfig\.([a-z_]+)/g)].map((match) => match[1]));
+  assert.ok(read.size > 10, "the scan found almost nothing, so it is not scanning");
+
+  const claimed = new Set(surface.TOP_LEVEL_CONFIG_KEYS);
+  const unread = [...claimed].filter((key) => !read.has(key)).sort();
+  const unclaimed = [...read].filter((key) => !claimed.has(key)).sort();
+  assert.deepEqual(unread, [], `the manifest promises keys normalizeConfig() never reads: ${unread.join(", ")}`);
+  assert.deepEqual(unclaimed, [], `normalizeConfig() reads keys the manifest does not promise: ${unclaimed.join(", ")}`);
+});
+
+test("the parts of the show block are exactly those the manifest claims", () => {
+  assert.deepEqual([...show.SHOW_KEYS].sort(), Object.keys(surface.SHOW_KEYS).sort());
+  // And the one that is not a switch is the one the manifest says is not a switch.
+  for (const [key, shape] of Object.entries(surface.SHOW_KEYS)) {
+    const isSwitch = Object.prototype.hasOwnProperty.call(show.SHOW_SWITCHES, key);
+    assert.equal(isSwitch, shape === "bool", `${key}: the manifest and the module disagree about its shape`);
+  }
+  assert.deepEqual(Object.keys(show.SHOW_ROOMS_STATES).sort(), ["auto", "false", "true"]);
 });

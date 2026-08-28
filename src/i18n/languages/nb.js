@@ -123,6 +123,7 @@ export const nb = {
 
   "rotator.hint": "Sveip for å bytte mellom visninger",
 
+  "layout.nothingShown": "Alle deler av dette kortet er skjult av show:.",
   "views.none": "Ingen visning tilgjengelig.",
 
 };

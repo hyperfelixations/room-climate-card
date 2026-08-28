@@ -277,12 +277,14 @@
     "range_scale": {
       "footer": "compact",
       "show_comfort_band": false,
+      "show_footer": true,
       "show_optimal_band": true
     },
     "scale": {
-      "footer": false,
+      "footer": true,
       "markers": "all",
       "show_comfort_band": true,
+      "show_footer": false,
       "show_optimal_band": false
     }
   },

@@ -119,6 +119,7 @@ export const it = {
 
   "rotator.hint": "Scorri per cambiare vista",
 
+  "layout.nothingShown": "Tutte le parti di questa scheda sono nascoste da show:.",
   "views.none": "Nessuna vista disponibile.",
 
 };

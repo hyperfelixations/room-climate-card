@@ -902,3 +902,49 @@ test("visual golden: accent_line false", async ({ page }) => {
   );
   await shot(page, cardId, "accent-line-off.png", 400);
 });
+
+// WHAT THE CARD LOOKS LIKE WITH A PART TAKEN OUT.
+//
+// Six pictures, and the point of every one of them is a shape rather than a colour: whether
+// the row above still reads as a row, whether what is left sits where it should, and whether
+// the space the missing part occupied went with it. None of that is a thing an assertion can
+// settle — a column that keeps its 11px gap is correct by every measurement and wrong on the
+// screen — which is why these are pictures and not a table of computed styles.
+//
+// The DEFAULT is deliberately not among them. It is in every other golden in this file, and
+// the DOM characterization baselines pin it to the byte besides; a seventh picture of it here
+// would only be a seventh thing to re-record.
+test.describe("visual golden: the parts a card can leave out", () => {
+  const SHOW_CASES = [
+    ["no-icon", { icon: false }],
+    ["no-title-block", { title: false, subtitle: false }],
+    ["no-pill", { pill: false }],
+    ["no-panel", { panel: false }],
+    ["rooms-only", { icon: false, title: false, subtitle: false, pill: false, panel: false }],
+    ["nothing-shown", { icon: false, title: false, subtitle: false, pill: false, panel: false, rooms: false }],
+  ];
+
+  for (const [name, show] of SHOW_CASES) {
+    test(name, async ({ page }) => {
+      await gotoHarness(page);
+      const attributes = TEMPERATURE_C;
+      const cardId = await createCard(
+        page,
+        {
+          entity: "sensor.avg",
+          auto_slide: false,
+          show,
+          rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }],
+          views: [{ type: "scale" }],
+        },
+        {
+          "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+          "sensor.r1": mkStateObj("sensor.r1", 18.4, attributes),
+          "sensor.r2": mkStateObj("sensor.r2", 22.1, attributes),
+          "sensor.r3": mkStateObj("sensor.r3", 26.8, attributes),
+        }
+      );
+      await shot(page, cardId, `show-${name}.png`, 400);
+    });
+  }
+});

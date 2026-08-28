@@ -115,6 +115,7 @@ export const ko = {
 
   "rotator.hint": "밀어서 보기 전환",
 
+  "layout.nothingShown": "이 카드의 모든 요소가 show: 옵션으로 숨겨져 있습니다.",
   "views.none": "사용 가능한 보기가 없습니다.",
 
 };

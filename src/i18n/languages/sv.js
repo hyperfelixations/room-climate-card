@@ -123,6 +123,7 @@ export const sv = {
 
   "rotator.hint": "Svep för att växla mellan vyer",
 
+  "layout.nothingShown": "Alla delar av det här kortet är dolda av show:.",
   "views.none": "Ingen vy tillgänglig.",
 
 };
