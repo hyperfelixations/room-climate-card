@@ -31,6 +31,9 @@ below. The card follows your dashboard's light or dark theme.
 - Rooms whose sensor is briefly unavailable stay on the card as `--` chips you
   can still tap
 - Translated into 15 languages, following your Home Assistant language setting
+- A `show:` block that takes parts off the card — the icon, either header line,
+  the status label, the middle block, the chips — for a smaller card or a denser
+  dashboard
 - Plenty of optional YAML for views, bands, markers, footers, chips, the
   carousel, and tap/hold actions — see [Configuration](#configuration)
 
@@ -45,12 +48,6 @@ With more than one view enabled (here: the scale and room-comparison views), the
 - **At least one sensor**: a main `entity`, one or more `rooms`, or both. The
   card reads the mode from a `device_class` of `temperature`, `humidity`,
   `carbon_dioxide`, or `pm25`. In practice these are `sensor.*` entities.
-- **A `device_class` on your CO₂ and PM2.5 sensors.** For temperature and
-  humidity the unit is enough on its own — `°C`, `°F`, `K` and `%` each belong
-  to one measurement. `ppm` and `µg/m³` do not: Home Assistant uses them for
-  several different measurements, so the card asks which one rather than
-  guessing. Most sensors from integrations already carry a `device_class`; a
-  hand-written template sensor may need one added.
 - **A current browser.** There is no backend part and no minimum Home Assistant
   version — but the layout uses CSS container queries, so any currently
   supported version of Chrome, Edge, Firefox, or Safari.
@@ -110,8 +107,8 @@ rooms:
 ```
 
 The room name becomes the caption, and tapping the large value opens that
-room. Its chip is hidden by default, since it would just repeat the big number
-— set `show_rooms: true` if you want it anyway.
+room. Its chip is hidden by default, since it would just repeat the big number —
+set `show: {rooms: true}` if you want it anyway.
 
 Only entities Home Assistant knows count here. If you add a second room and
 mistype its id, this stays a one-room card and the unknown id is named under
@@ -199,12 +196,55 @@ needs at least two rooms with values.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `title` | automatic | Replaces the card title, which otherwise names the measurement — “Temperature”, for example. |
-| `subtitle` | automatic | Replaces the line under the title, and decides what happens when it is too long for the card. `subtitle: ""` removes the line. See [The line under the title](#the-line-under-the-title). |
+| `title` | automatic | Replaces the card title, which otherwise names the measurement — “Temperature”, for example, and decides what happens when it is too long for the card. `title: ""` removes the line. See [The two header lines](#the-two-header-lines). |
+| `subtitle` | automatic | Replaces the line under the title, in the same shape. `subtitle: ""` removes the line. See [The two header lines](#the-two-header-lines). |
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
 | `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
+
+#### What the card shows
+
+The `show:` block decides which PARTS of the card are drawn. Everything in it is
+on unless you say otherwise, so a card without a `show:` block looks exactly the
+way it does in the pictures above.
+
+```yaml
+show:
+  icon: false
+  pill: false
+```
+
+| Part | Default | What it is |
+| --- | --- | --- |
+| `accent_line` | `true` | The colored bar along the top edge, in the color of the current reading. |
+| `icon` | `true` | The icon in the top left. Hiding it moves the title to the card's left edge. |
+| `title` | `true` | The card title. |
+| `subtitle` | `true` | The line under the title. |
+| `entity_label` | `true` | The small caption above the large value. |
+| `pill` | `true` | The status label in the top right — “Optimal”, “Warm”, and so on. |
+| `panel` | `true` | The middle block: the large value and the views beside it. |
+| `rooms` | `auto` | The room chips. `auto` hides the one chip that would just repeat the large value on a single-room card and shows chips otherwise; `true` always shows them; `false` never does. |
+| `unavailable_rooms` | `true` | A neutral, tappable `--` chip for a room whose sensor is unavailable or non-numeric. `false` leaves it out. A room whose entity Home Assistant does not know, or whose unit does not fit, is not shown as a chip at all. |
+
+Hiding a part is a layout decision and nothing more: every room you configure
+counts towards the average, the coldest/warmest comparison, the spread and the
+scale markers whether or not anything of it is drawn.
+
+Turn off the icon, both header lines and the pill together and the top row goes
+with them, so what is left moves up to the card's edge. Turn off everything —
+including the panel and the chips — and the card says so rather than showing you
+an empty box.
+
+Two of these have a second effect worth knowing. A card without a title has no
+visible name of its own, so the heading around it on your dashboard is what names
+it; a screen reader reaches the large value either way, since that carries its
+own description. And a card without the panel has no views, which leaves the
+carousel and its options with nothing to do.
+
+`show_rooms: auto | true | false` and `unavailable_values: show | hide` are the
+older spellings of `show.rooms` and `show.unavailable_rooms`. Both still work.
+Where a card writes both, the `show:` block decides.
 
 #### Room-chip display
 
@@ -212,17 +252,14 @@ needs at least two rooms with values.
 | --- | --- | --- |
 | `room_sort` | `value_asc` | Orders the chips by `value_asc`, `value_desc`, `name`, or the `configured` order. Sorting is display only — it does not change which room counts as coldest or warmest. |
 | `room_label` | `auto` | Chooses the chip text: `auto` and `short` use `rooms[].short`; `name` uses `rooms[].name`. |
-| `show_rooms` | `auto` | Controls the chip grid only: `auto` hides the one chip that would just repeat the large value on a single-room card and shows chips otherwise; `true` always shows them; `false` never does. Rooms still feed the comparisons either way. |
-| `unavailable_values` | `show` | `show` gives a room whose sensor is unavailable or non-numeric a neutral, tappable `--` chip; `hide` leaves it out. A room whose entity Home Assistant does not know, or whose unit does not fit, is never shown as a chip. |
 | `room_columns` | automatic | Sets `1`–`20` grid columns. If `room_rows` is omitted, enough rows are added automatically. |
 | `room_rows` | automatic | Sets `1`–`20` grid rows. If `room_columns` is omitted, enough columns are added automatically. |
 
 Setting both `room_columns` and `room_rows` caps how many chips are drawn — the
-first ones in your `rooms:` order. Hiding a chip is only visual: every room you
-configure keeps counting towards the average, the coldest/warmest comparison,
-the spread, and the scale markers.
+first ones in your `rooms:` order. A room left out of the grid still counts,
+exactly as a room hidden by `show.rooms` does.
 
-Which layouts show chips:
+Which layouts show chips, for each value of `show.rooms`:
 
 | Your sources | `auto` | `true` | `false` |
 | --- | --- | --- | --- |
@@ -243,8 +280,7 @@ calculation.
 | `swipe` | `true` | `false` disables horizontal swipe navigation. It does not stop automatic movement or tap/hold actions. |
 | `rotation_seconds` | `14` | Seconds a view remains visible before automatic movement. Accepted range: `1`–`3600`. |
 | `slide_seconds` | `1` | Duration of the slide transition. Accepted range: `0.1`–`10`. |
-| `hide_footer` | `false` | `true` hides both footers at once. Use the per-view `footer` option to hide only one of them. |
-| `accent_line` | `true` | The colored bar along the top edge of the card, in the color of the current reading. `false` leaves it out. |
+| `hide_footer` | `false` | `true` hides every view's footer at once. To hide one view's footer, use that view's own `show_footer`. |
 | `tap_action` | `more-info` | What a tap on the large value or a chip does. |
 | `hold_action` | `more-info` | The same for a long press. |
 | `views` | automatic | Chooses which views appear, in which order, with which options. Write it and it is the full list — see [Views](#views). |
@@ -294,7 +330,7 @@ interaction.
 
 ### Views
 
-Without a `views:` section, the card keeps its automatic behavior:
+Without a `views:` section the card decides for itself:
 
 - `range` appears when a usable `range_entity` is available.
 - `scale` appears by default.
@@ -341,18 +377,18 @@ those views, in exactly that order, and adds nothing on its own.
 
 #### View-specific options
 
-Options belong inside the corresponding `views:` entry. All defaults preserve
-the card's original behavior.
+Options belong inside the corresponding `views:` entry.
 
 | View | Option | Values | Default | Effect |
 | --- | --- | --- | --- | --- |
 | `range` | `show_time` | `true` / `false` | `true` | Hides the min/max timestamps but keeps the values. |
 | `range_scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides the comfort band. This view has no separate comfort label. |
 | `range_scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `range_scale` | `footer` | `detailed` / `compact` / `false` | `detailed` | Full footer with times, shorter footer without times, or no footer. Global `hide_footer: true` always wins. |
+| `range_scale` | `show_footer` | `true` / `false` | `true` | Whether this view draws a footer at all. Global `hide_footer: true` always wins. |
+| `range_scale` | `footer` | `detailed` / `compact` | `detailed` | Which form the footer takes: with the min/max times, or without them. |
 | `scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides both the comfort band and its label. |
 | `scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `scale` | `footer` | `true` / `false` | `true` | Shows or hides the comfort/spread/trend footer under this scale. It needs at least two rooms with values, and `hide_footer: true` overrides it. The trend arrow above the value is separate. |
+| `scale` | `show_footer` | `true` / `false` | `true` | Shows or hides the comfort/spread/trend footer under this scale. It needs at least two rooms with values, and `hide_footer: true` overrides it. The trend arrow above the value is separate. |
 | `scale` | `markers` | `extremes` / `average` / `all` | `extremes` | `extremes` shows the lowest room, average, and highest room (the default); `average` shows only the average; `all` shows a smaller marker for every currently valid configured room plus a larger average marker. |
 | `extremes` | `show_value` | `true` / `false` | `true` | Hides the numbers but keeps the coldest/warmest labels and the room names. |
 
@@ -370,12 +406,13 @@ views:
     options:
       show_comfort_band: false
       show_optimal_band: false
-      footer: false
+      show_footer: false
       markers: average
 ```
 
-Hiding a band only hides the band. The thresholds behind it still decide the
-colors, the classification, and where the markers sit.
+Hiding a band hides the band and nothing else. The thresholds behind it decide
+the colors, the classification, and where the markers sit whether or not the band
+is drawn.
 
 ### Classification
 
@@ -689,18 +726,20 @@ furthest color.
 impossible — a humidity of 130 %, say. Leaving it out is the normal thing to do,
 and a neutral grey fills in.
 
-A value the entity classifies itself keeps its own `value_color`, and shows the
-neutral color when it supplies none — the palette applies to the card's own
-classification, never to one an integration provided.
+A value the entity classifies itself uses its own `value_color`, and shows the
+neutral color when it supplies none. The palette applies to the card's own
+classification, not to one an integration provided.
 
-### The line under the title
+### The two header lines
 
-Under the title the card writes a sentence about what it is showing — which rooms
-are comfortable, which one stands out, or why there is no data. You can replace
-that sentence, and you can decide what happens when it is longer than the card is
-wide:
+The title names the measurement — “Temperature”, say — and under it the card
+writes a sentence about what it is showing: which rooms are comfortable, which
+one stands out, or why there is no data. You can replace either, and for either
+you can decide what happens when it is longer than the card is wide. Both take
+the same four shapes:
 
 ```yaml
+title: Ground floor
 subtitle: Ground floor sensors
 ```
 
@@ -714,27 +753,32 @@ subtitle:
   overflow: wrap
 ```
 
-`overflow: clip` is the default and cuts the line off with an ellipsis. `wrap`
-lets it run onto as many lines as it needs; everything below moves down to make
-room. Writing `subtitle: clip` or `subtitle: wrap` on its own sets the overflow
-and keeps the card's own sentence — which is why those two words cannot be used
-as subtitle text on their own. If you really want one of them as the text, use
-the block form: `subtitle: {text: wrap}`.
+```yaml
+title: ""
+```
 
-`subtitle: ""` removes the line entirely.
+`overflow: wrap` lets a line run onto as many lines as it needs, and everything
+below moves down to make room; `clip` cuts it off with an ellipsis. The two lines
+start from different defaults: the title wraps, the subtitle clips.
 
-One exception, on purpose: when the card has no data to show, the line explains
-why, and that explanation replaces your text until data comes back. A card
-showing `--` under a line that says nothing about it would be the wrong kind of
-quiet.
+Writing `clip` or `wrap` on its own sets the overflow and leaves the text alone —
+which is why those two words cannot be used as the text on their own. If you
+really want one of them as the text, use the block form: `title: {text: wrap}`.
+
+An empty string removes the line entirely, and so does `show: {title: false}`.
+
+One exception, and it belongs to the subtitle: when the card has no data to show,
+that line explains why, whatever you wrote there and even with `show: {subtitle:
+false}` set. It says your text again as soon as data comes back. A card showing
+`--` under a line that says nothing about it would be the wrong kind of quiet.
 
 ### What the card checks, and what it decides for you
 
 A mistake that would make the card meaningless stops it with an error naming
 the option: no source at all, a `rooms:` that is not a list, a room without an
 entity, duplicate room entities, or a malformed `entity`. A mistake in a purely
-cosmetic option falls back to the default, and an unknown `views:` entry or
-option key is skipped with a note in the browser console.
+cosmetic option falls back to the default, and an unknown `views:` entry, view
+option or `show:` key is skipped with a note in the browser console.
 
 Three things the card decides on its own:
 
@@ -773,9 +817,12 @@ rooms:
     entity: sensor.bedroom_temperature
 room_sort: name
 room_label: name
-show_rooms: true
-unavailable_values: show
 room_columns: 4
+
+show:
+  rooms: true
+  unavailable_rooms: true
+  pill: false
 
 auto_slide: false
 swipe: true
@@ -796,7 +843,7 @@ views:
     options:
       show_comfort_band: false
       show_optimal_band: true
-      footer: true
+      show_footer: true
       markers: average
   - type: extremes
     options:
@@ -846,9 +893,8 @@ situations:
   is named under the title. A card with one working room and one mistyped one
   is a one-room card.
 - **A sensor that is `unavailable`, `unknown`, or reporting something that is
-  not a number.** The entity exists, so it keeps its place as a `--` chip and
-  the card keeps its layout. Use `unavailable_values: hide` to leave those
-  chips out.
+  not a number.** The entity exists, so it holds its place on the card as a `--`
+  chip. Set `show.unavailable_rooms: false` to leave those chips out.
 - **A reading that cannot be real**, such as 800 % humidity. The card says so
   rather than showing it.
 - **A sensor measuring something else, or using a unit that does not fit.** It
