@@ -260,3 +260,29 @@ test("hiding a part changes what is drawn and nothing that is measured", () => {
   assert.equal(reduced.average.value, full.average.value);
   env.cleanup(hidden);
 });
+
+test("no data and no panel still leaves the card able to explain itself", () => {
+  // The combination that could have gone wrong: the middle block is where the headline
+  // lives, and hiding it in the state where the card has nothing to show could have taken
+  // the explanation with it. It does not — the explanation is the subtitle — and the card
+  // is therefore not "everything hidden" either.
+  const built = buildScenario({
+    metric: "temperature",
+    primary: { state: "unavailable" },
+    rooms: [],
+    config: { show: { panel: false, rooms: false } },
+  });
+  const card = env.createCard(built.config, built.hass);
+  const found = parts(card);
+  assert.equal(found.root.getAttribute("data-state"), "no-data");
+  assert.equal(found.panel, null);
+  assert.ok(found.subtitle, "the reason survives the hidden panel");
+  assert.equal(found.nothing, null, "and the card is not reported as empty, because it is not");
+  assert.ok(card.shadowRoot.querySelector('[tabindex="-1"]'), "the last-resort focus target is still there");
+
+  // A second update must not trip over the missing nodes.
+  assert.doesNotThrow(() => {
+    card.hass = built.hass;
+  });
+  env.cleanup(card);
+});
