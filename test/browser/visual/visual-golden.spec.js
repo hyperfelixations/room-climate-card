@@ -844,6 +844,39 @@ test("visual golden: a derived palette in dark mode", async ({ page }) => {
   await shot(page, cardId, "palette-blue-dark.png", 400);
 });
 
+// The hardest thing the card is asked to paint: a colour that is almost the same as the tint
+// of itself it sits on. Pure yellow on a light dashboard is the extreme of it — a 20% tint of
+// #FFFF00 over a white card is #FFFFEC, and a word written in #FFFF00 on that is not a word.
+//
+// The picture is here because the numbers alone were not enough. A measurement of the pill's
+// separation lives in paint-role-calibration.spec.js and is the guard that fails first; what
+// it cannot say is whether the answer LOOKS like the card. The adjustment deliberately moves
+// the colour as little as it can, so the question "is this still a yellow card, and can the
+// pill be read on it" is one only a person can settle — and this is the picture they settle
+// it on. Everything else in the shot is at full strength: the accent line, the scale, the
+// markers and the chips are all the yellow that was asked for.
+test("visual golden: a colour that has to be adjusted to be read on itself", async ({ page }) => {
+  await gotoHarness(page);
+  const attributes = TEMPERATURE_C;
+  const cardId = await createCard(
+    page,
+    {
+      entity: "sensor.avg",
+      palette: "yellow",
+      auto_slide: false,
+      rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }],
+      views: [{ type: "scale" }],
+    },
+    {
+      "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+      "sensor.r1": mkStateObj("sensor.r1", 18.4, attributes),
+      "sensor.r2": mkStateObj("sensor.r2", 22.1, attributes),
+      "sensor.r3": mkStateObj("sensor.r3", 26.8, attributes),
+    }
+  );
+  await shot(page, cardId, "palette-yellow.png", 400);
+});
+
 // The card without the bar across its top edge. Only the "off" case gets a picture: the
 // default is already in every other golden in this file, and it is pinned byte for byte by
 // the DOM characterization baselines besides. What this one has to show is that removing the

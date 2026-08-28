@@ -149,7 +149,7 @@
           font-size: 12px;
           font-weight: 900;
           white-space: nowrap;
-          color: var(--tone-color);
+          color: var(--tone-ink);
           background: var(--tone-soft);
           border: 1px solid var(--tone-border);
         }

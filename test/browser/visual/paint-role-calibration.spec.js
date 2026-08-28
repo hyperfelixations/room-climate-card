@@ -120,10 +120,21 @@ test("every role's background is the one the browser actually composites", async
   const surface = await page.evaluate((id) => document.getElementById(id)._surface(), cardId);
   const card = surface.samples[0];
 
-  // The tone colour as the card painted it, read from the pill rather than recomputed: the
-  // whole point is to compare the model against what is on the screen.
-  const pillText = await paintedWith(page, cardId, ".rtc-status-pill", "color");
-  const tone = hexOf(pillText);
+  // The tone colour as the card painted it, read off the card rather than recomputed: the whole
+  // point is to compare the model against what is on the screen.
+  //
+  // From `--tone-color` and NOT from the pill’s text. The two agree only where the palette
+  // colour needs no adjustment to be read on a tint of itself; where it does, the pill paints
+  // `--tone-ink` instead, and taking the tone from there would quietly measure every role
+  // against the adjusted colour. The distinction is the subject of the whole file below.
+  const tone = (
+    await page.evaluate(
+      (id) => document.getElementById(id).shadowRoot.querySelector(".rtc-root").style.getPropertyValue("--tone-color"),
+      cardId
+    )
+  )
+    .trim()
+    .toUpperCase();
   expect(tone).toMatch(/^#[0-9A-F]{6}$/);
 
   const measured = {
@@ -296,3 +307,138 @@ test("the bracketing cards, rendered for a person to look at", async ({ page }, 
   expect(verdicts.limeAccent, "and lime's middle is fine where it is painted on the card").toBe(true);
   expect(verdicts.tealLabel, "teal's pill is comfortably readable").toBe(true);
 });
+
+// ---------------------------------------------- what the screen actually shows ----
+
+// THE ONE QUESTION EVERYTHING ABOVE CANNOT ASK: can a person read it?
+//
+// Every assertion so far compares the card against the model — the alphas agree, the
+// backgrounds agree, the recipe agrees. All of them can hold while the stylesheet paints a
+// different colour from the one that was measured, because they read the custom PROPERTY and
+// never the rule that consumes it. A pill can ship in the raw palette colour with a perfectly
+// correct `--tone-ink` sitting unused beside it, and not one line above would notice.
+//
+// So this test reads only what the browser resolved: the colour the element paints its text
+// in, and the stack of backgrounds behind it composited down to the first opaque one. Nothing
+// here is told what the card intended. Then it asks the role's own separation, the same number
+// the palette machinery asks — so a colour that reaches its threshold in theory has to reach
+// it on the screen as well.
+//
+// The two mid-strength greys of a palette's ramp are the interesting steps and the two ends
+// are not: an extreme is nearly always far from a tint of itself. The cases below are the ones
+// that were reported or that bracket them.
+
+// What is painted here, and what is behind it, both taken from the browser.
+//
+// The walk upwards stops at the first background whose alpha is 1, which is always the card:
+// `.rtc-card` names an opaque colour. Only `background-color` is read, so the card's 135°
+// overlay gradient is not part of the answer — the same simplification the card's own surface
+// reading makes, and the reason both agree on what "the card" is.
+async function paintedAgainstItsBackground(page, cardId, selector) {
+  return page.evaluate(
+    ([id, sel]) => {
+      const parse = (value) => {
+        const match = String(value).match(/rgba?\(([^)]+)\)/);
+        if (!match) return null;
+        const parts = match[1].split(",").map((part) => Number(part.trim()));
+        return { channels: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
+      };
+      const hex = (channels) =>
+        `#${channels.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+
+      const element = typeof sel === "string" ? document.getElementById(id).shadowRoot.querySelector(sel) : sel;
+      if (!element) return null;
+
+      const layers = [];
+      let node = element;
+      while (node) {
+        const background = parse(getComputedStyle(node).backgroundColor);
+        if (background && background.alpha > 0) {
+          layers.push(background);
+          if (background.alpha >= 1) break;
+        }
+        node = node.parentElement || node.getRootNode().host || null;
+      }
+      if (!layers.length || layers[layers.length - 1].alpha < 1) return null;
+
+      // Bottom upwards: each translucent layer composited onto what is already beneath it.
+      let behind = layers[layers.length - 1].channels;
+      for (let index = layers.length - 2; index >= 0; index -= 1) {
+        const layer = layers[index];
+        behind = behind.map((channel, axis) => layer.channels[axis] * layer.alpha + channel * (1 - layer.alpha));
+      }
+
+      const foreground = parse(getComputedStyle(element).color);
+      return { foreground: hex(foreground.channels), background: hex(behind) };
+    },
+    [cardId, selector]
+  );
+}
+
+// The mark inside a room chip has no class of its own, so it is found the way the eye finds
+// it: the one element under `.rtc-room-top` that paints a background.
+const CHIP_MARK = ".rtc-room-chip .rtc-room-top";
+async function chipMarkHandle(page, cardId) {
+  return page.evaluateHandle(
+    ([id, sel]) => {
+      const top = document.getElementById(id).shadowRoot.querySelector(sel);
+      for (const element of top.querySelectorAll("*")) {
+        const background = getComputedStyle(element).backgroundColor;
+        if (background && background !== "rgba(0, 0, 0, 0)") return element;
+      }
+      return null;
+    },
+    [cardId, CHIP_MARK]
+  );
+}
+
+// Palette and scheme, and why each is here.
+const LEGIBILITY_CASES = [
+  ["yellow", "light", "the reported card: pure yellow on a 20% tint of pure yellow over white"],
+  ["gold", "light", "the same trap one hue away"],
+  ["yellow", "dark", "the hue that fails on white, on the background it does not fail on"],
+  ["navy", "dark", "a dark colour on a dark card — the opposite corner"],
+  ["pastel", "light", "a shipped palette, where nothing should have to move"],
+  ["pastel", "dark", "the same, on the other surface"],
+];
+
+for (const [palette, scheme, why] of LEGIBILITY_CASES) {
+  test(`palette: ${palette} on a ${scheme} card paints a pill, an icon and a chip mark that can be read — ${why}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await gotoHarness(page);
+    const cardId = await createCard(page, CONFIG(palette), STATES);
+
+    const places = {
+      toneLabel: await paintedAgainstItsBackground(page, cardId, ".rtc-status-pill"),
+      toneIcon: await paintedAgainstItsBackground(page, cardId, ".rtc-icon-badge ha-icon"),
+      chipMark: await paintedAgainstItsBackground(page, cardId, await chipMarkHandle(page, cardId)),
+    };
+
+    for (const [roleId, painted] of Object.entries(places)) {
+      expect(painted, `${roleId} paints something on a resolvable background`).not.toBeNull();
+
+      const verdict = await page.evaluate(
+        async ([role, foreground, background]) => {
+          const [oklch, fit] = await Promise.all([
+            import("/src/core/oklch.js"),
+            import("/src/domain/classification/palette-fit.js"),
+          ]);
+          return {
+            separation: oklch.screenDistance(foreground, background),
+            required: fit.requiredSeparationOf(role),
+          };
+        },
+        [roleId, painted.foreground, painted.background]
+      );
+
+      expect(
+        verdict.separation,
+        `${roleId}: ${painted.foreground} on ${painted.background} separates by ${verdict.separation.toFixed(
+          3
+        )}, and this role asks ${verdict.required.toFixed(3)}`
+      ).toBeGreaterThanOrEqual(verdict.required);
+    }
+  });
+}

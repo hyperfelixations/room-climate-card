@@ -25,6 +25,7 @@ let fit;
 let palettes;
 let color;
 let oklch;
+let styles;
 
 test.before(async () => {
   roles = await import("../../../src/domain/classification/paint-roles.js");
@@ -32,6 +33,7 @@ test.before(async () => {
   palettes = await import("../../../src/domain/classification/palettes/registry.js");
   color = await import("../../../src/core/color.js");
   oklch = await import("../../../src/core/oklch.js");
+  styles = await import("../../../src/styles/index.js");
 });
 
 const SRC = path.join(__dirname, "..", "..", "..", "src");
@@ -43,30 +45,70 @@ const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
 
 // ============================================ the map matches the stylesheet =====
 
-// Every palette-derived custom property the stylesheet paints with, and the role that
-// answers for it. A property with no entry here is a place a palette colour lands that
-// nothing is measuring, which is the failure this guard exists to prevent.
+// Every palette-derived custom property the stylesheet paints with, the role that answers for
+// it, and THE RULES THAT READ IT. A property with no entry here is a place a palette colour
+// lands that nothing is measuring; a property read by a rule not listed here is a place the
+// measurement does not know about. Both are the failure this guard exists to prevent.
+//
+// The consumers are written out because a property and its consumer are two halves of one
+// decision, and only the first half is visible from the module that sets it. A card once
+// shipped a correct `--tone-ink` beside a status pill that painted `--tone-color`: every
+// producer-side check passed, and what reached the screen was the unadjusted colour.
 const PROPERTY_OWNERS = {
-  "--tone-color": "accent",
+  "--tone-color": {
+    role: "accent",
+    readBy: [
+      ".rtc-top-line",
+      ".rtc-avg-button:focus-visible, .rtc-room-chip:focus-visible, .rtc-extreme-card:focus-visible",
+    ],
+  },
   // The same colour as --tone-color wherever nothing had to be adjusted, and a hue-locked
   // variant of it where the colour could not be read on its own tint — see tone-legibility.js.
   // The two roles answer for it either way: what they measure is what is painted here.
-  "--tone-ink": "toneLabel and toneIcon",
-  "--tone-soft": "the background of toneLabel and toneIcon",
-  "--tone-band": "toneBand",
-  "--marker-color": "marker",
-  "--room-color": "chipMark",
-  "--room-mark-bg": "the background of chipMark",
-  "--room-bg": "the chip chipMark is painted over",
+  "--tone-ink": { role: "toneLabel and toneIcon", readBy: [".rtc-status-pill", ".rtc-icon-badge ha-icon"] },
+  "--tone-soft": { role: "the background of toneLabel and toneIcon", readBy: [".rtc-status-pill", ".rtc-icon-badge"] },
+  "--tone-band": { role: "toneBand", readBy: [".rtc-optimal-band"] },
+  "--marker-color": { role: "marker", readBy: [".rtc-marker"] },
+  "--room-color": { role: "chipMark", readBy: [".rtc-room-mark"] },
+  "--room-mark-bg": { role: "the background of chipMark", readBy: [".rtc-room-mark"] },
+  "--room-bg": { role: "the chip chipMark is painted over", readBy: [".rtc-room-chip"] },
   // Deliberately unmeasured, each with its reason. A border is decorative: it outlines a
   // shape that is already there, carries no reading, and is painted at a HIGHER alpha than
   // the fill it surrounds, so it is the more visible half of its own element.
-  "--tone-border": null,
-  "--room-border": null,
+  "--tone-border": { role: null, readBy: [".rtc-status-pill", ".rtc-icon-badge"] },
+  "--room-border": { role: null, readBy: [".rtc-room-chip"] },
   // The marker's halo, a tint of the marker's own colour lying between the bar and the
   // track — see the note on the marker role.
-  "--marker-shadow": null,
+  "--marker-shadow": { role: null, readBy: [".rtc-marker"] },
 };
+
+// The shipped stylesheet, cut into rules. Read from buildStyles() rather than from the pinned
+// copy in test/baseline/, so what is examined is what the card would serve today.
+function shippedRules() {
+  const css = styles
+    .buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100 })
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  const rules = [];
+  const open = [];
+  let buffer = "";
+  for (const character of css) {
+    if (character === "{") {
+      open.push(buffer.trim().replace(/\s+/g, " "));
+      buffer = "";
+      continue;
+    }
+    if (character === "}") {
+      // An at-rule keeps no declarations of its own here; the rules nested inside it were
+      // closed and recorded before this point.
+      const selector = open.pop();
+      if (selector && !selector.startsWith("@")) rules.push({ selector, declarations: buffer.trim() });
+      buffer = "";
+      continue;
+    }
+    buffer += character;
+  }
+  return rules;
+}
 
 test("every palette colour the stylesheet paints with is either measured or excused", () => {
   const stylesheets = fs.readdirSync(path.join(SRC, "styles")).filter((name) => name.endsWith(".js"));
@@ -85,6 +127,66 @@ test("every palette colour the stylesheet paints with is either measured or excu
   }
   for (const property of Object.keys(PROPERTY_OWNERS)) {
     assert.ok(used.has(property), `${property} is listed here but the stylesheet no longer paints with it`);
+  }
+});
+
+test("every palette property is read by exactly the rules that answer for it", () => {
+  // The other half of the guard above. That one asks whether every property has an owner;
+  // this one asks whether the owner and the stylesheet agree on WHERE it is read. A property
+  // that grows a second consumer has grown a second place a palette colour is painted, and a
+  // consumer that disappears leaves a measurement judging something nothing draws.
+  const found = new Map();
+  for (const rule of shippedRules()) {
+    for (const match of rule.declarations.matchAll(/var\(--((?:tone|room|marker)-[a-z-]+)\)/g)) {
+      const property = `--${match[1]}`;
+      if (!found.has(property)) found.set(property, new Set());
+      found.get(property).add(rule.selector);
+    }
+  }
+  assert.ok(found.size > 0, "the stylesheet was not parsed into rules");
+
+  for (const [property, entry] of Object.entries(PROPERTY_OWNERS)) {
+    assert.deepEqual(
+      [...(found.get(property) || [])].sort(),
+      [...entry.readBy].sort(),
+      `${property} is read by different rules than the ones listed beside it`
+    );
+  }
+});
+
+// The ink of each place that paints TEXT in a palette colour on a tint of itself. Both halves
+// come from one recipe — see tone-legibility.js — and neither place may reach past it to the
+// palette colour, which is what the tint underneath it already is.
+const INK_PROPERTIES = { ".rtc-status-pill": "--tone-ink", ".rtc-icon-badge ha-icon": "--tone-ink", ".rtc-room-mark": "--room-color" };
+
+test("a colour painted on a tint of itself is painted in its ink, never in the palette colour", () => {
+  // THE CLASS OF DEFECT THIS FORBIDS, not the one instance of it. Every property in the table
+  // above can be produced correctly and measured correctly while the rule that draws the text
+  // reads the neighbouring property — and the measurement would never see it, because the
+  // measurement asks the producer. So the question is asked of the stylesheet instead: what
+  // does this rule paint its text in?
+  const colourOf = (declarations) => {
+    const match = declarations.match(/(?:^|\n)\s*color:\s*([^;]+);/);
+    return match ? match[1].trim() : null;
+  };
+
+  const rules = shippedRules();
+  for (const [selector, ink] of Object.entries(INK_PROPERTIES)) {
+    const rule = rules.find((candidate) => candidate.selector === selector);
+    assert.ok(rule, `${selector} is no longer in the stylesheet`);
+    assert.equal(colourOf(rule.declarations), `var(${ink})`, `${selector} has to paint its text in ${ink}`);
+  }
+
+  // And nowhere else in the stylesheet is a palette property used as a text colour. The two
+  // inks are the only ones that carry an adjusted colour; every other one carries the palette
+  // colour itself or a tint of it, and text painted in any of them is text painted in the
+  // colour it is sitting on.
+  const inks = new Set(Object.values(INK_PROPERTIES));
+  for (const rule of rules) {
+    const painted = colourOf(rule.declarations);
+    const match = painted && painted.match(/^var\(--((?:tone|room|marker)-[a-z-]+)\)$/);
+    if (!match) continue;
+    assert.ok(inks.has(`--${match[1]}`), `${rule.selector} paints its text in --${match[1]}, which is not an ink`);
   }
 });
 

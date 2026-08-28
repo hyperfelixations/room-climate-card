@@ -200,7 +200,7 @@ the few timing tests that justify a retry own and explain it locally.
 
 ## Golden screenshots
 
-55 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
+56 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
 budget of 200 differing pixels. Absolute rather than a ratio on purpose: rendering noise does
 not scale with image area, and a ratio quietly gave a large screenshot a thousand-pixel
 allowance — under which seven baselines depicted a caption the card had stopped drawing.
