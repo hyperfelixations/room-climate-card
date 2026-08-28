@@ -882,14 +882,14 @@ test("visual golden: a colour that has to be adjusted to be read on itself", asy
 // the DOM characterization baselines besides. What this one has to show is that removing the
 // line leaves nothing behind — no gap where it was, no substitute border, the same top corner
 // radius the bottom corners have.
-test("visual golden: accent_line false", async ({ page }) => {
+test("visual golden: the card without its accent line", async ({ page }) => {
   await gotoHarness(page);
   const attributes = TEMPERATURE_C;
   const cardId = await createCard(
     page,
     {
       entity: "sensor.avg",
-      accent_line: false,
+      show: { accent_line: false },
       auto_slide: false,
       rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
       views: [{ type: "scale" }],

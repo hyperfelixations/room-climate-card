@@ -100,7 +100,7 @@ function headerPartsAttribute(parts) {
 // Both, together, because the indentation inside these template literals is shipped markup:
 // emitting the node and its trailing blank line as ONE piece is what makes the default byte
 // for byte what it has always been, and what makes its absence a clean absence rather than a
-// blank line where an element used to be. `accent_line: false` therefore leaves the header as
+// blank line where an element used to be. `show.accent_line: false` therefore leaves the header as
 // the first thing inside the content root — the card ends at its top edge the way it ends at
 // its bottom one, with nothing put in the line's place.
 function accentLineMarkup(viewModel) {

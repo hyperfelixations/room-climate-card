@@ -142,17 +142,16 @@ export function normalizeConfig(config, collaborators) {
 
   // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else.
   //
-  // Three of these decisions have an older spelling that is still supported, and the rule
-  // between them is the same in each case: the block wins WHERE IT SPEAKS. That is per
+  // Two of these decisions have an older spelling that is still supported, and the rule
+  // between them is the same in both cases: the block wins WHERE IT SPEAKS. That is per
   // decision and not per block — writing `show:` at all must not quietly reset the parts it
-  // says nothing about, or adding one key to a working card would change three others.
+  // says nothing about, or adding one key to a working card would change two others.
   //
-  // The older three are on their way out and are listed in the backlog for the next major.
-  // Until then this is the only place that knows both spellings; everything downstream sees
+  // Both are on their way out and are listed in the backlog for the next major. Until then
+  // this is the only place that knows two spellings; everything downstream sees
   // `config.show` and nothing else.
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
   const show = resolveShowConfig({
-    accent_line: userConfig.accent_line !== false,
     rooms: normalizeShowRooms(userConfig.show_rooms),
     unavailable_rooms: normalizeEnum(userConfig.unavailable_values, ["show", "hide"], DEFAULT_CONFIG.unavailable_values) === "show",
     ...requestedShow,

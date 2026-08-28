@@ -242,10 +242,6 @@ it; a screen reader reaches the large value either way, since that carries its
 own description. And a card without the panel has no views, which leaves the
 carousel and its options with nothing to do.
 
-`show_rooms: auto | true | false` and `unavailable_values: show | hide` are the
-older spellings of `show.rooms` and `show.unavailable_rooms`. Both still work.
-Where a card writes both, the `show:` block decides.
-
 #### Room-chip display
 
 | Option | Default | What it does |
@@ -280,7 +276,6 @@ calculation.
 | `swipe` | `true` | `false` disables horizontal swipe navigation. It does not stop automatic movement or tap/hold actions. |
 | `rotation_seconds` | `14` | Seconds a view remains visible before automatic movement. Accepted range: `1`–`3600`. |
 | `slide_seconds` | `1` | Duration of the slide transition. Accepted range: `0.1`–`10`. |
-| `hide_footer` | `false` | `true` hides every view's footer at once. To hide one view's footer, use that view's own `show_footer`. |
 | `tap_action` | `more-info` | What a tap on the large value or a chip does. |
 | `hold_action` | `more-info` | The same for a long press. |
 | `views` | automatic | Chooses which views appear, in which order, with which options. Write it and it is the full list — see [Views](#views). |
@@ -384,11 +379,11 @@ Options belong inside the corresponding `views:` entry.
 | `range` | `show_time` | `true` / `false` | `true` | Hides the min/max timestamps but keeps the values. |
 | `range_scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides the comfort band. This view has no separate comfort label. |
 | `range_scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `range_scale` | `show_footer` | `true` / `false` | `true` | Whether this view draws a footer at all. Global `hide_footer: true` always wins. |
+| `range_scale` | `show_footer` | `true` / `false` | `true` | Whether this view draws a footer at all. |
 | `range_scale` | `footer` | `detailed` / `compact` | `detailed` | Which form the footer takes: with the min/max times, or without them. |
 | `scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides both the comfort band and its label. |
 | `scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `scale` | `show_footer` | `true` / `false` | `true` | Shows or hides the comfort/spread/trend footer under this scale. It needs at least two rooms with values, and `hide_footer: true` overrides it. The trend arrow above the value is separate. |
+| `scale` | `show_footer` | `true` / `false` | `true` | Shows or hides the comfort/spread/trend footer under this scale. It needs at least two rooms with values. The trend arrow above the value is separate. |
 | `scale` | `markers` | `extremes` / `average` / `all` | `extremes` | `extremes` shows the lowest room, average, and highest room (the default); `average` shows only the average; `all` shows a smaller marker for every currently valid configured room plus a larger average marker. |
 | `extremes` | `show_value` | `true` / `false` | `true` | Hides the numbers but keeps the coldest/warmest labels and the room names. |
 
@@ -862,6 +857,27 @@ views:
   using a unit that does not fit, are left out. If there is no main entity and
   the rooms disagree about what they measure, the card says so instead of
   picking a winner.
+
+## Older option names
+
+These four still work and are read exactly as they always were. They are the
+spellings that came before the `show:` block and the split of the footer into
+whether and which form, and **they will be removed in 3.0.0** — the reference
+above already uses what replaces them.
+
+| Older | Use instead |
+| --- | --- |
+| `show_rooms: auto | true | false` | `show: {rooms: …}` |
+| `unavailable_values: show | hide` | `show: {unavailable_rooms: true | false}` |
+| `hide_footer: true` | `show_footer: false` in each view that has a footer |
+| `footer: false` inside a view | `show_footer: false` in that view |
+
+Where a card writes both spellings of the same thing, the newer one decides.
+
+`hide_footer` is the one that costs something to give up: it turns every view's
+footer off in a single line, and nothing else does. From 3.0.0 the footer is each
+view's own business, so that line becomes a `show_footer: false` in every
+`views:` entry that has one.
 
 ## Troubleshooting
 

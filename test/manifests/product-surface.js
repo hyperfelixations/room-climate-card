@@ -62,7 +62,7 @@ const TOP_LEVEL_CONFIG_KEYS = [
   // block where both are written, and each is listed for removal at the next major.
   // hide_footer is the exception on both counts: it is not in the block, because the footer
   // is a view's own business, and it is the only way to turn every view's footer off at once.
-  "accent_line", "show_rooms", "unavailable_values", "hide_footer",
+  "show_rooms", "unavailable_values", "hide_footer",
 ];
 
 // Which PARTS the card draws. Every one of them is a switch except `rooms`, which has a

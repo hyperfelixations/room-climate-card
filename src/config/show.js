@@ -21,7 +21,7 @@
 // WHAT THIS MODULE RETURNS is what the user actually ASKED FOR, not the finished answer —
 // only the keys they wrote. That is what lets normalize-config.js give the block
 // precedence over the older spelling of the same decision (`show_rooms`,
-// `unavailable_values`, `accent_line`) without a written `show:` block silently resetting
+// `unavailable_values`) without a written `show:` block silently resetting
 // the decisions it says nothing about.
 
 import { isPlainObject } from "./primitives.js";

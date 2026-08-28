@@ -125,30 +125,34 @@ test("rooms keeps its three states while every other part is a switch", () => {
 
 test("the block wins over the older spelling of the same decision", () => {
   const both = configure({
-    show: { rooms: false, unavailable_rooms: false, accent_line: false },
+    show: { rooms: false, unavailable_rooms: false },
     show_rooms: true,
     unavailable_values: "show",
-    accent_line: true,
   });
   assert.equal(both.show.rooms, "never");
   assert.equal(both.show.unavailable_rooms, false);
-  assert.equal(both.show.accent_line, false);
 });
 
 test("the older spelling still decides on its own", () => {
   assert.equal(configure({ show_rooms: false }).show.rooms, "never");
   assert.equal(configure({ show_rooms: true }).show.rooms, "always");
   assert.equal(configure({ unavailable_values: "hide" }).show.unavailable_rooms, false);
-  assert.equal(configure({ accent_line: false }).show.accent_line, false);
+});
+
+test("the top-level accent_line is gone, and only the block decides", () => {
+  // Committed once, never released, so there is nobody to be compatible with. It is now an
+  // unrecognized top-level key like any other, and the block is the one spelling.
+  assert.equal(configure({ accent_line: false }).show.accent_line, true);
+  assert.equal(configure({ show: { accent_line: false } }).show.accent_line, false);
 });
 
 test("a block that mentions other parts does not silence the older spelling", () => {
   // The precedence is per DECISION, not per block: writing `show:` at all must not
   // quietly reset the keys it says nothing about.
-  const config = configure({ show: { icon: false }, show_rooms: false, accent_line: false });
+  const config = configure({ show: { icon: false }, show_rooms: false, unavailable_values: "hide" });
   assert.equal(config.show.icon, false);
   assert.equal(config.show.rooms, "never", "show_rooms still decides, because the block did not");
-  assert.equal(config.show.accent_line, false);
+  assert.equal(config.show.unavailable_rooms, false);
 });
 
 test("the diagnostics of the block travel on the same channel as the views diagnostics", () => {

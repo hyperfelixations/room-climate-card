@@ -7,16 +7,17 @@
 // pin the DEFAULT first, because the whole point of the option is that nobody who does not ask
 // for it sees any change at all.
 //
-// A NODE, NOT A STYLE. `accent_line: false` removes the element rather than hiding it, for the
+// A NODE, NOT A STYLE. `show.accent_line: false` removes the element rather than hiding it, for the
 // same reason `subtitle: ""` removes the subtitle: an element with `display:none` is still an
 // element, and "the card ends at its top edge the way it ends at its bottom edge" is a
 // statement about what is there. That makes the option STRUCTURAL — a patch can change text
 // and colours, it cannot create or delete a node — which is why toggling it has to force a
 // full rebuild, and why the last test here is about the render path rather than the markup.
 //
-// The tolerant reading (`accent_line: "yes"` is not false, so the line stays) is the same
-// convention `auto_slide` and `swipe` already use: a cosmetic option with a typo in it falls
-// back to the default rather than breaking the card.
+// The switch is STRICT, unlike `auto_slide` and `swipe`: it takes `true` or `false` and
+// falls back to the default with a diagnostic for anything else. Those two had to stay
+// tolerant because they were published that way; a new key can say what it means, and a value
+// that is neither true nor false is far more likely to be a mistake than an intention.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,8 +45,8 @@ test("the line is there when nobody says otherwise", () => {
   env.cleanup(card);
 });
 
-test("accent_line: false removes the node instead of hiding it", () => {
-  const built = scenario().rooms(2).config({ accent_line: false }).build();
+test("show.accent_line: false removes the node instead of hiding it", () => {
+  const built = scenario().rooms(2).config({ show: { accent_line: false } }).build();
   const card = env.createCard(built.config, built.hass);
   assert.equal(topLineOf(card), null, "the line is gone");
   // Nothing takes its place. The card ends at its top edge the way it ends at its bottom one,
@@ -60,28 +61,39 @@ test("the no-data card follows the same option", () => {
   // looking different from the card beside it is exactly the kind of inconsistency nobody
   // reports and everybody notices.
   // No usable value anywhere: the configured rooms exist, their entities do not.
-  const built = scenario().rooms(2).config({ accent_line: false }).build();
+  const built = scenario().rooms(2).config({ show: { accent_line: false } }).build();
   const card = env.createCard(built.config, { ...built.hass, states: {} });
   assert.equal(card.shadowRoot.querySelector(".rtc-root").getAttribute("data-state"), "no-data");
   assert.equal(topLineOf(card), null);
   env.cleanup(card);
 });
 
-test("anything that is not false leaves the line alone", () => {
-  for (const value of [true, "false", "no", 0, null, undefined, {}]) {
-    const built = scenario().rooms(2).config({ accent_line: value }).build();
+test("anything that is not a boolean leaves the line alone", () => {
+  for (const value of ["false", "no", 0, null, undefined, {}]) {
+    const built = scenario().rooms(2).config({ show: { accent_line: value } }).build();
     const card = env.createCard(built.config, built.hass);
     // Both halves of the contract in one place: what the normalizer decided, and what the
     // card actually drew. A normalizer that said `true` while the shell drew nothing would
     // pass either assertion on its own.
-    assert.equal(card._config.show.accent_line, true, `accent_line: ${JSON.stringify(value)} normalizes to the default`);
-    assert.ok(topLineOf(card), `accent_line: ${JSON.stringify(value)} must keep the default`);
+    assert.equal(card._config.show.accent_line, true, `show.accent_line: ${JSON.stringify(value)} falls back to the default`);
+    assert.ok(topLineOf(card), `show.accent_line: ${JSON.stringify(value)} must keep the default`);
     env.cleanup(card);
   }
 
-  const off = scenario().rooms(2).config({ accent_line: false }).build();
+  const off = scenario().rooms(2).config({ show: { accent_line: false } }).build();
   const card = env.createCard(off.config, off.hass);
   assert.equal(card._config.show.accent_line, false, "only a literal false turns it off");
+  env.cleanup(card);
+});
+
+test("the top-level accent_line is not a key of this card", () => {
+  // It was committed once and never released, so there is nobody to be compatible with —
+  // and one spelling is worth more than two. A card still carrying the old one is left with
+  // the line it would have had anyway, which is what any unrecognized top-level key gets.
+  const built = scenario().rooms(2).config({ accent_line: false }).build();
+  const card = env.createCard(built.config, built.hass);
+  assert.equal(card._config.show.accent_line, true, "the old spelling decides nothing");
+  assert.ok(topLineOf(card), "and the line is drawn");
   env.cleanup(card);
 });
 
@@ -93,7 +105,7 @@ test("toggling the option rebuilds the markup rather than patching it", () => {
   const card = env.createCard(withLine.config, withLine.hass);
   assert.ok(topLineOf(card));
 
-  card.setConfig(scenario().rooms(2).config({ accent_line: false }).build().config);
+  card.setConfig(scenario().rooms(2).config({ show: { accent_line: false } }).build().config);
   assert.equal(topLineOf(card), null, "the line went away when the option turned it off");
 
   card.setConfig(scenario().rooms(2).build().config);

@@ -242,7 +242,6 @@ const OPTION_PRESENCE = {
   room_label: 0.1,
   show_rooms: 0.12,
   unavailable_values: 0.1,
-  accent_line: 0.08,
   show: 0.16,
   start_view: 0.08,
   tap_action: 0.1,
@@ -654,7 +653,6 @@ function generateConfig(rng, metric) {
   if (has("room_label")) config.room_label = enumValue(rng, ENUMS.room_label);
   if (has("show_rooms")) config.show_rooms = enumValue(rng, ENUMS.show_rooms);
   if (has("unavailable_values")) config.unavailable_values = enumValue(rng, ENUMS.unavailable_values);
-  if (has("accent_line")) config.accent_line = boolValue(rng);
   if (has("show")) config.show = generateShow(rng);
   if (has("start_view")) config.start_view = enumValue(rng, VIEWS);
   if (has("tap_action")) config.tap_action = generateAction(rng);
