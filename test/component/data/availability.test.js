@@ -75,8 +75,11 @@ test("MeasurementContext exposes typed availability for the primary and every ro
 });
 
 test("fallback arbitration marks the rooms that supply the winning metric usable", () => {
+  // The primary carries no device_class and no unit, so it says nothing about what this
+  // card measures and the rooms decide. A primary that DOES declare a kind is the case
+  // below, and it decides the other way round.
   const context = measurementContext.resolveMeasurementContext({
-    "sensor.primary": state("sensor.primary", "unavailable", CO2),
+    "sensor.primary": state("sensor.primary", "unavailable", {}),
     "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
   }, {
     entity: "sensor.primary",
@@ -86,8 +89,30 @@ test("fallback arbitration marks the rooms that supply the winning metric usable
 
   assert.equal(context.metricKind, "humidity");
   assert.equal(context.averageSource.kind, "roomConsensus");
-  assert.equal(context.primary.availability, entityModel.AVAILABILITY.INCOMPATIBLE_KIND);
   assert.equal(context.rooms[0].availability, entityModel.AVAILABILITY.USABLE);
+});
+
+test("a declaring primary keeps the card its own kind even while it cannot be read", () => {
+  // device_class is a statement about a SENSOR, not a reading. An unreachable CO2 sensor
+  // still measures CO2, so a humidity room is as foreign here as it would be if the
+  // primary were readable — and the card says so instead of quietly becoming a
+  // humidity card.
+  const context = measurementContext.resolveMeasurementContext({
+    "sensor.primary": state("sensor.primary", "unavailable", CO2),
+    "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
+  }, {
+    entity: "sensor.primary",
+    rooms: [room("sensor.humidity", "Humidity")],
+    classification: { source: "auto", profile: null, custom: null },
+  });
+
+  assert.equal(context.metricKind, "co2");
+  assert.equal(context.averageSource, null, "no CO2 source can be read right now");
+  assert.equal(context.consistent, true, "the declaration settled it, so nothing is mixed");
+  assert.deepEqual(context.diagnostics, [
+    { code: "excluded_foreign_metric_kind", entityId: "sensor.humidity", metricKind: "humidity" },
+  ]);
+  assert.equal(context.rooms[0].availability, entityModel.AVAILABILITY.INCOMPATIBLE_KIND);
 });
 
 test("a no-data mixed-kind configuration exposes incompatibility, not placeholders", () => {

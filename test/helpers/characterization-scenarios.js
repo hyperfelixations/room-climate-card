@@ -229,7 +229,25 @@ const SCENARIOS = [
     },
   },
   {
+    // Nobody can say what this card measures: two rooms that disagree and no primary
+    // entity to settle it. The card says so rather than picking one of them.
     name: "state-mixed-metric-kinds",
+    config: {
+      rooms: [
+        { name: "Room A", short: "RA", entity: "sensor.r1" },
+        { name: "Room B", short: "RB", entity: "sensor.r2" },
+      ],
+    },
+    states: {
+      "sensor.r1": st("sensor.r1", 21.5, C),
+      "sensor.r2": st("sensor.r2", 55.0, RH),
+    },
+  },
+  {
+    // The same rooms, and a primary that cannot be read but still declares temperature.
+    // The declaration settles it: the thermometer carries the card and the hygrometer is
+    // excluded by name, exactly as it would be if the primary could be read.
+    name: "state-arbitrated-by-declaring-primary",
     config: {
       entity: "sensor.avg",
       rooms: [

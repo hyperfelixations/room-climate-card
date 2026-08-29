@@ -113,33 +113,6 @@ const KNOWN_ISSUES = [
     // the rendered card is wrong — that IS the problem, and only a direct test can say so.
   },
   {
-    id: "BUG-10",
-    area: "application/model measurement-context",
-    discovered: "2026-08-25",
-    summary:
-      "When the rooms report more than one metric kind AND the primary entity's state is unusable, " +
-      "the card discards EVERYTHING: no average, no room markers, no views, the no-data state. The " +
-      "primary entity still DECLARES what it measures — device_class is a statement about a sensor, " +
-      "not a reading — and measurement-context.js already computes that declaration for another " +
-      "purpose a few lines later. It simply is not used to settle the disagreement, so a single " +
-      "humidity sensor among four thermometers blanks the card the moment the thermometer feeding " +
-      "the average goes offline.",
-    foundBy: "test/property/metamorphic.property.test.js",
-    // TWO RELATIONS FIND IT, and both phrasings are listed because each says something the
-    // other cannot: one shows data being lost when a room the card was ALREADY ignoring is
-    // added, the other shows it being lost when only the primary goes offline.
-    //
-    // Specific enough to attribute. Both phrases are produced only after their relation has
-    // established that the card had something to show and that the change made to it cannot
-    // account for the loss — see the preconditions in test/property/metamorphic.js. A future
-    // violation of either is BUG-10 or a new defect of the same class, and either way it
-    // belongs here rather than in a run that has gone red for an unrelated reason.
-    matchesViolation: (violation) =>
-      /^emptied by an unusable room:|^rooms dropped when an unusable one was added:|^metric kind changed from .+ to .+|^rooms lost when only the primary went unavailable:|^the whole card emptied when only the primary went unavailable,/.test(
-        violation
-      ),
-  },
-  {
     id: "BUG-12",
     area: "application/model source-topology",
     discovered: "2026-08-28",

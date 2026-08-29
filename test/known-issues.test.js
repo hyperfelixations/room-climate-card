@@ -83,10 +83,11 @@ test("every copied view of a Fahrenheit overflow is attributed without hiding ot
 
 test("known-issue classification attributes each matching violation independently", () => {
   const bug06 = "everyNumberIsFinite: scale.markerPosition is NaN";
-  const bug10 = "rooms lost when only the primary went unavailable: sensor.room0";
-  const classified = classifyViolations([bug06, bug10]);
-  assert.deepEqual(classified.known.map(({ issue }) => issue.id), ["BUG-06", "BUG-10"]);
-  assert.deepEqual(classified.unknown, []);
+  const bug11 = "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)";
+  const unrelated = "rooms lost when only the primary went unavailable: sensor.room0";
+  const classified = classifyViolations([bug06, bug11, unrelated]);
+  assert.deepEqual(classified.known.map(({ issue }) => issue.id), ["BUG-06", "BUG-11"]);
+  assert.deepEqual(classified.unknown, [unrelated], "a defect that was fixed no longer absorbs its old signature");
 });
 
 test("expected reproductions accept only their identifying assertion", () => {
@@ -287,15 +288,14 @@ expectedFailure("BUG-09", /was accepted without a word about it/, () => {
   }
 });
 
-// BUG-10 — found by the metamorphic relations in test/property/metamorphic.property.test.js,
-// which compare two cards derived from one description rather than checking one card against
-// itself. Every single-card invariant passes on both sides of this: the blank card is
-// perfectly self-consistent, it is simply blank for no good reason.
+// What BUG-10 was, kept as an ordinary test now that it holds. The metamorphic relations
+// found it: every single-card invariant passed on both sides, because the blank card was
+// perfectly self-consistent — it was simply blank for no good reason.
 //
-// The trigger needs BOTH halves. Rooms that disagree about what they measure, AND a primary
-// entity whose state cannot be read. Either alone is handled correctly: uniform rooms keep
-// working when the primary goes offline, and a usable primary settles a disagreement.
-expectedFailure("BUG-10", /two usable temperature rooms|the two temperature rooms are usable and the card showed nothing/, () => {
+// The trigger needed BOTH halves: rooms that disagree about what they measure, AND a primary
+// entity whose state cannot be read. The primary's device_class outlives the outage and says
+// which kind is the card's, so the rooms of that kind carry it.
+test("an unreadable primary still says what the card is about", () => {
   const humidity = { state: 50, deviceClass: { value: "humidity" }, unit: { value: "%" } };
   const rooms = [{ state: 21 }, { state: 23 }, humidity];
 
@@ -303,18 +303,14 @@ expectedFailure("BUG-10", /two usable temperature rooms|the two temperature room
     const built = buildScenario({ metric: "temperature", primary: { state }, rooms });
     env.withCard(built.config, built.hass, (card) => {
       const model = card._computeViewModel();
-      assert.equal(
-        model.empty,
-        false,
-        `the primary reads "${state}", and its device_class still says temperature — the two ` +
-          `temperature rooms are usable and the card showed nothing`
-      );
+      assert.equal(model.empty, false, `the primary reads "${state}" and still declares temperature`);
       assert.equal((model.roomMarkers || []).length, 2, `two usable temperature rooms, ${state}`);
+      assert.equal(model.average.value, 22, state);
     });
   }
 });
 
-test("BUG-10's neighbourhood: each half of the trigger on its own is handled correctly", () => {
+test("each half of that trigger on its own is handled correctly", () => {
   const humidity = { state: 50, deviceClass: { value: "humidity" }, unit: { value: "%" } };
 
   // Uniform rooms and an unusable primary: the rooms carry the card, which is right.
@@ -329,8 +325,8 @@ test("BUG-10's neighbourhood: each half of the trigger on its own is handled cor
     assert.equal(model.roomMarkers.length, 2);
   });
 
-  // Rooms that disagree and a primary that can be read: the primary settles it, which is
-  // also right — and is exactly the arbitration the defect above fails to reach for.
+  // Rooms that disagree and a primary that can be read: the primary settles it, exactly as
+  // it does above when it can only declare and not report.
   const arbitrated = buildScenario({
     metric: "temperature",
     primary: { state: 22 },
@@ -342,16 +338,20 @@ test("BUG-10's neighbourhood: each half of the trigger on its own is handled cor
     assert.equal(model.roomMarkers.length, 2, "the humidity room is ignored and the others are not");
   });
 
-  // And with no primary configured at all there genuinely is nobody to arbitrate, so giving
-  // up is correct. This is the case the fix must NOT change.
-  const noArbiter = buildScenario({
-    metric: "temperature",
-    primary: null,
-    rooms: [{ state: 21 }, humidity],
-  });
-  env.withCard(noArbiter.config, noArbiter.hass, (card) => {
-    assert.equal(card._computeViewModel().empty, true, "nobody can say which metric the card is about");
-  });
+  // And with nobody able to arbitrate, giving up is correct. Three ways to have nobody:
+  // no primary at all, one Home Assistant has never heard of, and one that reports neither
+  // a device_class nor a unit. An id absent from hass.states is a typo, not an outage.
+  const noArbiter = [
+    { primary: null },
+    { primary: { present: false } },
+    { primary: { state: "unavailable", deviceClass: null, unit: null } },
+  ];
+  for (const [index, description] of noArbiter.entries()) {
+    const built = buildScenario({ metric: "temperature", rooms: [{ state: 21 }, humidity], ...description });
+    env.withCard(built.config, built.hass, (card) => {
+      assert.equal(card._computeViewModel().empty, true, `nobody can say which metric the card is about (${index})`);
+    });
+  }
 });
 
 test("BUG-09's neighbourhood: the same mistake one level down IS refused by name", () => {

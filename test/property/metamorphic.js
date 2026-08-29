@@ -166,17 +166,26 @@ const scenariosOf = (...descriptions) => descriptions.map((description) => build
 
 const roomsOf = (description) => (Array.isArray(description.rooms) ? description.rooms : []);
 
-// The metric kind an entity in this description reports, as the card would read it: what the
-// entity itself says, else what the scenario says, else what the metric is.
-function kindOf(entity, description) {
-  const declared = entity && entity.deviceClass;
-  if (declared === null) return null;
-  if (declared && declared.value !== undefined) return declared.value;
+// The attribute name Home Assistant uses. A description can override it — that is how a
+// generator writes `device_clas` on an otherwise well-formed sensor — and behind a
+// misspelled name the card never reads the value at all.
+const DEVICE_CLASS_KEY = "device_class";
+
+// The device_class attribute an entity in this description carries, NAME AND VALUE, resolved
+// the way the scenario builder resolves it: what the entity says, then what the scenario
+// says, then what the metric is. `null` at either level means the sensor reports none.
+function declaredDeviceClass(entity, description) {
+  const own = entity && entity.deviceClass;
+  if (own === null) return null;
   const fallback = description.defaults && description.defaults.deviceClass;
-  if (fallback === null) return null;
-  if (fallback && fallback.value !== undefined) return fallback.value;
-  return METRICS[description.metric || "temperature"].deviceClass;
+  if (own === undefined && fallback === null) return null;
+  const canonical = { key: DEVICE_CLASS_KEY, value: METRICS[description.metric || "temperature"].deviceClass };
+  return { ...canonical, ...(fallback || {}), ...(own || {}) };
 }
+
+// The device classes the card actually recognises, taken from the manifest rather than
+// listed again here.
+const KNOWN_DEVICE_CLASSES = new Set(Object.values(METRICS).map((metric) => metric.deviceClass));
 
 // Whether a description carries a primary entity that DECLARES what it measures.
 //
@@ -184,9 +193,21 @@ function kindOf(entity, description) {
 // statement about the sensor, and an unavailable sensor still measures temperature. Several
 // relations below rest on that, because it is the fact that lets the card arbitrate between
 // rooms that disagree.
+//
+// A DEVICE CLASS THE CARD DOES NOT KNOW DECLARES NOTHING. `device_class: timestamp` tells
+// this card no more than an absent one, so a card carrying it has no arbiter and a
+// disagreement between its rooms genuinely empties it — the documented answer when nobody
+// can settle which measurement the card is about. Counting such a value as a declaration
+// made the relation assert that the card knew which kind was its own when it did not, and
+// the generator reaches it: seed 0x13bb863d, a pm25 card whose primary declares `timestamp`.
 function hasDeclaringPrimary(description) {
   if (!description.primary || description.primary.present === false) return false;
-  return Boolean(kindOf(description.primary, description));
+  const declared = declaredDeviceClass(description.primary, description);
+  // BOTH HALVES have to be right, and the generator misses each of them separately: a
+  // misspelled attribute NAME hides a perfectly good value (seed 0x42b771f0, `device_class `
+  // with a trailing space), and a VALUE the card does not know says nothing behind a correct
+  // name (seed 0x13bb863d, `device_class: timestamp`).
+  return Boolean(declared) && declared.key === DEVICE_CLASS_KEY && KNOWN_DEVICE_CLASSES.has(declared.value);
 }
 
 // Whether the card refers to exactly one entity, which is also its only room.
@@ -231,8 +252,8 @@ const RELATIONS = [
     name: "a room the card cannot use changes nothing else",
     why:
       "A room reporting a different metric is not data the card can show, and it is not a " +
-      "reason to stop showing the data it can. Both cards have a primary entity declaring " +
-      "what they measure, so both know which kind is theirs.",
+      "reason to stop showing the data it can. Both cards have a primary entity declaring a " +
+      "measurement the card knows, so both know which kind is theirs.",
     // Only meaningful against a card that was showing something — see the note above.
     needsRenderedBase: true,
     derive(description, base) {

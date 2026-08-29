@@ -83,11 +83,21 @@ test("the empty model keeps its minimal shape and names the configuration state"
   assert.equal(model.missingRooms, 1, "only the entity absent from states counts as missing");
   assert.equal(model.configurationState, null, "nothing usable is not a mixed-kind state");
 
+  // A mixed-kind state needs nobody able to settle it: the primary here carries neither a
+  // device_class nor a unit, so it says nothing about what the card measures.
   const mixed = domainFor(
+    cfg({ rooms: [room("sensor.r1"), room("sensor.h")] }),
+    { "sensor.avg": st("unavailable", {}), "sensor.r1": st(21, C), "sensor.h": st(55, RH) }
+  );
+  assert.equal(mixed.configurationState, "mixed_metric_kinds");
+
+  // With a primary that does declare one, the same rooms are not a disagreement at all.
+  const arbitrated = domainFor(
     cfg({ rooms: [room("sensor.r1"), room("sensor.h")] }),
     { "sensor.avg": st("unavailable", C), "sensor.r1": st(21, C), "sensor.h": st(55, RH) }
   );
-  assert.equal(mixed.configurationState, "mixed_metric_kinds");
+  assert.equal(arbitrated.empty, false, "the temperature room carries the card");
+  assert.equal(arbitrated.metric.kind, "temperature");
 });
 
 test("a grid cap limits nothing but the chip count", () => {

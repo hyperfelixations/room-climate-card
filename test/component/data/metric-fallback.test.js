@@ -212,7 +212,10 @@ test("metricType and unit resolve together when the primary carries a stray unit
 // These cases share one invariant: metric kind, value and unit resolve
 // atomically and never produce combinations such as "55 ppm" or "1013 °C".
 
-test("an invalid CO2 primary falls back to valid humidity rooms without mixing labels", () => {
+test("an unusable CO2 primary keeps the card a CO2 card, and humidity rooms stay foreign", () => {
+  // Two separate facts, and the card keeps them apart: the READING is unusable, so it
+  // supplies no value; the DECLARATION still says this is a CO2 card, so a humidity room
+  // is as foreign as it would be if the reading were fine.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", -20, CO2), // a negative concentration is impossible
     "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
@@ -220,11 +223,27 @@ test("an invalid CO2 primary falls back to valid humidity rooms without mixing l
   });
   const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
   const context = el._resolveMetricContext();
-  assert.equal(context.metricType, "humidity", "a physically invalid primary reading must not be usable, regardless of its own device_class");
-  assert.equal(context.sourceKind, "roomConsensus");
+  assert.equal(context.metricType, "co2");
+  assert.equal(context.averageSource, null, "no CO2 source can be read");
+  assert.deepEqual([...context.excludedRoomIds], ["sensor.hum1", "sensor.hum2"]);
   const data = el._computeViewModel();
-  assert.equal(data.metric.kind, "humidity");
-  assert.equal(data.average.value, 55);
+  assert.equal(data.empty, true, "60 % must never be shown as the value of a CO2 card");
+  env.cleanup(el);
+});
+
+test("an unusable primary that declares nothing lets valid rooms take over", () => {
+  // The other half of the same rule: without a device_class and without a unit the primary
+  // says nothing at all, so the rooms decide what the card is about.
+  const hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", "unavailable", {}),
+    "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
+    "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
+  });
+  const el = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.hum2" }] }, hass);
+  const context = el._resolveMetricContext();
+  assert.equal(context.metricType, "humidity");
+  assert.equal(context.sourceKind, "roomConsensus");
+  assert.equal(el._computeViewModel().average.value, 55);
   env.cleanup(el);
 });
 

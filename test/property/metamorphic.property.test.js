@@ -215,15 +215,12 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
     `relations below the minimum population of ${minimumApplications}: ${starved.map(([name, count]) => `${name}=${count}`).join("; ")}`
   );
 
-  // The registered defects this run walked into. Asserted rather than merely printed: BUG-10
-  // is the reason this file exists, and a run that stopped reproducing it would mean either
-  // that somebody fixed it — in which case the register says what to do — or that a
-  // precondition drifted until the relation no longer reaches the case it was written for.
-  assert.ok(
-    knownDefects.get("BUG-10") > 0,
-    "BUG-10 was not reproduced by any relation. If it has been fixed, remove it from " +
-      "test/known-issues.js and delete this assertion; if not, a precondition has drifted."
-  );
+  // NO REGISTERED DEFECT IS ASSERTED HERE ANY MORE, and the reason is worth writing down.
+  // BUG-10 — the defect this file was built to reach — is fixed, so the assertion that it
+  // must still reproduce was removed with it. What replaced it as the guard against a
+  // precondition quietly drifting is the coverage assertion above: every relation has to
+  // apply to a real share of the population, which is the same protection without tying it
+  // to one defect that will not always be there.
 });
 
 // ------------------------------------------------------------ the relations themselves --

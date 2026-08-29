@@ -23,6 +23,48 @@ function identityMetricKind(primary, rooms) {
   return primary.metricKind || rooms.find((room) => room.metricKind)?.metricKind || null;
 }
 
+// Which rooms may take part once the card's metric kind is settled, in configuration
+// order, and why each of the others may not.
+//
+// ONE WALK, whether the kind came from a primary the card can read or from one that can
+// only still declare what it measures. What decides is the KIND; who supplied it is a
+// separate question, answered by the caller.
+function partitionRooms(roomModels, metricKind) {
+  const participatingRooms = [];
+  const excludedRoomIds = [];
+  const diagnostics = [];
+  for (const room of roomModels) {
+    if (room.metricKind === null) continue;
+    if (room.metricKind !== metricKind) {
+      excludedRoomIds.push(room.entityId);
+      diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
+      continue;
+    }
+    if (room.availability === AVAILABILITY.INCOMPATIBLE_UNIT) {
+      excludedRoomIds.push(room.entityId);
+      diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
+      continue;
+    }
+    if (isUsable(room)) participatingRooms.push(room);
+  }
+  return { participatingRooms, excludedRoomIds, diagnostics };
+}
+
+// The headline several rooms of one kind produce together, and the unit it can be shown
+// in. A unit profile they all share survives; a mixture falls back to the canonical unit
+// rather than preferring one room's unit for no reason.
+function roomConsensus(rooms) {
+  return {
+    averageSource: {
+      kind: "roomConsensus",
+      entityIds: rooms.map((room) => room.entityId),
+      canonicalValue: rooms.reduce((sum, room) => sum + room.canonicalValue, 0) / rooms.length,
+      unitProfile: null,
+    },
+    displayUnitProfileKey: rooms.every((room) => room.unitProfile === rooms[0].unitProfile) ? rooms[0].unitProfile : null,
+  };
+}
+
 // EntityModel owns intrinsic availability. MeasurementContext adds the one
 // card-wide fact EntityModel cannot know: whether a recognized entity kind is
 // compatible with the selected card kind.
@@ -94,23 +136,7 @@ export function resolveMeasurementContext(states, config) {
     displayUnitProfileKey = isUsable(room) ? room.unitProfile : null;
   } else if (isUsable(primaryModel)) {
     metricKind = primaryModel.metricKind;
-    participatingRooms = [];
-    excludedRoomIds = [];
-    diagnostics = [];
-    for (const room of roomModels) {
-      if (room.metricKind === null) continue;
-      if (room.metricKind !== metricKind) {
-        excludedRoomIds.push(room.entityId);
-        diagnostics.push({ code: "excluded_foreign_metric_kind", entityId: room.entityId, metricKind: room.metricKind });
-        continue;
-      }
-      if (room.availability === AVAILABILITY.INCOMPATIBLE_UNIT) {
-        excludedRoomIds.push(room.entityId);
-        diagnostics.push({ code: "unusable_unit", entityId: room.entityId, metricKind: room.metricKind });
-        continue;
-      }
-      if (isUsable(room)) participatingRooms.push(room);
-    }
+    ({ participatingRooms, excludedRoomIds, diagnostics } = partitionRooms(roomModels, metricKind));
     averageSource = {
       kind: "primary",
       entityId: primaryModel.entityId,
@@ -121,6 +147,39 @@ export function resolveMeasurementContext(states, config) {
     sourceEntity = primaryModel.entityId;
     sourceKind = "primary";
     displayUnitProfileKey = primaryModel.unitProfile;
+  } else if (primaryModel.metricKind) {
+    // THE PRIMARY CANNOT SUPPLY A VALUE, AND CAN STILL SAY WHAT THE CARD IS ABOUT.
+    //
+    // `device_class` is a statement about a SENSOR, not a reading: an unreachable
+    // thermometer measures temperature all the same. source-topology.js already builds the
+    // card's SHAPE on exactly that distinction — availability changes the value the card
+    // can show, never what kind of card it is — and this is the same rule one layer down.
+    // A declaration that survived the outage therefore settles which rooms belong here, by
+    // the same walk a readable primary uses; only the VALUE falls back to them.
+    //
+    // Without it, a single humidity sensor among four thermometers blanked the whole card
+    // the moment the thermometer feeding the average went offline: the rooms disagreed,
+    // nobody was asked to settle it, and the answer that was available went unread.
+    //
+    // AN ENTITY HOME ASSISTANT DOES NOT KNOW DECLARES NOTHING — buildEntityModel() leaves
+    // metricKind null without a state object — so a mistyped `entity:` still leaves the
+    // rooms to agree among themselves or not, in the branch below. That is the difference
+    // between an outage and a typo, and it is deliberate.
+    metricKind = primaryModel.metricKind;
+    ({ participatingRooms, excludedRoomIds, diagnostics } = partitionRooms(roomModels, metricKind));
+    // Settled, not merely quiet: the rooms may well disagree with each other, but the
+    // question of what this card measures has an answer, so nothing here is "mixed".
+    consistent = true;
+    if (participatingRooms.length) {
+      ({ averageSource, displayUnitProfileKey } = roomConsensus(participatingRooms));
+      sourceEntity = participatingRooms[0].entityId;
+      sourceKind = "roomConsensus";
+    } else {
+      averageSource = null;
+      displayUnitProfileKey = null;
+      sourceEntity = primaryModel.entityId;
+      sourceKind = "primary";
+    }
   } else {
     const candidates = roomModels.filter(isUsable);
     const unusableUnitRooms = roomModels.filter((room) => room.availability === AVAILABILITY.INCOMPATIBLE_UNIT);
@@ -161,15 +220,7 @@ export function resolveMeasurementContext(states, config) {
         consistent = true;
         sourceEntity = candidates[0].entityId;
         sourceKind = "roomConsensus";
-        displayUnitProfileKey = candidates.every((room) => room.unitProfile === candidates[0].unitProfile)
-          ? candidates[0].unitProfile
-          : null;
-        averageSource = {
-          kind: "roomConsensus",
-          entityIds: candidates.map((room) => room.entityId),
-          canonicalValue: candidates.reduce((sum, room) => sum + room.canonicalValue, 0) / candidates.length,
-          unitProfile: null,
-        };
+        ({ averageSource, displayUnitProfileKey } = roomConsensus(candidates));
       }
     }
   }

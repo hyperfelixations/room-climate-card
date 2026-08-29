@@ -259,8 +259,11 @@ test("an unavailable room can never out-vote an available one", () => {
 });
 
 test("mixed metric kinds produce a defined state, not a majority winner", () => {
+  // The primary declares nothing — no device_class, no unit — so there is genuinely
+  // nobody to settle the disagreement. That is what makes this a mixed state rather
+  // than an arbitrated one; the test below is the same rooms with an arbiter.
   const states = {
-    "sensor.avg": st("unavailable", C),
+    "sensor.avg": st("unavailable", {}),
     "sensor.r1": st(21, C),
     "sensor.r2": st(55, RH),
     "sensor.r3": st(56, RH),
@@ -279,7 +282,7 @@ test("mixed metric kinds produce a defined state, not a majority winner", () => 
 
 test("the mixed diagnosis comes first, before any unusable-unit entries", () => {
   const states = {
-    "sensor.avg": st("unavailable", C),
+    "sensor.avg": st("unavailable", {}),
     "sensor.bad": st(21, { device_class: "temperature", unit_of_measurement: "hPa" }),
     "sensor.r1": st(21, C),
     "sensor.r2": st(55, RH),
@@ -289,6 +292,62 @@ test("the mixed diagnosis comes first, before any unusable-unit entries", () => 
     cfg({ rooms: [room("sensor.bad"), room("sensor.r1"), room("sensor.r2")] })
   );
   assert.deepEqual(context.diagnostics.map((d) => d.code), ["mixed_metric_kinds", "unusable_unit"]);
+});
+
+test("an unreadable primary that DECLARES a kind settles a disagreement its rooms cannot", () => {
+  // BUG-10's shape: two thermometers, one hygrometer, and a primary whose state cannot be
+  // read. `device_class` is a statement about the sensor, so it outlives the outage and
+  // says what this card is about — and the rooms of that kind carry the value.
+  const states = {
+    "sensor.avg": st("unavailable", C),
+    "sensor.r1": st(21, C),
+    "sensor.r2": st(23, C),
+    "sensor.h": st(55, RH),
+  };
+  for (const unusable of ["unavailable", "unknown", "not a number"]) {
+    const context = measurementContext.resolveMeasurementContext(
+      { ...states, "sensor.avg": st(unusable, C) },
+      cfg({ rooms: [room("sensor.r1"), room("sensor.h"), room("sensor.r2")] })
+    );
+    assert.equal(context.metricKind, "temperature", unusable);
+    assert.equal(context.consistent, true, `${unusable}: settled, so nothing is mixed`);
+    assert.equal(context.sourceKind, "roomConsensus", unusable);
+    assert.equal(context.averageSource.canonicalValue, 22, unusable);
+    assert.deepEqual(context.participatingRooms.map((r) => r.entityId), ["sensor.r1", "sensor.r2"], unusable);
+    // The foreign room is excluded by name, in configuration order, exactly as it would be
+    // if the primary were readable — not swept into one card-wide "mixed" verdict.
+    assert.deepEqual(context.diagnostics, [
+      { code: "excluded_foreign_metric_kind", entityId: "sensor.h", metricKind: "humidity" },
+    ], unusable);
+  }
+});
+
+test("a declaration with no room of its own kind leaves the card its kind and no value", () => {
+  // The rooms are perfectly usable and simply not what this card measures. Which is the
+  // same answer a readable primary gives, and the reason the two no longer disagree about
+  // what the card is: only the VALUE depends on availability.
+  const context = measurementContext.resolveMeasurementContext(
+    { "sensor.avg": st("unavailable", C), "sensor.h": st(55, RH) },
+    cfg({ rooms: [room("sensor.h")] })
+  );
+  assert.equal(context.metricKind, "temperature");
+  assert.equal(context.averageSource, null);
+  assert.equal(context.consistent, true);
+  assert.equal(context.sourceKind, "primary");
+  assert.equal(context.rooms[0].availability, "incompatible_kind");
+});
+
+test("an entity Home Assistant does not know declares nothing, so the rooms still decide", () => {
+  // The difference between an outage and a typo, and it is the one the fix must not blur:
+  // an id that is absent from hass.states is a property of the configuration, and there is
+  // nothing there to arbitrate with.
+  const context = measurementContext.resolveMeasurementContext(
+    { "sensor.r1": st(21, C), "sensor.h": st(55, RH) },
+    cfg({ entity: "sensor.nowhere", rooms: [room("sensor.r1"), room("sensor.h")] })
+  );
+  assert.equal(context.metricKind, null);
+  assert.equal(context.consistent, false);
+  assert.equal(context.diagnostics[0].code, "mixed_metric_kinds");
 });
 
 test("compatible mixed units are averaged canonically", () => {

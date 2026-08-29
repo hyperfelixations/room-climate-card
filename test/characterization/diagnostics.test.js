@@ -374,8 +374,11 @@ test("a tolerated misconfiguration still renders a working card (degrade, never 
 });
 
 test("incompatible room metric kinds warn once and are exposed as a defined configuration state", () => {
+  // The primary reports neither a device_class nor a unit, so nothing can settle the
+  // disagreement between the rooms — which is what makes this the mixed state. A primary
+  // that declares a kind arbitrates instead, and warns about the excluded room by name.
   const hass = hassWith({
-    "sensor.avg": st("sensor.avg", "unavailable", C),
+    "sensor.avg": st("sensor.avg", "unavailable", {}),
     "sensor.r1": st("sensor.r1", 21.5, C),
     "sensor.r2": st("sensor.r2", 55.0, HUMIDITY),
   });
