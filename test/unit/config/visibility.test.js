@@ -112,12 +112,15 @@ test("a part that is not a boolean falls back to its default and is said out lou
 });
 
 test("rooms keeps its three states while every other part is a switch", () => {
-  assert.equal(showModule.normalizeShowConfig({ rooms: true }).show.rooms, "always");
-  assert.equal(showModule.normalizeShowConfig({ rooms: false }).show.rooms, "never");
+  // The three the user writes ARE the three the card carries: `true | false | "auto"`, the
+  // same shape views[].enabled uses for the same kind of decision. YAML's two spellings of
+  // a boolean both arrive here, and both mean the boolean.
+  for (const written of [true, "true"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, true);
+  for (const written of [false, "false"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, false);
   assert.equal(showModule.normalizeShowConfig({ rooms: "auto" }).show.rooms, "auto");
 
   // A typo here is the one case where falling back silently would be wrong: "auto" and
-  // "always" are different answers, and a user who wrote "alway" meant one of them.
+  // "true" are different answers, and a user who wrote "alway" meant one of them.
   const { show, diagnostics } = showModule.normalizeShowConfig({ rooms: "alway" });
   assert.deepEqual(show, {});
   assert.match(diagnostics[0], /show\.rooms: expected auto, true or false, got "alway"/);
@@ -131,13 +134,13 @@ test("the block wins over the older spelling of the same decision", () => {
     show_rooms: true,
     unavailable_values: "show",
   });
-  assert.equal(both.show.rooms, "never");
+  assert.equal(both.show.rooms, false);
   assert.equal(both.show.unavailable_rooms, false);
 });
 
 test("the older spelling still decides on its own", () => {
-  assert.equal(configure({ show_rooms: false }).show.rooms, "never");
-  assert.equal(configure({ show_rooms: true }).show.rooms, "always");
+  assert.equal(configure({ show_rooms: false }).show.rooms, false);
+  assert.equal(configure({ show_rooms: true }).show.rooms, true);
   assert.equal(configure({ unavailable_values: "hide" }).show.unavailable_rooms, false);
 });
 
@@ -153,7 +156,7 @@ test("a block that mentions other parts does not silence the older spelling", ()
   // quietly reset the keys it says nothing about.
   const config = configure({ show: { icon: false }, show_rooms: false, unavailable_values: "hide" });
   assert.equal(config.show.icon, false);
-  assert.equal(config.show.rooms, "never", "show_rooms still decides, because the block did not");
+  assert.equal(config.show.rooms, false, "show_rooms still decides, because the block did not");
   assert.equal(config.show.unavailable_rooms, false);
 });
 
@@ -174,12 +177,12 @@ test("an older spelling nobody recognised carries no default of its own", () => 
 test("legacyShowRequests() reports only what was actually asked for", () => {
   const { legacyShowRequests } = normalizeConfigModule;
   assert.deepEqual(legacyShowRequests({}), {});
-  assert.deepEqual(legacyShowRequests({ show_rooms: true }), { rooms: "always" });
-  assert.deepEqual(legacyShowRequests({ show_rooms: false }), { rooms: "never" });
+  assert.deepEqual(legacyShowRequests({ show_rooms: true }), { rooms: true });
+  assert.deepEqual(legacyShowRequests({ show_rooms: false }), { rooms: false });
   assert.deepEqual(legacyShowRequests({ unavailable_values: "hide" }), { unavailable_rooms: false });
   assert.deepEqual(legacyShowRequests({ unavailable_values: "show" }), {}, "the default is not this key's to state");
   assert.deepEqual(legacyShowRequests({ show_rooms: false, unavailable_values: "hide" }), {
-    rooms: "never",
+    rooms: false,
     unavailable_rooms: false,
   });
 });

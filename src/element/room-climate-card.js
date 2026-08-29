@@ -542,7 +542,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const rooms = this._config?.rooms ?? [];
       const roomCount = isSource ? rooms.filter((room) => isSource(room.entity)).length : rooms.length;
       const chipsDrawn =
-        roomCount >= 1 && showRooms !== "never" && (showRooms === "always" || !chipsWouldDuplicateHeadline(topology));
+        roomCount >= 1 && showRooms !== false && (showRooms === true || !chipsWouldDuplicateHeadline(topology));
       if (!chipsDrawn) return 3;
       const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);

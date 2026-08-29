@@ -373,7 +373,7 @@ function cfgWithTwoRooms(overrides = {}) {
 test("hiding the chips touches nothing else", () => {
   const domainModel = withTwoRooms();
   const shown = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms(), texts: stubTexts() });
-  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms({ show: { rooms: "never" } }), texts: stubTexts() });
+  const hidden = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms({ show: { rooms: false } }), texts: stubTexts() });
   assert.equal(shown.rooms.showChips, true);
   assert.equal(hidden.rooms.showChips, false);
   assert.equal(hidden.rooms.count, 2, "the rooms remain full data sources");

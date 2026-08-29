@@ -42,8 +42,14 @@ export const SHOW_SWITCHES = Object.freeze({
 
 // The one part that is not a switch. Chips have a third answer — "show them unless they
 // would only repeat the headline" — and that answer is the default, so it cannot be
-// expressed as a boolean. The vocabulary is the one downstream already reads.
-export const SHOW_ROOMS_STATES = Object.freeze({ true: "always", false: "never", auto: "auto" });
+// expressed as a boolean alone.
+//
+// ONE VOCABULARY FOR ONE SHAPE. `true | false | "auto"` is what `views[].enabled` already
+// carries for exactly this kind of decision, so downstream reads `config.show.rooms === true`
+// beside `config.show.icon === true` rather than a second set of words for the same three
+// answers. The keys are what a person may write, in the two spellings YAML produces for a
+// boolean; the values are what the card carries.
+export const SHOW_ROOMS_STATES = Object.freeze({ true: true, false: false, auto: "auto" });
 
 export const SHOW_KEYS = Object.freeze([...Object.keys(SHOW_SWITCHES), "rooms"]);
 

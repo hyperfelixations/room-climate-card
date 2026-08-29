@@ -231,9 +231,9 @@ test("show_rooms maps the three public states and defaults everything else to au
   // the same three-state vocabulary; the block simply outranks it where both are written.
   const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", show_rooms: value }, COLLABORATORS).show.rooms;
   assert.equal(n("auto"), "auto");
-  assert.equal(n(true), "always");
-  assert.equal(n(false), "never");
-  assert.equal(n("always"), "auto", "internal sentinels are not public YAML values");
+  assert.equal(n(true), true);
+  assert.equal(n(false), false);
+  assert.equal(n("always"), "auto", "a word the card has never accepted is not one of the three");
   assert.equal(n("invalid"), "auto");
 });
 

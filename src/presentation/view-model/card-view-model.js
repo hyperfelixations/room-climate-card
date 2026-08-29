@@ -357,9 +357,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
   const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, metricKind, language: texts.language });
   const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
   const showChips =
-    config.show.rooms !== "never" &&
+    config.show.rooms !== false &&
     chips.length >= 1 &&
-    (config.show.rooms === "always" || !chipsWouldDuplicateHeadline(topology));
+    (config.show.rooms === true || !chipsWouldDuplicateHeadline(topology));
 
   return {
     empty: true,
@@ -642,19 +642,19 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       // those are two different facts, and tying them together is why a card with a
       // primary and one room used to show no chip for it at all.
       //
-      //   never   no grid; the rooms stay full data sources regardless
-      //   always  a chip for every usable room — an explicit request outranks the
+      //   false   no grid; the rooms stay full data sources regardless
+      //   true    a chip for every usable room — an explicit request outranks the
       //           redundancy rule below
-      //   auto    chips unless the only room IS the headline, where a chip would
+      //   "auto"  chips unless the only room IS the headline, where a chip would
       //           print the same value twice
       //
       // Everything derived from the rooms — extrema, comfort count, spread, the
       // scale's markers — is unaffected by all three, because the rooms remain full
       // data sources whether or not they are drawn.
       showChips:
-        config.show.rooms !== "never" &&
+        config.show.rooms !== false &&
         chips.length >= 1 &&
-        (config.show.rooms === "always" || !chipsWouldDuplicateHeadline(topology)),
+        (config.show.rooms === true || !chipsWouldDuplicateHeadline(topology)),
       chips,
       chipRows: buildRoomChipRows(chips, layout.rowSizes),
     },

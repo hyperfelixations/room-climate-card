@@ -61,14 +61,13 @@ export function normalizeLanguage(value, isSupportedLanguage) {
 // that answered for a key nobody wrote would be a second statement of the same default,
 // and two statements of one default drift apart without anything noticing.
 //
-// `show_rooms` maps YAML's real booleans (not the strings "true"/"false") onto the
-// three-state vocabulary downstream reads. For `unavailable_values` only the literal
-// `hide` turns the placeholder chips off — every other value, including a typo, means
-// what the absent key means.
+// `show_rooms` speaks only for YAML's real booleans, not for the strings "true"/"false".
+// For `unavailable_values` only the literal `hide` turns the placeholder chips off — every
+// other value, including a typo, means what the absent key means.
 export function legacyShowRequests(userConfig) {
   const requests = {};
-  if (userConfig.show_rooms === true) requests.rooms = "always";
-  if (userConfig.show_rooms === false) requests.rooms = "never";
+  if (userConfig.show_rooms === true) requests.rooms = true;
+  if (userConfig.show_rooms === false) requests.rooms = false;
   if (userConfig.unavailable_values === "hide") requests.unavailable_rooms = false;
   return requests;
 }
