@@ -43,9 +43,9 @@ import {
   resolveProfileIcon,
   resolveScaleConfig,
 } from "./classification.js";
-import { AVAILABILITY, hasEntity, readNumericAttribute, convertMetricValue } from "./entity-model.js";
+import { AVAILABILITY, readNumericAttribute, convertMetricValue } from "./entity-model.js";
 import { effectiveMetricKind } from "./measurement-context.js";
-import { resolveSourceTopology } from "./source-topology.js";
+import { resolveSourceEligibility, resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
 import {
   buildRoomModels,
@@ -76,12 +76,12 @@ export function buildCardDomainModel({ states, config, context, language, surfac
     surface
   );
   const metricKind = effectiveMetricKind(context);
-  // The same configuration-only classification the measurement context branched on.
-  // Resolved once here and carried out on the model. It stopped being a pure function
-  // of the configuration alone when a configured id that Home Assistant does not know
-  // was excluded from it (see source-topology.js), and the presentation layer has no
-  // `states` to recompute it from — so the model that HAS them answers for everyone.
-  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
+  // The same source topology the measurement context branched on. Resolved once here and
+  // carried out on the model: deciding it needs `states` — a configured id may be one
+  // Home Assistant does not know, or may declare a different measurement (see
+  // source-topology.js) — and the presentation layer has none, so the model that HAS them
+  // answers for everyone.
+  const topology = resolveSourceTopology(config, resolveSourceEligibility(states, config));
   // `status` is what every decision compares against; `reason` is what the card TELLS a
   // reader. Both travel, because the presentation layer has no states object to work
   // either of them out again — see UNUSABLE_REASON in entity-model.js for why they are

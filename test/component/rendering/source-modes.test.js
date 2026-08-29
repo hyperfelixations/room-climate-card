@@ -181,6 +181,42 @@ const cases = [
     states: { "sensor.real": state("sensor.real", 28.7) },
     expected: { empty: false, source: "room", entity: "sensor.real", roomIndex: 0, label: "Arbeitszimmer", chips: false },
   },
+  // --- sources that measure something else ----------------------------------
+  //
+  // A room declaring a different measurement is data this card can never show, so it is not
+  // a source of it and does not shape it either. Same rule as above, second half: what
+  // counts is what a sensor DECLARES, and a declaration outlives an outage.
+  {
+    name: "a room measuring something else leaves a genuine one-room card",
+    config: { entity: "sensor.room", rooms: [room("sensor.room", "Kitchen"), room("sensor.humidity", "Bath")] },
+    states: {
+      "sensor.room": state("sensor.room", 21),
+      "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
+    },
+    expected: { empty: false, source: "room", entity: "sensor.room", roomIndex: 0, label: "Kitchen", chips: false },
+  },
+  {
+    name: "a card whose every room measures something else refers to its primary alone",
+    config: { entity: "sensor.primary", rooms: [room("sensor.humidity", "Bath")] },
+    states: {
+      "sensor.primary": state("sensor.primary", 22),
+      "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
+    },
+    // No room to stand among, so the headline needs no caption telling it apart — and the
+    // excluded room is diagnosed rather than drawn as a chip, so no grid is left over.
+    expected: { empty: false, source: "sensor", entity: "sensor.primary", roomIndex: null, label: "", chips: false },
+  },
+  {
+    name: "a foreign room that goes unavailable is still not a source",
+    config: { entity: "sensor.room", rooms: [room("sensor.room", "Kitchen"), room("sensor.humidity", "Bath")] },
+    states: {
+      "sensor.room": state("sensor.room", 21),
+      // Home Assistant publishes a restored entity with its device_class intact, so the
+      // declaration survives the outage and the card's shape does not move.
+      "sensor.humidity": state("sensor.humidity", "unavailable", HUMIDITY),
+    },
+    expected: { empty: false, source: "room", entity: "sensor.room", roomIndex: 0, label: "Kitchen", chips: false },
+  },
 ];
 
 for (const entry of cases) {

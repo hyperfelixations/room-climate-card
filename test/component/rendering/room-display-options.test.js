@@ -327,3 +327,32 @@ test("getCardSize(): show_rooms auto scales with a multi-room grid (regression)"
   });
   assert.ok(el.getCardSize() > 3, "10 rooms with chips visible must exceed the base size");
 });
+
+test("getCardSize(): the hint applies the same source rule the card does", () => {
+  // The room the card can never use is not a source of it, so the hint must not reserve a
+  // chip row for a grid that will hold nothing. Before any hass update there is nothing to
+  // ask, and the configuration alone decides — the stable answer for a layout hint.
+  const config = {
+    entity: "sensor.avg",
+    rooms: [{ entity: "sensor.avg", name: "Living room" }, { entity: "sensor.humidity", name: "Bath" }],
+  };
+  const el = env.document.createElement("room-climate-card");
+  el.setConfig(config);
+  assert.ok(el.getCardSize() > 3, "without states every configured source counts");
+
+  el.hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.humidity": mkState("sensor.humidity", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+  });
+  assert.equal(el.getCardSize(), 3, "the one remaining source IS the headline, so no chip is drawn");
+
+  // And with a distinct primary the foreign room leaves nothing to put in a grid, so the
+  // hint must not reserve a row for one — not even under an explicit `show.rooms: true`.
+  const noRoomsLeft = env.document.createElement("room-climate-card");
+  noRoomsLeft.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.humidity", name: "Bath" }], show_rooms: true });
+  noRoomsLeft.hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.humidity": mkState("sensor.humidity", 50, { device_class: "humidity", unit_of_measurement: "%" }),
+  });
+  assert.equal(noRoomsLeft.getCardSize(), 3);
+});

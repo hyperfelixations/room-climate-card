@@ -58,7 +58,11 @@ import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/re
 import { normalizeUnitToken } from "../domain/units/unit-token.js";
 import { resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
-import { chipsWouldDuplicateHeadline, resolveSourceTopology } from "../application/model/source-topology.js";
+import {
+  chipsWouldDuplicateHeadline,
+  resolveSourceEligibility,
+  resolveSourceTopology,
+} from "../application/model/source-topology.js";
 import { stubConfigFor } from "../application/model/card-suggestions.js";
 import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
@@ -512,25 +516,30 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     getCardSize() {
-      // Rough size hint for Home Assistant's masonry layout (config-based, not live
-      // data, so it uses the configured room count as an upper-bound proxy
-      // for "will show room chips" — a room without live data yet still
-      // gets counted here, unlike the live-data-driven capacity cap in
-      // roomGridRows()). Extra chip rows add to the
-      // base size one-for-one.
-      const roomCount = this._config?.rooms?.length ?? 0;
+      // Rough size hint for Home Assistant's masonry layout. An UPPER BOUND on purpose: a
+      // room whose sensor has no value yet is counted here, unlike the live-data-driven
+      // capacity cap in roomGridRows(). Extra chip rows add to the base size one-for-one.
+      //
       // The same chip-visibility contract the view model applies, minus the parts that
       // need live data — `never` draws nothing, and in `auto` a lone room that IS the
       // headline gets no chip. A grid that will not be drawn must not inflate the hint.
       const showRooms = this._config?.show?.rooms ?? "auto";
-      // Same source rule the card itself applies, including the one part that needs
-      // live state: an id Home Assistant does not know is not a source. Before the
-      // first update there is nothing to ask, and the configuration alone decides —
-      // which is the stable answer for a size hint.
+      // Same source rule the card itself applies, including the part that needs live
+      // state: an id Home Assistant does not know, and one that declares a different
+      // measurement, are both not sources. Before the first update there is nothing to
+      // ask, and the configuration alone decides — which is the stable answer for a size
+      // hint.
+      //
+      // ONE SOURCE SET, used for both answers. Counting the rooms differently from the way
+      // the topology beside it was decided is how the hint would come to reserve a row for
+      // a grid the card has just decided not to draw.
       const states = this._hass?.states;
-      const topology = states
-        ? resolveSourceTopology(this._config, (entityId) => Boolean(entityId && states[entityId]))
+      const isSource = states ? resolveSourceEligibility(states, this._config) : null;
+      const topology = isSource
+        ? resolveSourceTopology(this._config, isSource)
         : resolveSourceTopology(this._config);
+      const rooms = this._config?.rooms ?? [];
+      const roomCount = isSource ? rooms.filter((room) => isSource(room.entity)).length : rooms.length;
       const chipsDrawn =
         roomCount >= 1 && showRooms !== "never" && (showRooms === "always" || !chipsWouldDuplicateHeadline(topology));
       if (!chipsDrawn) return 3;

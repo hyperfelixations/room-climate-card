@@ -388,20 +388,17 @@ test("every metric refuses what it cannot be, and accepts the limit itself", () 
   }
 });
 
-// BUG-12 — found by the metamorphic relation "a room the card cannot use changes nothing
-// else", which adds a room reporting a different metric to a card that was already showing
-// something and asks what moved.
+// What BUG-12 was, kept as an ordinary test now that it holds. The metamorphic relation "a
+// room the card cannot use changes nothing else" found it: nothing about the NUMBER moved —
+// the value and its position on the scale were identical on both sides — but who the card
+// said the number belonged to did, and the caption and tap target moved with it.
 //
-// Nothing about the NUMBER moves: the value and its position on the scale are identical on
-// both sides. What moves is who the card says the number belongs to, and the caption and tap
-// target that follow from it.
-//
-// The two rooms below are deliberately different kinds of unusable. `sensor.room1` does not
-// exist at all, and the topology already ignores it — which is right, and is what keeps a
-// card stable while Home Assistant is still publishing states. `sensor.foreign` exists and
-// reports a temperature on a humidity card, so it can never contribute; the topology counts
+// The two rooms below are deliberately different kinds of "not a source". `sensor.room1` does
+// not exist at all, which the topology has always ignored — that is what keeps a card stable
+// while Home Assistant is still publishing states. `sensor.foreign` exists and reports a
+// temperature on a humidity card, so it can never contribute, and the topology used to count
 // it all the same.
-expectedFailure("BUG-12", /caption|single-room card/, () => {
+test("a room the card can never use does not change what the headline is", () => {
   const description = {
     metric: "humidity",
     primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
@@ -433,6 +430,37 @@ expectedFailure("BUG-12", /caption|single-room card/, () => {
     "a room the card can never use must not turn a single-room card into a whole-home card, " +
       `but the caption moved from "${before.label}" to "${after.label}"`
   );
+  // The caption and the number too, because the caption is what the defect actually moved
+  // and the number is what stayed put while it did.
+  assert.equal(after.label, before.label);
+  assert.equal(after.value, before.value);
+});
+
+test("the other half of that: a room that does not exist at all is ignored too", () => {
+  // The half that always behaved correctly, and the one the fix had to leave alone: a
+  // configured room Home Assistant has never heard of leaves the card's identity alone.
+  const alone = buildScenario({
+    metric: "humidity",
+    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+    rooms: [{ id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } }],
+  });
+  const withMissing = buildScenario({
+    metric: "humidity",
+    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+    rooms: [
+      { id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
+      { id: "sensor.nowhere", present: false, state: 50 },
+    ],
+  });
+  const sourceOf = (built) => {
+    let answer;
+    env.withCard(built.config, built.hass, (card) => {
+      answer = card._computeViewModel().average.source;
+    });
+    return answer;
+  };
+  assert.equal(sourceOf(alone), "room");
+  assert.equal(sourceOf(withMissing), "room", "an entity that does not exist does not change what the card is about");
 });
 
 // BUG-13 — found by a 20000-case sweep, shrunk to one room and one classification block.
@@ -495,31 +523,4 @@ test("BUG-13's neighbourhood: the same profile with >= classifies the same readi
   env.withCard(built.config, built.hass, (card) => {
     assert.equal(typeof card._computeViewModel().empty, "boolean", "it renders rather than throwing");
   });
-});
-
-test("BUG-12's neighbourhood: a room that does not exist at all is already ignored", () => {
-  // The half that behaves correctly, and the one the fix must not disturb: a configured room
-  // Home Assistant has never heard of leaves the card's identity alone.
-  const alone = buildScenario({
-    metric: "humidity",
-    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
-    rooms: [{ id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } }],
-  });
-  const withMissing = buildScenario({
-    metric: "humidity",
-    primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
-    rooms: [
-      { id: "sensor.avg", state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
-      { id: "sensor.nowhere", present: false, state: 50 },
-    ],
-  });
-  const sourceOf = (built) => {
-    let answer;
-    env.withCard(built.config, built.hass, (card) => {
-      answer = card._computeViewModel().average.source;
-    });
-    return answer;
-  };
-  assert.equal(sourceOf(alone), "room");
-  assert.equal(sourceOf(withMissing), "room", "an entity that does not exist does not change what the card is about");
 });

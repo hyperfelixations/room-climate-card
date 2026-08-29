@@ -7,8 +7,8 @@
 // primary-with-rooms or room-consensus.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
-import { AVAILABILITY, UNUSABLE_REASON, buildEntityModel, hasEntity } from "./entity-model.js";
-import { SOURCE_TOPOLOGY, resolveSourceTopology } from "./source-topology.js";
+import { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } from "./entity-model.js";
+import { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } from "./source-topology.js";
 
 // Numeric consumers use this only after the no-data branch has returned. Display
 // identity is deliberately allowed to remain null so the shell can use the
@@ -105,7 +105,7 @@ function withContextAvailability(model, metricKind, mixed) {
 export function resolveMeasurementContext(states, config) {
   const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
   const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
-  const topology = resolveSourceTopology(config, (entityId) => hasEntity(states, entityId));
+  const topology = resolveSourceTopology(config, resolveSourceEligibility(states, config));
   const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
   let metricKind;

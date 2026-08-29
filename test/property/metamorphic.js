@@ -8,12 +8,12 @@
 // *worse than it should be*, because "worse" is a comparison and there was nothing to
 // compare against.
 //
-// BUG-12 is exactly that shape. A card whose only usable source is a room that is also its
-// primary renders perfectly. Add a room reporting a metric it can never use, and the number
-// does not move by a hair — but the caption above it changes from the room's name to "Home
-// avg." and the tap target changes with it. Both cards are self-consistent; every
-// single-card invariant passes on both. Only putting them side by side shows that a room the
-// card ignores changed what the card says it is showing.
+// BUG-12 had exactly that shape, and this layer is what found it. A card whose only usable
+// source is a room that is also its primary rendered perfectly. Adding a room reporting a
+// metric it could never use moved the number not by a hair — but the caption above it
+// changed from the room's name to "Home avg." and the tap target changed with it. Both cards
+// were self-consistent; every single-card invariant passed on both. Only putting them side
+// by side showed that a room the card ignores had changed what the card says it is showing.
 //
 // HOW A RELATION IS WRITTEN. Each one derives a SEQUENCE of configurations from the original
 // description and what the ORIGINAL CARD turned out to be, applies them to one card in order,
@@ -253,17 +253,6 @@ function hasDeclaringPrimary(description) {
   return Boolean(declared) && declared.key === DEVICE_CLASS_KEY && KNOWN_DEVICE_CLASSES.has(declared.value);
 }
 
-// Whether the card refers to exactly one entity, which is also its only room.
-//
-// The scenario builder names the primary `sensor.avg` and an unnamed room after its
-// position, so the two coincide only when a description says so explicitly.
-function isSingleRoomCard(description) {
-  const rooms = roomsOf(description);
-  if (rooms.length !== 1 || !description.primary || description.primary.present === false) return false;
-  const primaryId = description.primary.id || "sensor.avg";
-  return (rooms[0].id || "sensor.room0") === primaryId;
-}
-
 // A room reporting something THIS CARD is not about.
 //
 // Chosen against the kind the card actually resolved to, not against the kind the description
@@ -305,16 +294,11 @@ const RELATIONS = [
       const rooms = roomsOf(description);
       if (!rooms.length) return null;
       if (!base.metricKind) return null;
-      // A ONE-ENTITY CARD IS A DIFFERENT KIND OF CARD, and adding any room changes which
-      // kind it is rather than what it shows. When the primary entity is also the single
-      // configured room, the headline genuinely IS that room and carries its name and its
-      // tap action; with a second room the same card is a whole-home card that happens to
-      // list its primary, and captioning it with one room's name would be wrong. The rule
-      // and its reasoning are written out in src/application/model/source-topology.js.
-      //
-      // Without this the relation reports the caption moving from "Room 0" to "Home avg." —
-      // which is the documented contract doing exactly what it says.
-      if (isSingleRoomCard(description)) return null;
+      // A CARD WHOSE ONLY SOURCE IS ONE ROOM IS INCLUDED, deliberately. The added room
+      // reports a measurement this card is not about, so it is not a source of it at all
+      // (see src/application/model/source-topology.js) and the card stays the single-room
+      // card it was — same caption, same tap target. That is exactly what BUG-12 got wrong,
+      // and excluding the case here would have been excluding the defect.
       const next = clone(description);
       next.rooms = [...next.rooms, foreignRoom(base.metricKind, "sensor.foreign_kind")];
       return scenariosOf(next);
