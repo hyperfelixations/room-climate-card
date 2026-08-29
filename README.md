@@ -770,8 +770,13 @@ false}` set. It says your text again as soon as data comes back.
 A mistake that would make the card meaningless stops it with an error naming
 the option: no source at all, a `rooms:` that is not a list, a room without an
 entity, duplicate room entities, or a malformed `entity`. A mistake in a purely
-cosmetic option falls back to the default, and an unknown `views:` entry, view
-option or `show:` key is skipped with a note in the browser console.
+cosmetic option falls back to the default.
+
+An option the card does not have is skipped with a note in the browser console
+that names it — whether you wrote it at the top level, in `views:`, in a view's
+`options:` or in `show:`. Where what you wrote is close to a real option, the
+note suggests that one. A `start_view` naming a view that does not exist is
+noted the same way, and the card opens on its first available view.
 
 Three things the card decides on its own:
 
