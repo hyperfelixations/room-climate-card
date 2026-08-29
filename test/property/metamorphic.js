@@ -8,11 +8,12 @@
 // *worse than it should be*, because "worse" is a comparison and there was nothing to
 // compare against.
 //
-// BUG-10 is exactly that shape. A card with three rooms, one of them reporting a metric the
-// card does not use, renders perfectly: two markers, an average, no NaN anywhere. Make the
-// primary entity unavailable and the whole card goes blank — and the blank card is *also*
-// perfectly self-consistent. Every single-card invariant passes on both. Only putting them
-// side by side shows that adding a room the card ignores turned two markers into none.
+// BUG-12 is exactly that shape. A card whose only usable source is a room that is also its
+// primary renders perfectly. Add a room reporting a metric it can never use, and the number
+// does not move by a hair — but the caption above it changes from the room's name to "Home
+// avg." and the tap target changes with it. Both cards are self-consistent; every
+// single-card invariant passes on both. Only putting them side by side shows that a room the
+// card ignores changed what the card says it is showing.
 //
 // HOW A RELATION IS WRITTEN. Each one derives a SEQUENCE of configurations from the original
 // description and what the ORIGINAL CARD turned out to be, applies them to one card in order,
@@ -200,9 +201,51 @@ const KNOWN_DEVICE_CLASSES = new Set(Object.values(METRICS).map((metric) => metr
 // can settle which measurement the card is about. Counting such a value as a declaration
 // made the relation assert that the card knew which kind was its own when it did not, and
 // the generator reaches it: seed 0x13bb863d, a pm25 card whose primary declares `timestamp`.
+// The entity id a description gives its primary.
+const primaryIdOf = (description) => description.primary && (description.primary.id || "sensor.avg");
+
+// The id a room in this description ends up with — the builder names an unnamed room after
+// its position.
+const roomIdAt = (room, index) => room.id || `sensor.room${index}`;
+
+// WHICH DESCRIPTION ACTUALLY AUTHORED the primary entity's state object.
+//
+// Usually the primary's own. But buildScenario() writes the rooms AFTER the primary, so a
+// room configured with the primary's id overwrites it — and the generator does that often
+// enough to have a test of its own ("sometimes one sensor is both the average and a room").
+// A relation that reads the PRIMARY's description in that case is reading something the card
+// never sees: measured on seed 0x5e0da25a, the primary described `device_class: pm25` while
+// the room that overwrote it declared none, so the card had no arbiter at all and was right
+// to give up on a disagreement.
+function primaryStateDescription(description) {
+  if (!description.primary) return null;
+  const primaryId = primaryIdOf(description);
+  // AND THE CARD HAS TO BE ABLE TO FIND IT. setConfig() trims the id it is given, while the
+  // builder stores the state under the id exactly as written — so a padded `"  sensor.x  "`
+  // is configured as `sensor.x` and resolves to nothing at all. The generator issues ids
+  // Home Assistant would never accept on purpose, and a primary the card cannot find
+  // declares no more than a missing one does. Seed 0x639fe77d.
+  if (typeof primaryId !== "string" || primaryId !== primaryId.trim() || !primaryId) return null;
+  const authors = description.primary.present === false ? [] : [description.primary];
+  roomsOf(description).forEach((room, index) => {
+    if (roomIdAt(room, index) === primaryId && room.present !== false) authors.push(room);
+  });
+  return authors.length ? authors[authors.length - 1] : null;
+}
+
+// Whether the primary entity is ALSO one of the configured rooms. Then taking the primary
+// away necessarily takes that room away as well — they are one entity — and a relation about
+// losing "no other" source has nothing to say.
+function primaryIsAlsoARoom(description) {
+  if (!description.primary) return false;
+  const primaryId = primaryIdOf(description);
+  return roomsOf(description).some((room, index) => roomIdAt(room, index) === primaryId);
+}
+
 function hasDeclaringPrimary(description) {
-  if (!description.primary || description.primary.present === false) return false;
-  const declared = declaredDeviceClass(description.primary, description);
+  const authored = primaryStateDescription(description);
+  if (!authored) return false;
+  const declared = declaredDeviceClass(authored, description);
   // BOTH HALVES have to be right, and the generator misses each of them separately: a
   // misspelled attribute NAME hides a perfectly good value (seed 0x42b771f0, `device_class `
   // with a trailing space), and a VALUE the card does not know says nothing behind a correct
@@ -308,6 +351,11 @@ const RELATIONS = [
       if (!description.primary || description.primary.present === false) return null;
       if (description.primary.state === "unavailable") return null;
       if (roomsOf(description).length < 1) return null;
+      // ONE ENTITY CANNOT BE TAKEN AWAY AND KEPT. When the primary is also configured as a
+      // room, that room IS the primary, and losing it is the loss this relation permits
+      // rather than a second source going with it. Reported as a violation before this
+      // existed — seed 0x8168eec, where `sensor.avg` was both — and the card was right.
+      if (primaryIsAlsoARoom(description)) return null;
       const next = clone(description);
       next.primary = { ...next.primary, state: "unavailable" };
       return scenariosOf(next);
