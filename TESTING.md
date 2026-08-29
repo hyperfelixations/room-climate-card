@@ -1,8 +1,8 @@
 # Testing the Room Climate Card
 
-The card ships straight to real dashboards and has no staging environment. The test suite is
-the only thing standing between a change and those dashboards, so it is built to be run
-constantly and to be believed when it is green.
+The Room Climate Card installs directly into live dashboards; there is no staging environment
+between a commit and the people running it. The suite is therefore written to be cheap enough
+to run on every change, and it is the release gate.
 
 Two commands cover almost everything:
 
@@ -10,9 +10,9 @@ Two commands cover almost everything:
 npm test
 ```
 
-Builds the bundle, checks it parses, runs every Node test, then every browser test. This is
-what must pass before a commit — no exceptions, and see [Known defects](#known-defects) for how
-that rule survives a defect that is deliberately not fixed yet.
+Builds the bundle, checks it parses, runs every Node test, then every browser test. It has to
+pass before a commit; [Known defects](#known-defects) describes how that requirement is kept
+while a defect is knowingly left unfixed.
 
 ```bash
 npm run test:node
@@ -139,12 +139,13 @@ timestamps that are missing or in the future, extra attributes in their awkward 
 configured both as the average and as a room.
 
 The weights live in one place (`generators.js`), and `generators.test.js` measures the realised
-distribution against them. That is not ceremony: a property test can pass five hundred
-iterations while checking nothing, if every card it builds lands in the no-data state and its
-invariants sit behind an `if (!data.empty)` that never runs. The run asserts what its own
-population looks like, and fails if that population stops being worth testing — including the
-two guards that catch the silent version: every declared weight table must actually be drawn
-from, and every optional configuration key must really appear.
+distribution against them. The measurement is what makes the run mean anything: a property test
+can pass five hundred iterations while checking nothing, if every card it builds lands in the
+no-data state and its invariants sit behind an `if (!data.empty)` that never runs. The run
+therefore asserts what its own population looks like and fails if that population stops being
+worth testing — including the two guards for the quieter version of the same problem: every
+declared weight table has to be drawn from, and every optional configuration key has to appear
+somewhere in the population.
 
 ### Two cards, not one
 
@@ -225,9 +226,9 @@ layer and the merge writes LCOV, JSON and a text summary under `coverage/`.
 
 Before it reports anything, the merge checks the INVENTORY: every `.js` file under `src/` has
 to appear in each of the three layers and in the merge, and the run fails naming the files if
-one does not. This is not pedantry about counts. Istanbul reports only the files it was handed,
-so a module no layer executed does not show up as 0% — it does not show up at all, and every
-percentage below is quietly computed over a smaller product than the one that ships. The merge
+one does not. The reason is how Istanbul reports: it covers only the files it was handed, so a
+module no layer executed does not show up as 0 % — it does not show up at all, and every
+percentage below it is then computed over a smaller product than the one that ships. The merge
 then enforces the calibrated floor of 98% statements, 97% branches, 75% functions and 98%
 lines. CI uploads the complete folder.
 
@@ -249,17 +250,18 @@ Weekly CI publishes the JSON and HTML reports under `reports/mutation/`.
 
 ## Known defects
 
-The suite is green at every commit. That rule is not negotiable — once a red run is normal,
-nobody can tell a new regression from an old one everybody agreed to live with.
+The suite is green at every commit. Once a red run is normal, a new regression cannot be told
+apart from an old one everybody has agreed to live with, and the suite stops being a gate.
 
 A defect that is understood, reproduced and deliberately not fixed yet is registered in
 `test/known-issues.js` and reproduced in `test/known-issues.test.js` through
-`expectedFailure()`, which requires the reproduction to **fail**. The run stays green, the bug
-stays documented in executable form, and — the part that makes this honest — **if the
-reproduction ever passes, the run fails**, telling whoever fixed the defect to come and close
-the entry.
+`expectedFailure()`, which requires the reproduction to **fail**. The run stays green and the
+defect stays documented in executable form. The register cannot go stale either: **if the
+reproduction ever passes, the run fails** and tells whoever fixed the defect to close the entry
+and promote the reproduction to an ordinary test.
 
-Read `test/known-issues.js` to find out what is currently broken on purpose.
+`test/known-issues.js` is the list of what is known to be wrong and deliberately left that
+way.
 
 ## Continuous integration
 

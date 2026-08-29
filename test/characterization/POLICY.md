@@ -9,8 +9,9 @@ markup". If it fails, something *changed* — and whether that change is a bug o
 the commit is a question only a person can answer.
 
 Both are valuable. What is not valuable is a baseline nobody can decide about, so every one of
-the 75 files under `test/baseline/` has an owner, a purpose, and a rule for when it may be
-re-recorded. `policy.test.js` checks that this document and the files agree.
+the 77 files under `test/baseline/` has an owner, a purpose, and a rule for when it may be
+re-recorded. `policy.test.js` checks that this document and the files agree — the table below
+against the directory, not this sentence, so the count here is the one place it can go stale.
 
 ## The rule that matters
 
