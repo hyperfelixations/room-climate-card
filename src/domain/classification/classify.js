@@ -27,7 +27,8 @@ const FALLBACK_INVALID = {
 
 // First tier whose threshold the value passes, using the profile's own comparison
 // operator. ">=" makes a boundary belong to the tier above it, ">" makes it belong to the
-// tier below.
+// tier below. Every built-in profile reads its thresholds the first way — the threshold
+// itself belongs to its tier — and `>` is a choice a YAML profile can make.
 //
 // PARTIAL, and the caller has to answer for it. A `>` profile's open-ended final tier sits
 // at -Infinity, and nothing is strictly above -Infinity — so a reading that reached

@@ -353,14 +353,13 @@ test("every built-in tier keeps exactly the colour it always had", () => {
   let tiers = 0;
   for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
     for (const [id, profile] of Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
-      // A value INSIDE the tier, on the profile's own comparison: an exclusive profile
-      // does not admit its own threshold. The open-ended tier is probed just below the
-      // one above it rather than at negative infinity, because several profiles call a
-      // far-out reading physically invalid — which is a different question from which
-      // tier it belongs to.
+      // A value INSIDE the tier, which for every built-in profile is its own threshold. The
+      // open-ended tier is probed just below the one above it rather than at negative
+      // infinity, because several profiles call a far-out reading physically invalid —
+      // which is a different question from which tier it belongs to.
       const inside = (index) => {
         const tier = profile.tiers[index];
-        if (Number.isFinite(tier.min)) return profile.comparison === ">" ? tier.min + 0.001 : tier.min;
+        if (Number.isFinite(tier.min)) return tier.min;
         const above = profile.tiers[index - 1];
         return above ? above.min - 0.001 : 0;
       };

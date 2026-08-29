@@ -20,7 +20,7 @@ import { physicalRange } from "../../validity.js";
 export const indoor = {
   id: "indoor",
   metricKind: "pm25",
-  comparison: ">",
+  comparison: ">=",
   // A concentration cannot be negative. Zero is what clean air reads.
   ...physicalRange({ min: 0 }),
   invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },

@@ -624,9 +624,12 @@ test("profileIconForValue() returns null when a profile declares no icon tiers",
   }
 });
 
-test("icon tiers honour the profile's comparison operator", () => {
+test("a built-in profile's icon threshold belongs to the icon it names", () => {
+  // The same rule the tiers follow, checked on the one profile whose icon boundaries used to
+  // read the other way: an icon and a tier must never disagree about the value ON a
+  // threshold, and they cannot, because both go through the profile's own operator.
   const pm25 = registry.CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor;
-  assert.equal(pm25.comparison, ">");
-  assert.equal(icons.profileIconForValue(5, pm25), "mdi:molecule", "exactly 5 does not pass an exclusive boundary");
-  assert.equal(icons.profileIconForValue(5.1, pm25), "mdi:weather-hazy");
+  assert.equal(pm25.comparison, ">=");
+  assert.equal(icons.profileIconForValue(4.99, pm25), "mdi:molecule");
+  assert.equal(icons.profileIconForValue(5, pm25), "mdi:weather-hazy", "exactly 5 passes an inclusive boundary");
 });

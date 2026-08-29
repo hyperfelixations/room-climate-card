@@ -283,10 +283,10 @@ test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thres
       deviceClass: "pm25",
       unit: "µg/m³",
       readings: [
-        [50.1, "mdi:alert-circle-outline"],
-        [25.1, "mdi:weather-dust"],
-        [5.1, "mdi:weather-hazy"],
-        [5, "mdi:molecule"],
+        [50, "mdi:alert-circle-outline"],
+        [25, "mdi:weather-dust"],
+        [5, "mdi:weather-hazy"],
+        [4.9, "mdi:molecule"],
       ],
     },
   ];

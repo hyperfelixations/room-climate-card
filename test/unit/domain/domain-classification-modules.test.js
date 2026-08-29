@@ -199,24 +199,20 @@ test("exactly one tier per profile is the optimal zone, and it contains the opti
 // ----------------------------------------------------- boundary behaviour --
 
 test("every tier boundary behaves correctly just below, exactly on, and just above", () => {
+  // ONE RULE FOR ALL SIX: the threshold itself belongs to the tier that names it. The
+  // operator is asserted rather than branched on, because a profile that stopped reading its
+  // thresholds like its neighbours would then fail here by name instead of quietly taking a
+  // second path through this loop.
   const EPS = 1e-9;
   for (const { kind, id, profile } of allProfiles()) {
+    assert.equal(profile.comparison, ">=", `${kind}/${id}: every built-in profile is inclusive`);
     for (const [i, tier] of profile.tiers.entries()) {
       if (!Number.isFinite(tier.min)) continue;
-      const label = `${kind}/${id} tier ${i} (min ${tier.min}, comparison "${profile.comparison}")`;
+      const label = `${kind}/${id} tier ${i} (min ${tier.min})`;
       const lower = profile.tiers[i + 1];
 
-      // Just above the boundary always selects this tier.
       assert.equal(selectTier(profile, tier.min + EPS), tier, `${label}: just above`);
-
-      // Exactly on the boundary depends on the profile's own operator.
-      if (profile.comparison === ">=") {
-        assert.equal(selectTier(profile, tier.min), tier, `${label}: exactly on (inclusive)`);
-      } else {
-        assert.equal(selectTier(profile, tier.min), lower, `${label}: exactly on (exclusive -> next lower)`);
-      }
-
-      // Just below always falls through to the next lower tier.
+      assert.equal(selectTier(profile, tier.min), tier, `${label}: exactly on`);
       assert.equal(selectTier(profile, tier.min - EPS), lower, `${label}: just below`);
     }
   }
@@ -242,11 +238,10 @@ test("a value above every threshold lands in the top tier", () => {
 test("non-finite values never crash tier selection", () => {
   for (const { kind, id, profile } of allProfiles()) {
     assert.equal(selectTier(profile, Infinity), profile.tiers[0], `${kind}/${id}: +Infinity`);
-    assert.equal(
-      selectTier(profile, -Infinity),
-      profile.comparison === ">" ? undefined : profile.tiers[profile.tiers.length - 1],
-      `${kind}/${id}: -Infinity`
-    );
+    // Every built-in is inclusive, so -Infinity lands in the open-ended tier rather than
+    // matching nothing. A `>` profile is the case that does not, and only YAML can write
+    // one — see unit/domain/domain-services-modules.test.js.
+    assert.equal(selectTier(profile, -Infinity), profile.tiers[profile.tiers.length - 1], `${kind}/${id}: -Infinity`);
     assert.equal(selectTier(profile, NaN), undefined, `${kind}/${id}: NaN matches no tier`);
   }
 });
@@ -393,9 +388,9 @@ test("co2/indoor is one-sided with explicit headroom", () => {
   assert.equal(selectTier(p, 2000).levelKey, "level.critical");
 });
 
-test("pm25/indoor uses the exclusive comparison so a value on a boundary stays lower", () => {
+test("pm25/indoor reads its thresholds the way every other built-in profile does", () => {
   const p = registry.CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor;
-  assert.equal(p.comparison, ">", "PM2.5 boundaries are exclusive");
+  assert.equal(p.comparison, ">=", "the threshold itself belongs to the tier that names it");
   assert.equal(p.oneSided, true);
   assert.equal(p.headroom, undefined);
   assert.deepEqual(p.comfort, { min: 0, max: 15 });
@@ -404,9 +399,8 @@ test("pm25/indoor uses the exclusive comparison so a value on a boundary stays l
   assert.equal(p.step, 5);
   assert.deepEqual(p.tiers.map((t) => t.min), [50, 35, 25, 15, 5, -Infinity]);
   assert.deepEqual(p.iconTiers.map((t) => t.min), [50, 25, 5, -Infinity]);
-  // Exactly 5 is NOT "slightly elevated" because the comparison is exclusive.
-  assert.equal(selectTier(p, 5).levelKey, "level.optimal");
-  assert.equal(selectTier(p, 5.1).levelKey, "level.slightlyElevated");
+  assert.equal(selectTier(p, 4.99).levelKey, "level.optimal");
+  assert.equal(selectTier(p, 5).levelKey, "level.slightlyElevated", "exactly 5 is the tier 5 names");
 });
 
 // ------------------------------------------------------------ icon tables --
@@ -416,6 +410,10 @@ test("pm25/indoor uses the exclusive comparison so a value on a boundary stays l
 // the profiles were rewritten, and are therefore evidence rather than a restatement of
 // the data below them: any profile whose icons move shows up here, and only here does a
 // wrong boundary have nowhere to hide.
+//
+// The three PM2.5 thresholds — 5, 25 and 50 — sit one row higher than the reading recorded
+// then, and that is the one deliberate move in this table: the profile used to read them
+// exclusively and now reads them like its five neighbours. Nothing else in it has changed.
 const SHIPPED_ICONS = {
   "temperature/indoor": [
     [[-100, 0, 15, 15.99, 16, 16.01, 17, 17.99], "mdi:snowflake"],
@@ -467,12 +465,12 @@ const SHIPPED_ICONS = {
     [[2000, 2000.01, 2001], "mdi:alert-circle-outline"],
   ],
   "pm25/indoor": [
-    [[-100, -1, -0.01, 0, 0.01, 1, 4, 4.99, 5], "mdi:molecule"],
+    [[-100, -1, -0.01, 0, 0.01, 1, 4, 4.99], "mdi:molecule"],
     [[
-      5.01, 6, 14, 14.99, 15, 15.01, 16, 19, 19.99, 20, 20.01, 21, 24, 24.99, 25,
+      5, 5.01, 6, 14, 14.99, 15, 15.01, 16, 19, 19.99, 20, 20.01, 21, 24, 24.99,
     ], "mdi:weather-hazy"],
-    [[25.01, 26, 34, 34.99, 35, 35.01, 36, 49, 49.99, 50], "mdi:weather-dust"],
-    [[50.01, 51, 1000], "mdi:alert-circle-outline"],
+    [[25, 25.01, 26, 34, 34.99, 35, 35.01, 36, 49, 49.99], "mdi:weather-dust"],
+    [[50, 50.01, 51, 1000], "mdi:alert-circle-outline"],
   ],
 };
 

@@ -154,11 +154,11 @@ test("co2 invalidWhen: a negative reading classifies as an invalid reading, not 
   assert.equal(toneLabel(0, "co2"), "Optimal", "zero ppm is a possible concentration, so it takes its tier like any other");
 });
 
-test("pm25 thresholds use an exclusive '>' comparison — the tier's own min boundary belongs to the tier BELOW it", () => {
+test("a pm25 threshold belongs to its own tier, like every other built-in profile's", () => {
   assert.equal(toneLabel(0, "pm25"), "Optimal");
   assert.equal(toneLabel(9999, "pm25"), "Critical");
-  assert.equal(toneLabel(50, "pm25"), "Very high", "exactly 50 is NOT > 50, so it falls into the next tier down, not Critical");
-  assert.equal(toneLabel(50.01, "pm25"), "Critical");
+  assert.equal(toneLabel(50, "pm25"), "Critical", "the threshold itself is the tier it names");
+  assert.equal(toneLabel(49.99, "pm25"), "Very high");
 });
 
 test("pm25 invalidWhen: negative readings classify as invalid, and 0 like any other reading", () => {
