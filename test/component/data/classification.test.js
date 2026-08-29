@@ -149,10 +149,9 @@ test("co2 thresholds: boundary values classify into the documented tiers (value 
   assert.equal(toneLabel(800, "co2"), "Slightly elevated");
 });
 
-test("co2 invalidWhen: 0 and negative readings classify as an invalid reading, not 'Optimal'", () => {
-  const invalidLabel = toneLabel(0, "co2");
-  assert.notEqual(invalidLabel, "Optimal");
-  assert.equal(invalidLabel, toneLabel(-5, "co2"), "0 and negative must classify identically as invalid");
+test("co2 invalidWhen: a negative reading classifies as an invalid reading, not 'Optimal'", () => {
+  assert.notEqual(toneLabel(-5, "co2"), "Optimal");
+  assert.equal(toneLabel(0, "co2"), "Optimal", "zero ppm is a possible concentration, so it takes its tier like any other");
 });
 
 test("pm25 thresholds use an exclusive '>' comparison — the tier's own min boundary belongs to the tier BELOW it", () => {
@@ -162,7 +161,12 @@ test("pm25 thresholds use an exclusive '>' comparison — the tier's own min bou
   assert.equal(toneLabel(50.01, "pm25"), "Critical");
 });
 
-test("pm25 invalidWhen: negative readings classify as invalid; 0 is valid (unlike co2)", () => {
+test("pm25 invalidWhen: negative readings classify as invalid, and 0 like any other reading", () => {
   assert.notEqual(toneLabel(-1, "pm25"), "Optimal");
-  assert.equal(toneLabel(0, "pm25"), "Optimal", "0 µg/m³ is a physically plausible PM2.5 reading, unlike CO2");
+  assert.equal(toneLabel(0, "pm25"), "Optimal", "0 µg/m³ is what clean air reads");
+});
+
+test("temperature invalidWhen: below absolute zero classifies as invalid, the limit itself does not", () => {
+  assert.notEqual(toneLabel(-274, "temperature"), toneLabel(-273.15, "temperature"));
+  assert.equal(toneLabel(-274, "temperature"), toneLabel(-1000, "temperature"), "everything past the limit is one answer");
 });

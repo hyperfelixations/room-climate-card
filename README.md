@@ -903,8 +903,9 @@ situations:
 - **A sensor that is `unavailable`, `unknown`, or reporting something that is
   not a number.** The entity exists, so it holds its place on the card as a `--`
   chip. Set `show.unavailable_rooms: false` to leave those chips out.
-- **A reading that cannot be real**, such as 800 % humidity. The card reports it
-  as an impossible reading and leaves it out of every calculation.
+- **A reading that cannot be real**, such as 800 % humidity or a temperature
+  below absolute zero. The card reports it as an impossible reading and leaves it
+  out of every calculation.
 - **A sensor measuring something else, or using a unit that does not fit.** It
   is left out of this card.
 

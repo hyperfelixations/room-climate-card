@@ -15,10 +15,14 @@
 // Values are product decisions, not implementation details. Do not round,
 // reorder or "tidy" them without a documented reason.
 
+import { physicalRange } from "../../validity.js";
+
 export const indoor = {
   id: "indoor",
   metricKind: "temperature",
   comparison: ">=",
+  // Nothing can be colder than absolute zero; there is no upper limit to state.
+  ...physicalRange({ min: -273.15 }),
   tiers: [
     { min: 28, score: 5, levelKey: "level.veryHot", zone: "outside" },
     { min: 26, score: 4, levelKey: "level.hot", zone: "outside" },

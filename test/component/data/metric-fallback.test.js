@@ -214,7 +214,7 @@ test("metricType and unit resolve together when the primary carries a stray unit
 
 test("an invalid CO2 primary falls back to valid humidity rooms without mixing labels", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 0, CO2), // 0 ppm: invalidWhen(value <= 0)
+    "sensor.avg": mkState("sensor.avg", -20, CO2), // a negative concentration is impossible
     "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
     "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
   });

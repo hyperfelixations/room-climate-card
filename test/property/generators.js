@@ -57,7 +57,7 @@ const OTHER_DOMAIN_UNITS = Object.entries(V.HA_UNITS)
 const VALUE_BANDS = {
   temperature: { typical: [-20, 45], wide: [-60, 100], impossible: [-400, -274] },
   humidity: { typical: [0, 100], wide: [0, 100], impossible: [-50, -0.01] },
-  co2: { typical: [350, 2500], wide: [1, 50000], impossible: [-1000, 0] },
+  co2: { typical: [350, 2500], wide: [1, 50000], impossible: [-1000, -0.01] },
   pm25: { typical: [0, 60], wide: [0, 1000], impossible: [-100, -0.01] },
 };
 

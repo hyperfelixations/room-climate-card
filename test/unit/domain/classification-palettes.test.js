@@ -377,8 +377,10 @@ test("every built-in tier keeps exactly the colour it always had", () => {
         );
         tiers++;
       }
-      if (profile.invalidWhen) {
-        const invalidProbe = kind === "humidity" ? -1 : kind === "co2" ? 0 : -1;
+      {
+        // One reading past each measurement's own limit. Temperature's is absolute zero,
+        // so -1 is an ordinary winter reading there and would prove nothing.
+        const invalidProbe = kind === "temperature" ? -274 : -1;
         const result = classify.classifyNumericValue(profile, invalidProbe);
         assert.equal(result.invalid, true, `${kind}/${id}: ${invalidProbe} is invalid`);
         assert.equal(
@@ -396,8 +398,11 @@ test("every built-in tier keeps exactly the colour it always had", () => {
 test("the same profiles under the second palette differ everywhere and stay coherent", () => {
   const profile = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor;
   const seen = new Set();
-  for (const tier of profile.tiers) {
-    const result = classify.classifyNumericValue(profile, Number.isFinite(tier.min) ? tier.min : -1e6);
+  for (const [index, tier] of profile.tiers.entries()) {
+    // Just below the tier above it for the open-ended one: -1e6 °C is past absolute zero
+    // and would classify as an impossible reading rather than as the coldest tier.
+    const probe = Number.isFinite(tier.min) ? tier.min : profile.tiers[index - 1].min - 0.001;
+    const result = classify.classifyNumericValue(profile, probe);
     const bold = paletteColor.resolveClassificationColor({ ...result, source: "builtin" }, vivid);
     const soft = paletteColor.resolveClassificationColor({ ...result, source: "builtin" }, pastel);
     assert.notEqual(bold, soft, `${tier.score} from optimal must actually change`);

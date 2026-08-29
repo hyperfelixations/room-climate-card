@@ -12,6 +12,7 @@
 // and unit profile is domain knowledge, and the configuration layer must not
 // import the domain registry.
 
+import { isOutsideRange } from "../../core/numbers.js";
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
 import { pathError } from "../errors.js";
 import { normalizeBands, normalizeIcons, normalizeScale, normalizeTiers, normalizeValidRange } from "./profile-parts.js";
@@ -97,11 +98,9 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     minInclusive: sourceValidRange.minInclusive,
     maxInclusive: sourceValidRange.maxInclusive,
   };
-  const invalidWhen = canonicalValidRange
-    ? (reading) =>
-        (canonicalValidRange.min !== null && (canonicalValidRange.minInclusive ? reading < canonicalValidRange.min : reading <= canonicalValidRange.min)) ||
-        (canonicalValidRange.max !== null && (canonicalValidRange.maxInclusive ? reading > canonicalValidRange.max : reading >= canonicalValidRange.max))
-    : null;
+  // The same comparison the built-in profiles use, from the same place, so a written
+  // window and a declared one can never disagree about where their edges are.
+  const invalidWhen = canonicalValidRange ? (reading) => isOutsideRange(reading, canonicalValidRange) : null;
 
   return {
     id: "custom",

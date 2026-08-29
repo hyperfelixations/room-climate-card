@@ -20,6 +20,7 @@ const assert = require("node:assert/strict");
 let registry;
 let zones;
 let icons;
+let classify;
 
 const KINDS = ["temperature", "humidity", "co2", "pm25"];
 const EXPECTED_PROFILE_IDS = {
@@ -33,6 +34,7 @@ test.before(async () => {
   registry = await import("../../../src/domain/classification/registry.js");
   zones = await import("../../../src/domain/classification/zones.js");
   icons = await import("../../../src/domain/classification/icons.js");
+  classify = await import("../../../src/domain/classification/classify.js");
 });
 
 function allProfiles() {
@@ -251,29 +253,62 @@ test("non-finite values never crash tier selection", () => {
 
 // ---------------------------------------------------------- validity rules --
 
-test("humidity, co2 and pm25 declare physical validity limits with an invalid classification", () => {
+test("every profile declares the limits of what its measurement can be", () => {
+  // ONE RULE across all four: the limit itself is a reading, and only what lies past it
+  // is impossible. A concentration of zero, 0 % and 100 % humidity and absolute zero are
+  // therefore all valid, which is why the invalid columns start one step beyond them.
   const cases = {
+    temperature: { invalid: [-273.16, -274, -1e6], valid: [-273.15, -40, 0, 21, 1e6] },
     humidity: { invalid: [-0.1, 100.1, -5, 150], valid: [0, 50, 100] },
-    co2: { invalid: [0, -1], valid: [1, 400, 5000] },
+    co2: { invalid: [-0.1, -1], valid: [0, 1, 400, 5000] },
     pm25: { invalid: [-0.1, -5], valid: [0, 12, 500] },
   };
   for (const [kind, { invalid, valid }] of Object.entries(cases)) {
-    const profile = registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles.indoor;
-    assert.equal(typeof profile.invalidWhen, "function", `${kind}: invalidWhen`);
-    for (const value of invalid) assert.equal(profile.invalidWhen(value), true, `${kind}: ${value} must be invalid`);
-    for (const value of valid) assert.equal(profile.invalidWhen(value), false, `${kind}: ${value} must be valid`);
-    assert.equal(profile.invalidClassification.zone, "invalid", `${kind}: invalid zone`);
-    assert.equal(profile.invalidClassification.levelKey, "level.invalidReading", `${kind}: invalid level key`);
-    assert.equal(profile.invalidClassification.color, undefined, `${kind}: the palette owns the invalid colour`);
+    for (const id of EXPECTED_PROFILE_IDS[kind]) {
+      const profile = registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles[id];
+      assert.equal(typeof profile.invalidWhen, "function", `${kind}/${id}: invalidWhen`);
+      for (const value of invalid) assert.equal(profile.invalidWhen(value), true, `${kind}/${id}: ${value} must be invalid`);
+      for (const value of valid) assert.equal(profile.invalidWhen(value), false, `${kind}/${id}: ${value} must be valid`);
+    }
   }
 });
 
-test("temperature profiles deliberately declare no physical validity limit", () => {
-  // Any finite temperature is a possible reading; there is no "impossible"
-  // value the way there is for a negative concentration.
+test("a profile's limits travel as a range, so they can be re-expressed in another unit", () => {
+  // The predicate alone would be a Celsius comparison forever. `validRange` is the same
+  // statement as data, and it is what projectProfileToDisplayUnit() converts — the reason
+  // a Fahrenheit card rejects the same physical readings rather than the same numbers.
   for (const id of EXPECTED_PROFILE_IDS.temperature) {
     const profile = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles[id];
-    assert.equal(profile.invalidWhen, undefined, `temperature/${id}`);
+    assert.deepEqual(profile.validRange, { min: -273.15, max: null, minInclusive: true, maxInclusive: true }, id);
+  }
+  assert.deepEqual(registry.CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.validRange, {
+    min: 0,
+    max: 100,
+    minInclusive: true,
+    maxInclusive: true,
+  });
+  for (const kind of ["co2", "pm25"]) {
+    assert.deepEqual(
+      registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles.indoor.validRange,
+      { min: 0, max: null, minInclusive: true, maxInclusive: true },
+      kind
+    );
+  }
+});
+
+test("an impossible reading takes the neutral invalid classification, however the profile got there", () => {
+  // humidity, co2 and pm25 name it themselves; the temperature profiles rely on the
+  // fallback classify.js documents. Both roads have to arrive at the same place, so this
+  // asks what a reading is CLASSIFIED as rather than which field the profile carries.
+  const impossible = { temperature: -300, humidity: 150, co2: -1, pm25: -1 };
+  for (const [kind, value] of Object.entries(impossible)) {
+    for (const id of EXPECTED_PROFILE_IDS[kind]) {
+      const result = classify.classifyNumericValue(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles[id], value);
+      assert.equal(result.invalid, true, `${kind}/${id}`);
+      assert.equal(result.zone, "invalid", `${kind}/${id}`);
+      assert.equal(result.levelKey, "level.invalidReading", `${kind}/${id}`);
+      assert.equal(result.explicitColor, null, `${kind}/${id}: the palette owns the invalid colour`);
+    }
   }
 });
 

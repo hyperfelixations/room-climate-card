@@ -131,15 +131,19 @@ test("a missing entity yields an all-null model rather than throwing", () => {
 });
 
 test("physical validity runs after canonicalization, not before", () => {
-  // 0 ppm is a stuck sensor, not a clean room.
-  const zero = entityModel.buildEntityModel({ "sensor.a": st(0, CO2) }, cfg(), "sensor.a", "primary");
-  assert.equal(zero.validNumeric, true);
-  assert.equal(zero.validPhysical, false);
+  // A negative concentration is impossible.
+  const negative = entityModel.buildEntityModel({ "sensor.a": st(-20, CO2) }, cfg(), "sensor.a", "primary");
+  assert.equal(negative.validNumeric, true);
+  assert.equal(negative.validPhysical, false);
   // A negative humidity is impossible.
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-5, RH) }, cfg(), "sensor.a", "primary").validPhysical, false);
   // 120 °F is 48.9 °C — perfectly possible, and would have been rejected if the
   // check had run against the raw value with Celsius limits.
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(120, F) }, cfg(), "sensor.a", "primary").validPhysical, true);
+  // -400 °F is -240 °C, which is cold beyond anything real and still above absolute
+  // zero: the limit has to be converted too, or this would be rejected.
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-400, F) }, cfg(), "sensor.a", "primary").validPhysical, true);
+  assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-500, F) }, cfg(), "sensor.a", "primary").validPhysical, false);
 });
 
 test("validity is checked leniently, so a foreign-kind probe cannot throw", () => {

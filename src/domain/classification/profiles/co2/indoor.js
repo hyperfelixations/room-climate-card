@@ -15,11 +15,14 @@
 // Values are product decisions, not implementation details. Do not round,
 // reorder or "tidy" them without a documented reason.
 
+import { physicalRange } from "../../validity.js";
+
 export const indoor = {
   id: "indoor",
   metricKind: "co2",
   comparison: ">=",
-  invalidWhen: (value) => value <= 0,
+  // A concentration cannot be negative. Zero is possible, if not indoors.
+  ...physicalRange({ min: 0 }),
   invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
   tiers: [
     { min: 2000, score: 5, levelKey: "level.critical", zone: "outside" },

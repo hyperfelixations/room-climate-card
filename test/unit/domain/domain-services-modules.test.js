@@ -372,11 +372,27 @@ test("isPhysicallyValid() only rejects what a profile declares impossible", () =
   assert.equal(validity.isPhysicallyValid(humidity, 101), false);
 
   const co2 = registry.CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor;
-  assert.equal(validity.isPhysicallyValid(co2, 0), false, "a stuck 0 ppm reading is not data");
+  assert.equal(validity.isPhysicallyValid(co2, -1), false, "a negative concentration is not data");
+  assert.equal(validity.isPhysicallyValid(co2, 0), true, "zero is possible; whether a sensor is stuck is a different question");
   assert.equal(validity.isPhysicallyValid(co2, 400), true);
 
   const temperature = temperatureRegistry().profiles.indoor;
-  assert.equal(validity.isPhysicallyValid(temperature, -300), true, "temperature declares no limit");
+  assert.equal(validity.isPhysicallyValid(temperature, -300), false, "nothing is colder than absolute zero");
+  assert.equal(validity.isPhysicallyValid(temperature, -273.15), true, "the limit itself is a reading");
+});
+
+test("physicalRange() states one window and answers with both fields the card reads", () => {
+  const floorOnly = validity.physicalRange({ min: 0 });
+  assert.deepEqual(floorOnly.validRange, { min: 0, max: null, minInclusive: true, maxInclusive: true });
+  assert.equal(floorOnly.invalidWhen(-0.001), true);
+  assert.equal(floorOnly.invalidWhen(0), false);
+  assert.equal(floorOnly.invalidWhen(1e308), false, "no upper bound means no upper limit");
+
+  const ceilingOnly = validity.physicalRange({ max: 100 });
+  assert.deepEqual(ceilingOnly.validRange, { min: null, max: 100, minInclusive: true, maxInclusive: true });
+  assert.equal(ceilingOnly.invalidWhen(-1e308), false, "no lower bound means no lower limit");
+  assert.equal(ceilingOnly.invalidWhen(100), false);
+  assert.equal(ceilingOnly.invalidWhen(100.001), true);
 });
 
 test("isPhysicallyValid() treats a missing profile as valid", () => {

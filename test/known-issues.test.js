@@ -112,26 +112,42 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
-// BUG-06 — found by the property run, seed 0x99accdd, shrunk to two rooms.
+// BUG-06 — found by the property run, seed 0x99accdd.
 //
-// Two rooms whose values are 1e308 and -1e308 have a span of 2e308, which is not a double.
-// The subtraction overflows to Infinity, every position derived from it divides by that
+// An axis whose ends are 1e308 apart in each direction spans 2e308, which is not a double.
+// The subtraction overflows to Infinity, a position derived from it divides Infinity by
 // Infinity into NaN, and the NaN is written straight into a CSS calc(). In a browser the
-// declaration is simply dropped and the markers land in the wrong place; under jsdom the
+// declaration is simply dropped and the marker lands in the wrong place; under jsdom the
 // CSS parser rejects `calc(NaN% + 0px)` outright and the render throws.
 //
-// The threshold is exactly the overflow: ±1e200 is fine (span 2e200), ±1e308 is not. A real
-// sensor cannot produce this, but a template sensor dividing by something near zero can,
-// and the card's answer should be the no-data state it already has for unusable readings —
-// not a card drawn at NaN per cent.
+// WHAT REACHES IT is a custom profile whose declared scale spans both extremes. Two entity
+// READINGS no longer can: every measurement has a physical floor, so no two valid readings
+// are far enough apart for their span to overflow. The arithmetic that overflows is
+// untouched, and the card's answer should still be the no-data state it already has for an
+// unusable reading — not a card drawn at NaN per cent.
+const BUG_06_PROFILE = {
+  source: "custom",
+  unit: "°C",
+  comparison: ">=",
+  bands: { comfort: { min: -10, max: 40 }, optimal: { min: 18, max: 24 } },
+  scale: { min: -1e308, max: 1e308, step: 5 },
+  tiers: [
+    { min: 40, score: 1, level: "hot", zone: "outside" },
+    { min: 18, score: 0, level: "ok", zone: "optimal" },
+    { default: true, score: -1, level: "cold", zone: "outside" },
+  ],
+};
+
 expectedFailure("BUG-06", (error) =>
   (error && error.name === "SyntaxError" && error.source === "calc(NaN% + 0px)" && /"\)" is expected/.test(error.message)) ||
-  (error && error.code === "ERR_ASSERTION" && /spread is Infinity|warmestPosition is NaN|scale\.markerPositions\..+ is NaN|NaN reached the DOM/.test(error.message)), () => {
-  const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e308 }, { state: -1e308 }] });
+  (error && error.code === "ERR_ASSERTION" && /spread is Infinity|scale\.markerPositions\..+ is NaN|NaN reached the DOM/.test(error.message)), () => {
+  const built = buildScenario({
+    metric: "temperature",
+    primary: { state: 1e308 },
+    config: { classification: BUG_06_PROFILE },
+  });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
-    assert.ok(Number.isFinite(model.spread), `spread is ${model.spread}`);
-    assert.ok(Number.isFinite(model.extremes.warmestPosition), `warmestPosition is ${model.extremes.warmestPosition}`);
     for (const [name, position] of Object.entries(model.scale.markerPositions)) {
       assert.ok(Number.isFinite(position), `scale.markerPositions.${name} is ${position}`);
     }
@@ -142,28 +158,47 @@ expectedFailure("BUG-06", (error) =>
 // The neighbouring case that DOES work, so the boundary is recorded and a future fix can be
 // checked against something. This is an ordinary test: it passes today and must keep doing so.
 test("BUG-06's neighbourhood: a span that fits in a double is handled correctly", () => {
-  const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e200 }, { state: -1e200 }] });
+  const built = buildScenario({
+    metric: "temperature",
+    primary: { state: 1e200 },
+    config: { classification: { ...BUG_06_PROFILE, scale: { min: -1e200, max: 1e200, step: 5 } } },
+  });
+  env.withCard(built.config, built.hass, (card) => {
+    const model = card._computeViewModel();
+    for (const position of Object.values(model.scale.markerPositions)) assert.ok(Number.isFinite(position));
+    assert.ok(!/NaN/.test(card.shadowRoot.innerHTML));
+  });
+});
+
+test("BUG-06's neighbourhood: two readings can no longer be far enough apart to overflow", () => {
+  // The route the defect was found on, closed by the physical floors rather than by any
+  // change to the arithmetic. Recorded so that a measurement added without a floor is
+  // known to reopen it.
+  const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e308 }, { state: -273.15 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
     assert.ok(Number.isFinite(model.spread), `spread is ${model.spread}`);
-    assert.ok(Number.isFinite(model.extremes.warmestPosition));
     assert.ok(!/NaN/.test(card.shadowRoot.innerHTML));
   });
 });
 
 // BUG-07 — found by the property run, seed 0x6627f909, shrunk to one room.
 //
-// One room reporting -1e308 °F. The conversion to Celsius is (F - 32) × 5/9; the
-// multiplication by five overflows, and -Infinity is what comes out. The card then displays
-// it: the headline reads "∞ °F" and the classification calls the room very cold.
+// One room reporting 1e308 °F. The conversion to Celsius is (F - 32) × 5/9; the
+// multiplication by five overflows, and Infinity is what comes out. The card then displays
+// it: the headline reads "∞ °F".
 //
 // The overflow is specific to the SCALING path — °C and K at the same magnitude come
 // through as ordinary (if absurd) numbers, because their conversion never multiplies.
+//
+// ONE DIRECTION IS LEFT. An overflow to -Infinity lands below absolute zero, which the
+// temperature profile now refuses as an impossible reading — the right answer arrived at
+// for the wrong reason, and it leaves the overflow itself exactly where it was.
 expectedFailure("BUG-07", /average\.value is -?Infinity|an infinity sign is shown as a reading/, () => {
   const built = buildScenario({
     metric: "temperature",
     primary: null,
-    rooms: [{ state: -1e308, unit: { value: "°F" }, deviceClass: null }],
+    rooms: [{ state: 1e308, unit: { value: "°F" }, deviceClass: null }],
   });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -176,7 +211,7 @@ test("BUG-07's neighbourhood: the same magnitude in Celsius does not overflow", 
   const built = buildScenario({
     metric: "temperature",
     primary: null,
-    rooms: [{ state: -1e308, unit: { value: "°C" }, deviceClass: null }],
+    rooms: [{ state: 1e308, unit: { value: "°C" }, deviceClass: null }],
   });
   env.withCard(built.config, built.hass, (card) => {
     assert.ok(Number.isFinite(card._computeViewModel().average.value));
@@ -215,25 +250,14 @@ test("BUG-11's neighbourhood: a smaller same-sign consensus remains finite", () 
   });
 });
 
-// BUG-08 — found while characterising BUG-07.
-//
-// -274 °C is colder than anything can be. The card accepts it, averages it, classifies it
-// and draws it. The same card rejects -1 % humidity, 101 % humidity, 0 ppm CO2 and a
-// negative particulate concentration, each through an `invalidWhen` rule on its profile —
-// and the temperature profile simply has none.
-//
-// Whether temperature SHOULD have one is a product decision, not a technical one, and it is
-// recorded here as a defect because the card already has an opinion about impossible
-// readings and does not apply it consistently.
-expectedFailure("BUG-08", /is below absolute zero and was rendered as data/, () => {
+// What BUG-08 was, kept as an ordinary test now that it holds: -274 °C is colder than
+// anything can be, and the card refuses it the way it refuses every other impossible
+// reading. The three values straddle the limit from just past it to absurdly past it.
+test("a temperature below absolute zero is refused rather than drawn", () => {
   for (const value of [-273.16, -274, -1000]) {
     const built = buildScenario({ metric: "temperature", primary: { state: value }, rooms: [] });
     env.withCard(built.config, built.hass, (card) => {
-      assert.equal(
-        card._computeViewModel().empty,
-        true,
-        `${value} °C is below absolute zero and was rendered as data`
-      );
+      assert.equal(card._computeViewModel().empty, true, `${value} °C is below absolute zero`);
     });
   }
 });
@@ -339,12 +363,12 @@ test("BUG-09's neighbourhood: the same mistake one level down IS refused by name
   );
 });
 
-test("BUG-08's neighbourhood: the other three metrics do reject their impossible readings", () => {
+test("every metric refuses what it cannot be, and accepts the limit itself", () => {
   const impossible = [
+    ["temperature", -273.16],
     ["humidity", -1],
     ["humidity", 101],
     ["humidity", 800],
-    ["co2", 0],
     ["co2", -500],
     ["pm25", -1],
   ];
@@ -352,6 +376,14 @@ test("BUG-08's neighbourhood: the other three metrics do reject their impossible
     const built = buildScenario({ metric, primary: { state: value }, rooms: [] });
     env.withCard(built.config, built.hass, (card) => {
       assert.equal(card._computeViewModel().empty, true, `${metric} ${value} should be rejected`);
+    });
+  }
+
+  // The other half of the same rule, and the one that keeps it from being a rounding trap.
+  for (const [metric, value] of [["temperature", -273.15], ["humidity", 0], ["humidity", 100], ["co2", 0], ["pm25", 0]]) {
+    const built = buildScenario({ metric, primary: { state: value }, rooms: [] });
+    env.withCard(built.config, built.hass, (card) => {
+      assert.equal(card._computeViewModel().empty, false, `${metric} ${value} is the limit itself and is a reading`);
     });
   }
 });

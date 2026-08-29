@@ -174,7 +174,7 @@ test("the rare cases are rare, but they do happen", () => {
         typeof entity.state === "number" &&
         ((description.metric === "temperature" && entity.state < -273.15) ||
           (description.metric === "humidity" && entity.state < 0) ||
-          (description.metric === "co2" && entity.state <= 0) ||
+          (description.metric === "co2" && entity.state < 0) ||
           (description.metric === "pm25" && entity.state < 0))
     ),
   };

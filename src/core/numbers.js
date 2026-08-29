@@ -57,6 +57,22 @@ export function parseConfigNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+// Whether a value falls OUTSIDE an interval, where either bound may be absent
+// (null) and each carries its own inclusive flag.
+//
+// One implementation, because the same interval is written down in three places
+// that have to agree: the physical limits a built-in classification profile
+// declares, the `classification.valid_range` a user writes, and the projection of
+// either into the unit the card displays. Three copies of four comparisons would
+// be three chances to get one edge wrong in only one of them.
+//
+// The range must carry all four fields; no caller is allowed to hand in a
+// half-written one, and none does.
+export function isOutsideRange(value, range) {
+  if (range.min !== null && (range.minInclusive ? value < range.min : value <= range.min)) return true;
+  return range.max !== null && (range.maxInclusive ? value > range.max : value >= range.max);
+}
+
 // Clamps a value to a fixed range.
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));

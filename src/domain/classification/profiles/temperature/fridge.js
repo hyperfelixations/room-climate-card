@@ -15,6 +15,8 @@
 // Values are product decisions, not implementation details. Do not round,
 // reorder or "tidy" them without a documented reason.
 
+import { physicalRange } from "../../validity.js";
+
 // Appliance profile, not a room: target band follows common food-
 // safety guidance (e.g. FDA/EU "at or below 5 C", ideal ~3-4 C) —
 // the internationally cited "danger zone" for holding food starts
@@ -28,6 +30,8 @@ export const fridge = {
   id: "fridge",
   metricKind: "temperature",
   comparison: ">=",
+  // Nothing can be colder than absolute zero; there is no upper limit to state.
+  ...physicalRange({ min: -273.15 }),
   tiers: [
     { min: 12, score: 5, levelKey: "level.veryHot", zone: "outside" },
     { min: 10, score: 4, levelKey: "level.hot", zone: "outside" },

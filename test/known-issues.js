@@ -48,9 +48,12 @@ const KNOWN_ISSUES = [
     area: "domain/scale",
     discovered: "2026-08-24",
     summary:
-      "A room span wider than Number.MAX_VALUE overflows: spread becomes Infinity and every " +
-      "derived position becomes NaN, which the card writes into the DOM as calc(NaN% + 0px). " +
-      "An unusable computed span should reach the no-data state the way an unusable reading does.",
+      "An axis wider than Number.MAX_VALUE overflows: the span becomes Infinity, every " +
+      "position derived from it becomes NaN, and the card writes that into the DOM as " +
+      "calc(NaN% + 0px). An unusable computed span should reach the no-data state the way an " +
+      "unusable reading does. Reachable through a custom profile whose declared scale spans " +
+      "both extremes; two ENTITY readings can no longer do it, because every metric now has a " +
+      "floor and none of them can be far enough apart.",
     foundBy: "test/property/model.property.test.js",
     // How the property run recognises THIS defect among the violations it collects, so a
     // case that reproduces a registered bug is counted as one rather than reported as a new
@@ -69,10 +72,12 @@ const KNOWN_ISSUES = [
     area: "domain/metrics conversion",
     discovered: "2026-08-24",
     summary:
-      "Converting an extreme Fahrenheit reading overflows: the ×5/9 step turns -1e308 °F into " +
-      "-Infinity, and the card renders the infinity sign as a value and classifies it as very " +
-      "cold. Celsius and Kelvin at the same magnitude are unaffected — only the scaling path " +
-      "overflows. A non-finite conversion result should reach the no-data state.",
+      "Converting an extreme Fahrenheit reading overflows: the ×5/9 step turns 1e308 °F into " +
+      "Infinity, and the card renders the infinity sign as a value. Celsius and Kelvin at the " +
+      "same magnitude are unaffected — only the scaling path overflows. A non-finite conversion " +
+      "result should reach the no-data state. The negative direction no longer shows: an " +
+      "overflow to -Infinity lands below absolute zero and is refused as an impossible reading, " +
+      "which is the right answer for the wrong reason and leaves the cause untouched.",
     foundBy: "test/property/model.property.test.js",
     // Distinct from BUG-06: no span is involved, a single room is enough, and what goes
     // non-finite is the VALUE rather than a position derived from a spread.
@@ -92,20 +97,6 @@ const KNOWN_ISSUES = [
       /everyNumberIsFinite: average\.value is -?Infinity \(source calculated; finite room inputs\)|aggregatesStayWithinTheirInputs: average -?Infinity lies outside its rooms/.test(
         violation
       ),
-  },
-  {
-    id: "BUG-08",
-    area: "domain/classification profiles",
-    discovered: "2026-08-24",
-    summary:
-      "The temperature profile declares no invalidWhen rule, so a reading below absolute zero " +
-      "is accepted and rendered as data. Every other metric rejects its impossible readings — " +
-      "co2 at <= 0, humidity outside 0-100, pm25 below 0 — and the machinery to do the same " +
-      "for temperature already exists and is simply not used.",
-    foundBy: "manual investigation while characterising BUG-07",
-    // Not reachable through the property invariants: nothing there knows what is physically
-    // possible, and teaching it would mean writing the missing rule in the test instead of
-    // the product. The reproduction below is deterministic and direct.
   },
   {
     id: "BUG-09",

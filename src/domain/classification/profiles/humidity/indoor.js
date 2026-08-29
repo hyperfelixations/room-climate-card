@@ -15,11 +15,14 @@
 // Values are product decisions, not implementation details. Do not round,
 // reorder or "tidy" them without a documented reason.
 
+import { physicalRange } from "../../validity.js";
+
 export const indoor = {
   id: "indoor",
   metricKind: "humidity",
   comparison: ">=",
-  invalidWhen: (value) => value < 0 || value > 100,
+  // Relative humidity is a share of a maximum: 0 % and 100 % are both readings.
+  ...physicalRange({ min: 0, max: 100 }),
   invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
   tiers: [
     { min: 75, score: 5, levelKey: "level.criticallyHumid", zone: "outside" },
