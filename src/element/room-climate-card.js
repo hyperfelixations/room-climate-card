@@ -112,6 +112,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
     optionSchemaForView,
+    viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
     metricKindForUnit: (unit) => METRIC_TYPE_BY_UNIT[normalizeUnitToken(unit)],
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);

@@ -99,20 +99,6 @@ const KNOWN_ISSUES = [
       ),
   },
   {
-    id: "BUG-09",
-    area: "config/normalize-config",
-    discovered: "2026-08-25",
-    summary:
-      "A misspelled TOP-LEVEL configuration key is accepted in silence. `pallete: vivid` or " +
-      "`subtitel: Ground floor` produce no error, no warning and no diagnostic — the option " +
-      "simply does nothing. The same mistake one level down is refused by name, because every " +
-      "nested object goes through assertAllowedKeys(), so the card is inconsistent with its " +
-      "own convention exactly where a user is most likely to make the mistake.",
-    foundBy: "manual investigation while extending the property generator",
-    // Deliberately no fingerprint: the property invariants cannot see this. Nothing about
-    // the rendered card is wrong — that IS the problem, and only a direct test can say so.
-  },
-  {
     id: "BUG-13",
     area: "domain/classification classify",
     discovered: "2026-08-29",

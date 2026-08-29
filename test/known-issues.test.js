@@ -263,29 +263,81 @@ test("a temperature below absolute zero is refused rather than drawn", () => {
   }
 });
 
-// BUG-09 — found while working out what the property generator should be allowed to
-// write. A key nobody meant to type produces no complaint of any kind.
+// What BUG-09 was, kept as an ordinary test now that it holds. A key nobody meant to type
+// used to produce no complaint of any kind — no error, no warning, no diagnostic — while the
+// same mistake one level down was refused by name, because every nested object goes through
+// assertAllowedKeys(). The top level, which is the level a person actually edits, was the
+// one place that let a typo through in silence.
 //
-// The card is strict about this everywhere else: `palette: {optimal: …, nonsense: 1}` is
-// refused by name, and so is an unknown key in `classification`. Only the top level, which
-// is the level a user actually edits, lets a typo through in silence.
-expectedFailure("BUG-09", /was accepted without a word about it/, () => {
-  const built = buildScenario({ rooms: [{}] });
-  for (const key of ["pallete", "subtitel", "roomz", "entiy"]) {
-    const messages = [];
-    const original = { warn: console.warn, error: console.error };
-    console.warn = (...args) => messages.push(args.join(" "));
-    console.error = (...args) => messages.push(args.join(" "));
-    let refused = false;
-    try {
-      env.withCard({ ...built.config, [key]: "vivid" }, built.hass, () => {});
-    } catch {
-      refused = true;
-    } finally {
-      Object.assign(console, original);
-    }
-    assert.ok(refused || messages.length > 0, `"${key}" was accepted without a word about it`);
+// It warns rather than refusing: an option that does not apply is cosmetic, while a card
+// that stops loading after an update is not. The nested behaviour is unchanged and is
+// asserted below.
+function warningsFor(config, hass) {
+  const messages = [];
+  const original = { warn: console.warn, error: console.error };
+  console.warn = (...args) => messages.push(args.join(" "));
+  console.error = (...args) => messages.push(args.join(" "));
+  try {
+    env.withCard(config, hass, () => {});
+  } finally {
+    Object.assign(console, original);
   }
+  return messages;
+}
+
+test("a misspelled top-level key is named, with the option it was probably meant to be", () => {
+  const built = buildScenario({ rooms: [{}] });
+  const meantToBe = { pallete: "palette", subtitel: "subtitle", roomz: "rooms", entiy: "entity" };
+  for (const [written, intended] of Object.entries(meantToBe)) {
+    const messages = warningsFor({ ...built.config, [written]: "vivid" }, built.hass);
+    const named = messages.filter((message) => message.includes(written));
+    assert.equal(named.length, 1, `"${written}" produced ${messages.length} message(s): ${messages.join(" | ")}`);
+    assert.match(named[0], new RegExp(`did you mean "${intended}"`), named[0]);
+  }
+});
+
+test("a key that resembles nothing is still named, without inventing a suggestion", () => {
+  const built = buildScenario({ rooms: [{}] });
+  const messages = warningsFor({ ...built.config, wibble_wobble: 1 }, built.hass);
+  assert.equal(messages.length, 1, messages.join(" | "));
+  assert.match(messages[0], /wibble_wobble: ignoring an unknown top-level option$/);
+});
+
+test("what Home Assistant writes onto every card configuration is not a typo", () => {
+  // The frontend attaches its own bookkeeping to every card it lays out, and card-mod adds
+  // one more. None of it is the card's, and complaining about it would be a false alarm on
+  // an ordinary dashboard.
+  const built = buildScenario({ rooms: [{}] });
+  const framework = {
+    type: "custom:room-climate-card",
+    index: 2,
+    view_index: 0,
+    view_layout: { position: "sidebar" },
+    layout_options: { grid_columns: 6 },
+    grid_options: { columns: 12, rows: 4 },
+    visibility: [{ condition: "user", users: ["abc"] }],
+    disabled: false,
+    card_mod: { style: ".rtc-card { border: none; }" },
+  };
+  assert.deepEqual(warningsFor({ ...built.config, ...framework }, built.hass), []);
+});
+
+test("a start_view naming no view says so and opens on the first one instead", () => {
+  const built = buildScenario({ rooms: [{}, {}] });
+  const messages = warningsFor({ ...built.config, start_view: "sclae" }, built.hass);
+  assert.equal(messages.length, 1, messages.join(" | "));
+  assert.match(messages[0], /^Room Climate Card: start_view: expected one of range, range_scale, scale, extremes, got "sclae"/);
+  // And a real one stays silent, so the check is about the value rather than about the key.
+  assert.deepEqual(warningsFor({ ...built.config, start_view: "scale" }, built.hass), []);
+});
+
+test("the same mistake one level down is still REFUSED by name, not warned about", () => {
+  const built = buildScenario({ rooms: [{}] });
+  assert.throws(
+    () => env.withCard({ ...built.config, palette: { optimal: "#3D9970", nonsense: 1 } }, built.hass, () => {}),
+    /nonsense/,
+    "a nested unknown key is named in the error, which is what the top level should also do"
+  );
 });
 
 // What BUG-10 was, kept as an ordinary test now that it holds. The metamorphic relations
@@ -352,15 +404,6 @@ test("each half of that trigger on its own is handled correctly", () => {
       assert.equal(card._computeViewModel().empty, true, `nobody can say which metric the card is about (${index})`);
     });
   }
-});
-
-test("BUG-09's neighbourhood: the same mistake one level down IS refused by name", () => {
-  const built = buildScenario({ rooms: [{}] });
-  assert.throws(
-    () => env.withCard({ ...built.config, palette: { optimal: "#3D9970", nonsense: 1 } }, built.hass, () => {}),
-    /nonsense/,
-    "a nested unknown key is named in the error, which is what the top level should also do"
-  );
 });
 
 test("every metric refuses what it cannot be, and accepts the limit itself", () => {

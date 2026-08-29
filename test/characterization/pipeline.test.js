@@ -34,6 +34,7 @@ let buildCardViewModel;
 let toLegacyData;
 let normalizeConfig;
 let optionSchemaForView;
+let VIEW_DEFINITIONS;
 let isSupportedLanguage;
 let translate;
 let resolveLanguage;
@@ -63,7 +64,7 @@ test.before(async () => {
   // src/, and the 32 committed baselines are what it still serves.
   ({ toLegacyData } = require("../helpers/legacy-dto.js"));
   ({ normalizeConfig } = await import("../../src/config/normalize-config.js"));
-  ({ optionSchemaForView } = await import("../../src/presentation/view-model/view-state.js"));
+  ({ optionSchemaForView, VIEW_DEFINITIONS } = await import("../../src/presentation/view-model/view-state.js"));
   ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));
   ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
   ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
@@ -84,6 +85,7 @@ function configCollaborators() {
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
     optionSchemaForView,
+    viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
     metricKindForUnit: (unit) => METRIC_TYPE_BY_UNIT[normalizeUnitToken(unit)],
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);

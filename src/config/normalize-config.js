@@ -19,6 +19,7 @@
 //   assertPalette         what makes a written-out palette usable
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
+//   viewTypes             every registered view type, for start_view
 //   metricKindForUnit     a unit string -> metric kind
 //   unitProfileForUnit    a metric kind + unit string -> unit profile
 
@@ -27,6 +28,7 @@ import { normalizeAction } from "./actions.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
 import { normalizeShowConfig, resolveShowConfig } from "./show.js";
+import { unknownTopLevelKeys } from "./top-level-keys.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
 import {
@@ -115,8 +117,22 @@ export function normalizeHeaderLine(value, defaultOverflow) {
   };
 }
 
+// Which view the card opens on. `null` means "the first available one", and a name that is
+// not a registered view type resolves to the same thing — a card must not fail to draw
+// because it was pointed at a view that does not exist. What is new is that it says so:
+// falling back in silence is what left a typo here looking like a card that ignores the
+// option. The view types are injected, because config/ must not import the view registry.
+export function normalizeStartView(value, viewTypes, diagnostics) {
+  const requested = optionalString(value);
+  if (requested === null || viewTypes.includes(requested)) return requested;
+  diagnostics.push(
+    `start_view: expected one of ${viewTypes.join(", ")}, got ${JSON.stringify(value)}, falling back to the first available view`
+  );
+  return null;
+}
+
 export function normalizeConfig(config, collaborators) {
-  const { isSupportedLanguage, optionSchemaForView } = collaborators;
+  const { isSupportedLanguage, optionSchemaForView, viewTypes } = collaborators;
   const userConfig = config ?? {};
   if (!isPlainObject(userConfig)) {
     throw new Error("Invalid configuration: card configuration must be an object.");
@@ -163,13 +179,15 @@ export function normalizeConfig(config, collaborators) {
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
   const show = resolveShowConfig({ ...legacyShowRequests(userConfig), ...requestedShow });
 
-  // The three top-level booleans, through the same reader the `show:` block uses, so a
-  // boolean is read one way in this file. Resolved here rather than inside the returned
-  // object so that the diagnostics exist before the list below is built.
-  const switchDiagnostics = [];
-  const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", switchDiagnostics) ?? DEFAULT_CONFIG.auto_slide;
-  const swipe = booleanOption(userConfig.swipe, "swipe", switchDiagnostics) ?? DEFAULT_CONFIG.swipe;
-  const hideFooter = booleanOption(userConfig.hide_footer, "hide_footer", switchDiagnostics) ?? DEFAULT_CONFIG.hide_footer;
+  // The top-level options that fall back rather than throwing, and say so. The three
+  // booleans go through the same reader the `show:` block uses, so a boolean is read one way
+  // in this file. Resolved here rather than inside the returned object so that the
+  // diagnostics exist before the list below is built.
+  const optionDiagnostics = [];
+  const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", optionDiagnostics) ?? DEFAULT_CONFIG.auto_slide;
+  const swipe = booleanOption(userConfig.swipe, "swipe", optionDiagnostics) ?? DEFAULT_CONFIG.swipe;
+  const hideFooter = booleanOption(userConfig.hide_footer, "hide_footer", optionDiagnostics) ?? DEFAULT_CONFIG.hide_footer;
+  const startView = normalizeStartView(userConfig.start_view, viewTypes, optionDiagnostics);
 
   return {
     entity,
@@ -226,8 +244,11 @@ export function normalizeConfig(config, collaborators) {
     // diagnostics forward to whoever is responsible for surfacing them once per
     // config change. One channel for every cosmetic fallback in the configuration,
     // because two would be two places to remember when a third kind arrives.
-    _configDiagnostics: [...switchDiagnostics, ...showDiagnostics, ...viewsDiagnostics],
-    start_view: optionalString(userConfig.start_view),
+    //
+    // Outermost first: a key the card does not have at all is the thing to read before any
+    // report about the values inside the keys it does have.
+    _configDiagnostics: [...unknownTopLevelKeys(userConfig), ...optionDiagnostics, ...showDiagnostics, ...viewsDiagnostics],
+    start_view: startView,
     classification,
     // The resolved palette object, not its name: everything downstream needs the colours,
     // and resolving once here is what keeps the domain registry out of the render path.

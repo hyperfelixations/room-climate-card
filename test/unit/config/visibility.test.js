@@ -22,6 +22,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { VIEWS } = require("../../manifests/product-surface.js");
 
 let showModule;
 let normalizeConfigModule;
@@ -41,6 +42,7 @@ const COLLABORATORS = {
   assertPalette: (palette) => palette,
   completePalette: (palette) => palette,
   isSupportedLanguage: (code) => SUPPORTED.has(code),
+  viewTypes: VIEWS,
   optionSchemaForView: () => undefined,
   metricKindForUnit: (unit) => (unit === "°C" ? "temperature" : undefined),
   unitProfileForUnit: () => ({ key: "celsius", toCanonical: (v) => v, deltaToCanonical: (v) => v }),

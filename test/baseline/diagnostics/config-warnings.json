@@ -1,4 +1,13 @@
 {
+  "start-view-unknown": [
+    "Room Climate Card: start_view: expected one of range, range_scale, scale, extremes, got \"sclae\", falling back to the first available view"
+  ],
+  "top-level-unknown-key": [
+    "Room Climate Card: pallete: ignoring an unknown top-level option; did you mean \"palette\"?"
+  ],
+  "top-level-unknown-key-without-a-near-option": [
+    "Room Climate Card: wibble_wobble: ignoring an unknown top-level option"
+  ],
   "views-duplicate-type": [
     "Room Climate Card: views: duplicate view type \"scale\""
   ],

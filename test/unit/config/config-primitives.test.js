@@ -23,6 +23,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { VIEWS } = require("../../manifests/product-surface.js");
 
 let primitives;
 let actions;
@@ -30,6 +31,7 @@ let rooms;
 let views;
 
 const COLLABORATORS = {
+  viewTypes: VIEWS,
   optionSchemaForView: (type) =>
     type === "scale"
       ? {

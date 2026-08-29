@@ -26,6 +26,7 @@ let paletteRegistry;
 let zones;
 let actions;
 let show;
+let topLevelKeys;
 
 test.before(async () => {
   i18nRegistry = await import("../../src/i18n/registry.js");
@@ -36,6 +37,7 @@ test.before(async () => {
   zones = await import("../../src/domain/classification/zones.js");
   actions = await import("../../src/config/actions.js");
   show = await import("../../src/config/show.js");
+  topLevelKeys = await import("../../src/config/top-level-keys.js");
 });
 
 // ------------------------------------------------------------------- languages --
@@ -158,6 +160,17 @@ test("the top-level keys the manifest claims are the ones the normalizer reads",
   const unclaimed = [...read].filter((key) => !claimed.has(key)).sort();
   assert.deepEqual(unread, [], `the manifest promises keys normalizeConfig() never reads: ${unread.join(", ")}`);
   assert.deepEqual(unclaimed, [], `normalizeConfig() reads keys the manifest does not promise: ${unclaimed.join(", ")}`);
+});
+
+test("the keys the card accepts are the ones the manifest claims", () => {
+  // The other end of the same rope. The scan above proves the normalizer READS what the
+  // manifest promises; this proves it ACCEPTS exactly that and nothing else — the list a
+  // configuration is measured against when it carries a key nobody recognises. Without both,
+  // an option could be read and still warned about, or accepted and never read.
+  assert.deepEqual([...topLevelKeys.TOP_LEVEL_KEYS].sort(), [...surface.TOP_LEVEL_CONFIG_KEYS].sort());
+  // And the two lists stay apart: a key Home Assistant writes is not one the card owns.
+  const owned = [...topLevelKeys.FRAMEWORK_KEYS].filter((key) => topLevelKeys.TOP_LEVEL_KEYS.has(key));
+  assert.deepEqual(owned, [], `these are claimed both as the card's own and as the framework's: ${owned.join(", ")}`);
 });
 
 test("the parts of the show block are exactly those the manifest claims", () => {

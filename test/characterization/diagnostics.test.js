@@ -298,6 +298,9 @@ const INVALID_CONFIGS = [
 ];
 
 const WARNING_CONFIGS = [
+  ["top-level-unknown-key", { entity: "sensor.avg", pallete: "vivid" }],
+  ["top-level-unknown-key-without-a-near-option", { entity: "sensor.avg", wibble_wobble: 1 }],
+  ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
   ["views-not-an-array", { entity: "sensor.avg", views: "scale" }],
   ["views-unknown-type", { entity: "sensor.avg", views: ["scale", "bogus"] }],
   ["views-duplicate-type", { entity: "sensor.avg", views: ["scale", "scale"] }],

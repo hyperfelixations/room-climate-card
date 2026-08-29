@@ -24,6 +24,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { VIEWS } = require("../../manifests/product-surface.js");
 
 let classification;
 let normalizeConfigModule;
@@ -77,6 +78,7 @@ const COLLABORATORS = {
   },
   completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#7D7D7D" }),
   isSupportedLanguage: (code) => SUPPORTED.has(code),
+  viewTypes: VIEWS,
   optionSchemaForView: (type) =>
     type === "scale"
       ? {

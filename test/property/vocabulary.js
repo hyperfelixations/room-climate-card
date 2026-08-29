@@ -145,9 +145,10 @@ const MISSPELLED_DEVICE_CLASS_VALUES = {
   pm25: ["pm2_5", "pm2.5", "PM25", "particulate_matter_25", "pm_25"],
 };
 
-// Top-level configuration keys somebody meant to write. The card accepts unknown top-level
-// keys in silence today (see BUG-09), so these are worth generating: what they prove is
-// that a misspelled key changes nothing, which is the whole problem.
+// Top-level configuration keys somebody meant to write. The card names each of them and
+// offers the option it was probably meant to be, so these carry two jobs: they keep a
+// generated card exercising the diagnostic path, and they are the population
+// unit/config/top-level-keys.test.js measures the suggestion against.
 const MISSPELLED_CONFIG_KEYS = [
   "entiy",
   "entitiy",
