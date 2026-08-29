@@ -1,7 +1,7 @@
 # Testing the Room Climate Card
 
-This card has more than 300 installations and no staging environment. The test suite is the
-only thing standing between a change and somebody's dashboard, so it is built to be run
+The card ships straight to real dashboards and has no staging environment. The test suite is
+the only thing standing between a change and those dashboards, so it is built to be run
 constantly and to be believed when it is green.
 
 Two commands cover almost everything:
@@ -12,7 +12,7 @@ npm test
 
 Builds the bundle, checks it parses, runs every Node test, then every browser test. This is
 what must pass before a commit — no exceptions, and see [Known defects](#known-defects) for how
-that rule survives contact with a bug nobody is fixing yet.
+that rule survives a defect that is deliberately not fixed yet.
 
 ```bash
 npm run test:node
@@ -200,17 +200,17 @@ the few timing tests that justify a retry own and explain it locally.
 
 ## Golden screenshots
 
-56 PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
+The PNGs under `test/browser/visual/visual-golden.spec.js-snapshots`, compared with an absolute
 budget of 200 differing pixels. Absolute rather than a ratio on purpose: rendering noise does
-not scale with image area, and a ratio quietly gave a large screenshot a thousand-pixel
-allowance — under which seven baselines depicted a caption the card had stopped drawing.
+not scale with image area, while a ratio gives a large screenshot a thousand-pixel allowance —
+wide enough to hide a caption the card has stopped drawing.
 
 Re-record with `npx playwright test --update-snapshots=all`, then **look at every changed
 image**. Never widen the budget to make a diff go away.
 
 Calibration specs attach their generated image to the Playwright report with
-`testInfo.attach()`. They do not leave a temporary picture behind and assume somebody saw it;
-open the report artifact and inspect the attachment.
+`testInfo.attach()` rather than writing a temporary file: open the report artifact and inspect
+the attachment.
 
 ## Coverage
 

@@ -155,10 +155,9 @@ See [Configuration](#configuration) below for every available option.
 
 ## Join the community
 
-Got the card running? There is a place to talk about it. The Home Assistant
-forum thread is where setups, questions and ideas for this card are discussed,
-and the Discord is where that happens as a conversation. Everything else is for
-following along as new things are built.
+The Home Assistant forum thread is where setups, questions and ideas for this
+card are discussed, and the Discord is where that happens as a conversation.
+The remaining links are for following along as new things are built.
 
 [![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
@@ -196,7 +195,7 @@ needs at least two rooms with values.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `title` | automatic | Replaces the card title, which otherwise names the measurement — “Temperature”, for example, and decides what happens when it is too long for the card. `title: ""` removes the line. See [The two header lines](#the-two-header-lines). |
+| `title` | automatic | Replaces the card title, which otherwise names the measurement (“Temperature”, for example), and decides what happens when the line is too long for the card. `title: ""` removes the line. See [The two header lines](#the-two-header-lines). |
 | `subtitle` | automatic | Replaces the line under the title, in the same shape. `subtitle: ""` removes the line. See [The two header lines](#the-two-header-lines). |
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
@@ -233,8 +232,8 @@ scale markers whether or not anything of it is drawn.
 
 Turn off the icon, both header lines and the pill together and the top row goes
 with them, so what is left moves up to the card's edge. Turn off everything —
-including the panel and the chips — and the card says so rather than showing you
-an empty box.
+including the panel and the chips — and the card says that there is nothing left
+to draw.
 
 Two of these have a second effect worth knowing. A card without a title has no
 visible name of its own, so the heading around it on your dashboard is what names
@@ -272,8 +271,8 @@ calculation.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `auto_slide` | `true` | `false` stops automatic movement between views. It does not disable manual swiping. |
-| `swipe` | `true` | `false` disables horizontal swipe navigation. It does not stop automatic movement or tap/hold actions. |
+| `auto_slide` | `true` | `false` stops automatic movement between views. |
+| `swipe` | `true` | `false` disables horizontal swipe navigation. |
 | `rotation_seconds` | `14` | Seconds a view remains visible before automatic movement. Accepted range: `1`–`3600`. |
 | `slide_seconds` | `1` | Duration of the slide transition. Accepted range: `0.1`–`10`. |
 | `tap_action` | `more-info` | What a tap on the large value or a chip does. |
@@ -413,7 +412,8 @@ is drawn.
 
 With no `classification` option, the card uses `source: auto`: a live entity
 classification is accepted only when both `value_color` and `value_level` are
-present and valid. Otherwise the complete numeric fallback profile is used.
+present and valid. Otherwise the card classifies the reading itself, against the
+built-in profile for that measurement.
 
 Temperature uses `indoor` by default. Select the built-in outdoor profile with
 the short form:
@@ -427,8 +427,8 @@ The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
 sensors currently report, which is what you want outdoors, where summer and
 winter are nowhere near each other. A band that is completely off the current
 scale is hidden until the values reach it. A profile of your own gets the same
-axis behaviour with `scale.anchor_scale: false` (see
-[Classification](#classification)).
+axis behaviour with `scale.anchor_scale: false`, described under the
+custom-profile rules below.
 
 Select the built-in fridge profile the same way, for monitoring an appliance
 instead of a room:
@@ -702,8 +702,7 @@ single color, or several separated by commas.
 
 > **Watch the `#`.** In YAML a `#` after a space starts a comment, so
 > `optimal: #1DB85D` leaves the value empty. Write it without the `#`, or put it
-> in quotes. If you do hit it, the card says so rather than just calling the
-> value invalid.
+> in quotes. If you do hit it, the card names the `#` as the reason.
 >
 > **A color written only in digits needs exactly six of them.** `123456`,
 > `080808` and `008000` all work unquoted. Anything shorter or longer has to be
@@ -764,8 +763,7 @@ An empty string removes the line entirely, and so does `show: {title: false}`.
 
 One exception, and it belongs to the subtitle: when the card has no data to show,
 that line explains why, whatever you wrote there and even with `show: {subtitle:
-false}` set. It says your text again as soon as data comes back. A card showing
-`--` under a line that says nothing about it would be the wrong kind of quiet.
+false}` set. It says your text again as soon as data comes back.
 
 ### What the card checks, and what it decides for you
 
@@ -852,34 +850,28 @@ views:
   reference from there.
 - Daily minimum/maximum and trend need their own entities. The card reads what
   Home Assistant reports right now; it does not look at history itself. Those
-  entities are usually template sensors — I plan to publish the ones I use.
+  entities are usually template sensors.
 - One card shows one kind of measurement. Rooms measuring something else, or
   using a unit that does not fit, are left out. If there is no main entity and
   the rooms disagree about what they measure, the card says so instead of
   picking a winner.
 
-## Older option names
-
-These four still work and are read exactly as they always were. They are the
-spellings that came before the `show:` block and the split of the footer into
-whether and which form, and **they will be removed in 3.0.0** — the reference
-above already uses what replaces them.
-
-| Older | Use instead |
-| --- | --- |
-| `show_rooms: auto | true | false` | `show: {rooms: …}` |
-| `unavailable_values: show | hide` | `show: {unavailable_rooms: true | false}` |
-| `hide_footer: true` | `show_footer: false` in each view that has a footer |
-| `footer: false` inside a view | `show_footer: false` in that view |
-
-Where a card writes both spellings of the same thing, the newer one decides.
-
-`hide_footer` is the one that costs something to give up: it turns every view's
-footer off in a single line, and nothing else does. From 3.0.0 the footer is each
-view's own business, so that line becomes a `show_footer: false` in every
-`views:` entry that has one.
-
 ## Troubleshooting
+
+> [!WARNING]
+> **Four option spellings disappear in 3.0.0.** They still work today, and the
+> reference above already uses what replaces them — if your card has one of
+> these, change it now:
+>
+> - `show_rooms: auto | true | false` → `show:` with `rooms: auto | true | false`
+> - `unavailable_values: show | hide` → `show:` with `unavailable_rooms: true | false`
+> - `hide_footer: true` → `show_footer: false` in every view that draws a footer
+> - `footer: false` inside a view's `options:` → `show_footer: false` in that view
+>
+> Where a card writes both spellings of one decision, the newer one applies.
+> `hide_footer` is the one without a one-line replacement: from 3.0.0 the footer
+> belongs to each view, so turning them all off takes a `show_footer: false` in
+> every `views:` entry that has one.
 
 **The card doesn't appear after installing.**
 Confirm the dashboard resource was actually added (Settings → Dashboards →
@@ -901,7 +893,7 @@ without a console error.
 
 **The card shows “No data” and `--` as its large value.**
 None of your sources has a usable number right now, or the card cannot tell
-what they measure. The line under the title says which. Three different
+what they measure. The line under the title says which. Four different
 situations:
 
 - **A typo, or an entity that no longer exists.** Home Assistant does not know
@@ -911,8 +903,8 @@ situations:
 - **A sensor that is `unavailable`, `unknown`, or reporting something that is
   not a number.** The entity exists, so it holds its place on the card as a `--`
   chip. Set `show.unavailable_rooms: false` to leave those chips out.
-- **A reading that cannot be real**, such as 800 % humidity. The card says so
-  rather than showing it.
+- **A reading that cannot be real**, such as 800 % humidity. The card reports it
+  as an impossible reading and leaves it out of every calculation.
 - **A sensor measuring something else, or using a unit that does not fit.** It
   is left out of this card.
 
