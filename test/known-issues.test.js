@@ -435,6 +435,68 @@ expectedFailure("BUG-12", /caption|single-room card/, () => {
   );
 });
 
+// BUG-13 — found by a 20000-case sweep, shrunk to one room and one classification block.
+//
+// `comparison: ">"` asks whether a reading is strictly ABOVE a tier's threshold, and the
+// final tier's threshold is -Infinity. Nothing is strictly above -Infinity, so a reading
+// that reached -Infinity matches no tier at all, and the classifier reads `.color` off the
+// undefined it got back. setConfig() throws, and Home Assistant paints the card red.
+//
+// The reading gets there through the Fahrenheit conversion of BUG-07 (×5/9 overflows), and
+// the profile has no `valid_range` to stop it — a built-in profile would, which is why only
+// a user-written one reaches this. Same family as BUG-06, BUG-07 and BUG-11: a quantity
+// stops being a number and nothing on the way to the screen notices.
+expectedFailure("BUG-13", (error) => /Cannot read properties of undefined \(reading 'color'\)/.test(String(error && error.message)), () => {
+  const built = buildScenario({
+    metric: "temperature",
+    primary: null,
+    rooms: [{ state: -1e308, unit: { value: "°F" } }],
+    config: {
+      classification: {
+        source: "custom",
+        unit: "°C",
+        comparison: ">",
+        bands: { comfort: { min: 20, max: 80 }, optimal: { min: 40, max: 60 } },
+        scale: { min: 0, max: 100, step: 5 },
+        tiers: [
+          { min: 40, score: 1, level: "high", zone: "outside" },
+          { default: true, score: 0, level: "ok", zone: "optimal" },
+        ],
+      },
+    },
+  });
+  env.withCard(built.config, built.hass, (card) => {
+    assert.equal(card._computeViewModel().empty, true, "a reading that classifies as nothing is not data");
+  });
+});
+
+test("BUG-13's neighbourhood: the same profile with >= classifies the same reading", () => {
+  // The boundary, and the reason the defect is about the comparison rather than about the
+  // value: `>=` admits -Infinity into the open-ended tier, so the card renders instead of
+  // throwing. It renders an infinity sign, which is BUG-07 and a different entry.
+  const built = buildScenario({
+    metric: "temperature",
+    primary: null,
+    rooms: [{ state: -1e308, unit: { value: "°F" } }],
+    config: {
+      classification: {
+        source: "custom",
+        unit: "°C",
+        comparison: ">=",
+        bands: { comfort: { min: 20, max: 80 }, optimal: { min: 40, max: 60 } },
+        scale: { min: 0, max: 100, step: 5 },
+        tiers: [
+          { min: 40, score: 1, level: "high", zone: "outside" },
+          { default: true, score: 0, level: "ok", zone: "optimal" },
+        ],
+      },
+    },
+  });
+  env.withCard(built.config, built.hass, (card) => {
+    assert.equal(typeof card._computeViewModel().empty, "boolean", "it renders rather than throwing");
+  });
+});
+
 test("BUG-12's neighbourhood: a room that does not exist at all is already ignored", () => {
   // The half that behaves correctly, and the one the fix must not disturb: a configured room
   // Home Assistant has never heard of leaves the card's identity alone.

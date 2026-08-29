@@ -113,6 +113,26 @@ const KNOWN_ISSUES = [
     // the rendered card is wrong — that IS the problem, and only a direct test can say so.
   },
   {
+    id: "BUG-13",
+    area: "domain/classification classify",
+    discovered: "2026-08-29",
+    summary:
+      "A custom profile written with comparison \">\" has no tier for a reading that reached " +
+      "-Infinity: selectTier() asks value > tier.min, and -Infinity > -Infinity is false, so " +
+      "even the open-ended final tier is skipped and classifyNumericValue() reads .color off " +
+      "undefined. setConfig() throws and the dashboard shows a red card. A \">=\" profile is " +
+      "unaffected, and every built-in \">\" profile is saved by its own physical limits, so " +
+      "only a user-written profile without valid_range reaches it.",
+    foundBy: "test/property/model.property.test.js, a 20000-case sweep on seed 0xc1a6e",
+    // The failure is a THROW rather than a wrong number, so the invariants never get to run
+    // and the run reports it as a configuration that was refused without saying why. The
+    // matcher is the message the crash produces on the way out.
+    matchesViolation: (violation) =>
+      /^setConfig refused with a message that does not identify itself: Cannot read properties of undefined \(reading 'color'\)/.test(
+        violation
+      ),
+  },
+  {
     id: "BUG-12",
     area: "application/model source-topology",
     discovered: "2026-08-28",
