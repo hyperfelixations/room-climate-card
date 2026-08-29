@@ -24,7 +24,7 @@
 // `unavailable_values`) without a written `show:` block silently resetting
 // the decisions it says nothing about.
 
-import { isPlainObject } from "./primitives.js";
+import { booleanOption, isPlainObject } from "./primitives.js";
 
 // The parts that are simply on or off, with the value each one has when nobody says
 // otherwise. Every default is `true`: the card as it is drawn without a `show:` block is
@@ -83,15 +83,11 @@ export function normalizeShowConfig(value) {
       continue;
     }
 
-    // Strict about the type, unlike the tolerant `!== false` reading the older top-level
-    // keys use. Those had to stay tolerant because they were already published; a new key
-    // can say what it means, and a value that is neither true nor false is far more likely
-    // to be a mistake than an intention.
-    if (raw !== true && raw !== false) {
-      diagnostics.push(`show.${key}: expected true or false, got ${JSON.stringify(raw)}, falling back to the default`);
-      continue;
-    }
-    show[key] = raw;
+    // The shared reader, so that a boolean means the same thing here and at the top
+    // level. It answers `undefined` both for a value it rejected and for one that was
+    // never written; neither is a request, so neither is recorded.
+    const parsed = booleanOption(raw, `show.${key}`, diagnostics);
+    if (parsed !== undefined) show[key] = parsed;
   }
 
   if (unknownKeys.length) {

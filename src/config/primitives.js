@@ -65,6 +65,27 @@ export function stringOrDefault(value, fallback) {
   return String(value);
 }
 
+// ONE way to read a boolean option, so that every one of them accepts the same
+// values and explains a rejection in the same words.
+//
+// Returns `undefined` for a key that was not written, because the two callers mean
+// different things by that: a top-level option falls back to its default, while the
+// `show:` block must say NOTHING about a decision the user did not touch, or writing
+// the block would reset the parts it is silent about. Leaving that to the caller is
+// what lets both use one reader.
+//
+// STRICT, like the view options already are: a value that is neither true nor false
+// is far more likely to be a mistake than an intention, so it is diagnosed and the
+// default applies. For the top-level switches that is no change of outcome — the
+// tolerant `!== false` reading this replaces gave every non-false value the default
+// too — what is new is that the card says so instead of shrugging.
+export function booleanOption(value, path, diagnostics) {
+  if (value === undefined || value === null) return undefined;
+  if (value === true || value === false) return value;
+  diagnostics.push(`${path}: expected true or false, got ${JSON.stringify(value)}, falling back to the default`);
+  return undefined;
+}
+
 // Generic closed-set config value: an unrecognized value silently falls back to
 // defaultValue, the same non-warning convention every other optional top-level
 // field uses — a typo degrades to "use the default" rather than breaking the

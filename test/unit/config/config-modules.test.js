@@ -29,8 +29,17 @@ test("the card defaults match the public contract", () => {
     hold_action: { action: "more-info" },
     auto_slide: true,
     swipe: true,
-    unavailable_values: "show",
+    hide_footer: false,
   });
+});
+
+test("no default of a `show:` decision is stated a second time here", () => {
+  // SHOW_SWITCHES owns every one of them, and the older top-level spellings are read
+  // without a default of their own. A key here for one of those decisions would be a
+  // second statement of the same default, and the two would drift apart in silence.
+  for (const key of ["show", "show_rooms", "unavailable_values", "accent_line", "rooms"]) {
+    assert.equal(key in defaults.DEFAULT_CONFIG, false, `DEFAULT_CONFIG must not restate ${key}`);
+  }
 });
 
 test("the defaults declare no entities", () => {

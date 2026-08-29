@@ -157,6 +157,41 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.room_label, "auto");
 });
 
+test("the three top-level switches read a boolean the way the show: block does", () => {
+  const n = (config) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", ...config }, COLLABORATORS);
+
+  assert.equal(n({ auto_slide: false }).auto_slide, false);
+  assert.equal(n({ swipe: false }).swipe, false);
+  assert.equal(n({ hide_footer: true }).hide_footer, true);
+
+  // The outcome for a value that is neither true nor false is the one these keys have
+  // always had — the default — so no released card changes behaviour. What is new is that
+  // the card now names the key instead of shrugging.
+  const typo = n({ auto_slide: "yes", swipe: 1, hide_footer: "true" });
+  assert.equal(typo.auto_slide, true, "the default, exactly as before");
+  assert.equal(typo.swipe, true);
+  assert.equal(typo.hide_footer, false);
+  assert.deepEqual(typo._configDiagnostics, [
+    'auto_slide: expected true or false, got "yes", falling back to the default',
+    "swipe: expected true or false, got 1, falling back to the default",
+    'hide_footer: expected true or false, got "true", falling back to the default',
+  ]);
+});
+
+test("the switch diagnostics share the one channel, ahead of the block and the views", () => {
+  // One list for every cosmetic fallback in the configuration, in the order the reader
+  // works through them, so a user reading the console sees the top level before the
+  // blocks nested inside it.
+  const result = normalizeConfigModule.normalizeConfig(
+    { entity: "sensor.avg", auto_slide: "yes", show: { pill: "no" }, views: "not-an-array" },
+    COLLABORATORS
+  );
+  assert.deepEqual(
+    result._configDiagnostics.map((entry) => entry.split(":")[0]),
+    ["auto_slide", "show.pill", "views"]
+  );
+});
+
 test("normalizeConfig() accepts a room as the only current-value source", () => {
   const result = normalizeConfigModule.normalizeConfig(
     { entity: null, rooms: [{ entity: "sensor.kitchen", name: "Kitchen" }] },

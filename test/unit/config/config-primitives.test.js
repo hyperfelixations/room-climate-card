@@ -106,6 +106,31 @@ test("stringOrDefault() coerces and honours the fallback chain", () => {
   assert.equal(stringOrDefault(undefined, undefined), "");
 });
 
+test("booleanOption() accepts exactly true and false, and says so when it does not", () => {
+  const { booleanOption } = primitives;
+  const diagnostics = [];
+  assert.equal(booleanOption(true, "auto_slide", diagnostics), true);
+  assert.equal(booleanOption(false, "auto_slide", diagnostics), false);
+  assert.deepEqual(diagnostics, [], "a value it accepts is not worth mentioning");
+
+  for (const rejected of ["true", "false", "yes", "on", 1, 0, {}]) {
+    assert.equal(booleanOption(rejected, "swipe", diagnostics), undefined, JSON.stringify(rejected));
+  }
+  assert.equal(diagnostics.length, 7, "each rejection is reported once");
+  assert.equal(diagnostics[0], 'swipe: expected true or false, got "true", falling back to the default');
+});
+
+test("booleanOption() answers undefined for an unwritten key without a word about it", () => {
+  // The two callers mean different things by "not written": a top-level option takes its
+  // default, while the `show:` block must stay silent about a decision nobody touched. So
+  // the reader reports absence and lets each decide — and never diagnoses it.
+  const { booleanOption } = primitives;
+  const diagnostics = [];
+  assert.equal(booleanOption(undefined, "auto_slide", diagnostics), undefined);
+  assert.equal(booleanOption(null, "auto_slide", diagnostics), undefined);
+  assert.deepEqual(diagnostics, []);
+});
+
 test("normalizeEnum() silently falls back for anything outside the set", () => {
   const { normalizeEnum } = primitives;
   assert.equal(normalizeEnum("name", ["configured", "name"], "configured"), "name");

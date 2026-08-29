@@ -155,6 +155,33 @@ test("a block that mentions other parts does not silence the older spelling", ()
   assert.equal(config.show.unavailable_rooms, false);
 });
 
+test("an older spelling nobody recognised carries no default of its own", () => {
+  // The point of legacyShowRequests(): each older key speaks only where it says
+  // something. If it answered for an unrecognised value too, that answer would be a
+  // second statement of a default SHOW_SWITCHES already owns, and the two could drift
+  // apart without anything failing.
+  for (const nonsense of ["auto", "alway", "", null, 0, 1]) {
+    assert.equal(configure({ show_rooms: nonsense }).show.rooms, "auto", JSON.stringify(nonsense));
+  }
+  for (const nonsense of ["show", "HIDE", "hidden", "", null, false]) {
+    assert.equal(configure({ unavailable_values: nonsense }).show.unavailable_rooms, true, JSON.stringify(nonsense));
+  }
+  assert.deepEqual(configure({ show_rooms: "alway", unavailable_values: "hidden" })._configDiagnostics, []);
+});
+
+test("legacyShowRequests() reports only what was actually asked for", () => {
+  const { legacyShowRequests } = normalizeConfigModule;
+  assert.deepEqual(legacyShowRequests({}), {});
+  assert.deepEqual(legacyShowRequests({ show_rooms: true }), { rooms: "always" });
+  assert.deepEqual(legacyShowRequests({ show_rooms: false }), { rooms: "never" });
+  assert.deepEqual(legacyShowRequests({ unavailable_values: "hide" }), { unavailable_rooms: false });
+  assert.deepEqual(legacyShowRequests({ unavailable_values: "show" }), {}, "the default is not this key's to state");
+  assert.deepEqual(legacyShowRequests({ show_rooms: false, unavailable_values: "hide" }), {
+    rooms: "never",
+    unavailable_rooms: false,
+  });
+});
+
 test("the diagnostics of the block travel on the same channel as the views diagnostics", () => {
   const config = configure({ show: { nonsense: true }, views: "not-an-array" });
   assert.equal(config._configDiagnostics.length, 2);

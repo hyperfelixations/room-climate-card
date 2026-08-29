@@ -4,6 +4,11 @@
 // presentation metadata lives with the metric registries, and every semantic
 // classification/scale decision lives in the domain classification profiles.
 //
+// Neither are the `show:` block's defaults. SHOW_SWITCHES in show.js owns them, and
+// the older top-level spellings that map onto that block are read WITHOUT a default
+// of their own (see legacyShowRequests() in normalize-config.js), so one decision is
+// never given two defaults that could drift apart.
+//
 // There are no default entities, and none of them is individually required. What IS
 // required is that at least one CURRENT-VALUE source exists: either `entity` or at
 // least one `rooms` entry. `range_entity` and `trend_entity` describe a value rather
@@ -19,5 +24,5 @@ export const DEFAULT_CONFIG = {
   hold_action: { action: "more-info" },
   auto_slide: true,
   swipe: true, // Manual swiping remains independent of automatic rotation.
-  unavailable_values: "show", // Preserve visible source identity during temporary outages.
+  hide_footer: false, // Every view draws its footer unless something asks it not to.
 };

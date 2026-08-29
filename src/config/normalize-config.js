@@ -30,6 +30,7 @@ import { normalizeShowConfig, resolveShowConfig } from "./show.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
 import {
+  booleanOption,
   decimalsOverride,
   isPlainObject,
   optionalEntity,
@@ -51,14 +52,23 @@ export function normalizeLanguage(value, isSupportedLanguage) {
   return isSupportedLanguage(normalized) ? normalized : "auto";
 }
 
-// `show_rooms` accepts what YAML naturally produces. `true`/`false` are booleans there,
-// not the strings "true"/"false", so they are mapped onto the three-state vocabulary
-// rather than compared as text. Anything unrecognized falls back to "auto" silently,
-// the same convention room_sort and room_label already use.
-export function normalizeShowRooms(value) {
-  if (value === true) return "always";
-  if (value === false) return "never";
-  return "auto";
+// The two older spellings of a `show:` decision, read WITHOUT a default of their own.
+//
+// Each speaks only where it actually says something, which is what leaves SHOW_SWITCHES
+// and resolveShowConfig() as the ONE place any of these defaults is written down. A reader
+// that answered for a key nobody wrote would be a second statement of the same default,
+// and two statements of one default drift apart without anything noticing.
+//
+// `show_rooms` maps YAML's real booleans (not the strings "true"/"false") onto the
+// three-state vocabulary downstream reads. For `unavailable_values` only the literal
+// `hide` turns the placeholder chips off — every other value, including a typo, means
+// what the absent key means.
+export function legacyShowRequests(userConfig) {
+  const requests = {};
+  if (userConfig.show_rooms === true) requests.rooms = "always";
+  if (userConfig.show_rooms === false) requests.rooms = "never";
+  if (userConfig.unavailable_values === "hide") requests.unavailable_rooms = false;
+  return requests;
 }
 
 // How a header line behaves, and what it says.
@@ -151,11 +161,15 @@ export function normalizeConfig(config, collaborators) {
   // this is the only place that knows two spellings; everything downstream sees
   // `config.show` and nothing else.
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
-  const show = resolveShowConfig({
-    rooms: normalizeShowRooms(userConfig.show_rooms),
-    unavailable_rooms: normalizeEnum(userConfig.unavailable_values, ["show", "hide"], DEFAULT_CONFIG.unavailable_values) === "show",
-    ...requestedShow,
-  });
+  const show = resolveShowConfig({ ...legacyShowRequests(userConfig), ...requestedShow });
+
+  // The three top-level booleans, through the same reader the `show:` block uses, so a
+  // boolean is read one way in this file. Resolved here rather than inside the returned
+  // object so that the diagnostics exist before the list below is built.
+  const switchDiagnostics = [];
+  const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", switchDiagnostics) ?? DEFAULT_CONFIG.auto_slide;
+  const swipe = booleanOption(userConfig.swipe, "swipe", switchDiagnostics) ?? DEFAULT_CONFIG.swipe;
+  const hideFooter = booleanOption(userConfig.hide_footer, "hide_footer", switchDiagnostics) ?? DEFAULT_CONFIG.hide_footer;
 
   return {
     entity,
@@ -182,15 +196,15 @@ export function normalizeConfig(config, collaborators) {
     // once, which no per-view option can do without writing out the whole `views:` list.
     // Listed in the backlog for removal at the next major, after which the per-view
     // `show_footer` is the only spelling.
-    hide_footer: userConfig.hide_footer === true,
+    hide_footer: hideFooter,
     rotation_seconds: positiveSeconds(userConfig.rotation_seconds, DEFAULT_CONFIG.rotation_seconds, 1, 3600),
     slide_seconds: positiveSeconds(userConfig.slide_seconds, DEFAULT_CONFIG.slide_seconds, 0.1, 10),
     hold_seconds: DEFAULT_CONFIG.hold_seconds,
     // Independent of each other: auto_slide only gates the automatic rotation
     // timer, swipe only gates the manual horizontal drag gesture. Both default
     // true; either can be turned off without affecting the other.
-    auto_slide: userConfig.auto_slide !== false,
-    swipe: userConfig.swipe !== false,
+    auto_slide: autoSlide,
+    swipe,
     tap_action: normalizeAction(userConfig.tap_action, DEFAULT_CONFIG.tap_action),
     hold_action: normalizeAction(userConfig.hold_action, DEFAULT_CONFIG.hold_action),
     // Optional room-chip grid override; null means "decide automatically".
@@ -212,7 +226,7 @@ export function normalizeConfig(config, collaborators) {
     // diagnostics forward to whoever is responsible for surfacing them once per
     // config change. One channel for every cosmetic fallback in the configuration,
     // because two would be two places to remember when a third kind arrives.
-    _configDiagnostics: [...showDiagnostics, ...viewsDiagnostics],
+    _configDiagnostics: [...switchDiagnostics, ...showDiagnostics, ...viewsDiagnostics],
     start_view: optionalString(userConfig.start_view),
     classification,
     // The resolved palette object, not its name: everything downstream needs the colours,
