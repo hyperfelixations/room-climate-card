@@ -358,6 +358,29 @@ test("compatible mixed units are averaged canonically", () => {
   assert.ok(Math.abs(context.averageSource.canonicalValue - expected) < 1e-9, `got ${context.averageSource.canonicalValue}`);
 });
 
+test("the consensus is the mean, whether or not its inputs can be added first", () => {
+  // ONE ANSWER, TWO ROADS TO IT. The ordinary road sums and divides, and it must keep
+  // producing the exact double it always did — anything else would move every average on
+  // every card by a bit. The other road exists because the sum can leave the number line
+  // while the mean stays on it, and it is checked here against the value written by hand.
+  const meanOf = (rooms) => {
+    const states = Object.fromEntries(rooms.map((value, index) => [`sensor.r${index}`, st(value, C)]));
+    const config = cfg({ entity: null, rooms: rooms.map((_, index) => room(`sensor.r${index}`)) });
+    return measurementContext.resolveMeasurementContext(states, config).averageSource.canonicalValue;
+  };
+
+  // Bit-for-bit what summing gives, on values chosen because their mean is not exact.
+  for (const rooms of [[21, 23], [19.2, 20.8, 21.6, 22.3], [0.1, 0.2]]) {
+    const summed = rooms.reduce((total, value) => total + value, 0) / rooms.length;
+    assert.equal(meanOf(rooms), summed, rooms.join("/"));
+  }
+
+  // And where the sum overflows to Infinity or to NaN, the mean is still the mean.
+  assert.equal(meanOf([1e308, 1e308]), 1e308);
+  assert.equal(meanOf([1e308, 1e308, 1e308]), 1e308);
+  assert.equal(meanOf([1e308, -273.15]), (1e308 + -273.15) / 2);
+});
+
 test("a room consensus spanning disagreeing units displays canonically", () => {
   const mixed = measurementContext.resolveMeasurementContext(
     { "sensor.avg": st("unavailable", C), "sensor.f": st(70, F), "sensor.c": st(22, C) },

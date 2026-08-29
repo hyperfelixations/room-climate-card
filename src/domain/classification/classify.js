@@ -25,10 +25,13 @@ const FALLBACK_INVALID = {
   zone: "invalid",
 };
 
-// First tier whose threshold the value passes, using the profile's own
-// comparison operator. ">=" makes a boundary belong to the tier above it, ">"
-// makes it belong to the tier below — PM2.5 uses the latter so a reading of
-// exactly 5 is still optimal.
+// First tier whose threshold the value passes, using the profile's own comparison
+// operator. ">=" makes a boundary belong to the tier above it, ">" makes it belong to the
+// tier below.
+//
+// PARTIAL, and the caller has to answer for it. A `>` profile's open-ended final tier sits
+// at -Infinity, and nothing is strictly above -Infinity — so a reading that reached
+// -Infinity passes no threshold at all and there is no tier to return.
 export function selectTier(profile, value) {
   return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
 }
@@ -54,7 +57,15 @@ export function deviationSpanOf(profile) {
 }
 
 export function classifyNumericValue(profile, value) {
-  if (profile.invalidWhen?.(value)) {
+  const tier = selectTier(profile, value);
+  // TWO WAYS TO HAVE NO CLASSIFICATION, and one answer. The profile may declare the value
+  // impossible, or no tier may cover it — and the second is the same statement as the
+  // first: there is no place on this profile's ramp for this number. Reachable only through
+  // a `>` profile and a reading of -Infinity (see selectTier), and before this the tier's
+  // `.color` was read off the undefined that came back, which threw out of setConfig() and
+  // left Home Assistant painting a red card. No FINITE reading is affected: every one of
+  // them is strictly above -Infinity.
+  if (profile.invalidWhen?.(value) || tier === undefined) {
     const invalid = profile.invalidClassification || FALLBACK_INVALID;
     return {
       level: invalid.level || null,
@@ -70,7 +81,6 @@ export function classifyNumericValue(profile, value) {
       invalid: true,
     };
   }
-  const tier = selectTier(profile, value);
   const explicitColor = tier.color || null;
   return {
     level: tier.level || null,

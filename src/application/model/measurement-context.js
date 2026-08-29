@@ -50,6 +50,27 @@ function partitionRooms(roomModels, metricKind) {
   return { participatingRooms, excludedRoomIds, diagnostics };
 }
 
+// The arithmetic mean, without an intermediate sum that can leave the number line when the
+// answer does not.
+//
+// Summing first is exact and is what every ordinary case takes: two readings of 21 and 23
+// give 22 with the bits a person would predict, and this path leaves every existing average
+// unchanged to the last digit. It is also the path that overflows — 1e308 + 1e308 is
+// Infinity, and dividing that by two cannot bring it back, so a card whose rooms were both
+// finite and whose true mean is finite showed the infinity sign.
+//
+// When it does overflow, dividing by the largest magnitude FIRST keeps every term at most 1
+// and the running sum at most n, and multiplying back at the end restores the scale. Less
+// exact in the last bits than the sum, which is why it is the second choice rather than the
+// only one. That largest magnitude cannot be zero on this path: a sum that left the number
+// line had a term near the ceiling in it.
+function meanOf(values) {
+  const sum = values.reduce((total, value) => total + value, 0);
+  if (Number.isFinite(sum)) return sum / values.length;
+  const scale = values.reduce((largest, value) => Math.max(largest, Math.abs(value)), 0);
+  return (values.reduce((total, value) => total + value / scale, 0) / values.length) * scale;
+}
+
 // The headline several rooms of one kind produce together, and the unit it can be shown
 // in. A unit profile they all share survives; a mixture falls back to the canonical unit
 // rather than preferring one room's unit for no reason.
@@ -58,7 +79,7 @@ function roomConsensus(rooms) {
     averageSource: {
       kind: "roomConsensus",
       entityIds: rooms.map((room) => room.entityId),
-      canonicalValue: rooms.reduce((sum, room) => sum + room.canonicalValue, 0) / rooms.length,
+      canonicalValue: meanOf(rooms.map((room) => room.canonicalValue)),
       unitProfile: null,
     },
     displayUnitProfileKey: rooms.every((room) => room.unitProfile === rooms[0].unitProfile) ? rooms[0].unitProfile : null,

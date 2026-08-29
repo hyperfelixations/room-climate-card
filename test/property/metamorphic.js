@@ -469,9 +469,9 @@ const RELATIONS = [
         const entity = states[id];
         const fahrenheit = toFahrenheit(Number(entity.state));
         // A reading near the floating-point ceiling overflows on the way: -1e308 °C is
-        // -1.8e308 °F, which is -Infinity. That is BUG-07, it is already registered, and it is
-        // not what this relation is about — restating it here would only mean feeding the card
-        // a number this file invented.
+        // -1.8e308 °F, which is -Infinity. The card refuses such a reading, and rightly — but
+        // it would be refusing a number THIS FILE invented rather than one the description
+        // asked for, so the pair says nothing and the relation stands down.
         if (!Number.isFinite(fahrenheit)) return null;
         converted[id] = {
           ...entity,

@@ -33,12 +33,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-function isFahrenheitConversionOverflowViolation(violation) {
-  return /^everyNumberIsFinite: (?:average\.value|rooms\.visible\[\d+\]\.value|rooms\.chips\[\d+\]\.room\.value|rooms\.chipRows\[\d+\]\.chips\[\d+\]\.room\.value|extremes\.(?:coolest|warmest)\.value|roomMarkers\[\d+\]\.value|spread) is -?Infinity .*finite Fahrenheit entity state .*overflowed during conversion/.test(
-    violation
-  );
-}
-
 // Every entry must carry an id, a one-line summary a person can act on, the area of the
 // product it lives in, and the date it was found. The id is the link to the internal
 // backlog; nothing here is a substitute for that entry.
@@ -66,57 +60,6 @@ const KNOWN_ISSUES = [
     // different finding and must still be reported as new.
     matchesViolation: (violation) =>
       /everyNumberIsFinite: spread is Infinity$|calc\(NaN%|"\)" is expected|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
-  },
-  {
-    id: "BUG-07",
-    area: "domain/metrics conversion",
-    discovered: "2026-08-24",
-    summary:
-      "Converting an extreme Fahrenheit reading overflows: the ×5/9 step turns 1e308 °F into " +
-      "Infinity, and the card renders the infinity sign as a value. Celsius and Kelvin at the " +
-      "same magnitude are unaffected — only the scaling path overflows. A non-finite conversion " +
-      "result should reach the no-data state. The negative direction no longer shows: an " +
-      "overflow to -Infinity lands below absolute zero and is refused as an impossible reading, " +
-      "which is the right answer for the wrong reason and leaves the cause untouched.",
-    foundBy: "test/property/model.property.test.js",
-    // Distinct from BUG-06: no span is involved, a single room is enough, and what goes
-    // non-finite is the VALUE rather than a position derived from a spread.
-    matchesViolation: isFahrenheitConversionOverflowViolation,
-  },
-  {
-    id: "BUG-11",
-    area: "application/model measurement-context",
-    discovered: "2026-08-27",
-    summary:
-      "A room-consensus average can overflow even though every room value is finite: two " +
-      "readings of 1e308 are added before division, so the calculated headline becomes " +
-      "Infinity. The card should reject an unusable aggregate or compute the mean without " +
-      "overflowing its intermediate sum.",
-    foundBy: "test/property/model.property.test.js, seed 0x3382a0c6",
-    matchesViolation: (violation) =>
-      /everyNumberIsFinite: average\.value is -?Infinity \(source calculated; finite room inputs\)|aggregatesStayWithinTheirInputs: average -?Infinity lies outside its rooms/.test(
-        violation
-      ),
-  },
-  {
-    id: "BUG-13",
-    area: "domain/classification classify",
-    discovered: "2026-08-29",
-    summary:
-      "A custom profile written with comparison \">\" has no tier for a reading that reached " +
-      "-Infinity: selectTier() asks value > tier.min, and -Infinity > -Infinity is false, so " +
-      "even the open-ended final tier is skipped and classifyNumericValue() reads .color off " +
-      "undefined. setConfig() throws and the dashboard shows a red card. A \">=\" profile is " +
-      "unaffected, and every built-in \">\" profile is saved by its own physical limits, so " +
-      "only a user-written profile without valid_range reaches it.",
-    foundBy: "test/property/model.property.test.js, a 20000-case sweep on seed 0xc1a6e",
-    // The failure is a THROW rather than a wrong number, so the invariants never get to run
-    // and the run reports it as a configuration that was refused without saying why. The
-    // matcher is the message the crash produces on the way out.
-    matchesViolation: (violation) =>
-      /^setConfig refused with a message that does not identify itself: Cannot read properties of undefined \(reading 'color'\)/.test(
-        violation
-      ),
   },
 ];
 

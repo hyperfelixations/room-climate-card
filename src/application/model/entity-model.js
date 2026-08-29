@@ -210,11 +210,20 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
   // only AFTER unit resolution and conversion — comparing a raw Fahrenheit value
   // against canonical Celsius limits would reject perfectly good data.
   //
+  // AND THE CONVERSION ITSELF HAS TO HAVE PRODUCED A NUMBER. A finite state can leave it
+  // non-finite: 1e308 °F is (v − 32) × 5/9, and the multiplication by five overflows to
+  // Infinity. That is not a reading of anything, so it is refused here rather than averaged,
+  // classified and drawn — the same answer 800 % humidity gets, for the same reason. Only
+  // the scaling paths can do it; °C and K at the same magnitude never multiply.
+  //
   // lenient: this entity's own kind may not be the kind the card-wide policy is
   // scoped to (a humidity room on a temperature card configured with the outdoor
   // profile). Falling back to that kind's default profile here lets the later
   // kind filter do its job instead of throwing during a probe.
-  const validPhysical = validNumeric && (!validUnit || isValuePhysicallyValid(policy, metricKind, null, canonicalValue, { lenient: true }));
+  const validPhysical =
+    validNumeric &&
+    Number.isFinite(canonicalValue) &&
+    (!validUnit || isValuePhysicallyValid(policy, metricKind, null, canonicalValue, { lenient: true }));
 
   const { availability, unusableReason } = resolveAvailability({
     stateObject,

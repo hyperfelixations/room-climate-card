@@ -249,8 +249,8 @@ const OPTION_PRESENCE = {
   classification: 0.08,
   range_entity: 0.1,
   trend_entity: 0.08,
-  // A key nobody meant to write. The card takes unknown top-level keys in silence today,
-  // which is BUG-09 — so generating them is how the run keeps proving it.
+  // A key nobody meant to write. The card names it and offers the option it was probably
+  // meant to be, so generating them keeps a generated card exercising that path.
   misspelledKey: 0.06,
 };
 

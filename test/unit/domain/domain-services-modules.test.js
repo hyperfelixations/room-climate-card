@@ -313,6 +313,56 @@ test("an invalid reading short-circuits to the invalid classification", () => {
   assert.equal(result.score, null, "an unusable reading has no distance from optimal to report");
 });
 
+test("a reading no tier covers is invalid too, rather than a crash", () => {
+  // selectTier() is PARTIAL: a `>` profile asks whether a reading is strictly above a
+  // threshold, its open-ended tier sits at -Infinity, and nothing is strictly above
+  // -Infinity. The classifier used to read `.color` off the undefined that came back, which
+  // threw out of setConfig() and painted the dashboard card red.
+  //
+  // The two roads into the invalid answer are separated here on purpose: this profile
+  // declares NO invalidWhen at all, so only the missing tier can produce it — and its
+  // neighbour below declares one that says no, so only the tier check can either.
+  const exclusive = {
+    comparison: ">",
+    tiers: [
+      { min: 5, levelKey: "hi", color: "#111111", zone: "outside", score: 2 },
+      { min: -Infinity, levelKey: "lo", color: "#222222", zone: "outside", score: 1 },
+    ],
+  };
+  assert.equal(classify.selectTier(exclusive, -Infinity), undefined, "the case is what it says it is");
+  const result = classify.classifyNumericValue(exclusive, -Infinity);
+  assert.equal(result.invalid, true);
+  assert.equal(result.zone, "invalid");
+  assert.equal(result.levelKey, "level.invalidReading");
+  assert.equal(result.score, null);
+  assert.equal(result.deviation, null, "there is no distance from optimal for a value off the ramp");
+
+  // The same profile with an invalidWhen that never fires still reaches the same answer, so
+  // the tier check is doing the work rather than riding on the validity check.
+  const guarded = { ...exclusive, invalidWhen: () => false };
+  assert.equal(classify.classifyNumericValue(guarded, -Infinity).invalid, true);
+
+  // And no FINITE reading is touched: every one of them is strictly above -Infinity.
+  for (const value of [-1e308, -1, 0, 5, 5.0001, 1e308]) {
+    assert.equal(classify.classifyNumericValue(exclusive, value).invalid, false, String(value));
+  }
+});
+
+test("an inclusive profile has a tier for -Infinity and is classified by it", () => {
+  // The boundary that makes the case above about the comparison rather than about the value:
+  // `>=` admits -Infinity into the open-ended tier, so the classifier finds one.
+  const inclusive = {
+    comparison: ">=",
+    tiers: [
+      { min: 5, levelKey: "hi", color: "#111111", zone: "outside", score: 2 },
+      { min: -Infinity, levelKey: "lo", color: "#222222", zone: "outside", score: 1 },
+    ],
+  };
+  const result = classify.classifyNumericValue(inclusive, -Infinity);
+  assert.equal(result.invalid, false);
+  assert.equal(result.levelKey, "lo");
+});
+
 test("a profile without an explicit invalid classification uses the neutral fallback", () => {
   const profile = {
     comparison: ">=",

@@ -109,7 +109,7 @@ test("every optional configuration key really does appear sometimes", () => {
   // an intention the generator does not have.
   for (const key of Object.keys(OPTION_PRESENCE)) {
     // The one key that by construction never appears under its own name — it exists to
-    // produce a MISSPELLING of a real key, which is how the run keeps proving BUG-09.
+    // produce a MISSPELLING of a real key, which is a different thing to prove.
     if (key === "misspelledKey") continue;
     assert.ok(configShare(key) > 0, `${key} is declared in OPTION_PRESENCE and never generated`);
   }

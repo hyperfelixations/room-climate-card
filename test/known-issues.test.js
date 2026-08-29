@@ -46,48 +46,47 @@ test("no id is registered twice", () => {
 });
 
 test("known-issue classification never hides an unrelated violation", () => {
-  const known =
-    "everyNumberIsFinite: average.value is -Infinity " +
-    "(source room; a finite Fahrenheit entity state overflowed during conversion)";
-  const unrelated = "active view is unavailable";
-  const classified = classifyViolations([known, unrelated]);
-  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [["BUG-07", known]]);
-  assert.deepEqual(classified.unknown, [unrelated]);
+  // The whole point of partitioning violation by violation rather than case by case: a case
+  // that reproduces a registered defect and ALSO does something new must report the new
+  // thing. One matching violation must never absorb the ones beside it.
+  const known = "everyNumberIsFinite: scale.markerPositions.average is NaN";
+  const unrelated = ["active view is unavailable", "rooms lost when only the primary went unavailable: sensor.room0"];
+  const classified = classifyViolations([known, ...unrelated]);
+  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [["BUG-06", known]]);
+  assert.deepEqual(classified.unknown, unrelated);
 });
 
-test("conversion and finite-input aggregation overflows are attributed to different defects", () => {
-  const conversion =
-    "everyNumberIsFinite: average.value is -Infinity " +
-    "(source room; a finite Fahrenheit entity state overflowed during conversion)";
-  const aggregation = "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)";
-  const classified = classifyViolations([conversion, aggregation]);
-  assert.deepEqual(classified.known.map(({ issue }) => issue.id), ["BUG-07", "BUG-11"]);
-  assert.deepEqual(classified.unknown, []);
-});
-
-test("every copied view of a Fahrenheit overflow is attributed without hiding other findings", () => {
-  const conversionViolations = [
-    "everyNumberIsFinite: average.value is -Infinity (source calculated; a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: rooms.visible[0].value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: rooms.chips[0].room.value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: rooms.chipRows[0].chips[0].room.value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: extremes.coolest.value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: roomMarkers[0].value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)",
-    "everyNumberIsFinite: spread is Infinity (derived from a finite Fahrenheit entity state that overflowed during conversion)",
+test("a defect that was fixed no longer absorbs its old signature", () => {
+  // These are the exact violation strings BUG-07, BUG-11 and BUG-12 were recognised by while
+  // they were open. Each is now a finding nobody has an explanation for, and the run has to
+  // say so rather than file it under a defect that no longer exists — which is the failure
+  // mode a register like this has: an entry outliving its defect and quietly swallowing the
+  // next regression that looks like it.
+  const retired = [
+    "everyNumberIsFinite: average.value is -Infinity (source room; a finite Fahrenheit entity state overflowed during conversion)",
+    "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)",
+    "aggregatesStayWithinTheirInputs: average Infinity lies outside its rooms",
+    'average moved from {"value":44,"position":50,"source":"room"} to {"value":44,"position":50,"source":"sensor"}',
+    "setConfig refused with a message that does not identify itself: Cannot read properties of undefined (reading 'color')",
   ];
-  const unrelated = "everyNumberIsFinite: range.min is Infinity";
-  const classified = classifyViolations([...conversionViolations, unrelated]);
-  assert.deepEqual(classified.known.map(({ issue }) => issue.id), conversionViolations.map(() => "BUG-07"));
-  assert.deepEqual(classified.unknown, [unrelated]);
+  const classified = classifyViolations(retired);
+  assert.deepEqual(classified.known, []);
+  assert.deepEqual(classified.unknown, retired);
 });
 
-test("known-issue classification attributes each matching violation independently", () => {
-  const bug06 = "everyNumberIsFinite: scale.markerPosition is NaN";
-  const bug11 = "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)";
-  const unrelated = "rooms lost when only the primary went unavailable: sensor.room0";
-  const classified = classifyViolations([bug06, bug11, unrelated]);
-  assert.deepEqual(classified.known.map(({ issue }) => issue.id), ["BUG-06", "BUG-11"]);
-  assert.deepEqual(classified.unknown, [unrelated], "a defect that was fixed no longer absorbs its old signature");
+test("every violation is judged on its own, not on the company it keeps", () => {
+  // Both of BUG-06's two symptoms, and a third string that merely resembles them. Ordering
+  // and count are asserted, so a matcher that started swallowing everything would show up
+  // here rather than as a quietly green sweep.
+  const span = "everyNumberIsFinite: spread is Infinity";
+  const position = "everyNumberIsFinite: roomMarkers[0].position is NaN";
+  const other = "everyNumberIsFinite: range.min is Infinity";
+  const classified = classifyViolations([span, other, position]);
+  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [
+    ["BUG-06", span],
+    ["BUG-06", position],
+  ]);
+  assert.deepEqual(classified.unknown, [other]);
 });
 
 test("expected reproductions accept only their identifying assertion", () => {
@@ -183,65 +182,76 @@ test("BUG-06's neighbourhood: two readings can no longer be far enough apart to 
   });
 });
 
-// BUG-07 — found by the property run, seed 0x6627f909, shrunk to one room.
+// What BUG-07 was, kept as an ordinary test now that it holds. One room reporting 1e308 °F:
+// the conversion to Celsius is (F - 32) × 5/9, the multiplication by five overflows, and the
+// card used to display what came out — the headline read "∞ °F".
 //
-// One room reporting 1e308 °F. The conversion to Celsius is (F - 32) × 5/9; the
-// multiplication by five overflows, and Infinity is what comes out. The card then displays
-// it: the headline reads "∞ °F".
+// A conversion result that is not a number is not a reading, so the card refuses it the way
+// it refuses 800 % humidity, and the whole card lands in the no-data state because that room
+// was its only source.
 //
-// The overflow is specific to the SCALING path — °C and K at the same magnitude come
-// through as ordinary (if absurd) numbers, because their conversion never multiplies.
-//
-// ONE DIRECTION IS LEFT. An overflow to -Infinity lands below absolute zero, which the
-// temperature profile now refuses as an impossible reading — the right answer arrived at
-// for the wrong reason, and it leaves the overflow itself exactly where it was.
-expectedFailure("BUG-07", /average\.value is -?Infinity|an infinity sign is shown as a reading/, () => {
-  const built = buildScenario({
-    metric: "temperature",
-    primary: null,
-    rooms: [{ state: 1e308, unit: { value: "°F" }, deviceClass: null }],
-  });
-  env.withCard(built.config, built.hass, (card) => {
-    const model = card._computeViewModel();
-    assert.ok(Number.isFinite(model.average.value), `average.value is ${model.average.value}`);
-    assert.ok(!/[∞]/.test(card.shadowRoot.textContent), "an infinity sign is shown as a reading");
-  });
+// The overflow is specific to the SCALING path, which is what the neighbouring test holds:
+// °C and K at the same magnitude come through as ordinary (if absurd) numbers, because their
+// conversion never multiplies.
+test("a reading that overflows on the way into the canonical unit is not a reading", () => {
+  for (const value of [1e308, -1e308]) {
+    const built = buildScenario({
+      metric: "temperature",
+      primary: null,
+      rooms: [{ state: value, unit: { value: "°F" }, deviceClass: null }],
+    });
+    env.withCard(built.config, built.hass, (card) => {
+      assert.equal(card._computeViewModel().empty, true, `${value} °F`);
+      assert.ok(!/[∞]/.test(card.shadowRoot.textContent), "an infinity sign is shown as a reading");
+    });
+  }
 });
 
-test("BUG-07's neighbourhood: the same magnitude in Celsius does not overflow", () => {
-  const built = buildScenario({
-    metric: "temperature",
-    primary: null,
-    rooms: [{ state: 1e308, unit: { value: "°C" }, deviceClass: null }],
-  });
-  env.withCard(built.config, built.hass, (card) => {
-    assert.ok(Number.isFinite(card._computeViewModel().average.value));
-  });
+test("the same magnitude in a unit that does not scale is still a reading", () => {
+  for (const unit of ["°C", "K"]) {
+    const built = buildScenario({
+      metric: "temperature",
+      primary: null,
+      rooms: [{ state: 1e308, unit: { value: unit }, deviceClass: null }],
+    });
+    env.withCard(built.config, built.hass, (card) => {
+      const model = card._computeViewModel();
+      assert.equal(model.empty, false, unit);
+      assert.ok(Number.isFinite(model.average.value), unit);
+    });
+  }
 });
 
-// BUG-11 — found by the property run, seed 0x3382a0c6, and reduced to two rooms.
-//
-// Every entity value is a finite JavaScript number and the true mean is 1e308, also finite.
-// The room-consensus path nevertheless adds first: 1e308 + 1e308 becomes Infinity, and
-// dividing that intermediate result by two leaves Infinity as the headline. This is not
-// BUG-07's unit conversion and not BUG-06's min/max span: both inputs and their span are
-// finite, and only the aggregate's intermediate sum overflows.
-expectedFailure("BUG-11", /room consensus average is Infinity although both room inputs are finite/, () => {
+// What BUG-11 was, kept as an ordinary test now that it holds. Every entity value is a
+// finite JavaScript number and the true mean is 1e308, also finite — but the room-consensus
+// path added first, 1e308 + 1e308 became Infinity, and dividing that intermediate result by
+// two left Infinity as the headline. Not BUG-07's unit conversion and not BUG-06's min/max
+// span: both inputs and their span are finite, and only the aggregate's own sum overflowed.
+test("a room consensus is the mean of its rooms even when their sum is not a number", () => {
   const built = buildScenario({ metric: "temperature", primary: null, rooms: [{ state: 1e308 }, { state: 1e308 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
-    assert.equal(model.roomMarkers.length, 2, "the reproduction must exercise a two-room consensus");
+    assert.equal(model.roomMarkers.length, 2, "the case must exercise a two-room consensus");
     for (const room of model.roomMarkers) {
       assert.ok(Number.isFinite(room.value), `input ${room.entity} is unexpectedly ${room.value}`);
     }
-    assert.ok(
-      Number.isFinite(model.average.value),
-      `room consensus average is ${model.average.value} although both room inputs are finite`
-    );
+    assert.equal(model.average.source, "calculated");
+    assert.equal(model.average.value, 1e308, "the mean of two equal readings is that reading");
   });
 });
 
-test("BUG-11's neighbourhood: a smaller same-sign consensus remains finite", () => {
+test("and the two ends of the number line still average to nothing in particular", () => {
+  // The case the scaled path exists for: summing first gives Infinity - Infinity, which is
+  // NaN, while dividing by the larger magnitude first gives the 0 a person would write down.
+  const built = buildScenario({ metric: "temperature", primary: null, rooms: [{ state: 1e308 }, { state: -273.15 }] });
+  env.withCard(built.config, built.hass, (card) => {
+    const model = card._computeViewModel();
+    assert.ok(Number.isFinite(model.average.value), `average is ${model.average.value}`);
+    assert.equal(model.average.value, (1e308 + -273.15) / 2);
+  });
+});
+
+test("a smaller same-sign consensus is unchanged, to the last digit", () => {
   const built = buildScenario({ metric: "temperature", primary: null, rooms: [{ state: 1e307 }, { state: 1e307 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -506,18 +516,19 @@ test("the other half of that: a room that does not exist at all is ignored too",
   assert.equal(sourceOf(withMissing), "room", "an entity that does not exist does not change what the card is about");
 });
 
-// BUG-13 — found by a 20000-case sweep, shrunk to one room and one classification block.
+// What BUG-13 was, kept as an ordinary test now that it holds. `comparison: ">"` asks
+// whether a reading is strictly ABOVE a tier's threshold, and the final tier's threshold is
+// -Infinity. Nothing is strictly above -Infinity, so a reading that had reached -Infinity
+// matched no tier at all, the classifier read `.color` off the undefined it got back,
+// setConfig() threw, and Home Assistant painted the card red.
 //
-// `comparison: ">"` asks whether a reading is strictly ABOVE a tier's threshold, and the
-// final tier's threshold is -Infinity. Nothing is strictly above -Infinity, so a reading
-// that reached -Infinity matches no tier at all, and the classifier reads `.color` off the
-// undefined it got back. setConfig() throws, and Home Assistant paints the card red.
-//
-// The reading gets there through the Fahrenheit conversion of BUG-07 (×5/9 overflows), and
-// the profile has no `valid_range` to stop it — a built-in profile would, which is why only
-// a user-written one reaches this. Same family as BUG-06, BUG-07 and BUG-11: a quantity
-// stops being a number and nothing on the way to the screen notices.
-expectedFailure("BUG-13", (error) => /Cannot read properties of undefined \(reading 'color'\)/.test(String(error && error.message)), () => {
+// TWO ANSWERS NOW STAND BETWEEN THAT AND THE SCREEN, and this case only ever reaches the
+// first. The reading got there through the Fahrenheit conversion of BUG-07, which is now
+// refused before anything classifies it — so the card is empty rather than red. The second
+// is in classifyNumericValue() itself, which no longer needs a tier to exist; that half is
+// asserted directly in unit/domain/domain-services-modules.test.js, because nothing
+// reachable through a configuration gets to it any more.
+test("a reading no tier covers empties the card rather than throwing", () => {
   const built = buildScenario({
     metric: "temperature",
     primary: null,
@@ -541,10 +552,11 @@ expectedFailure("BUG-13", (error) => /Cannot read properties of undefined \(read
   });
 });
 
-test("BUG-13's neighbourhood: the same profile with >= classifies the same reading", () => {
-  // The boundary, and the reason the defect is about the comparison rather than about the
-  // value: `>=` admits -Infinity into the open-ended tier, so the card renders instead of
-  // throwing. It renders an infinity sign, which is BUG-07 and a different entry.
+test("the same profile with >= reaches the same answer by the other road", () => {
+  // The boundary, and the reason the defect was about the comparison rather than about the
+  // value: `>=` admits -Infinity into the open-ended tier, so the classifier always had one
+  // here. The reading is refused earlier either way now, so both profiles agree — which is
+  // the point, since they always described the same card.
   const built = buildScenario({
     metric: "temperature",
     primary: null,
@@ -564,6 +576,6 @@ test("BUG-13's neighbourhood: the same profile with >= classifies the same readi
     },
   });
   env.withCard(built.config, built.hass, (card) => {
-    assert.equal(typeof card._computeViewModel().empty, "boolean", "it renders rather than throwing");
+    assert.equal(card._computeViewModel().empty, true, "a reading that is not a number is not data");
   });
 });
