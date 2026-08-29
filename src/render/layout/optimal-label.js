@@ -53,17 +53,17 @@ export function resolveOptimalLabelPosition(containerEl, content) {
   const desiredPx = (barWidth * content.optimalLabel.center) / 100;
   const lowLimit = minWidth + gap + centerWidth / 2;
   const highLimit = barWidth - maxWidth - gap - centerWidth / 2;
-  // With no room anywhere even for the short form (a very narrow bar, a very long
-  // label), centring is the fairest fallback — better than pinning fully against one
-  // side. The label's own width is then also capped to the space actually available,
-  // so it visibly truncates instead of overlapping its neighbours: the centring
-  // fallback alone only prevents anchoring off-centre, not overlap caused by the
-  // label's own width. Since the label is centred at barWidth/2, the space available
-  // to it is bounded by whichever side is tighter, applied on BOTH sides — not by
-  // minWidth + maxWidth combined, which would only be safe for an asymmetric split a
-  // centred box cannot have.
+  // `fits`: a non-overlapping position exists at the label's natural width, so it is
+  // clamped onto its band between the two edge labels. Otherwise the label is capped
+  // to the free span between those labels and fills it exactly — gap-clear of both,
+  // truncating in place — rather than detaching to the bar's midpoint.
   const fits = lowLimit <= highLimit;
-  const targetPx = fits ? clamp(desiredPx, lowLimit, highLimit) : barWidth / 2;
-  centerEl.style.left = `${targetPx}px`;
-  centerEl.style.maxWidth = fits ? "" : `${Math.max(0, barWidth - 2 * Math.max(minWidth, maxWidth) - gap * 2)}px`;
+  if (fits) {
+    centerEl.style.left = `${clamp(desiredPx, lowLimit, highLimit)}px`;
+    centerEl.style.maxWidth = "";
+  } else {
+    const spanWidth = Math.max(0, barWidth - minWidth - maxWidth - 2 * gap);
+    centerEl.style.left = `${minWidth + gap + spanWidth / 2}px`;
+    centerEl.style.maxWidth = `${spanWidth}px`;
+  }
 }

@@ -10,6 +10,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { JSDOM } = require("jsdom");
 
 const {
   KNOWN_ISSUES,
@@ -578,4 +579,92 @@ test("the same profile with >= reaches the same answer by the other road", () =>
   env.withCard(built.config, built.hass, (card) => {
     assert.equal(card._computeViewModel().empty, true, "a reading that is not a number is not data");
   });
+});
+
+// ---------------------------------------------------------------- BUG-14 --
+//
+// What BUG-14 was, kept as ordinary tests now that it holds. resolveOptimalLabelPosition()
+// centres the optimal-band label on its band, then clamps it between the min and max edge
+// labels. For a reading many orders of magnitude past the scale the axis-maximum label
+// ("200,000,001 °C") is wide, and on a narrow bar no non-overlapping slot is left at the
+// label's natural width. The fallback used to drop the label onto barWidth / 2 with a width
+// cap that evaluated to 0, so a label whose band sits at ~0 % of the axis was detached in
+// the middle of the bar and collapsed to nothing. It now caps the label to the free span
+// between the two edge labels and fills that span, gap-clear of both, truncating in place.
+//
+// The widths are measured values from Chromium at card width 420, same custom profile,
+// 2e9 °C — see test/browser/geometry/optimal-label-anchored-huge-reading.spec.js.
+
+// long === short so resolveLabelForm() measures exactly once; center ≈ 0 is the
+// optimal band (20–24) on an axis of [10, reading + 1], checked against buildScaleAxis().
+const OPTIMAL_LABEL_CONTENT = {
+  optimalLabel: { long: "20–24 °C optimal", short: "20–24 °C optimal", center: 6e-5, visible: true },
+};
+const OPTIMAL_LABEL_GAP_PX = 4; // LABEL_GAP_PX
+
+function buildOptimalLabelContainer({ barWidth, minWidth, centerWidth, maxWidth }) {
+  const container = new JSDOM("<!doctype html><div id='c'></div>").window.document.getElementById("c");
+  container.innerHTML =
+    '<div class="rtc-scale-bar"></div>' +
+    '<div class="rtc-scale-labels">' +
+    '<span class="rtc-scale-label-min">10 °C</span>' +
+    '<span class="rtc-scale-label-center">20–24 °C optimal</span>' +
+    '<span class="rtc-scale-label-max">200,000,001 °C</span>' +
+    "</div>";
+  const stub = (selector, width) => {
+    const el = container.querySelector(selector);
+    el.getBoundingClientRect = () => ({ width, height: 12, top: 0, left: 0, right: width, bottom: 12, x: 0, y: 0 });
+    return el;
+  };
+  stub(".rtc-scale-bar", barWidth);
+  stub(".rtc-scale-label-min", minWidth);
+  stub(".rtc-scale-label-max", maxWidth);
+  return { container, centerEl: stub(".rtc-scale-label-center", centerWidth) };
+}
+
+test("a huge reading keeps the optimal label in the free span, not detached at the bar centre", async () => {
+  const { resolveOptimalLabelPosition } = await import("../src/render/layout/optimal-label.js");
+  // bar 145, min 22, center 76, max 76 -> lowLimit 64 > highLimit 27: no natural slot.
+  const barWidth = 145;
+  const minWidth = 22;
+  const maxWidth = 76;
+  const { container, centerEl } = buildOptimalLabelContainer({ barWidth, minWidth, centerWidth: 76, maxWidth });
+
+  resolveOptimalLabelPosition(container, OPTIMAL_LABEL_CONTENT);
+
+  const left = Number.parseFloat(centerEl.style.left);
+  const spanWidth = barWidth - minWidth - maxWidth - 2 * OPTIMAL_LABEL_GAP_PX; // 39: the free room between the edge labels
+  assert.equal(
+    centerEl.style.maxWidth,
+    `${spanWidth}px`,
+    "the label is capped to the free span — neither collapsed to 0 nor left at its natural width"
+  );
+  assert.ok(
+    Math.abs(left - (minWidth + OPTIMAL_LABEL_GAP_PX + spanWidth / 2)) < 1e-9,
+    `left=${left}px should fill the span from the min label, not sit at bar centre ${barWidth / 2}px`
+  );
+  assert.ok(left < barWidth / 2, `left=${left}px must stay on the band's (left) side of the bar centre`);
+  assert.ok(left - spanWidth / 2 >= minWidth + OPTIMAL_LABEL_GAP_PX - 1e-9, "left edge stays gap-clear of the min label");
+  assert.ok(
+    left + spanWidth / 2 <= barWidth - maxWidth - OPTIMAL_LABEL_GAP_PX + 1e-9,
+    "right edge stays gap-clear of the max label"
+  );
+});
+
+test("with room for the label it still centres on its band, pinned to the near edge", async () => {
+  // The 2e7 reading, same profile, a wider card (width 520): "20,000,001 °C" is
+  // narrow enough that a non-overlapping slot exists, so the fits branch clamps
+  // the band-at-0% label to lowLimit — pinned left, full width, no cap. This is
+  // the standard-appearance path and must be untouched by the fallback change.
+  const { resolveOptimalLabelPosition } = await import("../src/render/layout/optimal-label.js");
+  const minWidth = 22;
+  const centerWidth = 76;
+  const { container, centerEl } = buildOptimalLabelContainer({ barWidth: 227, minWidth, centerWidth, maxWidth: 62 });
+
+  resolveOptimalLabelPosition(container, OPTIMAL_LABEL_CONTENT);
+
+  const left = Number.parseFloat(centerEl.style.left);
+  const lowLimit = minWidth + OPTIMAL_LABEL_GAP_PX + centerWidth / 2;
+  assert.ok(Math.abs(left - lowLimit) <= 1, `left=${left}px should be lowLimit≈${lowLimit}px`);
+  assert.equal(centerEl.style.maxWidth, "", "no width cap when the label fits");
 });
