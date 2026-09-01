@@ -23,23 +23,20 @@ below. The card follows your dashboard's light or dark theme.
   values
 - Room chips with a coldest/warmest comparison, wrapping into more rows as you
   add rooms — or laid out to a grid you choose
-- Daily minimum/maximum views and a rate-of-change segment, when you have
-  entities for them
-- Colors and labels from a built-in profile — temperature comes with `indoor`,
-  `outdoor`, and `fridge` — or from your own profile in YAML, in the color
-  palette of your choice
-- Rooms whose sensor is briefly unavailable stay on the card as `--` chips you
-  can still tap
+- Daily minimum/maximum views and a rate-of-change display
+- Built-in classification profiles for every measurement, including `indoor`,
+  `outdoor`, and `fridge` for temperature, plus custom profiles in YAML
+- Built-in color palettes, ramps made from one to three colors, and custom
+  palettes in YAML
 - Translated into 15 languages, following your Home Assistant language setting
-- A `show:` block that takes parts off the card — the icon, either header line,
-  the status label, the middle block, the chips — for a smaller card or a denser
-  dashboard
+- Flexible layouts through the `show:` block, from the full card to compact
+  combinations of headers, values, views, and room chips
 - Plenty of optional YAML for views, bands, markers, footers, chips, the
   carousel, and tap/hold actions — see [Configuration](#configuration)
 
 ### Auto-slide in action
 
-With more than one view enabled (here: the scale and room-comparison views), the card automatically rotates between them — swiping and tapping still work at any time:
+With more than one view enabled (here: the scale and room-comparison views), the card automatically rotates between them. You can swipe or tap at any time:
 
 ![Card automatically rotating between the scale and room-comparison views](demo-auto-slide.gif)
 
@@ -80,8 +77,8 @@ manually:
 The card picker knows this card. Start from **Add card**, pick a temperature,
 humidity, CO₂, or PM2.5 entity, and the Room Climate Card appears under
 **Community**, already set to the entity you picked and previewing your own
-reading. Browsing the card list instead works too: the card starts out pointing
-at a climate sensor it finds in your system.
+reading. You can also select the card from the full list, where it previews a
+climate sensor found in your system.
 
 From there the YAML below is what you edit. Pick the shape that matches what you
 have — you need at least one sensor.
@@ -93,8 +90,8 @@ type: custom:room-climate-card
 entity: sensor.house_temperature
 ```
 
-Tapping the large value opens that entity. There is no caption above it —
-nothing else on the card needs telling apart — unless you set `entity_label`.
+Tapping the large value opens that entity. Set `entity_label` to add a caption
+above the value.
 
 ### One room
 
@@ -110,10 +107,6 @@ The room name becomes the caption, and tapping the large value opens that
 room. Its chip is hidden by default, since it would just repeat the big number —
 set `show: {rooms: true}` if you want it anyway.
 
-Only entities Home Assistant knows count here. If you add a second room and
-mistype its id, this stays a one-room card and the unknown id is named under
-the title.
-
 ### Several rooms
 
 ```yaml
@@ -127,8 +120,7 @@ rooms:
     entity: sensor.bedroom_temperature
 ```
 
-The large value is the average of the rooms, so there is nothing to open by
-tapping it. The chips still open their own rooms.
+The large value is the average of the rooms. Each chip opens its room sensor.
 
 ### One sensor plus rooms
 
@@ -148,8 +140,8 @@ rooms:
 ```
 
 Your sensor gives the large value; the rooms give the chips, the
-coldest/warmest comparison, and the scale markers. If your main sensor drops
-out for a while, the card averages the rooms instead.
+coldest/warmest comparison, and the scale markers. Usable room values provide
+the average while the main sensor is unavailable.
 
 See [Configuration](#configuration) below for every available option.
 
@@ -183,13 +175,11 @@ default.
 | `rooms` | `[]` | Your room sensors. From two rooms with values on, you get the comparison features and the `extremes` view. Each room needs its own `entity` — see [Room entries](#room-entries). |
 | `range_entity` | none | A sensor holding today's range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_timestamp` and `maximum_timestamp` if you also want the times — `minimum_zeitpunkt` and `maximum_zeitpunkt` work too. Only `minimum` and `maximum` are needed; where a time is missing, the card just shows the value. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |
-| `classification` | `auto` + metric default | Decides the level names and where each reading sits on the scale; the [palette](#palettes) turns that into a colour. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
+| `classification` | `auto` + metric default | Sets the level names, bands, scale, and icons. A plain string such as `outdoor` picks a built-in profile. See [Classification](#classification). |
 | `palette` | `pastel` | The colors the card classifies with. `pastel` is the card's own soft ramp, `vivid` a saturated one. You can also name any color, or write out a palette of your own. See [Palettes](#palettes). |
 
-Small changes count as stable rather than as a trend, so the arrow does not
-flicker — for temperature, anything within about `±0.1 °C/h`. The arrow appears
-above the value; the signed rate needs the main scale footer, which in turn
-needs at least two rooms with values.
+The trend arrow appears above the value. Its signed rate appears in the main
+scale footer when at least two rooms have values.
 
 #### Text, language, and number display
 
@@ -204,9 +194,8 @@ needs at least two rooms with values.
 
 #### What the card shows
 
-The `show:` block decides which PARTS of the card are drawn. Everything in it is
-on unless you say otherwise, so a card without a `show:` block looks exactly the
-way it does in the pictures above.
+Use `show:` to fit the card to your dashboard. Each entry controls one layout
+part; omitted entries use the defaults shown below.
 
 ```yaml
 show:
@@ -217,55 +206,26 @@ show:
 | Part | Default | What it is |
 | --- | --- | --- |
 | `accent_line` | `true` | The colored bar along the top edge, in the color of the current reading. |
-| `icon` | `true` | The icon in the top left. Hiding it moves the title to the card's left edge. |
+| `icon` | `true` | The icon in the top left. |
 | `title` | `true` | The card title. |
 | `subtitle` | `true` | The line under the title. |
 | `entity_label` | `true` | The small caption above the large value. |
 | `pill` | `true` | The status label in the top right — “Optimal”, “Warm”, and so on. |
 | `panel` | `true` | The middle block: the large value and the views beside it. |
 | `rooms` | `auto` | The room chips. `auto` hides the one chip that would just repeat the large value on a single-room card and shows chips otherwise; `true` always shows them; `false` never does. |
-| `unavailable_rooms` | `true` | A neutral, tappable `--` chip for a room whose sensor is unavailable or non-numeric. `false` leaves it out. A room whose entity Home Assistant does not know, or whose unit does not fit, is not shown as a chip at all. |
-
-Hiding a part is a layout decision and nothing more: every room you configure
-counts towards the average, the coldest/warmest comparison, the spread and the
-scale markers whether or not anything of it is drawn.
-
-Turn off the icon, both header lines and the pill together and the top row goes
-with them, so what is left moves up to the card's edge. Turn off everything —
-including the panel and the chips — and the card says that there is nothing left
-to draw.
-
-Two of these have a second effect worth knowing. A card without a title has no
-visible name of its own, so the heading around it on your dashboard is what names
-it; a screen reader reaches the large value either way, since that carries its
-own description. And a card without the panel has no views, which leaves the
-carousel and its options with nothing to do.
+| `unavailable_rooms` | `true` | Shows a neutral `--` chip for an unavailable or non-numeric room sensor. Set it to `false` to omit these chips. |
 
 #### Room-chip display
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `room_sort` | `value_asc` | Orders the chips by `value_asc`, `value_desc`, `name`, or the `configured` order. Sorting is display only — it does not change which room counts as coldest or warmest. |
+| `room_sort` | `value_asc` | Orders the chips by `value_asc`, `value_desc`, `name`, or the `configured` order. |
 | `room_label` | `auto` | Chooses the chip text: `auto` and `short` use `rooms[].short`; `name` uses `rooms[].name`. |
 | `room_columns` | automatic | Sets `1`–`20` grid columns. If `room_rows` is omitted, enough rows are added automatically. |
 | `room_rows` | automatic | Sets `1`–`20` grid rows. If `room_columns` is omitted, enough columns are added automatically. |
 
-Setting both `room_columns` and `room_rows` caps how many chips are drawn — the
-first ones in your `rooms:` order. A room left out of the grid still counts,
-exactly as a room hidden by `show.rooms` does.
-
-Which layouts show chips, for each value of `show.rooms`:
-
-| Your sources | `auto` | `true` | `false` |
-| --- | --- | --- | --- |
-| Only `entity` | hidden | hidden | hidden |
-| One room | hidden | shown | hidden |
-| Several rooms | shown | shown | hidden |
-| `entity` plus rooms | shown | shown | hidden |
-
-`--` placeholders follow the same rules and sit after the rooms that do have a
-value. They are tappable, but a value the card cannot read is left out of every
-calculation.
+Setting both `room_columns` and `room_rows` limits the grid to that many chips,
+selected in the order written under `rooms:`.
 
 #### Card chrome, carousel, and actions
 
@@ -336,7 +296,7 @@ Available view types:
 | View | Availability | Purpose |
 | --- | --- | --- |
 | `range` | Usable `range_entity` | Two cards for today's minimum and maximum. |
-| `range_scale` | Usable `range_entity` with valid `minimum`/`maximum` | Alternate scale with current, daily-minimum, and daily-maximum markers. It stays off when `views:` is omitted, but listing it explicitly enables it. |
+| `range_scale` | Usable `range_entity` with valid `minimum`/`maximum` | Optional scale with current, daily-minimum, and daily-maximum markers. Add it to `views:` to enable it. |
 | `scale` | Always available | Main dynamic scale with configurable average, extrema, or per-room markers. |
 | `extremes` | At least two usable room values | Coldest and warmest room cards. |
 
@@ -363,8 +323,8 @@ views:
 ```
 
 `enabled` accepts `true`, `false`, or `auto`. Leaving it out means `true`; use
-`auto` to let the card decide as it would without a `views:` section. A view you
-enable still needs its entities to actually appear.
+`auto` for the availability rules in the table above. Each view also needs the
+listed data.
 
 Once you write a `views:` section, it is the full list: the card shows exactly
 those views, in exactly that order, and adds nothing on its own.
@@ -375,16 +335,16 @@ Options belong inside the corresponding `views:` entry.
 
 | View | Option | Values | Default | Effect |
 | --- | --- | --- | --- | --- |
-| `range` | `show_time` | `true` / `false` | `true` | Hides the min/max timestamps but keeps the values. |
-| `range_scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides the comfort band. This view has no separate comfort label. |
-| `range_scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `range_scale` | `show_footer` | `true` / `false` | `true` | Whether this view draws a footer at all. |
-| `range_scale` | `footer` | `detailed` / `compact` | `detailed` | Which form the footer takes: with the min/max times, or without them. |
-| `scale` | `show_comfort_band` | `true` / `false` | `true` | Shows or hides both the comfort band and its label. |
-| `scale` | `show_optimal_band` | `true` / `false` | `true` | Shows or hides both the optimal band and its label. |
-| `scale` | `show_footer` | `true` / `false` | `true` | Shows or hides the comfort/spread/trend footer under this scale. It needs at least two rooms with values. The trend arrow above the value is separate. |
+| `range` | `show_time` | `true` / `false` | `true` | Displays timestamps with the minimum and maximum values. |
+| `range_scale` | `show_comfort_band` | `true` / `false` | `true` | Displays the comfort band. This view has no separate comfort label. |
+| `range_scale` | `show_optimal_band` | `true` / `false` | `true` | Displays the optimal band and its label. |
+| `range_scale` | `show_footer` | `true` / `false` | `true` | Displays the footer. |
+| `range_scale` | `footer` | `detailed` / `compact` | `detailed` | `detailed` includes the min/max times; `compact` omits them. |
+| `scale` | `show_comfort_band` | `true` / `false` | `true` | Displays the comfort band and its label. |
+| `scale` | `show_optimal_band` | `true` / `false` | `true` | Displays the optimal band and its label. |
+| `scale` | `show_footer` | `true` / `false` | `true` | Displays the comfort/spread/trend footer when at least two rooms have values. |
 | `scale` | `markers` | `extremes` / `average` / `all` | `extremes` | `extremes` shows the lowest room, average, and highest room (the default); `average` shows only the average; `all` shows a smaller marker for every currently valid configured room plus a larger average marker. |
-| `extremes` | `show_value` | `true` / `false` | `true` | Hides the numbers but keeps the coldest/warmest labels and the room names. |
+| `extremes` | `show_value` | `true` / `false` | `true` | Displays the values with the coldest/warmest labels and room names. |
 
 Options apply to their own view only, and you can combine them freely:
 
@@ -404,10 +364,6 @@ views:
       markers: average
 ```
 
-Hiding a band hides the band and nothing else. The thresholds behind it decide
-the colors, the classification, and where the markers sit whether or not the band
-is drawn.
-
 ### Classification
 
 With no `classification` option, the card uses `source: auto`: a live entity
@@ -423,43 +379,42 @@ classification: outdoor
 ```
 
 The outdoor profile uses an optimal band of `18–22 °C` and a comfort band of
-`14–26 °C`. Its scale has no fixed range: both ends follow whatever your
-sensors currently report, which is what you want outdoors, where summer and
-winter are nowhere near each other. A band that is completely off the current
-scale is hidden until the values reach it. A profile of your own gets the same
-axis behaviour with `scale.anchor_scale: false`, described under the
-custom-profile rules below.
+`14–26 °C`. Its scale follows the current readings across seasonal temperature
+ranges. A custom profile selects this scale style with `anchor_scale: false`.
 
-Select the built-in fridge profile the same way, for monitoring an appliance
-instead of a room:
+Select the built-in fridge profile for appliance monitoring:
 
 ```yaml
 classification: fridge
 ```
 
-The fridge profile aims at food safety rather than comfort: an optimal band of
-`3–5 °C` and a comfort band of `1–6 °C`, with more room above the band than
-below, because getting too warm is what spoils food. Its scale stays fixed at
-`0–8 °C` — a fridge does not need a scale that follows the weather.
+The fridge profile uses food-safety ranges: an optimal band of `3–5 °C`, a
+comfort band of `1–6 °C`, and a base scale of `0–8 °C`.
 
 The header icon follows the active profile unless you set `icon` yourself:
 temperature moves through thermometer, fire, and snowflake icons; humidity
 through the water-percent variants; CO₂ switches to an alert icon at its
 highest tier; and PM2.5 goes from molecule through haze and dust to alert.
 
-The full object form gives you four choices:
+The object form selects the classification source. `auto` accepts complete
+entity attributes and uses the selected built-in profile for other readings:
 
 ```yaml
-# Complete entity attributes, then the selected built-in fallback.
 classification:
   source: auto
   profile: outdoor
+```
 
-# Entity attributes only. Incomplete attributes stay neutral.
+`entity` uses entity attributes on their own:
+
+```yaml
 classification:
   source: entity
+```
 
-# Ignore entity classification and force the built-in profile.
+`profile` selects the named built-in profile:
+
+```yaml
 classification:
   source: profile
   profile: outdoor
@@ -469,8 +424,7 @@ classification:
 omitted. `outdoor` and `fridge` exist for temperature only; `indoor` is the
 default profile for temperature, humidity, CO₂, and PM2.5.
 
-A custom profile is authoritative: it ignores entity classification and owns
-tiers, bands, base scale, and icons together.
+A custom profile defines its tiers, bands, scale, and icons together.
 
 ```yaml
 classification:
@@ -505,34 +459,28 @@ classification:
 
   tiers:
     - min: 30
-      score: 6
+      score: 3
       level: Very hot
-      color: "#B85F67"
       zone: outside
     - min: 26
-      score: 5
+      score: 2
       level: Warm
-      color: "#C0A752"
       zone: outside
     - min: 22
-      score: 4
+      score: 1
       level: Slightly warm
-      color: "#9DA85A"
       zone: comfort
     - min: 18
-      score: 3
+      score: 0
       level: Comfortable
-      color: "#79A86C"
       zone: optimal
     - min: 14
-      score: 2
+      score: -1
       level: Slightly cool
-      color: "#69A78B"
       zone: comfort
     - default: true
-      score: 1
+      score: -2
       level: Cold
-      color: "#8192C8"
       zone: outside
 ```
 
@@ -546,17 +494,10 @@ Custom-profile rules:
   `{default: true}` tier is required.
 - Every tier requires a non-empty `level`, a numeric `score`, and
   `zone: optimal | comfort | outside | invalid`.
-- `color` is optional, and what you do with it decides what `score` means.
-  Give a tier a safe 3/4/6/8-digit hex `color` and it uses that color, with
-  `score` free to be any number you like. Leave `color` out and the tier takes
-  its color from the [palette](#palettes), with `score` saying how far the tier
-  is from the right value: `0` is optimal, positive is too much, negative is too
-  little. A whole number, descending along with the thresholds. You can mix the
-  two — paint the ends by hand and let the palette fill in the middle.
-- How far a profile reaches is simply its own furthest tier, so a profile with
-  only one direction to go wrong — CO₂ has no "too little" — just stops at `0`,
-  and a profile with twenty steps needs no extra option to be shown in a palette
-  with five.
+- Without `color`, a tier's `score` selects its palette color: `0` is optimal,
+  positive values mean too much, and negative values mean too little. These
+  scores are whole numbers in strictly descending order. An optional
+  3/4/6/8-digit hex `color` sets a tier directly and accepts any numeric score.
 - The optimal band must be inside the comfort band. `scale.step` must be
   greater than zero.
 - `scale` describes the axis the card draws, and it comes in two shapes. Give
@@ -576,14 +517,9 @@ Custom-profile rules:
   `scale.one_sided` is a boolean for measurements with no "too little" end,
   such as CO₂; it holds the axis at `scale.min` and therefore needs the
   anchored shape.
-- Bands are drawn as far as the axis reaches. A comfort band wider than the
-  current axis fills the bar, and the rest of it appears as readings move and
-  the axis grows.
-- `icons` is optional and has the same shape for every measurement: a
-  descending list of `{min, icon}` tiers with a final `{default: true,
-  icon: ...}` entry, which is `tiers` without the color, level, and zone
-  fields. You choose the thresholds and the icons, and they follow the profile's
-  `comparison` just like the tiers do:
+- `icons` is optional and uses a descending list of `{min, icon}` entries with
+  one final `{default: true, icon: ...}` entry. The thresholds follow the
+  profile's `comparison`:
   ```yaml
   icons:
     - min: 60
@@ -597,88 +533,45 @@ Custom-profile rules:
   every reading.
 - Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
   `max_inclusive`.
-- A mistake inside `classification` stops the card with an error naming the
-  exact option, so a typo never quietly changes what a color means.
 
 ### Palettes
 
-A profile decides *where* a reading sits — how far it is from the right value,
-and in which direction — and the palette decides what those places look like.
-The two are separate, so you can keep the built-in profiles and still change
-every color on the card with one line:
+Choose the card's colors with `palette`:
 
 ```yaml
 palette: vivid
 ```
 
-Four palettes ship with the card:
+The built-in choices are `pastel` (the default), `vivid`, and the traffic-light
+palette `signal`. `color-vision` uses blue-violet and amber for color-vision
+accessibility; the keys `protan-deutan`, `protan`, `deutan`, and `tritan` select
+the same palette.
 
-| Name | What it is for |
-| --- | --- |
-| `pastel` | The default: a soft ramp running from blue through green to red. |
-| `vivid` | The same journey in saturated colors — easier to read on a bright wall panel, or beside strongly colored cards. |
-| `color-vision` | For color vision deficiency, of any kind. Its ends are blue-violet and amber, a pair that stays apart for protanopes, deuteranopes and tritanopes alike, instead of green and red, the pair that does not. Also answers to `protan-deutan`, `protan`, `deutan` and `tritan`. |
-| `signal` | Green, amber, red — a traffic light rather than a gradient, for a dashboard you read from across the room. Both directions use the same pair, so it says how far a reading is from where it should be rather than which way. It is built from green and red, so `color-vision` is the better choice if that pair is hard for you. |
-
-You can also ask for a ramp in a single color, by name or as a hex:
+Any CSS color name or hex color creates a coordinated palette around that
+color:
 
 ```yaml
 palette: teal
 ```
 
-Any of the 148 CSS color names works, as does `palette: "#3366CC"`. The color you
-name is the middle of the ramp, exactly as you wrote it; from there the ramp runs
-paler towards “too little” and deeper towards “too much”, keeping your color the
-whole way. A color with no hue of its own — `gray`, `white`, `black` — gives a
-grayscale ramp, which stays readable with any kind of color vision.
+Hex works too: `palette: "#3366CC"`.
 
-Not every color has room in both directions: nothing is paler than `white`, and
-`gold` is already so light that its palest steps sit close together. Both
-directions are the same length, so a side with nowhere left to go repeats the
-color it ended on.
-
-Two or three colors, joined by hyphens, give you a ramp that travels between
-them:
+Join two or three colors with hyphens to create a palette between them:
 
 ```yaml
 palette: blue-red            # blue at "too little", red at "too much"
-palette: blue-green-red      # and green in the middle
 ```
 
-The first color is the far end of “too little”, the last the far end of “too
-much”, and with three the middle one is the color for a reading that is where it
-should be. You get the colors you named, exactly as you wrote them; everything
-between is filled in. Hex works too: `palette: 1DB85D-FD9808`.
-
-The ramp travels the short way round the color wheel, so `blue-red` runs through
-violet. If you want white in the middle, say so: `blue-white-red`.
-
-Four or more is not supported, and the card says so.
-
-A name that ships as a palette always wins over a color of the same name, and a
-single color wins over the hyphenated form. That matters for five CSS colors you
-can spell either way: `orangered` is one color, `orange-red` is a ramp from
-orange to red. The same goes for `blueviolet`, `greenyellow`, `limegreen` and
-`yellowgreen`.
-
-Whichever you pick, the card fits it to the background it is standing on. A
-dark theme, a light theme, a card you have colored yourself — the ramp moves
-just far enough to be read there, in brightness and saturation only, so `teal`
-arrives as teal. That covers the four palettes above and every ramp built from
-a color you name; a palette you write out yourself keeps the ramp you typed.
-
-Three small places put a color on a soft tint of itself: the status pill in the
-top right, the icon badge, and the little mark on a room chip. Where that would
-swallow the color, the text takes a slightly deeper or lighter shade of the same
-color so it stays readable. The scale, the room chips and the line across the
-top always show the color itself.
+The first color is the far end of “too little”, and the last is the far end of
+“too much”. Add a middle color for optimal, for example
+`palette: blue-green-red`. Hex colors work too: `palette: 1DB85D-FD9808`.
+`blue-red` passes through violet; use `blue-white-red` to select white as the
+middle color.
 
 #### Writing your own
 
-A palette has a middle and two wings. `optimal` is the color for a reading that
-is where it should be, `above` runs outwards from there towards “too much” and
-`below` outwards towards “too little”, so the first entry of each is one step off
-optimal:
+`optimal` sets the middle color. `above` lists colors from the first step above
+optimal towards “too much”; `below` does the same towards “too little”:
 
 ```yaml
 palette:
@@ -687,38 +580,30 @@ palette:
   below: 6EC1E4, 2A6FDB
 ```
 
-**Only `optimal` is required.** Leave a wing out and the card simply does not
-color that direction — useful for CO₂ and PM2.5, which have no “too little” at
-all. Leave both out and the whole card is that one color:
+**Only `optimal` is required.** A palette with only that field gives every
+classification the same color:
 
 ```yaml
 palette:
   optimal: teal
 ```
 
-Each color can be written the way you have it to hand: `1DB85D`, `"#1DB85D"`,
-`#0F8` in quotes, or a CSS color name such as `teal`. A wing can be a list, a
-single color, or several separated by commas.
+Colors accept hex with or without `#`, quoted short hex, or CSS names. A wing
+can be a list, one color, or several colors separated by commas.
 
 > **Watch the `#`.** In YAML a `#` after a space starts a comment, so
 > `optimal: #1DB85D` leaves the value empty. Write it without the `#`, or put it
-> in quotes. If you do hit it, the card names the `#` as the reason.
+> in quotes.
 >
 > **A color written only in digits needs exactly six of them.** `123456`,
-> `080808` and `008000` all work unquoted. Anything shorter or longer has to be
-> quoted — `"080"`, `"#0808080"` — because `080` could mean `#000080` or `#008800`
-> and the card will not guess. Quoting is also the only way to be sure with more
-> than six digits: `0808080` unquoted arrives as `808080` and is read as that
-> color.
+> `080808`, and `008000` work unquoted. Quote shorter or longer values, such as
+> `"080"` or `"#0808080"`.
 
-The wings do not have to be the same length as each other, or the same length as
-the profile you are using. However many colors you give it, the first step away
-from the middle already changes color, and the furthest reading gets your
-furthest color.
+The two wings may have different lengths. The first color is the first step
+from optimal; the final color is the end of that direction.
 
 `invalid` is optional. It belongs to a reading the card considers physically
-impossible — a humidity of 130 %, say. Leaving it out is the normal thing to do,
-and a neutral grey fills in.
+impossible, such as a humidity of 130 %. Its default is neutral grey.
 
 A value the entity classifies itself uses its own `value_color`, and shows the
 neutral color when it supplies none. The palette applies to the card's own
@@ -755,39 +640,13 @@ title: ""
 below moves down to make room; `clip` cuts it off with an ellipsis. The two lines
 start from different defaults: the title wraps, the subtitle clips.
 
-Writing `clip` or `wrap` on its own sets the overflow and leaves the text alone —
-which is why those two words cannot be used as the text on their own. If you
-really want one of them as the text, use the block form: `title: {text: wrap}`.
+Writing `clip` or `wrap` on its own sets the overflow. To use either word as
+the text, use the block form: `title: {text: wrap}`.
 
 An empty string removes the line entirely, and so does `show: {title: false}`.
 
-One exception, and it belongs to the subtitle: when the card has no data to show,
-that line explains why, whatever you wrote there and even with `show: {subtitle:
-false}` set. It says your text again as soon as data comes back.
-
-### What the card checks, and what it decides for you
-
-A mistake that would make the card meaningless stops it with an error naming
-the option: no source at all, a `rooms:` that is not a list, a room without an
-entity, duplicate room entities, or a malformed `entity`. A mistake in a purely
-cosmetic option falls back to the default.
-
-An option the card does not have is skipped with a note in the browser console
-that names it — whether you wrote it at the top level, in `views:`, in a view's
-`options:` or in `show:`. Where what you wrote is close to a real option, the
-note suggests that one. A `start_view` naming a view that does not exist is
-noted the same way, and the card opens on its first available view.
-
-Three things the card decides on its own:
-
-- which metric it is showing, and the unit it displays;
-- converting a profile written in one unit to the unit your sensors use;
-- how far the scale stretches beyond a profile's range to fit your values.
-
-Levels and bands come from one place: the `classification` option above. A
-profile owns them together, so you switch profiles rather than overriding
-single pieces. Colors come from the [palette](#palettes), unless a tier names
-one for itself.
+When the card has no usable data, the subtitle shows the reason even with
+`show: {subtitle: false}`. For usable data, the configured subtitle applies.
 
 ### Full example
 
@@ -800,6 +659,7 @@ entity: sensor.house_temperature
 range_entity: sensor.house_temperature_daily_range
 trend_entity: sensor.house_temperature_trend
 classification: indoor
+palette: vivid
 
 title: Indoor climate
 entity_label: Home average
@@ -853,13 +713,11 @@ views:
 - There is no visual editor — everything is YAML. Start with the
   [Quickstart](#quickstart) and use the [Configuration](#configuration)
   reference from there.
-- Daily minimum/maximum and trend need their own entities. The card reads what
-  Home Assistant reports right now; it does not look at history itself. Those
-  entities are usually template sensors.
+- Daily minimum/maximum and trend use dedicated entities, usually template
+  sensors, that provide the current range and rate.
 - One card shows one kind of measurement. Rooms measuring something else, or
-  using a unit that does not fit, are left out. If there is no main entity and
-  the rooms disagree about what they measure, the card says so instead of
-  picking a winner.
+  using an incompatible unit, are excluded. Mixed room measurements without a
+  main entity produce a “No data” explanation.
 
 ## Troubleshooting
 
