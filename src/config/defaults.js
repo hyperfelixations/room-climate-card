@@ -1,20 +1,9 @@
-// Card defaults for the optional YAML fields.
+// Card defaults for the optional YAML fields only.
 //
-// Mode-dependent title/unit/icon/decimals are deliberately NOT here:
-// presentation metadata lives with the metric registries, and every semantic
-// classification/scale decision lives in the domain classification profiles.
-//
-// Neither are the `show:` block's defaults. SHOW_SWITCHES in show.js owns them, and
-// the older top-level spellings that map onto that block are read WITHOUT a default
-// of their own (see legacyShowRequests() in normalize-config.js), so one decision is
-// never given two defaults that could drift apart.
-//
-// There are no default entities, and none of them is individually required. What IS
-// required is that at least one CURRENT-VALUE source exists: either `entity` or at
-// least one `rooms` entry. `range_entity` and `trend_entity` describe a value rather
-// than being one, so they never satisfy that on their own. The check lives in
-// normalize-config.js, where both fields have been normalized and can be judged
-// together.
+// Not here: mode-dependent title/unit/icon/decimals (metric registries and
+// classification profiles own those), and the `show:` block's defaults
+// (SHOW_SWITCHES in show.js). The source-minimum requirement is checked in
+// normalize-config.js — see interne Doku §3 „Konfigurationsvertrag".
 
 export const DEFAULT_CONFIG = {
   rotation_seconds: 14, // hold time per view

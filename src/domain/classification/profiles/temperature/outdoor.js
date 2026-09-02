@@ -1,19 +1,9 @@
-// Outdoor temperature. Seasonal readings, so the profile declares no reference range at all and the rendered axis follows the data (anchorScale:false).
+// Outdoor temperature — seasonal, so it declares no reference range and the drawn axis
+// follows the live data (anchorScale:false).
 //
-// A classification profile is one atomic semantic unit: tiers with their
-// thresholds, score and zone, the comfort/optimal/scale bands, physical
-// validity, and the profile-specific icons. Everything that has to stay
-// coherent for a reading to be judged consistently lives here together;
-// unit conversion is deliberately separate (see ../../../metrics/definitions.js).
-//
-// It names no colours. `score` is the tier's distance from OPTIMAL -- 0 is the right
-// value, positive is too much, negative is too little -- and which colour sits at that
-// distance is the palette's decision, not the profile's. That is what lets the same
-// profile be shown in any palette without restating itself, and it is why a profile with
-// only one direction to go wrong needs no special case. See ../../palettes/registry.js.
-//
-// Values are product decisions, not implementation details. Do not round,
-// reorder or "tidy" them without a documented reason.
+// One atomic profile: tiers (threshold/score/zone), comfort/optimal/scale bands,
+// physical validity, icons. `score` is the signed distance from optimal that the
+// palette turns into a colour. Values are product decisions — do not reorder or "tidy".
 
 import { physicalRange } from "../../validity.js";
 
@@ -38,11 +28,9 @@ export const outdoor = {
   ],
   comfort: { min: 14, max: 26 },
   optimal: { min: 18, max: 22 },
-  // No reference range, deliberately: outdoor readings are seasonal, so any fixed one
-  // would be wrong for most of the year. dynamicScale() derives both edges from the live
-  // values plus its normal one-step headroom, and the two things a range is otherwise
-  // read for do not apply here — this profile is not one-sided, and it states its icon
-  // thresholds itself rather than deriving them.
+  // No reference range: a fixed one is wrong for most of the year. dynamicScale() takes
+  // both edges from the live values plus one step of headroom. Not one-sided, and icon
+  // thresholds are stated, not derived — the two other things a range would be read for.
   scale: null,
   step: 1,
   anchorScale: false,

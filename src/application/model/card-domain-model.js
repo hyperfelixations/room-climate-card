@@ -1,35 +1,5 @@
-// The CardDomainModel: everything the card knows about the current reading,
-// expressed in numbers and semantic tokens.
-//
-// No translated text, no formatted numbers, no HTML, no CSS, no DOM measurement,
-// and no rendering geometry — no percentages, no pixel offsets, no view-specific
-// marker objects. Those are all statements about a rendered bar, not about the
-// measurement, and they live in presentation/view-model.
-//
-// The model is NOT colour-free, and deliberately so. A classification result
-// carries the hex colour its tier (or the entity's own value_color attribute)
-// declares, because that colour is part of the classification itself — a
-// SEMANTIC CLASSIFICATION VALUE, authored in a profile or validated out of an
-// entity attribute. What the model never carries is a CSS-READY colour: no
-// rgba() derivation, no custom-property string, no alpha applied for a soft
-// background. Those are presentation decisions.
-//
-// Structure of the result:
-//   metric        kind, canonical unit, display unit, unit profile
-//   context       the MeasurementContext and its diagnostics
-//   average       value, source kind, the entity it may be attributed to
-//   rooms         declared order and business (value) order, plus availability
-//   roomColors    one semantic classification colour per participating room
-//   extremes      coolest/warmest and their semantic classification colours
-//   comfort       band bounds plus the three counts
-//   optimal       band bounds
-//   scaleConfig   the axis POLICY (preferred bounds, step, anchoring) — no geometry
-//   spread        the resolved value, whichever source won
-//   range         today's width, min/max, raw timestamps, colours, availability
-//   trend         value, unit and the semantic direction
-//   classification the average's own tokens plus the profile icon token
-//   subtitle      which sentence applies, and its numbers
-//   state         empty / configuration state
+// Numeric and semantic card state; presentation owns text, formatting, CSS and geometry.
+// Classification hex values are semantic inputs here, never CSS-ready paint recipes.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { adaptPalette } from "../../domain/classification/palettes/adaptation.js";
@@ -57,35 +27,17 @@ import {
 
 export function buildCardDomainModel({ states, config, context, language, surface }) {
   const policy = classificationPolicyOf(config);
-  // The palette the user asked for, then the one background question asked of it: can it be
-  // seen on what it is about to be painted on. One rule, applied in one place — and only to
-  // palettes the card built itself, never to one written out in YAML. See adaptPalette() in
-  // domain/classification/palettes/adaptation.js.
+  // Adapt only card-built palettes to the measured surface.
   const palette = adaptPalette(paletteOf(config), surface);
-  // AND THE SECOND QUESTION, asked in the same breath and for every score at once: how each of
-  // those colours has to be painted where it lands on a tint of ITSELF. Worked out here rather
-  // than where it is used, because here is where the palette and the surface are both in hand
-  // and because a score change must not cost a search — see tone-legibility.js.
-  //
-  // Every colour the card COMPOSES: the whole ramp, the invalid colour, and the neutral one it
-  // shows when there is nothing to classify. A colour the card was GIVEN — a tier that named
-  // its own hex, an integration's value_color — is left alone here exactly as the palette
-  // adaptation leaves it alone.
+  // Resolve self-tint recipes once for every composed colour; explicit colours stay untouched.
   const tintRecipes = tintRecipesFor(
     [...palette.below, palette.optimal, ...palette.above, palette.invalid, NEUTRAL_COLOR],
     surface
   );
   const metricKind = effectiveMetricKind(context);
-  // The same source topology the measurement context branched on. Resolved once here and
-  // carried out on the model: deciding it needs `states` — a configured id may be one
-  // Home Assistant does not know, or may declare a different measurement (see
-  // source-topology.js) — and the presentation layer has none, so the model that HAS them
-  // answers for everyone.
+  // Resolve topology while `states` is available; presentation must not reconstruct it.
   const topology = resolveSourceTopology(config, resolveSourceEligibility(states, config));
-  // `status` is what every decision compares against; `reason` is what the card TELLS a
-  // reader. Both travel, because the presentation layer has no states object to work
-  // either of them out again — see UNUSABLE_REASON in entity-model.js for why they are
-  // two values and not one.
+  // Carry both the availability decision and its user-facing reason.
   const sourceAvailability = {
     primary: {
       entity: context.primary.entityId,
@@ -103,24 +55,16 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   };
   const missingRooms = sourceAvailability.rooms.filter((room) => room.status === AVAILABILITY.MISSING).length;
 
-  // No usable average source at all: either nothing resolvable anywhere, or rooms
-  // reporting genuinely incompatible metric kinds with no usable primary to
-  // arbitrate. Exposed as a configuration state so a future release can surface it
-  // more specifically; today it renders as the no-data state, never as a
-  // cross-metric-kind average.
+  // No source or no metric-kind arbiter yields no-data, never a cross-metric average.
   if (context.averageSource === null) {
     return {
       empty: true,
-      // What the card is painted on, and the answer that was worked out from it. Both carried
-      // because the presentation layer paints a colour on a tint of itself in three places and
-      // may neither measure nor recompute — see domain/classification/tone-legibility.js.
+      // Presentation may consume but neither measure nor recompute these.
       surface,
       tintRecipes,
-      // Which sources the card actually refers to. Carried rather than recomputed
-      // downstream — see where it is resolved above.
+      // Preserve source identity through no-data rendering.
       topology,
-      // Unlike effectiveMetricKind(), this may be null. No-data presentation uses
-      // that fact to show the product name instead of inventing a temperature card.
+      // Null makes no-data presentation use the product name instead of a guessed metric.
       metric: { kind: context.identityMetricKind },
       context: {
         diagnostics: context.diagnostics,
@@ -147,11 +91,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   const comfort = scaleConfig.comfort;
   const optimal = scaleConfig.optimal;
 
-  // From here on every number is projected into the resolved display unit exactly
-  // once. Comfort, classification and scale decisions must be made against the
-  // SAME unit as the number that is rendered, or a rounded Fahrenheit boundary
-  // would be compared against an unrounded Celsius one. Identity for
-  // humidity/co2/pm25 and whenever the display unit already is canonical.
+  // Project every number once so display, bands, classification and scale share one unit.
   const displayProfile = context.displayUnitProfile;
   const toDisplay = displayProfile ? displayProfile.fromCanonical : (v) => v;
   const toDisplayDelta = displayProfile ? displayProfile.deltaFromCanonical : (v) => v;
@@ -159,32 +99,18 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   const declaredRooms = buildRoomModels({ config, context, toDisplay });
   const roomsByValue = sortRoomsByValue(declaredRooms, language);
 
-  // Extended mode (chips, extreme-value view, auto-slide) needs at least two valid
-  // rooms. Driven by the complete list, never by the possibly capped visible
-  // subset: a grid override that hides chips must not turn off the room-comparison
-  // features it does not otherwise affect.
+  // Comparison uses all valid rooms, never the grid-capped visible subset.
   const roomsComparable = roomsByValue.length >= 2;
   const coolest = roomsComparable ? roomsByValue[0] : null;
   const warmest = roomsComparable ? roomsByValue[roomsByValue.length - 1] : null;
 
   const average = toDisplay(context.averageSource.canonicalValue);
-  // WHICH ENTITY, if any, the displayed headline actually is. Everything attributed to
-  // an entity follows this exactly — clickability, the colour taken from its attributes,
-  // the spread attribute, and which action config a tap resolves against. A looser "the
-  // entity exists" check would keep the headline clickable and colour it from a stale
-  // entity while showing a room-derived fallback value.
-  //
-  //   sensor      the configured primary's own reading
-  //   room        one configured room's own reading, because the card names exactly
-  //               that one entity (see source-topology.js)
-  //   calculated  a consensus over several rooms; no single entity represents it
+  // Attribution controls clickability, entity colour, spread and action ownership:
+  // sensor = primary, room = direct single room, calculated = unattributed consensus.
   const averageSourceKind =
     context.averageSource.kind === "primary" ? "sensor" : context.averageSource.kind === "roomDirect" ? "room" : "calculated";
   const averageEntity = averageSourceKind === "calculated" ? "" : context.averageSource.entityId;
-  // Set only where the headline genuinely IS a configured room, which the topology
-  // decides. Carries the room's label and its per-room action overrides to the big
-  // value without a second lookup — and never fires for a primary that merely happens
-  // to appear among several rooms.
+  // A room index exists only when topology says the headline is that configured room.
   const averageRoomIndex = averageSourceKind === "room" ? topology.roomIndex : null;
 
   const range = buildRangeModel({ states, config, policy, palette, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
@@ -205,12 +131,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
   }
   const spread = computeSpread({ attributeValue: spreadAttribute, roomsComparable, coolest, warmest });
 
-  // One classification colour per participating room, keyed by the room's original
-  // YAML index. Every consumer that tints something per room — the chips, the
-  // `markers:all` marker set, the extreme-value cards — reads the SAME entry, so a
-  // room can never appear in two colours within one render. Keyed rather than
-  // attached to the room objects themselves: the room model is a shared, stable
-  // shape that several consumers compare by identity.
+  // Key semantic room colours by YAML index so all consumers share one colour per render.
   const roomColors = {};
   for (const room of roomsByValue) {
     roomColors[room.index] = classificationColorOf(
@@ -277,10 +198,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       : null,
     comfort: { min: comfort.min, max: comfort.max, ...counts },
     optimal: { min: optimal.min, max: optimal.max },
-    // The axis POLICY, not an axis: which bounds a profile prefers, which step it
-    // rounds to and whether it anchors. Turning that into a concrete axis needs the
-    // values it has to cover, which is a rendering decision (see
-    // presentation/view-model/scale-view-model.js).
+    // Axis policy only; presentation resolves concrete geometry from visible values.
     scaleConfig,
     spread,
     range,

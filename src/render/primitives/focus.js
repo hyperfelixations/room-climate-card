@@ -1,15 +1,5 @@
-// Where focus goes when the element that had it disappears.
-//
-// The keyed patchers exist so this almost never happens, but two cases remain
-// genuinely structural: a room whose entity vanished, and the average flipping
-// between its interactive and its disabled shape. Leaving focus to fall back to the
-// shadow root, the host or the body would drop a keyboard user out of the card
-// entirely, so a deterministic target is chosen instead.
-//
-// The average button is preferred when it exists AND is the interactive shape — the
-// disabled div variant is not focusable and would silently do nothing. `.rtc-root`
-// carries tabindex="-1" for exactly this purpose: out of the tab order, but a valid
-// programmatic target.
+// Preserve keyboard context when structural patching removes the focused node.
+// Prefer the interactive average; `.rtc-root[tabindex="-1"]` is the programmatic fallback.
 
 export function focusFallbackTarget(root) {
   if (!root) return null;

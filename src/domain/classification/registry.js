@@ -1,14 +1,9 @@
 // Aggregates the built-in classification profiles, one metric kind at a time.
 //
-// Deliberately thin: every semantic decision lives in the individual profile
-// modules under profiles/, and this file only says which profiles exist per
-// metric kind and which one is the default. Adding a profile is a new file
-// plus one import and one entry here — the registry must not grow back into a
-// second god file.
-//
-// Shape (unchanged, several call sites index into it directly):
-//   CLASSIFICATION_PROFILE_REGISTRY[metricKind].defaultProfile -> profile id
-//   CLASSIFICATION_PROFILE_REGISTRY[metricKind].profiles[id]   -> profile
+// Deliberately thin: every semantic decision lives in the profile modules under
+// profiles/. This file only maps `[metricKind].defaultProfile` to a profile id and
+// `[metricKind].profiles[id]` to a profile; call sites index into it directly. Adding
+// a profile is a new file plus one import and one entry here.
 
 import { indoor as temperatureIndoor } from "./profiles/temperature/indoor.js";
 import { outdoor as temperatureOutdoor } from "./profiles/temperature/outdoor.js";

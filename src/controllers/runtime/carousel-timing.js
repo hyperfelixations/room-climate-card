@@ -1,31 +1,13 @@
-// The carousel's arithmetic, as pure functions.
-//
-// Every value below is derived from four numbers — how many views there are, how long
-// a view is held, how long a slide takes, and what time it is — and nothing else. No
-// DOM, no card, no clock of its own: the caller passes `nowMs` in. That is what makes
-// the whole timing model testable by writing down a millisecond, and it is why the
-// auto-slide can be reasoned about at all.
-//
-// WHY WALL-CLOCK TIME. The track is moved by a CSS keyframe animation with a negative
-// delay derived from the absolute time. Two cards on the same dashboard therefore show
-// the same view at the same moment without talking to each other, and an entity update
-// never restarts the animation. The price is that JavaScript has to be able to compute
-// the animation's current phase from the same clock — which is what most of this file
-// is.
+// Pure carousel arithmetic derived from view count, hold/slide durations and caller time.
+// Wall-clock phase synchronizes independent cards; see internal documentation §5 “Carousel, Swipe und Accessibility”.
 
 import { clamp } from "../../core/numbers.js";
 import { A11Y_FLIP_TIME_FRACTION, SLIDE_EASING_CSS } from "../../core/easing.js";
 
-// The one name the track's keyframes are declared and referenced under. It is also how
-// the runtime finds that animation again among everything else running on the element,
-// so a second spelling of it would be a silent lookup failure rather than a build error.
+// Shared declaration/runtime lookup name; a second spelling would fail silently.
 export const TRACK_ANIMATION_NAME = "rtc-track-slide";
 
-// The hold-index sequence for one full cycle: a linear ping-pong straight through the
-// views in their actual left-to-right DOM order — 0,1,…,N-1,N-2,…,1, then wrapping
-// back to 0 — so every transition, including the wrap, moves exactly one position and
-// no view is ever skipped. A pure function of the count; it neither knows nor cares
-// which key sits at which index.
+// Linear ping-pong in DOM order; every transition, including wrap, moves one position.
 export function holdSequence(viewCount) {
   const n = Math.max(0, viewCount | 0);
   if (n < 2) return [];
@@ -34,8 +16,7 @@ export function holdSequence(viewCount) {
   return [...forward, ...backwardInterior];
 }
 
-// One view's width as a percentage of the track's own width. The track is
-// viewCount * 100% wide, so a view is 100/viewCount of it.
+// One view's percentage of the viewCount * 100%-wide track.
 export function viewWidthPct(viewCount) {
   return 100 / Math.max(1, viewCount | 0);
 }
@@ -71,9 +52,7 @@ export function formatPercent(value) {
     .replace(/\.?0+$/, "");
 }
 
-// The track's initial animation declarations. A manual swipe later overrides them with
-// inline styles; the negative delay is what synchronizes every card instance to the
-// same absolute cycle.
+// Negative delay synchronizes instances; manual swipe later overrides these declarations.
 export function trackAnimationCss(timing, activeIndex) {
   if (!timing.enabled) {
     const x = -(activeIndex || 0) * timing.viewWidthPct;
@@ -82,9 +61,7 @@ export function trackAnimationCss(timing, activeIndex) {
   return `animation:${TRACK_ANIMATION_NAME} ${timing.cycleMs}ms linear infinite;animation-delay:-${timing.phaseMs}ms;`;
 }
 
-// Each hold position produces two breakpoints — the hold's start (linear, so it does
-// not drift) and its end (eased, so the slide out of it matches the visual easing) —
-// and a final 100% breakpoint returns to the first position.
+// Each hold emits linear-start/eased-end breakpoints; 100% closes on the first position.
 export function slideKeyframes(timing) {
   if (!timing.enabled) return "";
 
@@ -114,15 +91,7 @@ export function slideKeyframes(timing) {
       `;
 }
 
-// Which view is VISUALLY in front at a given phase.
-//
-// Mirrors slideKeyframes()'s structure: segment i spans [i*segMs, (i+1)*segMs) — a
-// holdMs-long stable hold at positions[i], then a slideMs-long transition into
-// positions[(i+1) % n]. The current view flips where the EASED, spatial progress of
-// that transition crosses 50%, which for the card's easing curve is about 35.4% of the
-// slide's TIME — not 50% of it. Using the raw temporal midpoint was a real bug: for
-// roughly 15% of every slide the outgoing view stayed the "accessible" one while the
-// incoming one was already spatially dominant.
+// The visible/A11y view flips at eased spatial midpoint: about 35.4% of slide time, not 50%.
 export function accessibleViewIndexAt(phaseMs, timing) {
   const n = timing.positions.length;
   if (n === 0) return 0;
@@ -132,10 +101,7 @@ export function accessibleViewIndexAt(phaseMs, timing) {
   return subPhase < flipOffset ? timing.positions[segIndex] : timing.positions[(segIndex + 1) % n];
 }
 
-// How long until accessibleViewIndexAt() would next return something different, so the
-// caller can arm one precisely-timed timer instead of polling. Uses the same flip
-// offset as the function above — a second, independently derived one would let the two
-// disagree about when a flip actually happens.
+// Share the exact flip offset with accessibleViewIndexAt() so one timer can replace polling.
 export function msUntilNextAccessibilityFlip(phaseMs, timing) {
   const n = timing.positions.length;
   if (n === 0) return timing.segMs;
@@ -146,11 +112,7 @@ export function msUntilNextAccessibilityFlip(phaseMs, timing) {
   return timing.segMs - subPhase + flipOffset;
 }
 
-// The phases at which it is SAFE to hand the track back to the synchronized animation
-// while showing targetIndex — one window per occurrence of that index in the hold
-// sequence, since a view can be held more than once per cycle. Each window is trimmed
-// by a margin so the handover never lands on a hold's very edge, where the animation
-// is about to move.
+// Stable handover windows, one per occurrence, trimmed away from moving hold edges.
 export function holdWindowsForView(targetIndex, timing) {
   const holdMs = Math.max(0, timing.holdMs);
   const marginMs = Math.min(150, Math.max(0, holdMs / 4));
@@ -170,8 +132,7 @@ export function isPhaseInStableViewHold(targetIndex, phaseMs, timing) {
   );
 }
 
-// How much longer after `timestampMs` the phase needs before it holds targetIndex.
-// Zero when it already does.
+// Wait until targetIndex is stably held; zero when it already is.
 export function waitFromTimestampUntilViewHold(targetIndex, timestampMs, timing) {
   const phaseMs = phaseForTimestamp(timestampMs, timing.cycleMs);
   if (isPhaseInStableViewHold(targetIndex, phaseMs, timing)) return 0;

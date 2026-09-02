@@ -1,21 +1,13 @@
 // Colour primitives, and what counts as a colour from outside the card.
 //
-// TWO TRUST LEVELS, and they are deliberately two functions.
+// TWO TRUST LEVELS, two functions. isHexColor() is strict — for a value_color attribute
+// from an arbitrary integration, which reaches CSS properties and inline styles; anything
+// that is not one of the four CSS hex lengths is treated as absent. parseColorToken() is
+// lenient and for YAML ONLY (a human typing), accepting the spellings people write and
+// normalizing to hex — and it finishes on the same strict check, so its output is as safe.
 //
-// isHexColor() is the strict one. A value_color attribute arrives from an arbitrary
-// integration or template sensor and ends up in CSS custom properties and inline style
-// attributes further down the render pipeline. Anything that is not one of the four valid
-// CSS hex lengths is treated as absent rather than passed through verbatim.
-//
-// parseColorToken() is the lenient one, and it is for YAML ONLY — a human typing into a
-// dashboard editor, where the strict spelling is a trap rather than a safeguard. It
-// accepts the spellings a person actually writes and normalizes them to hex; what comes
-// out is exactly as safe as what isHexColor() lets through, because that is the check it
-// finishes with.
-//
-// The 148 CSS colour names live here rather than in a module of their own because layer 0
-// may not import anything, not even from itself (see architecture-imports.test.js) — and
-// a name table without the parser that reads it would be data nobody can use.
+// The 148 CSS colour names live here because layer 0 may not import, even from itself, and
+// a name table without its parser would be unusable.
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -25,10 +17,8 @@ export function isHexColor(value) {
   return HEX_COLOR_PATTERN.test(value);
 }
 
-// How bright a colour is to the eye, on the 0..1 scale WCAG's contrast ratio is built on.
-// Not the same as any of the lightness values elsewhere in the card: this one answers
-// "can text in this colour be read on that background", which is a question about light,
-// not about appearance.
+// How bright a colour is to the eye, on the 0..1 scale WCAG's contrast ratio uses. Not
+// the same as the lightness values elsewhere — this one is about light, not appearance.
 export function relativeLuminance(hex) {
   const value = String(hex).replace("#", "").trim();
   const full = value.length <= 4 ? value.slice(0, 3).split("").map((digit) => digit + digit).join("") : value.slice(0, 6);
@@ -39,12 +29,9 @@ export function relativeLuminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-// Builds a semi-transparent colour from a hex, rgb(), or CSS variable input.
-// Accepts all four valid CSS hex lengths (3/4/6/8, matching isHexColor); for
-// the two with an embedded alpha channel (4/8), only the RGB part is used —
-// this always applies the given alpha rather than any alpha already embedded
-// in the source colour, since the contract here is "this colour at the
-// requested opacity", not "this colour's own opacity, adjusted".
+// Builds a semi-transparent colour from a hex, rgb(), or CSS variable input. Accepts all
+// four CSS hex lengths; for 4/8-digit input only the RGB part is used, and the given
+// alpha always wins over any alpha embedded in the source ("this colour at this opacity").
 export function rgba(color, alpha) {
   if (typeof color !== "string") return `rgba(255,255,255,${alpha})`;
   if (color.startsWith("rgba") || color.startsWith("rgb")) return color;
@@ -66,15 +53,10 @@ export function rgba(color, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// The names CSS itself defines, so a palette can be asked for by name. One line of YAML —
-// `palette: teal` — is a far better door into the colour system than a hand-written ramp.
-// All 148 are here rather than a curated subset: a subset would need a reason for every
-// colour left out, and there is none.
-//
-// Values are the CSS Color Module Level 4 definitions; a browser test resolves every name
-// through Chromium's own CSS parser and compares, so this table cannot quietly drift from
-// the specification it claims to follow. Keys are lower case, which is how the lookup
-// normalizes; the grey/gray pairs are both spellings of one colour, as in CSS.
+// The CSS Color Module Level 4 named colours, so a palette can be asked for by name. All
+// 148, not a curated subset. A browser test resolves every name through Chromium's CSS
+// parser and compares, so this cannot drift from the spec. Keys are lower case (how the
+// lookup normalizes); grey/gray pairs are one colour, as in CSS.
 
 export const CSS_COLOR_NAMES = Object.freeze({
   aliceblue: "#F0F8FF",
@@ -227,20 +209,12 @@ export const CSS_COLOR_NAMES = Object.freeze({
   yellowgreen: "#9ACD32",
 });
 
-// A colour as the CSSOM hands it back, reduced to its relative luminance — or null when
-// it is nothing this can read.
+// One CSS colour, as an opaque hex plus the alpha it was written with — or null.
 //
-// getComputedStyle always returns `rgb()`/`rgba()` for a resolved background-color, so
-// that form is the one that matters; a custom property, however, comes back exactly as
-// the theme author wrote it, which is why hex and names are accepted too. A fully
-// transparent colour is not an answer: nothing is painted, so the background is whatever
-// is behind it and this cannot say.
-// One CSS colour, as an opaque hex and the alpha it was written with.
-//
-// The alpha is reported rather than applied, because applying it needs something to apply
-// it TO — see compositeOver(). null means the value says nothing usable: a form this cannot
-// read, or a fully transparent colour, where the answer has to come from further up the
-// tree instead of being guessed.
+// getComputedStyle returns `rgb()`/`rgba()` for a resolved background-color; a custom
+// property comes back as the theme author wrote it, so hex and names are accepted too.
+// The alpha is reported, not applied — that needs a backdrop (see compositeOver()). null
+// means nothing usable (an unreadable form, or fully transparent): answer from up the tree.
 export function cssColorToHex(value) {
   if (typeof value !== "string") return null;
   const text = value.trim();
@@ -278,12 +252,9 @@ const channelsOf = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, i
 const hexOf = (channels) =>
   `#${channels.map((value) => Math.round(Math.min(255, Math.max(0, value))).toString(16).padStart(2, "0")).join("")}`;
 
-// A translucent colour painted over an opaque one.
-//
-// Blended in sRGB, NOT in linear light. That is not an approximation — it is what browsers
-// do: CSS composites in the device colour space, so `rgba(0,0,0,0.5)` over white really does
-// come out near #808080 rather than the linear-correct #BCBCBC. Matching the browser matters
-// more here than matching physics, because the point is to predict what is on screen.
+// A translucent colour painted over an opaque one. Blended in sRGB, not linear light —
+// what browsers do: `rgba(0,0,0,0.5)` over white comes out near #808080, not #BCBCBC. The
+// point is to predict the screen, not the physics.
 export function compositeOver(hex, alpha, backdrop) {
   if (!(alpha > 0)) return backdrop;
   if (alpha >= 1) return hex;
@@ -294,16 +265,11 @@ export function compositeOver(hex, alpha, backdrop) {
 
 // The colours a CSS gradient actually puts behind the card.
 //
-// Two things make this more than "list the colour stops". First, browsers interpolate
-// gradients in sRGB by default, so the colours BETWEEN two stops are a straight per-channel
-// blend and can be sampled the same way. Second — and this is the part that matters — the
-// interior is where a gradient hurts: a card on `linear-gradient(#FFF, #000)` has white and
-// black at its edges and mid grey through the middle, and mid grey is where every mid-light
-// palette dies. Sampling only the stops would have declared that gradient harmless.
-//
-// Returns an empty list for anything this cannot read — a `url(...)` image, a conic gradient
-// with angular interpolation, `color-mix()`, relative colours. An honest nothing, so the
-// caller falls back rather than acting on a guess.
+// More than "list the stops": browsers interpolate gradients in sRGB, so colours BETWEEN
+// stops are a per-channel blend and get sampled too — the interior is where a gradient
+// hurts (`linear-gradient(#FFF, #000)` is mid grey through the middle, where mid-light
+// ramps die). Returns [] for anything unreadable (a `url(...)` image, conic gradient,
+// `color-mix()`), so the caller falls back rather than guesses.
 export function gradientSamples(value, { between = 3 } = {}) {
   if (typeof value !== "string") return [];
   const gradient = value.trim().match(/^(?:repeating-)?(?:linear|radial)-gradient\((.*)\)$/is);
@@ -353,42 +319,20 @@ export function gradientSamples(value, { between = 3 } = {}) {
   return samples;
 }
 
-// The colour spellings a human writes in YAML, normalized to hex — or null.
+// The colour spellings a human writes in YAML, normalized to hex — or null. Accepts
+// "#1DB85D", unquoted 1DB85D (`optimal: #1DB85D` is a YAML comment), a name (teal), and a
+// digits-only value YAML turned into a Number.
 //
-// Four roads in, and each exists because of something a user actually runs into:
-//
-//   "#1DB85D"   the strict spelling, which YAML forces into quotes
-//   1DB85D      the same colour unquoted, because `optimal: #1DB85D` is a YAML COMMENT
-//               and the value would silently be empty
-//   teal        a name, for the far more common case of not having a hex at hand
-//   123456      what YAML hands over when every digit of a hex happens to be numeric
-//
-// THE NUMERIC ROAD IS THE SUBTLE ONE, and it is worth spelling out because the trap is in
-// YAML rather than here. A value made only of digits is a NUMBER to a YAML parser, so
-// `080808` reaches this function as 80808 — the leading zero is gone before the card sees
-// anything. That is why the digits are read back from the decimal spelling and padded
-// left to six: the digits a user typed are their own hex digits, and the padding restores
-// exactly what YAML dropped.
-//
-//   080808  ->  80808 -> "080808"      008000 -> 8000   -> "008000"
-//   123456  -> 123456 -> "123456"      0      -> 0      -> "000000"
-//
-// TWO REFUSALS, both because guessing would be worse than an error:
-//
-//   fewer than four digits   80 could be the six-digit #000080 or the shorthand #080,
-//                            which are different colours. Quoting says which.
-//   more than six digits     1234567 is not a colour in any reading.
-//
-// AND ONE CASE THAT CANNOT BE CAUGHT: `0808080` also arrives as 808080, indistinguishable
-// from `808080`, because the leading zero was removed upstream. Seven digits starting with
-// a zero is therefore read as six. Nothing in this file can see the difference; the readme
-// says to quote anything longer than six digits.
+// The numeric road: `080808` arrives as 80808, so the digits are read back from the
+// decimal spelling and left-padded to six. Refused: fewer than four digits (80 is
+// ambiguous between #000080 and shorthand #080) or more than six. Unfixable: `0808080`
+// also arrives as 808080 — the readme says to quote anything longer than six digits.
+// Full contract: internal dev doc, §5 "Der YAML-Palettenvertrag".
 export function parseColorToken(value) {
   if (typeof value === "number") {
     if (!Number.isInteger(value) || value < 0 || value > 999999) return null;
     const digits = String(value);
-    // Exactly `0` is the one short spelling with nothing to guess about: every reading of
-    // it is black. Everything else needs four digits before padding is unambiguous.
+    // `0` is the one short spelling with nothing to guess (every reading is black).
     if (digits !== "0" && digits.length < 4) return null;
     return `#${digits.padStart(6, "0")}`;
   }
@@ -399,10 +343,8 @@ export function parseColorToken(value) {
   if (named) return named;
   const hex = token.startsWith("#") ? token : `#${token}`;
   if (!isHexColor(hex)) return null;
-  // One output form for every input form. The shorthand doubling is CSS's own definition
-  // of what #0F8 means, so nothing is invented — and downstream, where colours are
-  // compared and written into styles, "the same colour" and "the same string" being the
-  // same thing is worth more than keeping the user's abbreviation.
+  // One output form for every input form: shorthand is doubled (CSS's own definition of
+  // #0F8), so "same colour" and "same string" match downstream.
   const digits = hex.slice(1).toUpperCase();
   return `#${digits.length <= 4 ? digits.split("").map((digit) => digit + digit).join("") : digits}`;
 }

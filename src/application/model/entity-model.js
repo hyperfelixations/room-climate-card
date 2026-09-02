@@ -1,19 +1,6 @@
-// One EntityModel per participating entity.
-//
-// Everything needed to decide whether an entity may determine the card's metric
-// kind or contribute to the average is resolved ONCE, here, from the same state
-// object. Atomicity prevents a humidity room from joining a temperature average,
-// a "1013 hPa" primary from displaying as °C, or an unavailable room from
-// participating in consensus.
-//
-// The unit rule is deliberately strict and symmetric: a unit is trusted only when
-// it is BOTH present AND resolves to a registered profile. A missing
-// unit_of_measurement is NOT assumed to be the canonical unit — missing and
-// unknown both yield unitProfile:null, exclude the measurement, and get
-// diagnosed. metricKind itself is still resolved in that case, so the no-data state
-// can show the right title and icon.
-//
-// `states` is Home Assistant's own states object, read but never written.
+// Resolve each configured entity atomically from one read-only Home Assistant state object.
+// Units must be present and registered; metric kind may still identify unusable readings for
+// no-data title and icon selection.
 
 import { isUnavailableState, parseNumericState } from "../../core/numbers.js";
 import { normalizeUnitToken } from "../../domain/units/unit-token.js";
@@ -27,9 +14,7 @@ import {
 } from "../../domain/metrics/resolution.js";
 import { classificationPolicyOf, isValuePhysicallyValid } from "./classification.js";
 
-// One exhaustive vocabulary for a configured entity's current availability.
-// Consumers compare these values; they never repeat the raw-state/unit/kind
-// checks that decide them.
+// Closed decision vocabulary; consumers never repeat raw state/unit/kind checks.
 export const AVAILABILITY = Object.freeze({
   USABLE: "usable",
   MISSING: "missing",
@@ -39,21 +24,8 @@ export const AVAILABILITY = Object.freeze({
   INCOMPATIBLE_KIND: "incompatible_kind",
 });
 
-// WHY a source cannot be used — which is a different question from whether it may
-// participate, and has to be answered separately or one of the two answers gets bent.
-//
-// AVAILABILITY is a POLICY vocabulary: everything downstream compares against it to
-// decide who joins the average, who becomes a placeholder chip, who is filtered out. Its
-// categories are therefore as coarse as those decisions need, and INVALID_VALUE covers
-// both "the sensor says heating" and "the sensor says 800 %" because both mean the same
-// thing to every one of those decisions.
-//
-// They do NOT mean the same thing to a reader, and that is what this vocabulary is for.
-// It changes no decision anywhere; it exists so the card can say what actually happened
-// instead of picking the nearest of three sentences. The two live side by side rather
-// than one being derived from the other, because every attempt to serve both purposes
-// with one value ends with a policy category invented for a message, or a message that is
-// vague because its category had to stay coarse.
+// Explanation vocabulary kept separate from AVAILABILITY policy decisions.
+// Details: internal docs §3 “EntityModel und MeasurementContext”.
 export const UNUSABLE_REASON = Object.freeze({
   NONE: "none",
   // The configured id is not in hass.states at all.
@@ -64,8 +36,7 @@ export const UNUSABLE_REASON = Object.freeze({
   NOT_NUMERIC: "not_numeric",
   // A number outside what the measurement can physically be — 800 % humidity.
   OUT_OF_RANGE: "out_of_range",
-  // No device_class, and a unit several measurements share. The card refuses to guess;
-  // adding a device_class fixes it, and the message says so.
+  // Shared unit without device_class; adding one resolves the ambiguity.
   UNIT_AMBIGUOUS: "unit_ambiguous",
   // No device_class and no unit the card recognizes: nothing says what this measures.
   UNIDENTIFIED: "unidentified",
@@ -89,12 +60,7 @@ export function readNumericAttribute(states, entityId, attributeName) {
   return parseNumericState(states?.[entityId]?.attributes?.[attributeName]);
 }
 
-// The first of several accepted spellings of one attribute, for the places where an
-// attribute has more than one name in the wild.
-//
-// The order of `names` IS the precedence, and it is a closed list on purpose: searching
-// for "any attribute that looks like a timestamp" would sooner or later hit an unrelated
-// one from some other integration and read it as ours.
+// `names` is a closed precedence list; never guess similarly named integration attributes.
 export function readFirstAttribute(attributes, names) {
   if (!attributes) return null;
   for (const name of names) {
@@ -109,16 +75,13 @@ export function readAttributes(states, entityId) {
   return states?.[entityId]?.attributes ?? null;
 }
 
-// One entity's own unit_of_measurement, with no metric-kind fallback — the
-// counterpart to metricKindForEntity(), so kind and unit always come from the
-// SAME entity.
+// Read only this entity's unit; metric kind and unit must share an owner.
 export function rawUnitForEntity(states, entityId) {
   const entityUnit = states?.[entityId]?.attributes?.unit_of_measurement;
   return typeof entityUnit === "string" && entityUnit.trim() ? entityUnit.trim() : null;
 }
 
-// device_class first (Home Assistant's own declaration), unit_of_measurement as
-// the fallback; null when neither is present or recognized.
+// Prefer device_class; use only an unambiguous unit fallback.
 export function metricKindForEntity(states, entityId) {
   const state = states?.[entityId];
   if (!state) return null;
@@ -127,21 +90,12 @@ export function metricKindForEntity(states, entityId) {
     const metric = METRIC_TYPE_BY_DEVICE_CLASS[deviceClass.trim().toLowerCase()];
     if (metric) return metric;
   }
-  // Only where the unit belongs to a single measurement — see metricKindFromUnitAlone().
-  // Where several share it, the card asks for a device_class rather than guessing.
+  // Shared units require device_class instead of a guess.
   return metricKindFromUnitAlone(state.attributes?.unit_of_measurement);
 }
 
-// range_entity and trend_entity are auxiliary sensors, not participants in metric
-// kind resolution, but their readings still need a unit profile before they can be
-// converted. The same strict rule applies: a missing unit is as unusable as an
-// unknown one, never a silent canonical assumption.
-//
-// rateSuffix: a rate is conventionally reported with "/h" appended to the
-// absolute unit ("°C/h", "ppm/h" — Home Assistant's own derivative helpers use
-// exactly that). The suffix is stripped before matching; a trend entity using the
-// bare absolute unit still resolves, since stripping a non-matching suffix is a
-// no-op.
+// Auxiliary sensors also require registered units but do not arbitrate metric kind.
+// `rateSuffix` strips an optional conventional `/h` before profile matching.
 export function resolveAuxiliaryUnitProfileKey(states, entityId, metricKind, { rateSuffix = false } = {}) {
   if (!entityId) return null;
   if (!METRIC_DEFINITIONS[metricKind]) return null;
@@ -155,18 +109,14 @@ export function resolveAuxiliaryUnitProfileKey(states, entityId, metricKind, { r
 // domain/metrics/access.js).
 export { convertMetricValue };
 
-// One cascade, two answers. Decided together because they are decided by the same facts
-// in the same order, and keeping them in step is not something a second pass over the
-// finished model could guarantee.
+// Derive policy status and explanatory reason together from the same ordered facts.
 function resolveAvailability({ stateObject, validNumeric, metricKind, rawUnit, validUnit, validPhysical }) {
   const pair = (availability, unusableReason) => ({ availability, unusableReason });
   if (!stateObject) return pair(AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING);
   if (isUnavailableState(stateObject.state)) return pair(AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE);
   if (!validNumeric) return pair(AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC);
   if (metricKind === null) {
-    // Two different things a reader can do about it, and one policy answer for both: a
-    // unit several measurements share needs a device_class added, a unit nothing
-    // recognizes needs the card pointed somewhere else.
+    // Shared and unknown units have one policy result but different remedies.
     const shared = Boolean(rawUnit) && !unitPredictsMetricKind(rawUnit);
     return pair(AVAILABILITY.INCOMPATIBLE_KIND, shared ? UNUSABLE_REASON.UNIT_AMBIGUOUS : UNUSABLE_REASON.UNIDENTIFIED);
   }
@@ -206,20 +156,8 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
     }
   }
 
-  // Validity limits are defined in the profile's canonical unit, so this runs
-  // only AFTER unit resolution and conversion — comparing a raw Fahrenheit value
-  // against canonical Celsius limits would reject perfectly good data.
-  //
-  // AND THE CONVERSION ITSELF HAS TO HAVE PRODUCED A NUMBER. A finite state can leave it
-  // non-finite: 1e308 °F is (v − 32) × 5/9, and the multiplication by five overflows to
-  // Infinity. That is not a reading of anything, so it is refused here rather than averaged,
-  // classified and drawn — the same answer 800 % humidity gets, for the same reason. Only
-  // the scaling paths can do it; °C and K at the same magnitude never multiply.
-  //
-  // lenient: this entity's own kind may not be the kind the card-wide policy is
-  // scoped to (a humidity room on a temperature card configured with the outdoor
-  // profile). Falling back to that kind's default profile here lets the later
-  // kind filter do its job instead of throwing during a probe.
+  // Validate only after canonical conversion, including finiteness of the converted result.
+  // Lenient profile lookup lets later metric-kind arbitration reject foreign rooms cleanly.
   const validPhysical =
     validNumeric &&
     Number.isFinite(canonicalValue) &&

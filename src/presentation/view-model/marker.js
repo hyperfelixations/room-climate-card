@@ -1,19 +1,9 @@
-// One marker on a scale bar.
-//
-// A marker is a position, a colour, its own drop shadow and a tooltip. The shadow
-// is an rgba() derivation of the colour, which is exactly why markers are built
-// here and not in the domain: the position is a percentage of a rendered bar and
-// the shadow is a CSS value, neither of which is a fact about the reading.
-//
-// shiftPx exists only for the two extrema markers, which are nudged apart when they
-// would otherwise visually merge (see resolveMarkerNudge()). It is always 0 for
-// every other marker, so the render and patch paths need no special case.
+// Presentation marker with percentage geometry and CSS shadow.
+// `shiftPx` nudges colliding extrema; all other markers use zero.
 
 import { rgba } from "../../core/color.js";
 
-// The two shadow alphas. Room markers are deliberately fainter: with `markers:all`
-// there can be a dozen of them, and the extrema plus the average stay the ones the
-// eye is drawn to.
+// Room-marker shadows stay fainter so extrema and average retain emphasis.
 const MARKER_SHADOW_ALPHA = 0.28;
 const ROOM_MARKER_SHADOW_ALPHA = 0.22;
 

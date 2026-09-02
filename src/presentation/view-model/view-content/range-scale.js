@@ -1,43 +1,17 @@
-// The daily-range scale view's content model.
-//
-// Same bar as the main scale view, different meaning: the markers show today's
-// minimum and maximum instead of the coldest and warmest room, and the top row
-// carries three labels above their own markers instead of a single comfort pill.
-//
-// The three top labels overlap easily, so this model carries what the layout pass
-// needs to declutter them without formatting anything itself:
-//
-//   current  a fixed pivot, never repositioned — it is the primary live value and
-//            has no visual identity distinct from the marker above it, so a drifted
-//            current label would read as belonging to whichever marker it ended up
-//            nearest. Long and short form, chosen at measure time.
-//   min/max  historical context values that can absorb a shift. Each carries its
-//            numeric value for ordering and a sortKey for tie detection.
-//
-// sortKey is compared for EQUALITY only and never parsed back into a number: a
-// grouped display value ("1,200") is not valid numeric input, and an earlier version
-// that re-parsed it compared as NaN for every value above 999. Actual ordering uses
-// the raw numeric value.
+// Daily min/max reuse the main scale geometry with three declutterable top labels.
+// Current is the fixed live-value pivot; historical min/max may shift. Raw values
+// determine order, while formatted `sortKey` is used only for equality/tie detection
+// and must never be parsed (grouped display text is not numeric input).
 
 import { buildMarker } from "../marker.js";
 import { buildScaleBarContent } from "./scale-bar.js";
 
-// A timestamp as it appears beside its value, brackets and all — or nothing at all when
-// there is no timestamp to show.
-//
-// The brackets belong to the TRANSLATION rather than to this file, because where they go
-// and which ones to use is a question about a language: Japanese and Chinese use
-// full-width brackets and no leading space. Putting the whole parenthetical in the value
-// is also what lets one sentence serve all four cases — both times, either one, or
-// neither — instead of four sentences per language.
+// Translations own timestamp brackets and spacing; missing timestamps add nothing.
 function timeSuffix(texts, time) {
   return time ? texts.t("rangeScale.footerTime", { time }) : "";
 }
 
-// Today's span (the range entity's own state, never max - min), plus the daily extremes
-// and, when the entity reports them, their timestamps. "compact" is the same sentence
-// with both timestamps dropped for want of room — a separate translation, because
-// truncating a sentence here would have to guess each language's punctuation.
+// Uses the range entity's state as the span, never `max - min`; compact mode omits times.
 function buildFooterText(shared, mode) {
   const { texts, range } = shared;
   return texts.t(mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer", {
@@ -60,8 +34,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately NOT tied to rooms.comparable, unlike the main scale's footer: this
-      // view must show its daily span with zero rooms configured.
+      // Daily span remains available with zero comparable rooms.
       footerText: !options.show_footer || shared.hideFooter ? null : buildFooterText(shared, options.footer),
     }),
     topLabels: {
@@ -72,17 +45,14 @@ export function buildRangeScaleViewContent(shared, options, axis) {
         sortKey: texts.fmt(average.value),
         value: average.value,
       },
-      // Ordered min-before-max, which is also the tie-break order: semanticRank
-      // places min left of current and max right of it when their displayed values
-      // are indistinguishable.
+      // Min-before-max order and semanticRank resolve indistinguishable display values.
       sides: [
         { role: "min", text: texts.t("rangeScale.minLabel"), position: positions.min, value: range.min, sortKey: texts.fmt(range.min), semanticRank: 0 },
         { role: "max", text: texts.t("rangeScale.maxLabel"), position: positions.max, value: range.max, sortKey: texts.fmt(range.max), semanticRank: 2 },
       ],
     },
     markers: {
-      // Reuses the cold/warm marker shapes for min/max: identical CSS, different
-      // meaning in this view.
+      // Min/max reuse the extrema marker shapes with view-specific meaning.
       min: buildMarker({
         position: positions.min,
         color: range.minColor,

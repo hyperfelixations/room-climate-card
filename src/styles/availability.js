@@ -1,7 +1,5 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Availability is a display state of the normal card shell. It deliberately
-// changes neither the configured source identity nor any calculation colour.
+// SHIPPED STYLESHEET SLICE: availability state for the normal card shell.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const AVAILABILITY_CSS = `        .rtc-root[data-state="no-data"] .rtc-main-panel {
           grid-template-columns: minmax(94px, 106px);

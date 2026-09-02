@@ -1,18 +1,11 @@
-// The atomic MeasurementContext: metric kind, current headline source,
-// per-entity availability and display unit, decided from one set of EntityModels.
-//
-// Source topology is configuration-owned. Availability may change the value that
-// can be shown (including the established primary-to-room-consensus fallback),
-// but it never changes whether the configured card is primary-only, single-room,
-// primary-with-rooms or room-consensus.
+// Atomically arbitrate metric kind, headline source, availability and display unit.
+// Configuration owns topology; availability may change the value, never the card form.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } from "./entity-model.js";
 import { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } from "./source-topology.js";
 
-// Numeric consumers use this only after the no-data branch has returned. Display
-// identity is deliberately allowed to remain null so the shell can use the
-// untranslated product name when no configured source reveals a metric kind.
+// Numeric consumers use this only after no-data; display identity may remain null.
 const FALLBACK_METRIC_KIND = "temperature";
 
 function isUsable(model) {
@@ -23,12 +16,7 @@ function identityMetricKind(primary, rooms) {
   return primary.metricKind || rooms.find((room) => room.metricKind)?.metricKind || null;
 }
 
-// Which rooms may take part once the card's metric kind is settled, in configuration
-// order, and why each of the others may not.
-//
-// ONE WALK, whether the kind came from a primary the card can read or from one that can
-// only still declare what it measures. What decides is the KIND; who supplied it is a
-// separate question, answered by the caller.
+// Partition rooms once, in config order, after metric-kind arbitration.
 function partitionRooms(roomModels, metricKind) {
   const participatingRooms = [];
   const excludedRoomIds = [];
@@ -50,20 +38,8 @@ function partitionRooms(roomModels, metricKind) {
   return { participatingRooms, excludedRoomIds, diagnostics };
 }
 
-// The arithmetic mean, without an intermediate sum that can leave the number line when the
-// answer does not.
-//
-// Summing first is exact and is what every ordinary case takes: two readings of 21 and 23
-// give 22 with the bits a person would predict, and this path leaves every existing average
-// unchanged to the last digit. It is also the path that overflows — 1e308 + 1e308 is
-// Infinity, and dividing that by two cannot bring it back, so a card whose rooms were both
-// finite and whose true mean is finite showed the infinity sign.
-//
-// When it does overflow, dividing by the largest magnitude FIRST keeps every term at most 1
-// and the running sum at most n, and multiplying back at the end restores the scale. Less
-// exact in the last bits than the sum, which is why it is the second choice rather than the
-// only one. That largest magnitude cannot be zero on this path: a sum that left the number
-// line had a term near the ceiling in it.
+// Preserve ordinary sum/divide results bit-for-bit. If the sum overflows, normalize by the
+// largest magnitude first; each term is then at most 1 and the finite mean remains recoverable.
 function meanOf(values) {
   const sum = values.reduce((total, value) => total + value, 0);
   if (Number.isFinite(sum)) return sum / values.length;
@@ -71,9 +47,7 @@ function meanOf(values) {
   return (values.reduce((total, value) => total + value / scale, 0) / values.length) * scale;
 }
 
-// The headline several rooms of one kind produce together, and the unit it can be shown
-// in. A unit profile they all share survives; a mixture falls back to the canonical unit
-// rather than preferring one room's unit for no reason.
+// Preserve a unanimous unit profile; mixed profiles display in the canonical unit.
 function roomConsensus(rooms) {
   return {
     averageSource: {
@@ -86,15 +60,9 @@ function roomConsensus(rooms) {
   };
 }
 
-// EntityModel owns intrinsic availability. MeasurementContext adds the one
-// card-wide fact EntityModel cannot know: whether a recognized entity kind is
-// compatible with the selected card kind.
-//
-// The two rewrites that DO change the reason are the two where the card-wide view is the
-// reason: this source measures something else. The third does not touch it, deliberately
-// — a sentinel value whose kind cannot be identified is still best explained by what its
-// state actually is, and "unavailable" remains the more useful sentence than anything
-// this function could add.
+// Add card-wide kind compatibility to EntityModel's intrinsic availability.
+// Rewrite the reason only when kind mismatch is itself the cause; untyped sentinels retain
+// their more useful intrinsic explanation.
 function withContextAvailability(model, metricKind, mixed) {
   if (!model.entityId) return model;
   if (
@@ -140,9 +108,7 @@ export function resolveMeasurementContext(states, config) {
   let displayUnitProfileKey;
 
   if (topology.kind === SOURCE_TOPOLOGY.SINGLE_ROOM) {
-    // The topology's own index, never a hard 0: the one room the card refers to is not
-    // necessarily the first one configured — the others may simply be ids Home Assistant
-    // does not know.
+    // Use topology's config index; unknown earlier room ids may have been excluded.
     const room = roomModels[topology.roomIndex];
     metricKind = room.metricKind || null;
     excludedRoomIds = [];
@@ -169,27 +135,11 @@ export function resolveMeasurementContext(states, config) {
     sourceKind = "primary";
     displayUnitProfileKey = primaryModel.unitProfile;
   } else if (primaryModel.metricKind) {
-    // THE PRIMARY CANNOT SUPPLY A VALUE, AND CAN STILL SAY WHAT THE CARD IS ABOUT.
-    //
-    // `device_class` is a statement about a SENSOR, not a reading: an unreachable
-    // thermometer measures temperature all the same. source-topology.js already builds the
-    // card's SHAPE on exactly that distinction — availability changes the value the card
-    // can show, never what kind of card it is — and this is the same rule one layer down.
-    // A declaration that survived the outage therefore settles which rooms belong here, by
-    // the same walk a readable primary uses; only the VALUE falls back to them.
-    //
-    // Without it, a single humidity sensor among four thermometers blanked the whole card
-    // the moment the thermometer feeding the average went offline: the rooms disagreed,
-    // nobody was asked to settle it, and the answer that was available went unread.
-    //
-    // AN ENTITY HOME ASSISTANT DOES NOT KNOW DECLARES NOTHING — buildEntityModel() leaves
-    // metricKind null without a state object — so a mistyped `entity:` still leaves the
-    // rooms to agree among themselves or not, in the branch below. That is the difference
-    // between an outage and a typo, and it is deliberate.
+    // An unreadable primary still arbitrates by its declared sensor kind; only its value falls
+    // back to matching rooms. A missing state object declares no kind, so rooms arbitrate below.
     metricKind = primaryModel.metricKind;
     ({ participatingRooms, excludedRoomIds, diagnostics } = partitionRooms(roomModels, metricKind));
-    // Settled, not merely quiet: the rooms may well disagree with each other, but the
-    // question of what this card measures has an answer, so nothing here is "mixed".
+    // A declaring primary settles the kind even when rooms disagree.
     consistent = true;
     if (participatingRooms.length) {
       ({ averageSource, displayUnitProfileKey } = roomConsensus(participatingRooms));
@@ -247,9 +197,7 @@ export function resolveMeasurementContext(states, config) {
   }
 
   const mixed = consistent === false;
-  // Compatibility follows the kind that actually won arbitration. A typed but
-  // unusable primary must not make the compatible rooms supplying its fallback
-  // look foreign merely because it identifies a different kind.
+  // Compatibility follows the winning kind so fallback rooms are not marked foreign.
   const compatibilityMetricKind = metricKind || resolvedIdentityMetricKind;
   const primary = withContextAvailability(primaryModel, compatibilityMetricKind, mixed);
   const rooms = roomModels.map((room) => withContextAvailability(room, compatibilityMetricKind, mixed));
@@ -282,8 +230,7 @@ export function resolveMeasurementContext(states, config) {
   };
 }
 
-// The metric kind numeric consumers can safely assume. No-data presentation reads
-// context.metricKind directly so the product-name fallback remains possible.
+// Numeric consumers call this only beyond the no-data boundary.
 export function effectiveMetricKind(context) {
   return context.metricType || FALLBACK_METRIC_KIND;
 }

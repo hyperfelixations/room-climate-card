@@ -1,32 +1,13 @@
-// The keys a card configuration may carry at its top level, and what to say about one it
-// may not.
+// The keys a card configuration may carry at its top level, and what to say about one
+// it may not. An unknown top-level key warns rather than refusing (a nested object
+// still throws) — full rationale, the two contract tests, and the FRAMEWORK_KEYS
+// ageing concern in interne Doku §3 „#### Der Schlüsselvertrag der obersten Ebene".
 //
-// Every nested object in a configuration is already checked against the keys it allows —
-// `palette`, `classification`, the tier lists and `views[].options` all are. The top level,
-// which is the level a person actually edits, was the one that let a typo through in
-// silence: `pallete: vivid` did nothing at all and said nothing about it, and the reader
-// went looking for the reason in the wrong place.
-//
-// IT WARNS RATHER THAN REFUSING, deliberately. A key the card does not know is cosmetic in
-// its effect — the option simply does not apply — while a configuration that stops loading
-// after an update is not: a card carrying a key an older version once had, or one a
-// front-end module the card knows nothing about put there, would take the dashboard down
-// with it. That is the same answer `views:` and `show:` give, through the same channel.
-//
-// THE TWO LISTS BELOW ARE NOT THE SAME KIND OF THING.
-//
-// TOP_LEVEL_KEYS is what the card OWNS: every key normalizeConfig() reads. It is the
-// counterpart of the manifest in test/manifests/product-surface.js, and a contract test
-// holds the two together, so a new option cannot be added here without being promised
-// there or the other way round.
-//
-// FRAMEWORK_KEYS is what the card is HANDED. Home Assistant writes its own bookkeeping onto
-// every card configuration, and the card is neither the owner nor the reader of any of it —
-// warning about it would be a false alarm on a perfectly ordinary dashboard. The list is
-// taken from `LovelaceCardConfig` in the Home Assistant frontend (`src/data/lovelace/
-// config/card.ts`), plus `card_mod`, which the card-mod front-end module attaches to any
-// card it styles. It therefore AGES: a Home Assistant release that adds a field here would
-// make the card complain about it, which is the one maintenance cost this file carries.
+// The two lists differ in kind:
+//   TOP_LEVEL_KEYS   what the card OWNS: every key normalizeConfig() reads. Held in
+//                    lockstep with the product-surface manifest by a contract test.
+//   FRAMEWORK_KEYS   what the card is HANDED: `LovelaceCardConfig` bookkeeping plus
+//                    `card_mod`. Not owned, not read here, so not warned about.
 
 // Owned by the card. The last three are older spellings, still accepted and listed for
 // removal at the next major.
@@ -68,17 +49,12 @@ export const FRAMEWORK_KEYS = Object.freeze(
   new Set(["type", "index", "view_index", "view_layout", "layout_options", "grid_options", "visibility", "disabled", "card_mod"])
 );
 
-// How far apart two keys may be and still be a plausible slip of the fingers. Two covers
-// the mistakes people actually make — a dropped or doubled character, a transposition, a
-// separator written the other way (`tap-action`, `tapAction`) — without reaching far enough
-// to propose an option that has nothing to do with what was typed.
+// Max edit distance for a suggestion: 2 covers a dropped/doubled character, a
+// transposition, or a separator written the other way (`tap-action`, `tapAction`).
 const SUGGESTION_LIMIT = 2;
 
-// Levenshtein distance, abandoned as soon as it cannot come in under `limit`.
-//
-// The early exits are not an optimisation of a hot path — this runs once per configuration
-// change — they are what keeps the answer bounded for a key of any length somebody pastes
-// in by accident.
+// Levenshtein distance, abandoned as soon as it cannot come in under `limit`. The
+// early exits bound the cost for an arbitrarily long key pasted in by accident.
 function editDistance(one, other, limit) {
   if (Math.abs(one.length - other.length) > limit) return limit + 1;
   let previous = Array.from({ length: other.length + 1 }, (_, index) => index);
@@ -96,12 +72,9 @@ function editDistance(one, other, limit) {
   return previous[other.length];
 }
 
-// The one allowed key a written one was probably meant to be, or null.
-//
-// ONLY WHEN IT IS THE ONLY ONE THAT CLOSE. Two candidates at the same distance mean the
-// card cannot tell which was meant, and naming one of them would send a reader to fix a key
-// they did not write. Comparison is case-insensitive, so `Palette` is answered too, and the
-// suggestion is spelled the way the option really is.
+// The one allowed key a written one was probably meant to be, or null — only when it
+// is the single closest one (a tie is ambiguous, so it stays silent). Case-insensitive
+// match; the suggestion is spelled the way the option really is.
 export function nearestKey(written, allowed) {
   const needle = String(written).toLowerCase();
   let best = null;
@@ -121,9 +94,8 @@ export function nearestKey(written, allowed) {
   return ties === 1 ? best : null;
 }
 
-// One diagnostic per unknown key, rather than one naming them all: the suggestion belongs
-// to the key it is about, and a single line carrying three keys and three suggestions would
-// have to be read twice to see which goes with which.
+// One diagnostic per unknown key, not one naming them all: the suggestion belongs to
+// the key it is about.
 export function unknownTopLevelKeys(userConfig) {
   const diagnostics = [];
   for (const key of Object.keys(userConfig)) {

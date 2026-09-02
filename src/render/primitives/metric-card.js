@@ -1,17 +1,10 @@
-// The metric card: one large tappable card with a label, a name and a value.
-//
-// Used by the daily-range view (today's minimum and maximum) and by the
-// extreme-value view (the coldest and warmest room). Both get the identical shape
-// from the identical model, which is why the two views cannot drift apart visually.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Shared tappable metric card keeps daily-range and room-extreme views visually identical.
+// Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
 
 export function renderMetricCard(model) {
-  // Only real rooms carry an index, so the action layer falls back to the card's
-  // default actions for a daily-range card instead of a nonexistent room.
+  // Only real rooms carry per-room action ownership.
   const roomIndexAttr = model.roomIndex !== null ? ` data-room-index="${model.roomIndex}"` : "";
 
   return `
@@ -31,9 +24,7 @@ export function renderMetricCard(model) {
       `;
 }
 
-// Field-for-field mirror of renderMetricCard(). The four custom properties are set
-// through style.setProperty() rather than by reassembling one style string, so an
-// update never re-parses a value as CSS.
+// Mirror renderMetricCard(); update custom properties without reparsing a CSS string.
 export function patchMetricCard(element, model) {
   element.setAttribute("data-entity", model.entity);
   if (model.roomIndex !== null) element.setAttribute("data-room-index", String(model.roomIndex));
@@ -50,11 +41,7 @@ export function patchMetricCard(element, model) {
   element.querySelector(".rtc-extreme-value-unit").textContent = model.unitText;
 }
 
-// The shared patch path for both two-card views. The pair is positionally fixed by
-// its render function, so index 0 and index 1 are stable slots — which is what lets
-// a focused card survive the room behind it changing. Falls back to a full
-// re-render only as a defensive guard if the DOM does not actually hold two cards;
-// these views only appear or disappear through a full rebuild, never mid-patch.
+// Stable positional slots preserve focused nodes; mismatched DOM falls back to pair re-render.
 export function patchMetricCardPair(element, models, renderPairHtml) {
   if (!element) return;
   const cards = element.querySelectorAll(".rtc-extreme-card");

@@ -1,12 +1,5 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
-
-// The container queries, plus the width-based fallback for browsers without container support.
+// SHIPPED STYLESHEET SLICE: container queries and width-based fallback.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
           .rtc-root { padding: 14px; }

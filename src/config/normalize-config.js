@@ -1,15 +1,11 @@
-// The whole `setConfig()` contract, as one pure function.
+// The whole `setConfig()` contract, as one pure function. normalizeConfig() returns
+// the normalized config or throws the error the user needs; a malformed views: entry
+// or show: key records a diagnostic on _configDiagnostics instead, and the element
+// decides when to surface it. Transaction semantics: interne Doku §3
+// „setConfig() und YAML-Normalisierung".
 //
-// normalizeConfig(userConfig, collaborators) either returns the normalized
-// config or throws exactly the error the user needs to see. It has no `this`, no
-// hass, no DOM and no console output: a malformed views: entry or show: key
-// records a diagnostic string on the returned config (_configDiagnostics) and the
-// caller decides when and how often to surface it. That separation is what lets the
-// element deduplicate warnings per config change without the normalizer knowing
-// anything about it.
-//
-// Injected collaborators, because the configuration layer must not import the
-// domain, i18n or view registries:
+// Injected collaborators, because config/ must not import the domain, i18n or view
+// registries. This list is authoritative:
 //   classificationZones   the accepted zone vocabulary
 //   paletteForName        a palette by name, or the default for null
 //   paletteForColor       a ramp derived from one named colour
@@ -17,6 +13,7 @@
 //   paletteGradientLimit  how many colours such a palette may name, for the error message
 //   paletteKeys           every word a palette option may be, for the error message
 //   assertPalette         what makes a written-out palette usable
+//   completePalette       fills a validated palette's missing wings
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
 //   viewTypes             every registered view type, for start_view
@@ -54,16 +51,10 @@ export function normalizeLanguage(value, isSupportedLanguage) {
   return isSupportedLanguage(normalized) ? normalized : "auto";
 }
 
-// The two older spellings of a `show:` decision, read WITHOUT a default of their own.
-//
-// Each speaks only where it actually says something, which is what leaves SHOW_SWITCHES
-// and resolveShowConfig() as the ONE place any of these defaults is written down. A reader
-// that answered for a key nobody wrote would be a second statement of the same default,
-// and two statements of one default drift apart without anything noticing.
-//
-// `show_rooms` speaks only for YAML's real booleans, not for the strings "true"/"false".
-// For `unavailable_values` only the literal `hide` turns the placeholder chips off — every
-// other value, including a typo, means what the absent key means.
+// The two older spellings of a `show:` decision, read WITHOUT a default of their own,
+// so SHOW_SWITCHES stays the one place these defaults live. `show_rooms` speaks only
+// for YAML's real booleans; `unavailable_values` only for the literal `hide`. Every
+// other value means what the absent key means. See interne Doku §3 „Der show:-Block".
 export function legacyShowRequests(userConfig) {
   const requests = {};
   if (userConfig.show_rooms === true) requests.rooms = true;
@@ -72,29 +63,12 @@ export function legacyShowRequests(userConfig) {
   return requests;
 }
 
-// How a header line behaves, and what it says.
-//
-// The title and the subtitle are the same kind of thing — a line of text at the top of the
-// card that the user may write — so they take the same shape, and there are two separate
-// things to say about either: what it reads, and what happens when it is longer than the
-// card is wide. Hence one option carrying both answers, in four spellings:
-//
-//   subtitle: Ground floor          the text, overflow unchanged
-//   subtitle: wrap                  the overflow, text still automatic
-//   subtitle: ""                    no line at all
-//   subtitle: {text: …, overflow: …}  both
-//
-// THE ONE AMBIGUITY, and it is deliberate: a bare `clip` or `wrap` is read as the overflow
-// mode, so those two words alone cannot be used as the TEXT. That is worth the shorthand —
-// nobody labels a card "wrap" — and it has an escape hatch that needs no guessing,
-// `subtitle: {text: wrap}`. An ambiguity with no way out would not be worth it.
-//
-// THE DEFAULTS DIFFER, and they are measured rather than chosen: `.rtc-title` carries
-// neither `white-space: nowrap` nor an ellipsis and therefore wraps, `.rtc-subtitle`
-// carries both and therefore clips. Each line keeps the behaviour it has always had.
-//
-// Malformed values fall back to the default rather than throwing, like every other purely
-// cosmetic option.
+// Title and subtitle take one shape carrying both what the line says and how it
+// behaves when too wide, in four spellings: `text`, a bare `clip`/`wrap` (overflow
+// only), `""` (no line), or `{text, overflow}`. A bare `clip`/`wrap` is read as the
+// overflow mode, so those two words cannot be the text — escape via `{text: wrap}`.
+// Defaults differ and are measured from the stylesheet: title wraps, subtitle clips.
+// Malformed values fall back. See interne Doku §3 „Konfigurationsvertrag" (Kopfzeilen).
 export const HEADER_LINE_OVERFLOWS = ["clip", "wrap"];
 
 export function normalizeHeaderLine(value, defaultOverflow) {
@@ -116,11 +90,9 @@ export function normalizeHeaderLine(value, defaultOverflow) {
   };
 }
 
-// Which view the card opens on. `null` means "the first available one", and a name that is
-// not a registered view type resolves to the same thing — a card must not fail to draw
-// because it was pointed at a view that does not exist. What is new is that it says so:
-// falling back in silence is what left a typo here looking like a card that ignores the
-// option. The view types are injected, because config/ must not import the view registry.
+// Which view the card opens on. `null` and a name that is not a registered view type
+// both mean "the first available one", the latter with a diagnostic. View types are
+// injected, because config/ must not import the view registry.
 export function normalizeStartView(value, viewTypes, diagnostics) {
   const requested = optionalString(value);
   if (requested === null || viewTypes.includes(requested)) return requested;
@@ -137,20 +109,16 @@ export function normalizeConfig(config, collaborators) {
     throw new Error("Invalid configuration: card configuration must be an object.");
   }
 
-  // `entity` is OPTIONAL, and deliberately normalized before the requirement below is
-  // checked. Absent or empty is a legitimate configuration — the rooms can carry the
-  // card on their own. Present but malformed is still a hard error with its own path,
-  // because silently ignoring a typo'd entity id would leave the user staring at a card
-  // that reads correctly and shows the wrong thing.
+  // `entity` is OPTIONAL and normalized before the requirement below: absent/empty is
+  // legitimate (rooms can carry the card), present-but-malformed is a hard path error.
   const entity = optionalEntity(userConfig.entity, null, "entity");
 
-  // rooms is optional too, and every entry is fully validated (each needs its own
-  // entity, and they must be unique) before the combined requirement is judged.
+  // rooms is optional too; every entry is fully validated (unique, each with its own
+  // entity) before the combined requirement is judged.
   const rooms = normalizeRooms(userConfig.rooms === undefined ? [] : userConfig.rooms);
 
-  // THE requirement: a card has to be able to show a current value, and there are
-  // exactly two ways to give it one. `range_entity` and `trend_entity` are auxiliary —
-  // they describe a value, they cannot BE it — so neither satisfies this on its own.
+  // THE requirement: a current-value source must exist. `range_entity`/`trend_entity`
+  // describe a value rather than being one, so neither satisfies it.
   if (!entity && rooms.length === 0) {
     throw new Error(
       "Invalid configuration: at least one current-value source is required — set entity, or add at least one entry to rooms."
@@ -165,23 +133,16 @@ export function normalizeConfig(config, collaborators) {
   const classification = normalizeClassificationConfig(userConfig.classification, collaborators);
   const palette = normalizePalette(userConfig.palette, collaborators);
 
-  // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else.
-  //
-  // Two of these decisions have an older spelling that is still supported, and the rule
-  // between them is the same in both cases: the block wins WHERE IT SPEAKS. That is per
-  // decision and not per block — writing `show:` at all must not quietly reset the parts it
-  // says nothing about, or adding one key to a working card would change two others.
-  //
-  // Both are on their way out and are listed in the backlog for the next major. Until then
-  // this is the only place that knows two spellings; everything downstream sees
-  // `config.show` and nothing else.
+  // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else. The block wins WHERE IT
+  // SPEAKS — per decision, not per block — over the two older top-level spellings, which
+  // are on their way out (backlog, next major). Everything downstream sees `config.show`
+  // only. See interne Doku §3 „Der show:-Block".
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
   const show = resolveShowConfig({ ...legacyShowRequests(userConfig), ...requestedShow });
 
-  // The top-level options that fall back rather than throwing, and say so. The three
-  // booleans go through the same reader the `show:` block uses, so a boolean is read one way
-  // in this file. Resolved here rather than inside the returned object so that the
-  // diagnostics exist before the list below is built.
+  // Top-level options that fall back with a diagnostic. The three booleans use the same
+  // reader as the `show:` block. Resolved before the returned object so the diagnostics
+  // exist when the list below is built.
   const optionDiagnostics = [];
   const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", optionDiagnostics) ?? DEFAULT_CONFIG.auto_slide;
   const swipe = booleanOption(userConfig.swipe, "swipe", optionDiagnostics) ?? DEFAULT_CONFIG.swipe;
@@ -190,36 +151,26 @@ export function normalizeConfig(config, collaborators) {
 
   return {
     entity,
-    // Cosmetic/optional overrides: a malformed value falls back to the previous
-    // default rather than throwing, so a typo in an optional field can't break
-    // the whole card the way a bad entity id would.
-    //
-    // entity_label is the headline's caption, and uses optionalLabel() rather than
-    // optionalString() so an explicit "" survives as "no caption" (see buildAverage()).
+    // Cosmetic/optional overrides fall back rather than throwing. entity_label uses
+    // optionalLabel() so an explicit "" survives as "no caption" (see buildAverage()).
     entity_label: optionalLabel(userConfig.entity_label),
-    // The two header lines: what each says, and how it behaves when it does not fit. See
-    // normalizeHeaderLine() above for why one option carries both, and why the two
-    // defaults differ.
+    // The two header lines; see normalizeHeaderLine() above.
     title: normalizeHeaderLine(userConfig.title, "wrap"),
     subtitle: normalizeHeaderLine(userConfig.subtitle, "clip"),
     icon: optionalString(userConfig.icon),
-    // WHETHER each part is drawn. The part's own key above decides WHAT it says; a line
-    // emptied with "" and a part switched off here are two roads to the same absent node,
-    // and both stay open.
+    // WHETHER each part is drawn; "" on the part's key and `show.<part>: false` are two
+    // roads to the same absent node.
     show,
     decimals: decimalsOverride(userConfig.decimals),
     language: normalizeLanguage(userConfig.language, isSupportedLanguage),
-    // The one footer switch that is not view-specific: it turns every view's footer off at
-    // once, which no per-view option can do without writing out the whole `views:` list.
-    // Listed in the backlog for removal at the next major, after which the per-view
-    // `show_footer` is the only spelling.
+    // The one global footer switch: turns every view's footer off at once. Backlog
+    // removal at the next major, leaving per-view `show_footer` as the only spelling.
     hide_footer: hideFooter,
     rotation_seconds: positiveSeconds(userConfig.rotation_seconds, DEFAULT_CONFIG.rotation_seconds, 1, 3600),
     slide_seconds: positiveSeconds(userConfig.slide_seconds, DEFAULT_CONFIG.slide_seconds, 0.1, 10),
     hold_seconds: DEFAULT_CONFIG.hold_seconds,
-    // Independent of each other: auto_slide only gates the automatic rotation
-    // timer, swipe only gates the manual horizontal drag gesture. Both default
-    // true; either can be turned off without affecting the other.
+    // Independent: auto_slide gates the automatic rotation timer, swipe gates the
+    // manual drag gesture. Both default true.
     auto_slide: autoSlide,
     swipe,
     tap_action: normalizeAction(userConfig.tap_action, DEFAULT_CONFIG.tap_action),
@@ -227,30 +178,22 @@ export function normalizeConfig(config, collaborators) {
     // Optional room-chip grid override; null means "decide automatically".
     room_columns: positiveInteger(userConfig.room_columns),
     room_rows: positiveInteger(userConfig.room_rows),
-    // Purely presentation decisions: room_sort only reorders the rendered chips,
-    // never the value-sorted list every calculation uses; room_label picks
-    // between the existing short/name pair; show_rooms governs the chip grid only,
-    // rooms stay full data sources in every setting.
+    // Presentation only: room_sort reorders the rendered chips, never the value-sorted
+    // list calculations use; room_label picks between the short/name pair.
     room_sort: normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
     room_label: normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
-    // views: is the single public view-composition surface. null is the "not
-    // configured at all" sentinel, which resolves to one auto entry per
-    // registered view; a present-but-possibly-empty array is authoritative even
-    // when empty. Unknown or duplicate view types are not rejected here — a YAML
-    // typo degrades to "ignored" and is reported through the diagnostics below.
+    // null = "not configured", resolving to one auto entry per registered view; a
+    // present array is authoritative even when empty. Invalid entries degrade to
+    // "ignored" via the diagnostics below.
     views,
-    // Internal-only field (the underscore signals "not a YAML key") carrying the
-    // diagnostics forward to whoever is responsible for surfacing them once per
-    // config change. One channel for every cosmetic fallback in the configuration,
-    // because two would be two places to remember when a third kind arrives.
-    //
-    // Outermost first: a key the card does not have at all is the thing to read before any
-    // report about the values inside the keys it does have.
+    // Internal-only (underscore = not a YAML key): the one channel carrying every
+    // cosmetic fallback forward for the element to surface once per config change.
+    // Unknown top-level keys first — read before any report about the keys that exist.
     _configDiagnostics: [...unknownTopLevelKeys(userConfig), ...optionDiagnostics, ...showDiagnostics, ...viewsDiagnostics],
     start_view: startView,
     classification,
-    // The resolved palette object, not its name: everything downstream needs the colours,
-    // and resolving once here is what keeps the domain registry out of the render path.
+    // The resolved palette object, not its name: resolving once here keeps the domain
+    // registry out of the render path.
     palette,
     rooms,
     range_entity: rangeEntity,

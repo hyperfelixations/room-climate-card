@@ -1,16 +1,6 @@
-// The two optional auxiliary sensors: today's range and the hourly trend.
-//
-// Both exist only if configured, currently numeric, AND reporting a unit that
-// resolves to a registered profile. That last condition is not pedantry: without
-// it, a Celsius-configured card would happily display a Fahrenheit "18" as 18 °C.
-//
-// The quantity kinds matter and are deliberately different:
-//
-//   range state      a DELTA (today's width) — must never pick up a unit offset
-//   range min/max    ABSOLUTE readings
-//   trend            a RATE — same conversion factor as a delta
-//
-// Timestamps are returned raw. Formatting them is a presentation decision.
+// Optional range and trend sensors require numeric values and registered units.
+// Range state is a delta, range min/max are absolute, and trend is a rate.
+// Timestamps stay raw for presentation-layer formatting.
 
 import { classifyTrendRate, TREND_DIRECTION_META, TREND_POLICY_REGISTRY } from "../../domain/trend.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
@@ -23,9 +13,7 @@ import {
   resolveAuxiliaryUnitProfileKey,
 } from "./entity-model.js";
 
-// Single policy-resolution seam: today it returns registry defaults, and a later
-// release can layer validated YAML or entity attributes here without touching the
-// classifier or any renderer.
+// Keep trend-policy lookup behind one seam.
 export function resolveTrendPolicy(metricKind) {
   return TREND_POLICY_REGISTRY[metricKind] || null;
 }
@@ -60,8 +48,7 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
       })
     );
   }
-  // A negative width is physically impossible. Checked on the DISPLAY value, like
-  // every other validity check once the projection has happened.
+  // Validate the projected display value; a negative width is impossible.
   const hasRange = state !== null && state >= 0;
 
   let min = hasRange ? readNumericAttribute(states, config.range_entity, "minimum") : null;
@@ -80,16 +67,11 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
   if (max !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, max)) max = null;
 
   const attributes = hasRange ? states?.[config.range_entity]?.attributes : undefined;
-  // Two spellings, English first. The German one is what the card was originally built
-  // against and stays supported; nothing that already works may stop working. Both are
-  // OPTIONAL — a range entity that reports only its minimum and maximum is complete.
+  // English names win; legacy German names remain optional fallbacks.
   const minTimestamp = hasRange ? readFirstAttribute(attributes, ["minimum_timestamp", "minimum_zeitpunkt"]) : null;
   const maxTimestamp = hasRange ? readFirstAttribute(attributes, ["maximum_timestamp", "maximum_zeitpunkt"]) : null;
 
-  // No attributes are passed to the classifier on purpose. min/max are HISTORICAL
-  // readings taken from attributes, not the entity's current state — letting them
-  // see range_entity's own live value_color/value_level would make both inherit
-  // one current classification instead of their own numeric tier.
+  // Historical min/max classify numerically, never from the entity's current attributes.
   const minColor = min !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, min, null, palette) : null;
   const maxColor = max !== null ? classificationColorOf(policy, metricKind, displayUnitProfile, max, null, palette) : null;
 
@@ -102,10 +84,7 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
     maxTimestamp,
     minColor,
     maxColor,
-    // Pure availability, with no config gate baked in: whether an available
-    // range_scale view is actually requested is a view-composition decision.
-    // hasRange alone is not enough — that only says the entity's own state is
-    // valid, not that both attributes are present and the pair is not inverted.
+    // Availability requires valid ordered extrema; view composition decides activation.
     rangeScaleAvailable: hasRange && min !== null && max !== null && min <= max,
   };
 }
@@ -126,9 +105,7 @@ export function buildTrendContext({ states, config, metricKind, unit, toDisplayD
     });
     value = toDisplayDelta(canonicalValue);
   }
-  // Always "<display unit>/h" rather than the entity's own raw unit: once the
-  // NUMBER has been converted, labelling it with the pre-conversion unit would be
-  // a label/number mismatch.
+  // Label the converted number with the display unit, never the raw entity unit.
   const displayUnit = config.trend_entity ? `${unit}/h` : null;
 
   return {

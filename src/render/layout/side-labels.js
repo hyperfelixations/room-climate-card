@@ -1,13 +1,5 @@
-// Positions a small group of labels inside a horizontal span without overlaps.
-//
-// A deterministic four-step declutter: anchor each item on its own value, push
-// forwards to clear the previous one, clamp the group back inside the right edge,
-// then push backwards and clamp inside the left edge. The result depends only on the
-// inputs, so repeated calls converge instead of drifting.
-//
-// Mutates each item's .left and .width in place and does not touch the DOM except to
-// cap a width that cannot fit — the caller applies el.style.left once, after every
-// group has been laid out.
+// Deterministically anchor, forward-pack, right-clamp, backward-pack and left-clamp labels.
+// Mutates item left/width; only unavoidable width caps touch DOM before callers apply positions.
 
 import { measuredWidth } from "../primitives/dom.js";
 
@@ -41,6 +33,5 @@ export function layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
   }
 }
 
-// The minimum visual gap between two adjacent labels, in CSS pixels. Shared by every
-// layout pass so the spacing is consistent across the two scale-shaped views.
+// Shared minimum label gap across both scale-shaped views.
 export const LABEL_GAP_PX = 4;

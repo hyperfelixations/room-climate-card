@@ -1,12 +1,7 @@
-// Normalizing the `rooms:` list.
-//
-// A room is rejected outright when it is structurally unusable, because every
-// downstream stage indexes rooms by their entity id: the keyed chip patching
-// maps DOM nodes by data-entity, and the per-room action overrides are looked up
-// by list index. A duplicate entity would silently overwrite one node in that
-// map, leaving one room unpatched or two models fighting over one chip — hence
-// the explicit uniqueness check rather than an occurrence-suffixed secondary key
-// that every consumer would have to special-case.
+// Normalizing the `rooms:` list. A structurally unusable room is rejected outright,
+// and room entities must be unique: downstream stages key rooms by entity id (keyed
+// chip patching maps DOM nodes by data-entity), so a duplicate would collide on one
+// node rather than be special-cased.
 
 import { normalizeAction } from "./actions.js";
 import { isPlainObject, requiredEntity, stringOrDefault } from "./primitives.js";

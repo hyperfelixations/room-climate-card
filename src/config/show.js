@@ -1,34 +1,17 @@
-// Normalizing the `show:` block: which PARTS of the card are drawn.
+// Normalizing the `show:` block: which PARTS of the card are drawn (a part belongs
+// here iff leaving it out changes the card's LAYOUT; what a view draws inside itself
+// is that view's own option).
 //
-// One rule decides what belongs in here and what does not: a part is in the block if
-// leaving it out changes the card's LAYOUT — the icon, the two header lines, the status
-// pill, the caption over the headline, the middle panel, the room chips, the bar across
-// the top. What a view draws INSIDE itself is that view's own option and stays there.
-//
-// Like views.js, this file is deliberately NON-DESTRUCTIVE and never throws. Two reasons,
-// and the second is the harder one:
-//
-//   - the block is cosmetic, and cosmetic configuration must not be able to break a card;
-//   - Home Assistant's YAML editor calls setConfig() on every keystroke, so `show:` alone,
-//     `show: {ic`, and `show: {icon:` all arrive as real configurations on the way to a
-//     valid one. A normalizer that threw would paint the dashboard red on every other
-//     character typed.
-//
-// Every fallback records a diagnostic instead, and the element surfaces those once per
-// config change. Printing is not this module's job: a pure normalizer must not write to
-// the console, and the deduplication needs state only the caller has.
-//
-// WHAT THIS MODULE RETURNS is what the user actually ASKED FOR, not the finished answer —
-// only the keys they wrote. That is what lets normalize-config.js give the block
-// precedence over the older spelling of the same decision (`show_rooms`,
-// `unavailable_values`) without a written `show:` block silently resetting
-// the decisions it says nothing about.
+// Non-destructive and never throws — the block is cosmetic, and HA's YAML editor
+// calls setConfig() on every keystroke, so half-typed blocks arrive as real configs.
+// Fallbacks record a diagnostic; the element surfaces them. Returns only the keys the
+// user wrote, not the finished answer — normalize-config.js layers the defaults and
+// the older spellings underneath. See interne Doku §3 „Der show:-Block".
 
 import { booleanOption, isPlainObject } from "./primitives.js";
 
-// The parts that are simply on or off, with the value each one has when nobody says
-// otherwise. Every default is `true`: the card as it is drawn without a `show:` block is
-// the card with everything visible.
+// The on/off parts. Every default is `true` — the card without a `show:` block is
+// the card with everything visible. This is the ONE place these defaults are written.
 export const SHOW_SWITCHES = Object.freeze({
   accent_line: true,
   icon: true,
@@ -40,15 +23,10 @@ export const SHOW_SWITCHES = Object.freeze({
   unavailable_rooms: true,
 });
 
-// The one part that is not a switch. Chips have a third answer — "show them unless they
-// would only repeat the headline" — and that answer is the default, so it cannot be
-// expressed as a boolean alone.
-//
-// ONE VOCABULARY FOR ONE SHAPE. `true | false | "auto"` is what `views[].enabled` already
-// carries for exactly this kind of decision, so downstream reads `config.show.rooms === true`
-// beside `config.show.icon === true` rather than a second set of words for the same three
-// answers. The keys are what a person may write, in the two spellings YAML produces for a
-// boolean; the values are what the card carries.
+// The one part that is not a switch: chips default to "show unless they would only
+// repeat the headline", which a boolean cannot express. Written keys (in the two
+// spellings YAML gives a boolean) map to the `true | false | "auto"` form that
+// `views[].enabled` already carries for this kind of decision.
 export const SHOW_ROOMS_STATES = Object.freeze({ true: true, false: false, auto: "auto" });
 
 export const SHOW_KEYS = Object.freeze([...Object.keys(SHOW_SWITCHES), "rooms"]);

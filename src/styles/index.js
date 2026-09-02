@@ -1,17 +1,6 @@
-// The card's complete stylesheet, assembled from its sections.
-//
-// The sections are contiguous slices of one original stylesheet and are joined with
-// NOTHING between them: each slice already carries the blank line that separated it
-// from the next. That is what makes this composition byte-identical to the single
-// template it replaced, and why the order below is normative rather than cosmetic.
-//
-// Only four values vary per render, and all four come from the carousel: the
-// generated auto-slide keyframes, the track's animation declarations, how many views
-// are mounted, and how wide one view is inside the track. Everything else is static.
-//
-// Deliberately NOT adoptedStyleSheets: the card ships one <style> element inside its
-// shadow root, which is what the DOM characterization baselines capture and what makes
-// the stylesheet inspectable in the browser's element panel.
+// Assemble 13 contiguous slices with no separator; their order and owned blank lines are normative.
+// Only carousel keyframes/animation/view count/view width vary; the shadow root keeps one inspectable <style>.
+// Contract: internal documentation §5 “Build/Rollup/HACS-Auslieferung”.
 
 import { tokensCss } from "./tokens.js";
 import { CARD_CSS } from "./card.js";

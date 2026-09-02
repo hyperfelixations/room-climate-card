@@ -1,17 +1,8 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
-
-// The room chip grid: rows, chips, labels, marks and values.
+// SHIPPED STYLESHEET SLICE: room rows, chips, labels, marks and values.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const ROOMS_CSS = `        .rtc-room-grid {
-          /* One .rtc-room-row per row (see _roomGridRows()) — a plain flex
-             column, since native CSS grid can't vary column count per row
-             within a single grid. gap here is the vertical row gap. */
+          /* Flex stacks per-row grids because native grid cannot vary column count by row. */
           display: flex;
           flex-direction: column;
           gap: 6px;
@@ -54,14 +45,8 @@ export const ROOMS_CSS = `        .rtc-room-grid {
           min-width: 0;
         }
 
-        /* Guarantees full visibility for an exactly-two-uppercase-letter
-           label (see TWO_UPPER_LETTER_RE / validRooms.shortGuaranteed) --
-           overflow:visible alone would not be enough, since .rtc-room-chip
-           itself clips at narrow widths (see the 460px/600px breakpoints
-           below) and .rtc-room-short competes for space in .rtc-room-top
-           with the fixed 15px .rtc-room-mark and its 4px gap. Presence-only
-           attribute selector: _patchRoomChip() sets/clears this via
-           toggleAttribute(), which does not guarantee the "true" value. */
+        /* Reserve full width for validated two-uppercase-letter labels beside the fixed mark.
+           Presence-only selector matches toggleAttribute() semantics. */
         .rtc-room-short[data-short-guaranteed] {
           flex: 0 0 auto;
           min-width: max-content;

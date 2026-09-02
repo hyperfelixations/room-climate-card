@@ -1,20 +1,8 @@
 // The translation registry: one entry per supported language.
 //
-// Adding a language (including community contributions):
-//   1. Add its base code to NUMBER_LOCALE_BY_LANGUAGE in locales.js, mapped
-//      to an Intl-compatible locale.
-//   2. Copy languages/en.js, rename the file and its exported constant to the
-//      new base code, and translate every value — including the function
-//      values (they interpolate variables and handle plural branching; keep
-//      the same variable names). For languages with more than two plural
-//      categories, use getPluralCategory()/selectPlural() from formatters.js
-//      rather than hand-written one-vs-other rules.
-//   3. Import it below and add it to TRANSLATIONS.
-//   4. Reload the card once — the self-check below lists any key that is
-//      missing or extra compared to the reference language.
-//
-// No other code changes are needed: language resolution and lookup (see
-// translate.js) read this table generically by key.
+// Adding a language: interne Doku §6 „Neue Sprache". The load-time self-check
+// below lists any key a new file has missing or extra vs the reference language;
+// resolution and lookup (translate.js) read this table generically by key.
 
 import { DEFAULT_LANGUAGE } from "./locales.js";
 import { verifyTranslationKeyParity } from "./integrity.js";
@@ -36,6 +24,5 @@ import { lv } from "./languages/lv.js";
 
 export const TRANSLATIONS = { en, de, nl, fr, it, es, ru, pl, uk, ko, ja, zh, nb, sv, lv };
 
-// Load-time only, exactly as before the source split: the check has to run
-// where the assembled table first exists.
+// Load-time only: the check has to run where the assembled table first exists.
 verifyTranslationKeyParity(TRANSLATIONS, DEFAULT_LANGUAGE);

@@ -1,47 +1,16 @@
-// THE REPAIR: a palette the card cannot be read on, made readable, and changed as little as
-// it takes.
+// The repair: a palette the card cannot be read on, made readable, changed as little as it
+// takes. Triggered only by `fits` — `accent` and `marker`, where the colour is painted on
+// something it does not tint. What is held fixed: hue exactly; the middle unless it cannot be
+// seen; wing count; the ramp never gets harder to read than it was.
 //
-// This is the method BL-21 left open. The decision it acts on is settled elsewhere and is
-// deliberately narrow: ../palette-fit.js asks whether each colour can be seen where the colour
-// is painted on something it does not tint — the scale marker and the accent line. Nothing
-// else moves a palette colour. The status pill, the header icon and a room chip's mark are
-// painted on a tint of the colour ITSELF, and their answer is a different tint rather than a
-// different colour. There is exactly one colour per score on the card, and it stays that way.
+// Two ways in. A DERIVED ramp remembers its seed (which direction means "less"), so it is
+// REBUILT from that seed with its wings aimed somewhere legible — same construction, different
+// endpoints. A BUILT-IN ramp has no seed, so its finished steps are moved by the smallest
+// monotone lightness correction that frees every step. Candidates are produced lazily,
+// best-first, and each is judged by holds(); `null` when nothing works.
 //
-// WHAT IS HELD FIXED, and each of these is a rule rather than a preference:
-//
-//   hue        exactly, everywhere. A `palette: yellow` that came back green would not be a
-//              repair. What moves is lightness, and with it whatever chroma the gamut allows.
-//   the middle stays exactly where it is whenever it can be seen where it is, and moves the
-//              smallest step that makes it visible when it cannot.
-//   shape      wings stay wings, and a wing keeps every step it had — until nothing else
-//              works, when fewer steps a reader can see beats more that they cannot.
-//   spacing    the ramp never gets harder to read than it already was.
-//
-// TWO WAYS IN, chosen by whether the palette remembers where it came from.
-//
-// A DERIVED ramp does. `palette: teal` and `palette: blue-green-red` are calculations from
-// colours somebody named, and the calculation knows something the finished list of hexes no
-// longer does: which direction means "less" and which means "more". So a derived ramp is
-// REBUILT from the same seed with its wings aimed somewhere legible — the same construction,
-// different endpoints. That is what lets a pale wing with nowhere paler to go run downwards
-// into the washed-out while the deep wing runs downwards into the saturated: both darker, and
-// never mistakable for one another, because a monochrome ramp separates its wings by chroma
-// as much as by lightness.
-//
-// A BUILT-IN ramp does not. There is no seed behind `pastel`, only eleven decided colours, so
-// the finished steps are moved instead — by the smallest monotone lightness correction that
-// frees every step, which moves the colliding run and whatever has to follow it and leaves the
-// rest exactly where it was.
-//
-// EVERY METHOD IS A CANDIDATE, NOT A DECISION. They are produced best-first and each is judged
-// on what it produced: a correction can be minimal and still squash two steps together, and
-// only holds() can see that. This is also why they are produced lazily rather than chained —
-// the common case costs one candidate, and the expensive searches are never reached.
-//
-// AND WHEN NOTHING WORKS, the answer is `null`. A card on a gradient from white to black
-// contains every lightness and no fixed ramp is legible over all of it; adaptation.js then
-// keeps what the user asked for, because poor contrast is at least theirs.
+// See interne Doku §5 „Die Transformation: eine Palette, die hier nicht lesbar ist, lesbar
+// machen".
 
 import { hexToOklch, oklchToHex, screenDistance } from "../../../core/oklch.js";
 import { evaluatePaletteFit } from "../palette-fit.js";
@@ -52,9 +21,8 @@ import { LIGHTNESS_CEILING, LIGHTNESS_FLOOR, monochromeAnchors, monochromePalett
 import { gradientPalette } from "./gradient.js";
 import { completePalette } from "./registry.js";
 
-// The cheap predicate the search runs on, equivalent to the palette verdict by construction —
-// see paletteDemandOf(). Evaluating a whole report per candidate would cost a hundred times
-// this and answer the same question.
+// The cheap predicate the search runs on, equivalent to the palette verdict by construction
+// (paletteDemandOf()). A whole report per candidate would cost a hundred times this.
 function clears(hex, demand) {
   return separationFrom(hex, demand.backgrounds) >= demand.required;
 }
@@ -66,8 +34,7 @@ function colorsOf(parts) {
 }
 
 // The palette a candidate ramp would be, in the shape the resolver reads. `id`, `origin` and
-// `source` travel unchanged: what a palette IS and where it came from are not what a repair is
-// allowed to alter.
+// `source` travel unchanged — a repair does not alter what a palette is or where it came from.
 function rebuilt(palette, parts, invalid) {
   return completePalette({
     id: palette.id,
@@ -80,13 +47,10 @@ function rebuilt(palette, parts, invalid) {
   });
 }
 
-// The closest two neighbouring steps of a ramp come to each other, ON A SCREEN. One number,
-// because that is the property a reader notices: a ramp is as hard to read as its worst pair.
-//
-// screenDistance rather than the plain Oklab distance the generators use — see MIN_VISIBLE_STEP
-// in geometry.js for the measurement that separates the two. Using the generators' instrument
-// here let a repair of `palette: black` on a mid grey card compress its darkest three steps
-// into one colour while the arithmetic still read 0.07, twice the bar.
+// The closest two neighbouring steps come to each other, ON A SCREEN — a ramp is as hard to
+// read as its worst pair. screenDistance, not the generators' plain Oklab distance (see
+// MIN_VISIBLE_STEP in geometry.js): by Oklab, a repair of `palette: black` compressed three
+// dark steps into one colour while the arithmetic read 0.07, twice the bar.
 function tightestNeighbour(steps) {
   let tightest = Infinity;
   for (let index = 1; index < steps.length; index += 1) {
@@ -95,13 +59,9 @@ function tightestNeighbour(steps) {
   return tightest;
 }
 
-// How close a step of one wing comes to a step of the other. A diverging ramp says two
-// different things in two directions, and a reader can only follow it while those two things
-// look different.
-//
-// Compared to what the palette ALREADY did rather than to a fixed bar, because `signal` is
-// deliberately symmetric: its two wings are the same orange and the same red by design, and a
-// rule that forbade that would forbid the palette itself.
+// How close a step of one wing comes to a step of the other — a reader can only follow a
+// diverging ramp while its two directions look different. Compared to what the palette ALREADY
+// did, not a fixed bar, because `signal` is deliberately symmetric.
 function wingsApart(palette) {
   let closest = Infinity;
   for (const cold of palette.below) {
@@ -112,27 +72,17 @@ function wingsApart(palette) {
   return closest;
 }
 
-// A candidate is only an answer if it keeps its promises. Checked here rather than trusted,
-// because a search that only asked "is it legible now" would happily hand back a ramp with two
-// steps nobody can tell apart.
-//
-// THE CROSS-WING CHECK IS THE ONE THE PICTURES ADDED. A rebuild is free to turn a wing round
-// when it has nowhere else to go, and `palette: teal` on a mid grey card needs both wings
-// below the middle. Left at that, the search found a ramp whose two wings ran down to the same
-// near-black — five steps each, every one of them legible against the card, and the two
-// directions indistinguishable from one another. Legible is not the same as readable.
-//
-// SEPARATION IS COMPARED AS ONE NUMBER rather than pair by pair. Pair by pair would forbid a
-// repair from ever trading a hundredth between two neighbours, which is not a promise anybody
-// needs and is impossible to keep while moving anything at all; and with a wing free to change
-// length, the pairs do not even correspond. What must not happen is the ramp getting harder to
-// read than it was, and that is exactly what its tightest pair says.
+// A candidate is only an answer if it keeps its promises — checked, not trusted. Same wing
+// lengths; no neighbouring pair tighter than the original's tightest (capped at
+// MIN_VISIBLE_STEP); and the two wings no closer to each other than before. The cross-wing
+// check stops a rebuild that turned a wing round (`palette: teal` on mid grey) from running
+// both wings down to the same near-black — each step legible, the two directions not.
+// Separation is compared as one number, not pair by pair (with a wing free to change length
+// the pairs do not correspond).
 function holds(candidate, original) {
   if (!candidate) return false;
   if (candidate.below.length !== original.below.length) return false;
   if (candidate.above.length !== original.above.length) return false;
-  // Capped at one perceptible step: a repair is not asked to pull apart a pair the palette
-  // itself chose to keep close, only to leave it no closer.
   const neighbourBar = Math.min(MIN_VISIBLE_STEP, tightestNeighbour(describePalette(original).steps));
   if (tightestNeighbour(describePalette(candidate).steps) < neighbourBar) return false;
 
@@ -142,13 +92,10 @@ function holds(candidate, original) {
 
 // ============================================================== the derived ramps ====
 
-// A LADDER OF LIGHTNESSES, nearest to a preferred one first.
-//
-// Used for both things a rebuild may have to choose: where a wing ends, and — only when no
-// pair of endpoints works — where the middle sits. Ordering by distance from what the
-// generator would have picked is what makes the answer the least departure from the ramp the
-// user would have got on a friendlier background, and it is also what lets a wing flip sides
-// without any bookkeeping about direction: the far side is simply further down the list.
+// A ladder of lightnesses, nearest to `preferred` first. Used for where a wing ends and (only
+// when no endpoints work) where the middle sits. Ordering by distance from the generator's own
+// choice keeps the answer the least departure, and lets a wing flip sides with no direction
+// bookkeeping — the far side is just further down the list.
 const ANCHOR_CANDIDATES = 24;
 const BASE_CANDIDATES = 24;
 
@@ -164,27 +111,18 @@ function wingIsUsable(colors, demand) {
   return colors.every((color) => clears(color, demand));
 }
 
-// The ramp one particular middle implies, with each wing aimed as close to the generator's own
-// choice as this background allows — or null when one of them has nowhere to go.
-//
-// THE DEEP WING IS CHOSEN FIRST, and the order is not arbitrary. It is the wing that carries
-// "more", the pale wing is allowed to run the other way when it has nowhere paler to go, and a
-// flipped wing only makes sense in relation to the one it flipped alongside.
-//
-// A FLIPPED WING MAY NOT OVERTAKE THE OTHER, which is the constraint the pictures produced.
-// `palette: teal` on a mid grey card has a middle just under the grey and no room above it, so
-// the pale wing turned downwards — and, unconstrained, ran past the deep wing into near-black.
-// The ramp then read backwards: its "much too little" was darker than its "much too much".
-// Keeping a flipped wing inside the other one's travel makes that impossible, and when no
-// endpoint satisfies it the middle moves instead, which is the better repair anyway.
+// The ramp one particular middle implies, each wing aimed as close to the generator's own
+// choice as the background allows, or null when a wing has nowhere to go. The deep wing (which
+// carries "more") is chosen first; the pale wing may flip downwards when it has nowhere paler,
+// but a flipped wing may not overtake the deep one — unconstrained, `palette: teal` on mid
+// grey ran its pale wing past the deep wing into near-black and the ramp read backwards. When
+// no endpoint satisfies that, the middle moves instead.
 function rampForBase(base, palette, demand, allowFlip) {
   const coordinates = hexToOklch(base);
   const preferred = monochromeAnchors(coordinates);
   const middle = coordinates.lightness;
 
-  // ONE WING AT A TIME. Each search tests one endpoint of one wing, and a wing's colours depend
-  // on the middle and its own endpoint alone — so building the whole palette to look at half of
-  // it would do twice the work for the same answer.
+  // One wing at a time: a wing's colours depend on the middle and its own endpoint alone.
   let deep = null;
   for (const candidate of lightnessLadder(ANCHOR_CANDIDATES, preferred.deep)) {
     if (!wingIsUsable(monochromeWing(coordinates, "deep", candidate), demand)) continue;
@@ -205,25 +143,12 @@ function rampForBase(base, palette, demand, allowFlip) {
   return null;
 }
 
-// Every ramp this seed can produce here, best first — and "best" is three questions in order.
-//
-// 1  DOES THE NAMED COLOUR STAY EXACTLY AS NAMED. It is the one thing the user actually wrote,
-//    so it outranks everything else: `palette: yellow` on a white card keeps #FFFF00 and lets
-//    its pale wing turn round, because there is nothing paler than that yellow to be seen on
-//    white and a yellow palette should still be yellow.
-//
-// 2  DO THE WINGS RUN THE WAY THEY MEAN TO. Once the middle has to move there is no promise
-//    left to protect, and a ramp whose pale wing is paler than its middle reads better than
-//    one whose two wings both run the same way. `palette: teal` on a mid grey card is the case
-//    that showed this: the nearest legible middle sits just above the grey, where both wings
-//    have to climb and the deep one washes out to near-white at the top; a middle a little
-//    further down has the whole range below the grey to itself and reads as it was meant to.
-//
-// 3  HOW FAR THE MIDDLE MOVED. Within each of the two sweeps above, nearest first.
-//
-// Measured: `palette: gold` on a mid grey card takes its middle 0.045 lighter and nothing
-// else; `palette: yellow` on a mid YELLOW card has to go down to a dark olive-yellow, because
-// a yellow ramp on a yellow card has nowhere else to be. In both, the hue is exact.
+// Every ramp this seed can produce here, best first — "best" is three questions in order:
+//   1  does the named colour stay exactly as named (it outranks everything; its pale wing may
+//      turn round, e.g. `palette: yellow` on white)
+//   2  do the wings run the way they mean to (once the middle must move, a pale-paler-than-
+//      middle ramp reads better than two wings the same way)
+//   3  how far the middle moved (nearest first, within each of the two sweeps above)
 function* fromMonochromeSeed(palette, demand) {
   const seed = palette.source.color;
   const nearest = legibleVariant(seed, demand.backgrounds, demand.required);
@@ -252,37 +177,32 @@ function* fromMonochromeSeed(palette, demand) {
   }
 }
 
-// The ramp a set of anchors implies, if all of it can be seen.
-//
-// The steps BETWEEN two legible anchors are not legible by construction — an interpolation can
-// travel straight through the lightness the card is painted at, which is what happens to
-// red-white-green on a mid grey card. So the whole ramp is checked, not the ends.
+// The ramp a set of anchors implies, if ALL of it can be seen — the whole ramp, not the ends:
+// an interpolation between two legible anchors can travel through the card's own lightness
+// (red-white-green on a mid grey card).
 function gradientRampFor(seeds, palette, demand) {
   const ramp = gradientPalette(seeds, palette.id);
   if (!colorsOf(ramp).every((color) => clears(color, demand))) return null;
   return { optimal: ramp.optimal, above: ramp.above, below: ramp.below };
 }
 
-// HOW FAR THE WHOLE SET OF ANCHORS MAY BE CARRIED, and in what steps. A shift past this is no
-// longer a repair of what somebody named; it is a different palette.
+// How far the whole set of anchors may be carried, and in what steps. Past this it is a
+// different palette, not a repair.
 const SHIFT_LIMIT = 0.4;
 const SHIFT_STEPS = 20;
 
 function* fromGradientSeeds(palette, demand) {
   const seeds = palette.source.colors;
 
-  // First, each anchor on its own and only as far as it must. The two or three colours a user
-  // wrote are the strongest commitment in the whole palette, and one of them may be perfectly
-  // fine where another is not.
+  // First, each anchor on its own and only as far as it must — one may be fine where another
+  // is not.
   const nearest = seeds.map((hex) => legibleVariant(hex, demand.backgrounds, demand.required));
   if (nearest.some((hex) => !hex)) return;
   const first = gradientRampFor(nearest, palette, demand);
   if (first) yield first;
 
-  // Then all of them together. Moving them as a SET is what keeps the relationship between
-  // them — which end is lighter, and by how much — and that relationship is most of what a
-  // two- or three-colour palette is. Nearest first, so a ramp is carried no further than the
-  // background makes necessary.
+  // Then all of them together, as a SET, which keeps the relationship between them — most of
+  // what a two- or three-colour palette is. Nearest first.
   const anchors = seeds.map((hex) => hexToOklch(hex));
   const ladder = [];
   for (let step = 1; step <= SHIFT_STEPS; step += 1) {
@@ -320,18 +240,11 @@ function partsFrom(geometry, lightnesses) {
   return { optimal, above, below };
 }
 
-// THE SMALLEST MONOTONE CORRECTION that frees every step, in one direction.
-//
-// Each step names the nearest lightness that would free it; a step that is already free names
-// where it is. Those targets on their own would reorder the ramp, so the monotone envelope is
-// taken over them: the steps are walked in order of their ORIGINAL lightness, carrying a
-// running bound. That envelope is the least monotone function above (or below) the targets,
-// which is exactly what "move the colliding run and whatever has to follow it, and nothing
-// else" means — a step with room to spare moves only if a step it must stay ordered with
-// pushed past it.
-//
-// Steps that share a lightness land on the same one, because preserving a weak ordering in
-// both directions is preserving equality.
+// The smallest monotone correction that frees every step, in one direction. Each step names
+// the nearest lightness that would free it (a free step names where it is); those targets
+// would reorder the ramp, so the monotone envelope is taken over them — steps walked in
+// ORIGINAL-lightness order carrying a running bound. That is "move the colliding run and
+// whatever must follow it, nothing else". Steps sharing a lightness land on the same one.
 function monotoneLightnesses(geometry, demand, direction) {
   const steps = geometry.steps;
   const targets = steps.map((step) =>
@@ -366,24 +279,15 @@ function monotoneLightnesses(geometry, demand, direction) {
   return result;
 }
 
-// THE COARSE ANSWER, kept as a fallback and not as the method.
-//
-// Moving the whole ramp by one amount is what a reader would call "the palette went lighter".
-// It preserves order and shape by construction and very nearly preserves the SPACING, which is
-// the property the correction above can lose: when every step has to move, the envelope pushes
-// them all towards the same bound and the ramp flattens. Measured, a uniform shift rescues
-// every shipped palette on every hard background at a cost of 0.03 to 0.20 in lightness, with
-// the tightest neighbour distance unchanged to three digits.
-//
-// It runs only after the correction above has had its two chances, so a palette with one
-// colliding step never pays for a case that has eleven.
+// The coarse fallback: move the whole ramp by one amount. Preserves order and shape by
+// construction and nearly preserves SPACING (which the envelope above can flatten when every
+// step must move). Runs only after the envelope's two chances, so a one-collision palette
+// never pays for an eleven-collision case.
 const SHIFT_CANDIDATES = 200;
 
-// A SHIFT THAT WOULD RUN OFF THE END IS NOT A SHIFT, and clamping it is worse than skipping
-// it. Measured: `palette: gray` on a mid grey card was carried upwards until its palest step
-// hit white, where clamping held it at 1.000 while the step below arrived at 0.976 — two
-// colours that had been a clear step apart, pressed into #FFFFFF and #F7F7F7. The ramp was
-// legible against the card and had lost a step to a rounding decision nobody made.
+// A shift that runs off the end is skipped, not clamped: `palette: gray` on mid grey, carried
+// up until its palest step hit white, had clamping press #F7F7F7 and #FFFFFF into one — a step
+// lost to a rounding decision nobody made.
 function* uniformCandidates(geometry, demand) {
   for (let step = 1; step <= SHIFT_CANDIDATES; step += 1) {
     for (const direction of [1, -1]) {
@@ -398,11 +302,9 @@ function* uniformCandidates(geometry, demand) {
 
 function* fromFinishedSteps(palette, demand) {
   const geometry = describePalette(palette);
-  // NOTHING HERE MOVES A STEP OFF ITS OWN HUE AND CHROMA — not the envelope, not the uniform
-  // shift. So a step with no legible lightness at all is a step no method in this section can
-  // reach, and walking four hundred shifts to rediscover that is time spent on a foregone
-  // conclusion. Measured on a card whose background runs from white to black, this is most of
-  // what the give-up path used to cost.
+  // Nothing here moves a step off its own hue and chroma, so a step with no legible lightness
+  // is unreachable by any method in this section — bail before walking 400 shifts to
+  // rediscover that (most of the old give-up cost on a white-to-black card).
   const reachable = geometry.steps.every(
     (step) => legibleVariant(step.color, demand.backgrounds, demand.required) !== null
   );
@@ -427,10 +329,9 @@ function* fromFinishedSteps(palette, demand) {
 
 // ================================================================== the strategy ====
 
-// `invalid` is corrected on its own and never as part of the ramp, because it is not on the
-// ramp: it is what the card paints when no judgement is possible, and it has no neighbours to
-// stay ordered with. Left behind, it would be the one colour on an adapted card that still
-// could not be seen — and it is the one that means "no reading", which is worth seeing.
+// `invalid` is corrected on its own, never as part of the ramp: it is not on the ramp and has
+// no neighbours to stay ordered with. Left behind, it would be the one unseeable colour on an
+// adapted card — and it means "no reading", which is worth seeing.
 function correctedInvalid(palette, demand) {
   return legibleVariant(palette.invalid, demand.backgrounds, demand.required) || palette.invalid;
 }
@@ -444,17 +345,13 @@ export function legibleStrategy(palette, fit) {
   const demand = paletteDemandOf(fit.surface, fit.threshold);
   const invalid = correctedInvalid(palette, demand);
 
-  // Rebuilding from the seed first, moving the finished steps second. A ramp that remembers
-  // where it came from can be rebuilt into something that still means what it meant; one that
-  // does not can only be pushed around.
-  //
-  // Lazily, which is what keeps the common case cheap: the first candidate is usually the
-  // answer, and the ladders behind it are never walked.
+  // Rebuild from the seed first, move finished steps second; lazily, so the common case costs
+  // one candidate and the ladders behind it are never walked.
   for (const parts of everyCandidate(palette, demand)) {
     const candidate = rebuilt(palette, parts, invalid);
     if (!holds(candidate, palette)) continue;
-    // The postcondition, against the real report rather than the search's own predicate. The
-    // two agree by construction; checking anyway is what makes the construction falsifiable.
+    // Postcondition against the real report, not the search's own predicate — the two agree by
+    // construction, and checking makes the construction falsifiable.
     if (evaluatePaletteFit(candidate, fit.surface, { threshold: fit.threshold }).fits) return candidate;
   }
   return null;

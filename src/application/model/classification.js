@@ -1,15 +1,5 @@
-// The application layer's access to classification.
-//
-// Every classification decision the pipeline makes needs the same two inputs
-// resolved first: which profile the card-wide policy selects, and which unit that
-// profile has to be expressed in. Doing that in one place keeps the rest of the
-// pipeline from re-deriving it, and keeps the ORDER right — the physical-validity
-// check has to run against the canonical profile, everything the user sees against
-// the projected one.
-//
-// Results are returned in TOKEN form (levelKey for a built-in tier, a verbatim
-// level string for a custom profile). Translation happens in the presentation
-// layer; a wrong split here would put German UI text into the model.
+// Application seam for profile resolution, projection and token-only classification.
+// Physical validity uses canonical values; visible decisions use the display projection.
 
 import { CLASSIFICATION_PROFILE_REGISTRY } from "../../domain/classification/registry.js";
 import { classifyNumericValue } from "../../domain/classification/classify.js";
@@ -29,9 +19,7 @@ export function classificationPolicyOf(config) {
   return config?.classification || DEFAULT_CLASSIFICATION_POLICY;
 }
 
-// The palette a card classifies with. A normalized configuration always carries one;
-// the fallback is for the call sites that build a model from a hand-written config
-// object, so that a missing palette is the card's own ramp rather than a crash.
+// Hand-built configs fall back to the card's default ramp.
 export function paletteOf(config) {
   return config?.palette || DEFAULT_PALETTE;
 }
@@ -51,10 +39,7 @@ export function resolveDisplayProfile(policy, metricKind, unitProfile) {
   );
 }
 
-// Physical validity. With no unit profile this deliberately uses the CANONICAL
-// profile: an entity's reading is canonicalized before this runs, and comparing a
-// converted value against projected-and-rounded limits would reject valid data at
-// the edges.
+// Canonicalized readings use canonical limits to avoid projected rounding at the edges.
 export function isValuePhysicallyValid(policy, metricKind, unitProfile, value, { lenient = false } = {}) {
   if (!CLASSIFICATION_PROFILE_REGISTRY[metricKind]) return true;
   const profile = unitProfile
@@ -68,21 +53,13 @@ export function resolveScaleConfig(policy, metricKind, unitProfile) {
   return scaleConfigFor(resolveDisplayProfile(policy, metricKind, unitProfile));
 }
 
-// The purely numeric tier of a value, ignoring any entity-provided
-// classification. The single implementation of "which tier does this value fall
-// into", used by classifyValue() below and by the icon path.
+// Shared numeric tier selection for classification and profile icons.
 export function classifyNumericTier(policy, metricKind, unitProfile, value) {
   return classifyNumericValue(resolveDisplayProfile(policy, metricKind, unitProfile), value);
 }
 
-// One value's classification, honouring the entity/auto/profile/custom priority.
-// `attributes` is the entity's own attribute object, or null when there is no
-// entity to read from (historical range extremes deliberately pass null so they
-// classify numerically instead of inheriting the entity's current colour).
-//
-// The numeric branch stays lazy: projecting the profile can throw on a degenerate
-// custom profile, and a card in forced `entity` mode must not start failing on a
-// profile it never looks at.
+// Honour entity/auto/profile/custom priority. Null attributes force numeric classification.
+// Keep the numeric fallback lazy so forced entity mode never resolves an unused profile.
 export function classifyValue(policy, metricKind, unitProfile, value, attributes, palette) {
   const classification = resolveValueClassification({
     policy,
@@ -97,9 +74,7 @@ export function classifyValue(policy, metricKind, unitProfile, value, attributes
       };
     },
   });
-  // The one place a classification turns into a colour. Everything downstream reads
-  // `color` and needs to know nothing about palettes, ramps or provenance; everything
-  // upstream produces tokens and needs to know nothing about hex values.
+  // Single token-to-colour boundary; downstream sees only the resolved colour.
   return {
     ...classification,
     color: resolveClassificationColor(classification, palette, `the "${metricKind}" classification`),
@@ -111,8 +86,7 @@ export function classificationColorOf(policy, metricKind, unitProfile, value, at
   return classifyValue(policy, metricKind, unitProfile, value, attributes, palette).color;
 }
 
-// The profile's own icon token, or null when the profile declares none — the
-// presentation layer then falls back to the metric's stable default icon.
+// Null lets presentation use the metric's stable default icon.
 export function resolveProfileIcon(policy, metricKind, unitProfile, value) {
   return profileIconForValue(value, resolveDisplayProfile(policy, metricKind, unitProfile));
 }

@@ -1,10 +1,6 @@
-// Locale-aware formatting, plus the plural helpers the language files use.
-//
-// Number.prototype.toLocaleString()/Date.prototype.toLocaleTimeString() each
-// construct a fresh Intl formatter internally on every call; a card with
-// several rooms formats a dozen-plus numbers per render, so everything here
-// reuses one cached formatter per locale/digits combination (built once,
-// formats many times).
+// Locale-aware formatting, plus the plural helpers the language files use. One Intl
+// formatter is cached per locale/digits combination: a multi-room render formats a
+// dozen-plus numbers, and a fresh Intl instance per call would be built each time.
 
 import { NUMBER_LOCALE_BY_LANGUAGE } from "./locales.js";
 

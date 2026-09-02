@@ -1,17 +1,5 @@
-// The scale bar every scale-shaped view is built from.
-//
-// One markup template, two callers: the main scale (room-based bounds) and the
-// daily-range scale (min/max-based bounds). Only three things differ between them and
-// all three are passed in — the top row, the markers and the wrapper class. The
-// comfort band, the optimal band, the two edge labels and the footer are shared, and
-// that sharing is what makes the two views structurally identical.
-//
-// Switching a band off is purely a markup omission: neither the band div nor its
-// descriptive label is emitted, and the patch path's querySelector guards already
-// no-op on their absence.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Shared scale-bar template; callers inject wrapper, top row and markers.
+// Disabled bands omit their markup; template-literal indentation is shipped and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
 
@@ -24,8 +12,7 @@ export function renderScaleBar({ content, viewClass, topRowHtml, markersHtml }) 
   const optimalBandHtml = content.showOptimalBand
     ? `<div class="rtc-optimal-band" style="left:${geometry.optimalLeft}%;width:${geometry.optimalWidth}%;"${geometry.optimalVisible ? "" : " hidden"}></div>`
     : "";
-  // The long form is emitted first, always. The layout pass may swap in the short
-  // form once it can measure the real rendered width (see render/layout/).
+  // Emit long form; measured layout may select the short form.
   const optimalLabelHtml = content.optimalLabel
     ? `<span class="rtc-scale-label-center" style="left:${content.optimalLabel.center}%"${content.optimalLabel.visible ? "" : " hidden"}>${escapeHtml(content.optimalLabel.long)}</span>`
     : "";
@@ -51,14 +38,8 @@ export function renderScaleBar({ content, viewClass, topRowHtml, markersHtml }) 
       `;
 }
 
-// The shared partial update: band positions, band visibility, the footer text and the
-// two edge labels. Scoped to the view's own container rather than the whole root,
-// because both scale-shaped views can be mounted at once — the carousel keeps every
-// view in the DOM — and they share the same inner class names.
-//
-// The optimal label's own text and position are deliberately NOT touched here. They
-// are owned by the layout pass, which picks between the long and short form against
-// the measured width, so there is exactly one place that decides them.
+// Patch within one view because both scale shapes share inner classes and remain mounted.
+// Measured layout exclusively owns optimal-label form and position.
 export function patchScaleBar(containerEl, content) {
   if (!containerEl) return;
   const geometry = content.geometry;
@@ -77,8 +58,7 @@ export function patchScaleBar(containerEl, content) {
     optimalBandEl.hidden = !geometry.optimalVisible;
   }
 
-  // A footer only exists in the DOM when this view's own render pass decided to show
-  // one, so the guard doubles as the "no footer in this view" case.
+  // Missing footer node means this view omitted it structurally.
   const footerEl = containerEl.querySelector(".rtc-scale-footer");
   if (footerEl) footerEl.textContent = content.footerText;
 

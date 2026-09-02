@@ -1,12 +1,6 @@
-// English UI strings — the reference language.
-//
-// English is the card default, the HACS audience's language, and the
-// fallback translate() uses for any key missing in another language. Every
-// other language file in this directory must carry exactly this key set.
-//
-// Values are either a string or a function (vars) => string — the function
-// form covers interpolation and plural/conditional branching without pulling
-// in a full ICU parser.
+// English UI strings — the reference language, card default, and per-key fallback.
+// Every other file in this directory must carry exactly this key set (checked at
+// load by ../integrity.js). A value is a string or a function (vars) => string.
 
 export const en = {
   "title.temperature": "Temperature",

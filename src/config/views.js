@@ -1,24 +1,13 @@
-// Normalizing the `views:` list.
-//
-// This whole file is deliberately NON-DESTRUCTIVE and never throws: a malformed
-// views: config degrades to "ignored" or "auto" rather than breaking the card.
-// But it no longer does so invisibly — every fallback records a diagnostic
-// string, which the orchestrating element surfaces exactly once per config
-// change. Printing them is not this module's job: a pure normalizer must not
-// write to the console, and the deduplication needs state that only the caller
-// has.
-//
-// The view types and their option schemas are INJECTED. The registry that owns
-// them also owns render/update callbacks, so importing it here would drag the
-// rendering layer into the configuration layer.
+// Normalizing the `views:` list. Non-destructive and never throws: a malformed
+// entry degrades to "ignored" or "auto" and records a diagnostic for the element to
+// surface. The view types and their option schemas are INJECTED, because the registry
+// that owns them also owns render callbacks and config/ may not import it.
 
 import { isPlainObject, optionalString } from "./primitives.js";
 
-// A non-array views: value. `undefined`/`null` (genuinely omitted from the YAML)
-// is NOT diagnosed — that is the normal "not configured" case, and it resolves
-// to "one auto entry per registered view". Any OTHER non-array value (a string,
-// number, plain object, ...) is a real misconfiguration and IS diagnosed, then
-// normalizes to the same null sentinel.
+// A non-array views: value. `undefined`/`null` is the normal "not configured" case
+// (resolves to one auto entry per registered view) and is not diagnosed; any other
+// non-array value is diagnosed and normalizes to the same null sentinel.
 export function normalizeViewsConfig(value, { optionSchemaForView }) {
   if (!Array.isArray(value)) {
     if (value === undefined || value === null) return { views: null, diagnostics: [] };
@@ -34,16 +23,11 @@ export function normalizeViewsConfig(value, { optionSchemaForView }) {
   return { views, diagnostics };
 }
 
-// One views: list entry. A bare non-empty string is shorthand for
-// {type, enabled:true}; an object needs at least a non-empty `type`. An entry
-// with no resolvable type at all is dropped WITH a diagnostic.
-//
-// `enabled`: listing a view is itself an explicit request, regardless of which
-// syntax was used, so an omitted field normalizes to true; only an explicitly
-// written "auto" delegates to the view's own default. Any other value (a typo
-// like "yes", a stray 1, explicit null) is diagnosed but still falls back to
-// "auto" rather than dropping the entry — a typo in enabled: must not make a
-// view disappear as completely as an unknown type would.
+// One views: list entry. A bare non-empty string is shorthand for {type,
+// enabled:true}; an object needs a non-empty `type`, else it is dropped with a
+// diagnostic. `enabled`: omitted normalizes to true (listing a view is itself a
+// request), "auto" delegates to the view's own default, and any other value is
+// diagnosed but falls back to "auto" rather than dropping the entry.
 export function normalizeViewRequest(entry, index, { optionSchemaForView }) {
   if (typeof entry === "string") {
     const type = entry.trim();
@@ -75,10 +59,9 @@ export function normalizeViewRequest(entry, index, { optionSchemaForView }) {
 }
 
 // views:[i].options against the requested view's own schema. Only keys the view
-// actually implements survive — a renderer must never end up trusting an
-// arbitrary user-supplied key. A known key's VALUE is validated too when its
-// schema entry declares a validate(); an invalid value is diagnosed and dropped,
-// so the schema default applies instead.
+// implements survive — a renderer must never trust an arbitrary user key. A known
+// key's value is validated when its schema entry declares a validate(); an invalid
+// value is diagnosed and dropped, so the schema default applies.
 export function normalizeViewOptions(type, rawOptions, index, { optionSchemaForView }) {
   const schema = optionSchemaForView(type) || {};
   if (rawOptions === undefined || rawOptions === null) return { options: {}, diagnostics: [] };

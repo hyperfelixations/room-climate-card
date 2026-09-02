@@ -1,12 +1,5 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
-
-// The bar itself: bands, markers, edge labels and the footer — shared by both scale views.
+// SHIPPED STYLESHEET SLICE: shared scale bands, markers, labels and footer.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const SCALE_BAR_CSS = `        .rtc-scale-bar {
           position: relative;
@@ -71,10 +64,8 @@ export const SCALE_BAR_CSS = `        .rtc-scale-bar {
         .rtc-scale-labels span {
           position: absolute;
           top: 0;
-          /* Ellipsis only actually engages on .rtc-scale-label-center, and
-             only when _resolveOptimalLabelPosition() sets an explicit
-             max-width (no non-overlapping position fits) — harmless no-op
-             on min/max, which never get a max-width. */
+          /* Ellipsis engages only when measured layout caps the center label;
+             min/max never receive max-width. */
           overflow: hidden;
           text-overflow: ellipsis;
         }

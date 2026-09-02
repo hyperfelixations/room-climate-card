@@ -1,12 +1,5 @@
-// Swedish UI strings.
-//
-// Key set must stay identical to en.js: translate() falls back to English
-// per key, and a module-load self-check (see ../integrity.js) warns about any
-// missing or extra key as soon as the card is loaded.
-//
-// Values are either a string or a function (vars) => string — the function
-// form covers interpolation and plural/conditional branching without pulling
-// in a full ICU parser.
+// Swedish UI strings. Same key set as en.js (reference + per-key fallback), checked
+// at load by ../integrity.js. Value shapes and plural rules: interne Doku §5.
 
 export const sv = {
   "title.temperature": "Temperatur",

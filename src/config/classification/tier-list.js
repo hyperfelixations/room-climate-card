@@ -1,15 +1,12 @@
-// The shared "descending min + exactly one final default" list contract.
+// The shared "strictly descending min + exactly one final default" list contract.
 //
-// Two different YAML lists use it — classification.tiers (score/level/color/zone
-// per item) and a non-temperature classification.icons list (icon per item) —
-// and they differ only in their per-item extra fields. validateItem(item, path)
-// checks those and returns the extra fields to merge onto the normalized
-// {min, ...} entry.
+// Used by classification.tiers (score/level/color/zone) and a non-temperature
+// classification.icons list (icon); they differ only in per-item extra fields.
+// validateItem(item, path) checks those and returns the fields to merge onto {min, ...}.
 //
-// Why the contract is this strict: the classifier walks the list top-down and
-// takes the first tier whose threshold the value passes. Without strictly
-// descending, unique thresholds a tier could be unreachable; without exactly one
-// open-ended final tier a reading could match nothing at all.
+// Strict because the classifier walks top-down and takes the first tier the value passes:
+// without strict descent a tier could be unreachable, without one open-ended final tier a
+// reading could match nothing.
 
 import { isPlainObject, assertAllowedKeys, numberAtPath } from "../primitives.js";
 import { pathError } from "../errors.js";

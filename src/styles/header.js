@@ -1,12 +1,5 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
-
-// The header row: icon badge, title block, status pill — and the main panel it sits above.
+// SHIPPED STYLESHEET SLICE: header parts and the main panel below them.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const HEADER_CSS = `        .rtc-header {
           display: grid;
@@ -33,14 +26,8 @@ export const HEADER_CSS = `        .rtc-header {
           color: var(--tone-ink);
         }
 
-        /* A header that is missing a part needs the column it is missing to be missing too.
-           A grid column holding nothing is still a column: it brings its 11px gap, and the
-           title would start 11px from the left edge instead of at it.
-
-           One override per subset, and none for the full set — the ordinary card carries no
-           data-parts attribute at all and therefore meets none of these rules. The pill is
-           pushed to the right edge only where it lands in a stretching track; where it sits
-           in a content-sized track at the end of the row it is already there. */
+        /* Remove absent header columns and their gaps; the full header needs no override.
+           Right-align a lone pill only when its remaining track stretches. */
         .rtc-root[data-parts="icon title"] .rtc-header {
           grid-template-columns: auto 1fr;
         }
@@ -81,9 +68,7 @@ export const HEADER_CSS = `        .rtc-header {
           color: var(--primary-text-color);
         }
 
-        /* title: clip — the mirror image of the subtitle's override below. The title wraps
-           by default and the subtitle clips by default, so each rule states the departure
-           from its own line's habit and neither touches the ordinary card. */
+        /* Title wraps by default; this attribute opts into clipping. */
         .rtc-root[data-title="clip"] .rtc-title {
           white-space: nowrap;
           overflow: hidden;
@@ -101,13 +86,8 @@ export const HEADER_CSS = `        .rtc-header {
           text-overflow: ellipsis;
         }
 
-        /* subtitle: wrap — the line runs onto as many lines as it needs and the card
-           grows under it. Written as an override rather than as two variants of the rule
-           above, so the default is literally unchanged.
-
-           overflow-wrap: anywhere is not decoration: the no-data explanations name entity
-           ids, and an id is one unbreakable token that would otherwise run out of the
-           card sideways instead of wrapping. */
+        /* Subtitle clips by default; this attribute opts into wrapping. anywhere breaks
+           otherwise-unbreakable entity ids in no-data explanations. */
         .rtc-root[data-subtitle="wrap"] .rtc-subtitle {
           white-space: normal;
           overflow: visible;
@@ -126,21 +106,8 @@ export const HEADER_CSS = `        .rtc-header {
           border: 1px solid var(--tone-border);
         }
 
-        /* The two columns negotiate their own widths. The first is the headline value,
-           the second the view beside it.
-
-           minmax(<floor>, auto) means "as wide as the value needs, never narrower than
-           <floor>". The floor is the width this column used to be capped at, so every
-           reading that fits today produces exactly the column it produces today and the
-           view keeps every pixel it has. Only a value that would have painted across the
-           view — four-digit CO2, three-digit PM2.5, a negative two-digit temperature —
-           makes the column grow, and only by what it is short.
-
-           minmax(40%, 1fr) is the other side of that bargain: the view yields width, but
-           never falls below 40% of the panel. Without that one implausible reading could
-           take the view away altogether. The rotator carries min-width:0, so in the rare
-           container that has no definite width of its own the percentage resolves to zero
-           and the pair behaves exactly as it did before. */
+        /* Let the headline grow beyond its 106px floor while the adjacent view keeps at least
+           40% of a definite panel width; min-width:0 on the rotator permits negotiation. */
         .rtc-main-panel {
           display: grid;
           grid-template-columns: minmax(106px, auto) minmax(40%, 1fr);

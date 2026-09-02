@@ -1,13 +1,11 @@
 // The individual parts of a custom classification profile.
 //
-// Each function validates one YAML block and returns it in the unit the user
-// wrote it in; converting to the canonical unit happens once, at the end, in
-// normalize.js. Splitting it this way keeps every validation rule next to the
-// error message it produces, and the messages are a user-facing contract.
+// Each function validates one YAML block and returns it in the user's unit; conversion to
+// canonical happens once, at the end, in normalize.js. Split this way so every rule sits
+// next to the error message it produces (the messages are a user-facing contract). The
+// zone vocabulary is INJECTED — the config layer must not import the domain registry.
 //
-// The accepted zone vocabulary is INJECTED rather than imported: it belongs to
-// the domain, and the configuration layer must not reach into the domain
-// registry.
+// Full contract: internal dev doc, §3 "Custom-Profile-Vertrag".
 
 import { isHexColor } from "../../core/color.js";
 import { assertAllowedKeys, isPlainObject, numberAtPath } from "../primitives.js";
@@ -40,26 +38,15 @@ export function normalizeBands(value) {
 // Everything `classification.scale` accepts besides the range itself.
 const SCALE_SWITCHES = ["step", "headroom", "one_sided", "anchor_scale"];
 
-// classification.scale: the profile's reference axis, its rounding step, and the three
-// optional switches that change how the axis grows around live values.
+// classification.scale: the reference axis, its rounding step, and three optional switches.
 //
-// The reference axis has exactly TWO shapes, and they are alternatives rather than
-// settings that combine:
+// The axis has TWO mutually exclusive shapes: `min + max` (the drawn axis always covers
+// this range and grows outwards) or `anchor_scale: false` (no range; the axis comes from
+// the data, as outdoor temperature needs). Declaring both is refused. "No reference axis"
+// is `null` from here on, never an invented range.
 //
-//   min + max              the drawn axis always covers this range and grows outwards
-//                          when readings go further. Every built-in profile but one.
-//   anchor_scale: false    no range at all; the drawn axis comes from the readings.
-//                          What outdoor temperature needs, where a range that is right
-//                          in January is wrong in July.
-//
-// Declaring both is a contradiction, not a preference, so it is refused as one — and
-// `null` rather than an invented range is what "this profile has no reference axis"
-// looks like from here on.
-//
-// This is the ONLY reader of the `scale` block, and every switch leaves it already
-// validated and camel-cased rather than for the caller to pick back out of the raw
-// YAML. The caller should not have to know that `anchor_scale` and `anchorScale` are
-// the same thing, and what `scale` means has exactly one place to change.
+// The ONLY reader of the `scale` block: it returns everything validated and camel-cased,
+// so the caller never touches raw YAML or learns that `anchor_scale` becomes `anchorScale`.
 export function normalizeScale(value) {
   if (!isPlainObject(value)) pathError("classification.scale", "must be an object");
   assertAllowedKeys(value, new Set(["min", "max", ...SCALE_SWITCHES]), "classification.scale");
@@ -75,9 +62,7 @@ export function normalizeScale(value) {
     }
   }
 
-  // anchor_scale defaults to true: pinning the axis to a declared range is what every
-  // built-in profile except outdoor does, and it is what a profile that says nothing
-  // about it means.
+  // anchor_scale defaults to true (every built-in but outdoor).
   const anchorScale = value.anchor_scale !== false;
   const oneSided = value.one_sided === true;
   const declaresRange = value.min !== undefined || value.max !== undefined;
@@ -95,53 +80,28 @@ export function normalizeScale(value) {
       "must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data"
     );
   }
-  // one_sided says "the lower edge stays at the reference minimum" — which is an anchor,
-  // and there is none to stay at.
+  // one_sided keeps the lower edge at the reference minimum — an anchor, and there is none.
   if (oneSided) {
     pathError("classification.scale.one_sided", "requires an anchored axis, because it keeps the lower bound at classification.scale.min");
   }
   return { scale: null, step, headroom, oneSided, anchorScale };
 }
 
-// classification.tiers, with the per-tier semantic fields.
+// classification.tiers. `color` is OPTIONAL: a tier with one paints itself and its `score`
+// may be any finite number; a colourless tier takes its colour from the palette and its
+// `score` is a whole-number distance from optimal. Mixing is allowed — painted tiers are
+// stepped over below.
 //
-// `color` is OPTIONAL, and which of the two things a tier is decides what its `score`
-// means:
-//
-//   with a color     the tier paints itself. `score` keeps the only rule it has ever
-//                    had -- any finite number -- because every profile written before
-//                    palettes existed named a colour on every tier, and all of them stay
-//                    valid unchanged.
-//   without a color  the tier takes its colour from the palette, and `score` is its
-//                    DISTANCE FROM OPTIMAL: 0 is the right value, positive is too much,
-//                    negative is too little. A whole number, and descending with the
-//                    thresholds like every other tier field.
-//
-// Two of those words are properties of the LIST, not of a tier, and are checked as such
-// in assertRampOrder() below: the colourless scores descend with the thresholds, and the
-// optimal zone is the one carrying 0. There is no upper bound -- how far a profile
-// reaches is simply its own extreme, which is what the palette is scaled against.
-//
-// Mixing the two in one profile is allowed -- a profile can paint the two ends by hand
-// and let the palette fill in the middle. The painted tiers are then stepped over
-// entirely: their colour does not come from their score, so their score answers to
-// nothing.
-// The two rules that make a set of palette-driven scores mean what the comment above says
-// it means. Checked over the WHOLE list, because neither is a property a single tier has.
-//
-// Only colourless tiers take part. A tier that names its own colour is not on the ramp,
-// its score is free by contract, and a mixed profile is simply the colourless ones read
-// in order with the painted ones stepped over.
-//
-// Without this, `[1, 5, -1]` with `zone: optimal` in the middle was accepted and rendered
-// the optimum in the palette's most extreme colour — valid YAML, silently wrong card.
+// assertRampOrder(): two rules over the WHOLE list (neither is a per-tier property),
+// checked on colourless tiers only. Without them `[1, 5, -1]` with `zone: optimal` in the
+// middle was accepted and painted the optimum in the palette's most extreme colour.
 function assertRampOrder(tiers) {
   let previous = null;
   tiers.forEach((tier, index) => {
     if (tier.color) return;
     const path = `classification.tiers[${index}]`;
-    // Thresholds already descend, so scores must too: a tier that admits lower readings
-    // is further below optimal than the one above it, never nearer.
+    // Thresholds descend, so colourless scores must too: a tier for lower readings is
+    // further from optimal, never nearer.
     if (previous && tier.score >= previous.score) {
       pathError(
         `${path}.score`,
@@ -150,14 +110,9 @@ function assertRampOrder(tiers) {
     }
     previous = { score: tier.score, path };
 
-    // The anchor, in one direction only. A tier that CALLS itself optimal has to sit at
-    // the middle of the ramp, or the card paints "exactly right" in the palette's most
-    // extreme colour. The converse is deliberately not required: a profile may have no
-    // optimal zone at all — one that only tells comfortable from outside is a legitimate
-    // thing to write — and its middle tier then carries 0 while calling itself comfort.
-    //
-    // Two optimal tiers cannot arise: this rule pins each of them to 0, and strict
-    // descent above allows the value 0 exactly once.
+    // A tier that calls itself optimal must carry score 0. The converse is not required (a
+    // profile may have no optimal zone). Two optimal tiers cannot arise: this pins each to
+    // 0, and the strict descent above allows 0 exactly once.
     if (tier.zone === "optimal" && tier.score !== 0) {
       pathError(
         `${path}.score`,
@@ -218,23 +173,15 @@ export function normalizeValidRange(value) {
   return validRange;
 }
 
-// The five icons a temperature profile used to select with a fire/high/normal/low
-// threshold object, in the order that object implied. Kept only to translate that
-// spelling into the one shape everything downstream now uses.
+// The icons the legacy fire/high/normal/low temperature object mapped to, in its order.
 const LEGACY_TEMPERATURE_ICONS = ["mdi:fire-alert", "mdi:thermometer-high", "mdi:thermometer", "mdi:thermometer-low"];
 const LEGACY_TEMPERATURE_DEFAULT_ICON = "mdi:snowflake";
 
-// classification.icons: ONE shape for every measurement — a descending list of
-// {min, icon} tiers ending in a {default: true, icon} entry, the same shape as
-// classification.tiers without the fields that carry meaning.
-//
-// Omitting it means the same thing for every measurement too: the profile declares no
-// icons, and the presentation layer applies the measurement's own stable icon. There is
-// no derivation and no per-kind fallback.
-//
-// The fire/high/normal/low object a temperature profile could give instead is accepted
-// for backwards compatibility and translated here, at the configuration boundary, into
-// exactly the list that spelling always meant. Nothing downstream sees two shapes.
+// classification.icons: ONE shape for every measurement — a descending {min, icon} list
+// ending in {default: true, icon}. Omitting it means the profile declares no icons and
+// the presentation layer uses the metric's stable icon. The fire/high/normal/low object
+// (temperature only) is accepted for backwards compatibility and translated here into
+// that list; nothing downstream sees two shapes.
 export function normalizeIcons(value, metricKind) {
   if (value === undefined) return { iconTiers: null };
 

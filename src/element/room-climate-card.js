@@ -1,39 +1,19 @@
-// The custom element: Home Assistant's lifecycle, the render pipeline, and the
-// state transitions between them.
+// The custom element: Home Assistant's lifecycle, the render pipeline, and the state
+// transitions between them. It owns config, hass, the shadow DOM, warning dedup and
+// lifecycle orchestration; the controllers own everything else and the element holds
+// accessors onto them, never copies. Owner/runtime split: interne Doku §4
+// „Owner- und Runtime-Verträge".
 //
-// What it does is deliberately narrow, and everything it does NOT do lives one layer
-// down:
-//
-//   config and hass          it owns these, because Home Assistant hands them to it
-//   the shadow DOM           it is the only thing that may write markup
-//   warning deduplication    stateful, so it cannot live in a pure normalizer
-//   lifecycle orchestration  connect, disconnect, and what each one starts or stops
-//
-// The render controller owns the three signatures, the deferred-render debt, whether
-// anything has been rendered at all and the view model on screen. The carousel owns the
-// active index and both timers. The interaction runtime owns the pointer, the drag flag
-// and the click-suppression deadline. The resize runtime owns the observer, the
-// animation frame and the fonts subscription. The element holds windows onto those —
-// accessors, never copies — because a second copy of a fact is how the two drift apart.
-//
-// Import direction is enforced by test/unit/architecture-imports.test.js:
+// Import direction, enforced by test/unit/architecture-imports.test.js (a cycle or
+// unresolved specifier is also a Rollup build failure):
 //
 //   core -> config / i18n / domain -> application/model
 //        -> presentation/view-model -> render/primitives + render/layout + styles
 //        -> views + render/composition
 //        -> controllers/runtime + controllers/render -> this file -> index.js
 //
-// The two controller groups sit on the same layer and may not import each other:
-// controllers/render decides WHETHER and HOW MUCH to render, controllers/runtime
-// decides WHEN things move. This file is the only place that knows both exist.
-//
-// Nothing below may be imported by a module above it, and Rollup's onwarn (see
-// rollup.config.mjs) turns any cycle or unresolved specifier into a build failure.
-
-// dist/room-climate-card.js is generated from this tree by `npm run build` and is not
-// stored in the repository; the published copy is the GitHub release asset. The IIFE
-// wrapper and the "use strict" prologue are emitted by the build (see
-// rollup.config.mjs), which is why this file is a plain module.
+// The two controller groups sit on one layer and may not import each other:
+// controllers/render decides WHETHER and HOW MUCH, controllers/runtime decides WHEN.
 
 import { CARD_NAME } from "../core/card-metadata.js";
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
@@ -92,22 +72,10 @@ import { createRenderController } from "../controllers/render/render-controller.
 import { entityDataSignature, structuralConfigSignature } from "../controllers/render/render-signatures.js";
 
 
-  // Custom card for Home Assistant room climate data (temperature, humidity,
-  // CO2, PM2.5). Usage and configuration are documented in this repository's
-  // README.
-  //
-  // One card-wide classification policy resolves complete HA attributes,
-  // built-in profiles, or a validated custom YAML profile. A profile owns
-  // tiers, score/zone metadata, bands, scale policy, and profile icons together.
-
   // ==== Composition: what the configuration layer is handed ====
-  // config/ deliberately imports neither the domain, the i18n registry nor the
-  // view registry — it normalizes input shapes, it does not own semantics. The
-  // few facts it nevertheless needs are injected from here, which keeps the
-  // dependency pointing one way and keeps a single copy of every registry.
-  //
-  // The lookups are wrapped rather than passed through so the configuration
-  // layer never sees a registry object it could index into directly.
+  // config/ must not import the domain, i18n or view registries; the facts it needs
+  // are injected here, wrapped so it never sees a registry object to index into. The
+  // authoritative list is in the head of config/normalize-config.js.
   const CONFIG_COLLABORATORS = {
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
@@ -118,14 +86,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
-    // Wrapped rather than handed over: the config layer gets the questions it has to ask
-    // about palettes, and never the registry itself.
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
     paletteForColor,
     paletteForGradient,
-    // How many colours a hyphenated palette may name. Handed over rather than restated in
-    // the message, so the number the user is told cannot drift from the one the generator
-    // enforces — the same reason paletteKeys() exists.
+    // Handed over rather than restated in the error message, so the number the user is
+    // told cannot drift from the one the generator enforces (as with paletteKeys()).
     paletteGradientLimit: MAX_GRADIENT_COLORS,
     paletteKeys,
     assertPalette,
@@ -133,12 +98,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
   };
 
   // ==== Card class: lifecycle, configuration, rendering ====
-  // Main class for the custom Lovelace card; Home Assistant instantiates it
-  // when the card is displayed.
-  // NOTE ON INDENTATION: the class is deliberately indented by two spaces even though
-  // it sits at module scope. Its render methods build markup from template literals
-  // whose leading whitespace reaches the browser verbatim and is pinned by the DOM
-  // characterization baselines. Re-indenting the class would change the shipped HTML.
+  // NOTE ON INDENTATION: the class is indented two spaces at module scope on purpose.
+  // Its render methods build markup from template literals whose leading whitespace
+  // ships verbatim and is pinned by the DOM characterization baselines — re-indenting
+  // the class would change the shipped HTML.
   class RoomClimateCard extends HTMLElement {
     constructor() {
       super();
@@ -152,11 +115,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // path against a configuration that is not installed yet.
       this._rehearsing = false;
 
-      // The only route to the outside world: a clock, timers, animation frames, the
-      // reduced-motion preference, visibility, a ResizeObserver, the fonts promise,
-      // event construction and one transform read. The document is resolved through a
-      // thunk on every call rather than captured here, so a card adopted into another
-      // document keeps scheduling and dispatching in the realm it now lives in.
+      // The only route to browser runtime services (clock, timers, rAF, reduced-motion,
+      // visibility, observers, fonts, event construction, transform read). The document
+      // is resolved through a thunk on every call, so a card adopted into another
+      // document keeps scheduling in the realm it now lives in.
       this._platform = createBrowserPlatform(() => this.ownerDocument);
 
       // Owns the active view index, both timers and every clock read. It is given a
@@ -185,11 +147,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         onMeasure: () => this._resolveViewLayouts(this._renderController.lastViewModel),
       });
 
-      // A theme switch, an operating system flipping to dark, a card-mod rule repainting
-      // this one card — none of them changes an entity or the configuration, so none of
-      // them would otherwise bring the card back to look at what it is standing on. The
-      // watch supplies the occasion; _render()'s data signature decides whether anything
-      // actually changed, which is why an unrelated attribute costs one string comparison.
+      // A theme switch, an OS dark-mode flip, a card-mod repaint — none changes an
+      // entity or the config, so nothing else would bring the card back to re-read what
+      // it is standing on. The watch supplies the occasion; _render()'s data signature
+      // decides whether anything changed. See interne Doku §5 „Wann die Karte erneut fragt".
       this._surfaceWatch = createSurfaceWatch({
         platform: this._platform,
         onChange: () => {
@@ -234,18 +195,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           this._render(false);
         },
       });
-      // This state is separate from this._views because the key list
-      // alone can't distinguish a deliberately empty/collapsed view area
-      // from one that's requested-but-unavailable — both resolve to an
-      // empty list (see views.collapsed in presentation/view-model/
-      // view-state.js). Set alongside this._views in _renderAll(), and part
-      // of the structure signature _render() compares.
+      // Separate from this._views: the key list alone can't tell a deliberately
+      // collapsed view area from a requested-but-unavailable one (both are an empty
+      // list — see views.collapsed in view-state.js). Set in _renderAll(); part of the
+      // structure signature _render() compares.
       this._viewAreaCollapsed = false;
 
-      // Decides whether a render is needed and how much of one: the three signatures,
-      // the deferred-render debt, whether anything has been rendered at all, and the
-      // view model currently on screen. The element supplies the inputs and performs
-      // the three paths; it no longer decides between them.
+      // Decides whether a render is needed and how much of one (owns the three
+      // signatures, the deferred-render debt, the rendered flag and the on-screen view
+      // model). The element supplies inputs and performs the three paths. See interne
+      // Doku §5 „Render-Controller".
       this._renderController = createRenderController({
         viewRenderers: VIEW_RENDERERS,
         computeViewModel: () => this._computeViewModel(),
@@ -257,27 +216,21 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       });
 
       this._eventsBound = false;
-      // Returned by the platform when the visibility listener is attached; the only
-      // thing that knows how to detach it again.
+      // The platform's unsubscribe for the visibility listener.
       this._unlistenVisibility = null;
-      // _background() memoization — see there.
-      this._surfaceCacheKey = undefined;
+      // Memoization state, each keyed and invalidated in its own method:
+      this._surfaceCacheKey = undefined; // _surface()
       this._surfaceCacheValue = undefined;
-      // _language() memoization — see _language().
-      this._languageCacheHass = undefined;
+      this._languageCacheHass = undefined; // _language()
       this._languageCacheConfigLanguage = undefined;
       this._languageCacheValue = undefined;
-      // _resolveMetricContext() memoization — see there.
-      this._metricContextCacheHass = undefined;
+      this._metricContextCacheHass = undefined; // _resolveMetricContext()
       this._metricContextCacheConfig = undefined;
       this._metricContextCacheValue = undefined;
-      // _warnAboutViewConfigOnce() dedup — see there.
-      this._lastViewConfigWarningKey = null;
-      // _warnMixedMetricKindsOnce() deduplication state — see there.
-      this._lastMetricContextWarningKey = null;
+      this._lastViewConfigWarningKey = null; // _warnAboutViewConfigOnce() dedup
+      this._lastMetricContextWarningKey = null; // _warnMixedMetricKindsOnce() dedup
 
-      // Bind handlers once so add/removeEventListener always reference the
-      // same function.
+      // Bind handlers once so add/removeEventListener reference the same function.
       this._boundClick = this._handleClick.bind(this);
       this._boundKeydown = this._handleKeydown.bind(this);
       this._boundPointerDown = this._handlePointerDown.bind(this);
@@ -289,11 +242,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     // ==== Accessors over controller-owned state ====
-    // Read-write only where the render path legitimately assigns — the resolved view
-    // list and the active index, both of which a structural rebuild recomputes.
-    // Everything else is read-only: a setter would either create a second copy of the
-    // same fact or, in the strict-mode bundle, throw. None of them stores anything;
-    // there is exactly one owner, and these are the window onto it.
+    // Windows onto the one owner; they store nothing. Read-write only where the render
+    // path legitimately assigns (the view list and active index, both recomputed by a
+    // structural rebuild); everything else is read-only.
     get _views() {
       return this._carousel.viewKeys;
     }
@@ -314,100 +265,62 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return this._interaction.isDragging;
     }
 
-    // The configuration the card starts out as in the picker.
-    //
-    // Home Assistant passes the entities the current view already uses and a broader
-    // fallback list, exactly as it does to its own cards, so the start configuration can
-    // name a real sensor and the picker's preview can show the user's own reading. The
-    // three arguments are all optional: an older frontend calls this with none, and the
-    // documented placeholder template comes back — which is also what happens when
-    // nothing in the system is a climate entity this card can read.
+    // The configuration the card starts out as in the picker. HA passes the current
+    // view's entities and a fallback list (all three args optional); the stub names a
+    // real sensor when it can, else the documented placeholder template. See interne
+    // Doku §4 „Card-Picker-Vertrag".
     static getStubConfig(hass, entities, entitiesFallback) {
       return stubConfigFor(hass?.states, entities, entitiesFallback);
     }
 
-    // STRONG EXCEPTION SAFETY. Either the whole configuration change happens, or
-    // nothing observable does.
-    //
-    // Home Assistant's live YAML editor calls setConfig() on every keystroke, so most
-    // calls during editing are INVALID — a half-typed entity id, a `rooms:` list with
-    // one line still missing. Those must propagate the error (the editor shows it) and
-    // otherwise leave the card exactly as it was.
-    //
-    // The previous ordering ended the running gesture before validating. That looked
-    // harmless, because the render deferred during the gesture was correctly kept. But
-    // the pointerup that would have SETTLED that render was now the end of a gesture
-    // that no longer existed, so nothing applied it: a card mid-swipe when an update
-    // arrived, followed by one rejected keystroke in the editor, kept showing the old
-    // value until an unrelated update happened along. Keeping the debt is not enough if
-    // the occasion to pay it is destroyed.
-    //
-    // Hence the split below. Everything that can throw runs first and writes nothing;
-    // the commit phase cannot fail.
+    // Strong exception safety: everything that can throw runs first and writes nothing;
+    // the commit phase cannot fail. HA's live YAML editor calls setConfig() on every
+    // keystroke, so invalid calls are the norm and must leave the card untouched. See
+    // interne Doku §3 „setConfig() und YAML-Normalisierung" and §5 „setConfig() ist auch
+    // für renderzeitige Fehler atomar".
     setConfig(config) {
       // ---- validate: no observable state may change in here --------------------
       const normalized = this._normalizeConfig(config);
       this._assertRenderable(normalized);
 
       // ---- commit: from here on nothing throws ---------------------------------
-      // The view visible "before" must be read while the OLD configuration and view
-      // list are still installed: _currentVisualViewIndex() reads this._config for its
-      // wall-clock phase math, so computing it after the overwrite would reinterpret
-      // the still-running old animation with the new timing and preserve the wrong
-      // view. _renderAll() prefers this snapshot over recomputing live.
+      // The "before" view must be read while the OLD config and view list are still
+      // installed — _currentVisualViewIndex() does wall-clock phase math against
+      // this._config. _renderAll() prefers this snapshot over recomputing live.
       this._renderController.capturePreConfigVisualKey(this._views[this._currentVisualViewIndex()] ?? null);
       try {
-        // A configuration change can arrive mid-swipe. The gesture is aborted through
-        // its owner, which settles a confirmed drag the same way a pointercancel does.
-        // A render deferred by that gesture is deliberately NOT dropped — the
-        // _render(false) below settles it.
+        // A config change can arrive mid-swipe; aborting the gesture through its owner
+        // settles a confirmed drag like a pointercancel. The render it deferred is NOT
+        // dropped — the _render(false) below settles it.
         this._interaction.cancelForConfigChange();
         this._config = normalized;
         this._warnAboutViewConfigOnce();
-        // _activeView is intentionally left untouched here — _renderAll() preserves it
-        // across a structural change when the previously active view key still exists,
-        // falling back to config.start_view then the first active view otherwise.
+        // _activeView is left untouched: _renderAll() preserves it across a structural
+        // change, else falls back to config.start_view then the first active view.
         this._renderController.invalidateDataSignature();
-        // Do not restart rotation after this render: doing so would re-engage the
-        // synchronized animation and undo the freeze _renderAll() performs for every
-        // non-first-render structural change. _render(false) already handles rotation
-        // state completely on its own — via _renderAll() when the change is structural,
-        // or not at all when it is a purely cosmetic edit that must not disturb an
-        // in-progress resume wait. connectedCallback() independently starts rotation
-        // when the card is first attached to the DOM.
+        // Rotation is deliberately not restarted here: _render(false) handles rotation
+        // state itself (via _renderAll() when structural, not at all for a cosmetic edit
+        // mid-resume-wait), and connectedCallback() starts it on first attach.
         this._render(false);
       } finally {
-        // The snapshot is transient by construction: it belongs to exactly the one
-        // render above. A `finally` because _render() can still throw on a malformed
-        // entity STATE (a runtime problem, not a configuration one), and a stuck
-        // snapshot would then leak into a later, unrelated rebuild.
+        // Transient snapshot for exactly the one render above; `finally` because
+        // _render() can still throw on a malformed entity STATE, and a stuck snapshot
+        // would leak into a later rebuild.
         this._renderController.releasePreConfigVisualKey();
       }
     }
 
     _warnAboutViewConfigOnce() {
-      // Validates views: against the view definitions once per setConfig() call
-      // (i.e. once per actual config change) rather than inside
-      // _computeViewModel(), which runs on every hass update — logging there
-      // would flood the console for a persistently misconfigured YAML
-      // value. Availability is "everything available" here on purpose: only the
-      // static shape (unknown/duplicate type) is checked, not current
-      // runtime availability, which resolveActiveViews() re-derives fresh
-      // on every render anyway. Combines resolveActiveViews()'s own
-      // unknown/duplicate-type diagnostics with _normalizeViewsConfig()'s
-      // (non-array/unparseable-entry/invalid-enabled) diagnostics, carried
-      // forward on this._config._configDiagnostics (see _normalizeConfig()),
-      // into one flat list.
+      // Validates views: against the view definitions once per config change, not in
+      // _computeViewModel() (which runs on every hass update and would flood the
+      // console). Availability is "everything available" here: only the static shape
+      // (unknown/duplicate type) is checked. Combines resolveActiveViews()'s diagnostics
+      // with the normalizer's, carried on this._config._configDiagnostics.
       //
-      // The dedup key is updated on every
-      // call, including when the current diagnostics list is empty — only
-      // the actual console.warn() calls are skipped for an empty list. The
-      // Returning early on an empty list without touching
-      // _lastViewConfigWarningKey would make a sequence invalid -> valid -> the
-      // SAME invalid config again incorrectly stayed silent on the third
-      // step (the key still held the first invalid config's value, so it
-      // looked like a duplicate). Resetting the key on the valid step fixes
-      // that: only a genuinely repeated diagnostics list is deduplicated.
+      // The dedup key is updated on every call, empty list included — only the
+      // console.warn() calls are skipped for an empty list. That reset is what lets the
+      // sequence invalid -> valid -> the same invalid config warn again on the third
+      // step. See interne Doku §4 „Fehler- und Warnungs-Deduplizierung".
       const configDiagnostics = this._config?._configDiagnostics || [];
       const { diagnostics: resolveDiagnostics } = resolveActiveViews(
         VIEW_DEFINITIONS,
@@ -435,61 +348,42 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     connectedCallback() {
-      // Lifecycle order is events -> carousel -> deferred-render catch-up -> resize.
-      // Starting the carousel before catch-up restores runtime state needed by the
-      // render path; a catch-up rebuild then rebinds events and recalculates carousel
-      // styles against its new markup. Resize and fonts observation comes last because
-      // it must inspect the view model committed by that render.
+      // Order: events -> carousel -> deferred-render catch-up -> resize. The carousel
+      // must be up before catch-up (which rebinds events and recomputes carousel styles
+      // against the new markup); resize/fonts observation is last because it inspects
+      // the committed view model. See interne Doku §5 „Lifecycle, Disconnect und Reconnect".
       this._bindEvents();
       this._startRotation();
       this._catchUpDeferredRender();
       this._bindResizeObserver();
-      // A card can come back into a different document, a different dashboard or a
-      // different theme than the one it left, and nothing about that arrives as an update.
-      // Costs one signature comparison when it came back onto the same ground.
+      // A card can return into a different document, dashboard or theme, and none of
+      // that arrives as an update. Costs one signature comparison on the same ground.
       this._render();
     }
 
-    // Pays a render deferred by a gesture that the disconnect then ended.
-    //
-    // Home Assistant hands over a new hass and does not hand it over again. If that
-    // arrived mid-swipe it was deliberately not rendered, and if the card was then
-    // removed from the document the gesture that would have released it never ends. Left
-    // alone the card comes back showing a value Home Assistant superseded before the
-    // removal, until some unrelated update happens along.
-    //
-    // Cheap when nothing is owed: the debt is a plain flag, and a card that never
-    // deferred anything does no work at all here. `_render(false)` rather than
-    // `_render()` because the point is to apply an update the signature fast path would
-    // otherwise be entitled to skip — the deferral means the signature was never
-    // committed, but bypassing it says so explicitly.
+    // Pays a render deferred by a gesture that the disconnect then ended: HA sends the
+    // new hass once, and a mid-swipe removal leaves that gesture without a pointerup to
+    // release it. Cheap when nothing is owed (a plain flag). `_render(false)` bypasses
+    // the signature fast path, because the deferral means the signature was never
+    // committed. See interne Doku §5 „Lifecycle, Disconnect und Reconnect".
     _catchUpDeferredRender() {
       if (!this._renderController.isRenderPending) return;
       try {
         this._render(false);
       } catch (err) {
-        // Same contract as set hass(): a bad state must not turn a dashboard reflow into
-        // a thrown connectedCallback. The debt stays outstanding (see the controller's
-        // commit-on-success), so the next connect tries again.
+        // As in set hass(): a bad state must not throw out of connectedCallback. The
+        // debt stays outstanding (controller commit-on-success), retried next connect.
         console.error(`${CARD_NAME}: render failed`, err);
       }
     }
 
     disconnectedCallback() {
-      // Card is removed or rebuilt by Home Assistant. Every runtime ends what it was
-      // doing; nothing schedules anything into a card that is no longer in the document.
-      //
-      // The gesture goes first, and deliberately so: it is the only one of the three
-      // whose state would otherwise BLOCK the reconnected card rather than merely leak.
-      // A pointer that survives the removal keeps isInteracting() true, which stops the
-      // carousel from starting and turns every hass update into a deferred render
-      // waiting on a pointerup that can never arrive.
-      //
-      // The deferred render is deliberately NOT cleared here. It is a different kind of
-      // obligation: the gesture must not survive, but the DATA behind the deferral must.
-      // `_hass` already holds the newest state and Home Assistant will not send it again,
-      // so dropping the debt here left the card showing a superseded value until some
-      // unrelated update happened along. connectedCallback() pays it instead.
+      // Every runtime ends what it was doing. The gesture goes first: it is the only
+      // one whose surviving state would BLOCK the reconnected card (a live pointer keeps
+      // isInteracting() true, stalling the carousel and every hass update). The deferred
+      // render is deliberately NOT cleared — the gesture must not survive, but the data
+      // behind it must; connectedCallback() pays it. See interne Doku §5 „Lifecycle,
+      // Disconnect und Reconnect".
       this._interaction.disconnect();
       this._carousel.destroy();
       this._unbindEvents();
@@ -497,15 +391,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _bindResizeObserver() {
-      // Re-measures the labels on a pure container resize (sidebar toggle, dashboard
-      // column reflow, browser resize, device rotation). Safe to observe repeatedly
-      // because the layout pass is idempotent — it always derives the position fresh
-      // from the view model and never reads back its own previous pixel output.
-      // Observing the card host remains valid across every structural rebuild.
+      // Re-measures labels on a pure container resize. Safe to observe repeatedly: the
+      // layout pass is idempotent (derives position fresh from the view model, never
+      // reads back its own pixel output), and the card host is stable across rebuilds.
       this._resize.connect(this);
-      // A fonts.ready that settled while the card was out of the DOM still owes one
-      // measurement — nothing could be measured on a detached node. Asking again on
-      // reconnect is what collects that debt; it is a no-op in every other case.
+      // A fonts.ready that settled while the card was detached still owes one
+      // measurement; asking again on reconnect collects that debt, a no-op otherwise.
       const onScreen = this._renderController.lastViewModel;
       if (onScreen && !onScreen.empty) {
         this._resize.measureOnceFontsReady(() => this.isConnected);
@@ -517,23 +408,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     getCardSize() {
-      // Rough size hint for Home Assistant's masonry layout. An UPPER BOUND on purpose: a
-      // room whose sensor has no value yet is counted here, unlike the live-data-driven
-      // capacity cap in roomGridRows(). Extra chip rows add to the base size one-for-one.
-      //
-      // The same chip-visibility contract the view model applies, minus the parts that
-      // need live data — `never` draws nothing, and in `auto` a lone room that IS the
-      // headline gets no chip. A grid that will not be drawn must not inflate the hint.
+      // Rough size hint for HA's masonry layout, an UPPER BOUND: a room with no value
+      // yet still counts (unlike roomGridRows()'s live capacity cap). Applies the same
+      // chip-visibility contract as the view model minus the live-data parts, and one
+      // source set for both the topology and the room count, so the hint never reserves
+      // a row for a grid the card decided not to draw. Before the first update the
+      // configuration alone decides. See interne Doku §5 „Measurement Context und
+      // Raumaggregation".
       const showRooms = this._config?.show?.rooms ?? "auto";
-      // Same source rule the card itself applies, including the part that needs live
-      // state: an id Home Assistant does not know, and one that declares a different
-      // measurement, are both not sources. Before the first update there is nothing to
-      // ask, and the configuration alone decides — which is the stable answer for a size
-      // hint.
-      //
-      // ONE SOURCE SET, used for both answers. Counting the rooms differently from the way
-      // the topology beside it was decided is how the hint would come to reserve a row for
-      // a grid the card has just decided not to draw.
       const states = this._hass?.states;
       const isSource = states ? resolveSourceEligibility(states, this._config) : null;
       const topology = isSource
@@ -560,21 +442,15 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Configuration ====
     _normalizeConfig(config) {
-      // The whole normalization lives in config/ as pure
-      // functions without `this`. What stays here is only the wiring — the
-      // registries the configuration layer is not allowed to import are passed
-      // in from this composition root.
+      // Normalization is pure functions in config/; this is only the wiring of the
+      // registries that layer may not import.
       return normalizeConfig(config, CONFIG_COLLABORATORS);
     }
 
     // ==== Auto-slide, track and accessibility controller boundary ====
-    // Everything below forwards to this._carousel, which owns the active index, both
-    // timers and every read of the wall clock. They are named entry points the render
-    // and lifecycle paths above call — a structural rebuild freezes the track and
-    // reschedules the accessibility sync through exactly these — and none of them holds
-    // state of its own. An element member without a production caller is a failing
-    // architecture test (see architecture-imports.test.js), so nothing below survives
-    // only because a test likes the name.
+    // Stateless named entry points onto this._carousel, called by the render and
+    // lifecycle paths above. An element member without a production caller fails an
+    // architecture test (architecture-imports.test.js).
     _startRotation() {
       this._carousel.start();
     }
@@ -616,16 +492,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _language() {
-      // Base language code (e.g. "de" from "de-AT"), checked against
-      // the registered translations. An explicit config.language override (see
-      // _normalizeLanguage()) wins outright; otherwise locale.language
-      // takes priority as HA's most granular, explicitly user-selectable
-      // setting, then language/selectedLanguage. A single render calls
-      // this many times (once per _fmt()/_t() call); cached by hass
-      // reference identity plus the config override value, so a plain
-      // hass update (HA reassigns a new object on every real update) never
-      // returns a stale value, and a setConfig()-only language change
-      // (no new hass object) invalidates the cache too.
+      // Base language code; resolution rules in resolveLanguage() (i18n/translate.js).
+      // Called many times per render, so cached by hass reference identity plus the
+      // config override value — both observable identities that must invalidate it.
       const configLanguage = this._config?.language;
       if (this._languageCacheHass === this._hass && this._languageCacheConfigLanguage === configLanguage) {
         return this._languageCacheValue;
@@ -668,14 +537,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _warnMixedMetricKindsOnce(diagnostic) {
-      // Deduplicated the same way as _warnAboutViewConfigOnce() (see there),
-      // but keyed on the resolved diagnosis itself rather than on
-      // setConfig() calls: _resolveMetricContext() re-resolves on every hass
-      // update (HA reassigns a new hass object each time, invalidating the
-      // memoization above), so without this a persistently misconfigured
-      // set of rooms would log on every single update instead of once,
-      // while a genuinely NEW diagnosis (different disagreeing kinds) still
-      // needs to be surfaced again.
+      // Deduplicated like _warnAboutViewConfigOnce(), but keyed on the resolved
+      // diagnosis itself: _resolveMetricContext() re-resolves on every hass update, so
+      // a persistently misconfigured set of rooms would otherwise log every time, while
+      // a genuinely new diagnosis still needs surfacing.
       const key = JSON.stringify(diagnostic);
       if (key === this._lastMetricContextWarningKey) return;
       this._lastMetricContextWarningKey = key;
@@ -684,13 +549,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       );
     }
 
-    // Memoized by hass/config identity. Home Assistant reassigns a fresh hass
-    // object on every real update, so identity is exactly the right invalidation
-    // signal, and a single render asks for the context many times.
-    //
-    // The mixed-kind warning is deduplicated and therefore stateful, which is why
-    // it stays out here rather than inside the pure resolution. It fires on a cache
-    // MISS only — the same moments it fired before.
+    // Memoized by hass/config identity (HA reassigns hass on every real update, so
+    // identity is the right invalidation signal; a render asks many times). The
+    // mixed-kind warning is stateful, so it lives here rather than in the pure
+    // resolution and fires on a cache MISS only.
     _resolveMetricContext() {
       if (this._metricContextCacheHass === this._hass && this._metricContextCacheConfig === this._config) {
         return this._metricContextCacheValue;
@@ -708,38 +570,20 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _unit() {
-      // Card unit — see _resolveMetricContext() for how it's kept
-      // consistent with _metricType(). Always a real unit string (never
-      // null), even when metricType itself is null (the
-      // "mixed_metric_kinds" configuration state) — _resolveMetricContext()
-      // resolves canonicalUnit/unit via _metricMetaFor()'s own
-      // temperature-default fallback in that case.
+      // Always a real unit string, never null — even in the "mixed_metric_kinds" state,
+      // where _resolveMetricContext() falls back via _metricMetaFor()'s temperature
+      // default. Kept consistent with _metricType() there.
       return this._resolveMetricContext().unit;
     }
 
     _metricType() {
-      // Card mode — see _resolveMetricContext() for how it's kept
-      // consistent with _unit(). Can be null when
-      // _resolveMetricContext() finds rooms reporting genuinely
-      // incompatible metric kinds with no usable primary to arbitrate
-      // ("mixed_metric_kinds") — this safety fallback keeps every existing
-      // direct caller (icon/title lookups via _metricMetaFor(), etc.)
-      // working with a sensible default instead of suddenly receiving null.
+      // Card mode, kept consistent with _unit(). null in the "mixed_metric_kinds" state
+      // (incompatible room kinds, no primary to arbitrate); the fallback keeps direct
+      // callers working with a sensible default.
       return this._resolveMetricContext().metricType || "temperature";
     }
 
-    // ==== MetricDefinition / UnitProfile / QuantityKind ====
-    // Testable instance-method wrappers around the module-scope
-    // METRIC_DEFINITIONS registry and its pure helper functions above — the
-    // same pattern this class already uses for other pure logic
-    // (_isPhysicallyValid(), _floorToStep()/_ceilToStep()). _convertMetricValue()
-    // and _getUnitProfile() are called from _buildEntityModel() (see
-    // below _resolveMetricContext()) for every metric kind. Temperature has
-    // real Celsius/Fahrenheit/Kelvin conversion; the other profiles use
-    // identity conversion.
-
     _fmtWithUnit(value, digits, withSpace = true) {
-      // Combines the formatted number and its unit.
       const separator = withSpace ? " " : "";
       return `${this._fmt(value, digits)}${separator}${this._unit()}`;
     }
@@ -749,32 +593,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     // ==== Data computation ====
-    // The production entry point. Domain logic lives in application/model
-    // (numbers and semantic tokens) and presentation/view-model (titles, formatting,
-    // geometry, colours); this method only supplies the inputs.
-    // Would this configuration survive being rendered?
-    //
-    // Not everything a configuration can get wrong is visible in the configuration alone.
-    // A profile is scoped to a measurement, and which measurement a card shows comes from
-    // the ENTITIES — so "this custom profile is written in %, but your sensor reads °C"
-    // cannot be decided until both are present. Checks like that therefore live in the
-    // model builders, and they throw.
-    //
-    // Which is fine, except that setConfig() promises all-or-nothing. Without this, a
-    // running card handed such a configuration would commit it, throw from the render
-    // that follows, and be left holding a configuration every later render throws on too
-    // — permanently broken by one rejected keystroke in the editor.
-    //
-    // So the render is REHEARSED here, before the commit. The candidate is installed for
-    // the duration of one synchronous call and then removed again, which is what makes
-    // this faithful: it exercises the real path rather than a reconstruction of it that
-    // could drift. Everything the rehearsal can write is memoization and one deduplicated
-    // warning, and all of it is put back — a rejected configuration leaves no trace at
-    // all, and an accepted one leaves the caches cold rather than warm for a
-    // configuration that was about to be installed anyway.
-    //
-    // With no hass there is nothing to rehearse against and nothing to render either; the
-    // first hass update does both.
+
+    // Would this configuration survive being rendered? Some faults (a custom profile in
+    // %, a sensor in °C) are only decidable once the entities are in hand, so the model
+    // builders throw. To keep setConfig() all-or-nothing, the render is REHEARSED here:
+    // the candidate is installed for one synchronous call and removed again (the real
+    // path, not a reconstruction), and everything it can write — memoization and one
+    // deduplicated warning — is restored. No hass, nothing to rehearse. See interne Doku
+    // §5 „setConfig() ist auch für renderzeitige Fehler atomar".
     _assertRenderable(candidate) {
       if (!this._hass) return;
       const saved = {
@@ -794,34 +620,22 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       }
     }
 
-    // THE SURFACE THIS CARD IS ACTUALLY PAINTED ON: every colour it sits on, and the text
-    // colour of the theme around it.
-    //
-    // MEASURED, not taken from the theme. `hass.themes.darkMode` says which theme is
-    // active; it does not say what THIS card sits on, and card-mod, a custom theme or a
-    // dashboard that styles one card differently all break that equivalence. So the browser
-    // is asked first (readBackgroundSamples in the platform adapter, which also reads a
-    // gradient's colour stops and composites a translucent card onto what is behind it),
-    // and `hass` is the fallback for the moment before the card is painted, or a realm that
-    // will not answer. Home Assistant's own default is a light theme, which is the last
-    // resort.
-    //
-    // A LIST rather than one colour, because a card-mod gradient is several colours and a
-    // palette has to hold up over all of them.
-    //
-    // Memoized on the readings themselves rather than on a render count: the work is in
-    // judging them, the read is two getComputedStyle calls, and a theme switch changes both
-    // the samples and the text colour — which is exactly when the answer has to change.
+    // The surface this card is painted on: every colour it sits on (a LIST, since a
+    // card-mod gradient is several), plus the theme's text colour, both MEASURED from
+    // the browser rather than read off `hass.themes.darkMode` — which describes the
+    // theme, not what card-mod or a per-card style put under this card. `hass` is the
+    // fallback before paint or in a realm that will not answer; HA's light default is
+    // last. Memoized on the readings themselves — a theme switch changes both, which is
+    // exactly when the answer must change. Full ladder: interne Doku §5 „Die Leseleiter".
     _surface() {
       const root = this.shadowRoot?.querySelector(".rtc-card") ?? this;
       const samples = this._platform.readBackgroundSamples(root);
-      // The theme's text colour, asked separately because it answers a separate question:
-      // the scale track and a room chip's background are tints of IT, not of the card, so a
-      // palette step painted on either is not painted on the card. Null when the theme will
-      // not say, and paint-roles.js falls back to the card rather than inventing one.
+      // Asked separately because it answers a separate question: the scale track and a
+      // chip background are tints of the text colour, not the card, so a palette step on
+      // either is not on the card. Null when the theme will not say; paint-roles.js then
+      // falls back to the card rather than inventing one.
       const text = this._platform.readTextColor(root);
-      // Nothing readable was painted. The theme flag is the next best statement about what
-      // is behind the card, and it maps to the canonical background of its surface.
+      // Nothing readable: the theme flag maps to the canonical background of its surface.
       const resolved = samples.length
         ? samples
         : [this._hass?.themes?.darkMode ? SURFACE_BACKGROUNDS.dark : SURFACE_BACKGROUNDS.light];
@@ -861,27 +675,20 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       };
     }
 
-    // The only DOM capability the rendering layer is given: this card's own document,
-    // that document's window, and the two element operations derived from them. Built
-    // per call because it is a handful of property reads, and because caching it would
-    // add the one failure mode it does not otherwise have — going stale if the card is
-    // ever adopted into another document.
+    // The only DOM capability the rendering layer gets: this card's document, its
+    // window, and the operations derived from them. Built per call (a few property
+    // reads) so it cannot go stale if the card is adopted into another document.
     _renderContext() {
       return createRenderContext(this.ownerDocument);
     }
 
     // ==== Rendering ====
-    // Builds the card HTML into the shadow DOM; once built, only the
-    // dynamic values are updated so the slide animation never jumps.
     // Returns which path the render took (see RENDER_PATH), or null when there is
-    // nothing to render from yet. Returned rather than kept private because "this
-    // update was a patch, not a rebuild" is the property the partial-update pipeline
-    // exists to provide, and asserting it should not require reading private state.
+    // nothing to render from yet — returned so tests can assert "patch, not rebuild"
+    // without reading private state. The two signatures are computed here because this
+    // is the only place both config and hass are in hand.
     _render(allowSkip = true) {
       if (!this._config || !this._hass) return null;
-      // Config and hass are the element's; everything derived from them is not. The two
-      // signatures are computed here because this is the only place both are in hand,
-      // and handed to the controller that decides what to do with them.
       return this._renderController.render({
         allowSkip,
         dataSignature: entityDataSignature({
@@ -898,63 +705,36 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     }
 
     _renderAll(viewModel, { isFirstRender = !this._renderController.hasRendered, preConfigVisualKey = undefined } = {}) {
-      // Full (re)build on first render, empty/normal-state changes, or a
-      // view-composition change. _views/_activeView must be set before
-      // _styles(), which derives track/view widths and keyframes from the
-      // current view list; a structural change preserves the previously
-      // active view when it still exists (see previousActiveKey below),
-      // falling back to config.start_view, then the first active view.
-      //
-      // A structural rebuild can happen while the user is deliberately
-      // "parked" on a manually-swiped view, still waiting out its resume
-      // timer (e.g. a range_entity blips unavailable and back while the
-      // user is looking at the daily-range view). Naively calling
-      // _applyAutoSlideStyles() below would immediately re-engage the
-      // synced animation and jump away from that view, defeating the whole
-      // point of the phase-aware resume: the card must remain on the manually
-      // selected view until the shared wall-clock phase reaches that view again.
-      // isFirstRender arrives as an argument: the controller flips its `rendered` flag
-      // only after this method returns, so "is there a previous view worth protecting"
-      // is decided once, by the owner of that fact, rather than read back mid-render.
+      // Full (re)build on first render, data <-> no-data changes, or a view-composition
+      // change. _views/_activeView must be set before _styles() (it derives track/view
+      // widths and keyframes from the view list). A structural change preserves the
+      // on-screen view, then config.start_view, then the first active view — and freezes
+      // on it rather than re-engaging synced auto-slide, so a rebuild does not jump away
+      // from a view the user manually parked on. isFirstRender is passed in because the
+      // controller flips `rendered` only after this returns. See interne Doku §5
+      // „Carousel, Swipe und Accessibility".
 
-      // Preserve a focused source across the structural replacement where possible.
-      // Attribute equality is checked in JS rather than interpolated into a selector,
-      // so even a hostile entity id remains plain data.
+      // Preserve a focused source across the replacement where possible. Attribute
+      // equality is checked in JS, not interpolated into a selector, so a hostile entity
+      // id stays plain data.
       const focusedBefore = this.shadowRoot?.activeElement ?? null;
       const focusedEntity = focusedBefore?.getAttribute?.("data-entity") ?? null;
       const hadCardFocus = Boolean(focusedBefore);
 
-      // The innerHTML replacement below destroys everything an
-      // unclassified in-flight gesture is anchored to. The runtime owns that decision
-      // and states the reasoning in full; the element only has to say when.
+      // The innerHTML replacement destroys what an in-flight gesture is anchored to; the
+      // runtime owns that decision, the element only says when.
       this._interaction.abandonGestureForRebuild();
 
-      // Dropping to fewer than two active views renders a
-      // track-less solo/empty layout (no ".rtc-track" at all — see
-      // renderCardBody()'s view-area branch). _applyAutoSlideStyles()
-      // bails out on its very first line when there's no track, so it
-      // never reaches _scheduleAccessibilitySync() — the only place that
-      // otherwise clears the accessibility timer. Without this, a timer armed
-      // while at least two views were active would linger until it fires.
-      // _stopRotation() clears both
-      // timers unconditionally; the branches below re-arm exactly what's
-      // actually warranted for the NEW view count — for every other
-      // transition this is a harmless no-op, since
-      // _scheduleAccessibilitySync()/_resumeSynchronizedSlideWhenAligned()
-      // already clear-before-set themselves.
+      // Clears both timers unconditionally; the branches below re-arm what the NEW view
+      // count warrants. Matters when dropping below two views (a track-less layout, where
+      // _applyAutoSlideStyles() bails before it would clear the a11y timer).
       this._stopRotation();
 
-      // _currentVisualViewIndex() (shared with
-      // _updateViewAccessibility(), see there) is read against the
-      // still-mounted PREVIOUS render's track/this._views, before either is
-      // replaced below — so a structural change mid-auto-slide preserves
-      // whichever view was actually on screen, not the stale
-      // this._activeView. A live setConfig() change already captured this
-      // BEFORE overwriting this._config (see there) — using the OLD timing
-      // definition, never the new one — and the controller carries that snapshot in
-      // as preConfigVisualKey; prefer it when present, otherwise (the ordinary
-      // hass-driven-update case, where this._config never changed) compute it live.
-      // `undefined` means no snapshot; `null` is a real snapshot of "no view".
+      // Read against the still-mounted previous track/_views, so a structural change
+      // mid-auto-slide preserves the view actually on screen, not the stale
+      // this._activeView. A live setConfig() captured this before overwriting
+      // this._config (old timing) and passes it as preConfigVisualKey; prefer it, else
+      // compute live. `undefined` = no snapshot; `null` = a real "no view" snapshot.
       const previousActiveKey = preConfigVisualKey !== undefined
         ? preConfigVisualKey
         : (this._views[this._currentVisualViewIndex()] ?? null);
@@ -962,10 +742,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._viewAreaCollapsed = Boolean(viewModel.views.collapsed);
       let nextIndex = this._views.indexOf(previousActiveKey);
       if (nextIndex === -1) nextIndex = this._views.indexOf(this._config?.start_view);
-      // No view is mandatory: nextIndex === -1 ? 0 : nextIndex already means "the first
-      // active view" (index 0 of this._views), which is exactly the
-      // correct final fallback now that any view, including "scale", can
-      // be absent.
+      // No view is mandatory; index 0 is the final "first active view" fallback.
       this._activeView = nextIndex === -1 ? 0 : nextIndex;
 
       const context = this._renderContext();
@@ -986,39 +763,26 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       }
       this._bindEvents();
       if (!isFirstRender && !viewModel.empty) {
-        // previousActiveKey above is correctly preserved, but that alone is only a JS
-        // bookkeeping value. Applying auto-slide styles here would re-engage the synchronized animation
-        // immediately, which ignores this._activeView entirely and can show
-        // any view depending on the current phase. That silently defeated
-        // preserving previousActiveKey/start_view/the first-active-view fallback.
-        // Every non-first,
-        // non-empty rebuild now freezes visually on the just-resolved
-        // this._activeView first, then schedules the same phase-aware
-        // resume used by the manual-swipe path, so DOM/CSS and
-        // this._activeView stay aligned. The very first render is
-        // deliberately excluded: there is no previous view to protect, so
-        // going straight into synced auto-slide is correct there.
+        // A non-first, non-empty rebuild freezes visually on the just-resolved
+        // this._activeView, then schedules the same phase-aware resume as a manual
+        // swipe. Applying auto-slide styles here instead would re-engage the synced
+        // animation and ignore this._activeView. The first render has no previous view
+        // to protect, so it goes straight into synced auto-slide (the else branch).
         this._updateTrackTransform(false);
-        // The track just landed back in manual/frozen mode (see
-        // _updateTrackTransform()), so accessibility must be computed AFTER
-        // that decision, not before it (a freshly rebuilt track has no
-        // "rtc-manual" class yet — computing it earlier would briefly treat
-        // the track as auto-engaged, see _currentVisualViewIndex()). The
-        // else branch below doesn't need this call: _applyAutoSlideStyles()
-        // already schedules it internally.
+        // After _updateTrackTransform(): a freshly rebuilt track has no "rtc-manual"
+        // class yet, so computing accessibility earlier would treat it as auto-engaged.
+        // The else branch does not need this — _applyAutoSlideStyles() schedules it.
         this._scheduleAccessibilitySync();
         this._resumeSynchronizedSlideWhenAligned(this._activeView, 10000);
       } else {
         this._applyAutoSlideStyles();
       }
       this._resolveViewLayouts(viewModel);
-      // On a cold dashboard reload the measurement above can run before the page's
-      // web font has loaded (the card inherits its font from the page and has no
-      // @font-face of its own), and fallback-font metrics produce a slightly wrong
-      // position that looks like an overlap until something else re-renders. The
-      // runtime subscribes exactly once per card instance and measures from the
-      // controller's committed view model at fire time, so a later render cannot be
-      // undone by an older one arriving late.
+      // On a cold reload the measurement above can run before the page web font loads
+      // (the card has no @font-face of its own), and fallback metrics look like an
+      // overlap until a re-render. The runtime subscribes once per instance and measures
+      // from the committed view model at fire time, so a later render is not undone by
+      // an older one arriving late.
       if (!viewModel.empty) this._resize.measureOnceFontsReady(() => this.isConnected);
     }
 
@@ -1055,13 +819,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this.shadowRoot.addEventListener("pointercancel", this._boundPointerCancel);
       this.shadowRoot.addEventListener("pointerleave", this._boundPointerCancel);
       this.shadowRoot.addEventListener("contextmenu", this._boundContextMenu);
-      // Not shadow-root-scoped (visibilitychange only fires on the document) —
-      // resyncs the accessibility timer when the tab becomes visible again after the
-      // sync paused itself while hidden. The platform hands back the unsubscribe, so
-      // the pair can never disagree about what was attached.
+      // Document-scoped (visibilitychange only fires there): resyncs the accessibility
+      // timer when the tab becomes visible again. The platform returns the unsubscribe.
       this._unlistenVisibility = this._platform.onVisibilityChange(this._boundVisibilityChange);
-      // Also outside the shadow root, and for the same kind of reason: what the card is
-      // painted ON is decided by the document around it, not by anything inside it.
+      // Also outside the shadow root: what the card is painted ON is decided by the
+      // document around it.
       this._surfaceWatch.observe(this);
       this._eventsBound = true;
     }

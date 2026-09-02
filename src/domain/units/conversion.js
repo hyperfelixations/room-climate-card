@@ -1,26 +1,12 @@
 // Unit conversion and threshold projection.
 //
-// These operate directly on UnitProfile/tier/band objects with no registry
-// lookup, which is what makes them reusable for a metric kind that is not
-// registered in METRIC_DEFINITIONS yet.
+// Operates directly on UnitProfile/tier/band objects with no registry lookup, so it stays
+// usable for a metric kind not yet in METRIC_DEFINITIONS.
 //
-// A "quantityKind" distinguishes three fundamentally different numeric
-// semantics that must never share a conversion path:
-//
-//   absolute — an actual reading (e.g. today's temperature): converts via
-//              toCanonical()/fromCanonical(), which DOES apply the Fahrenheit
-//              offset (0 °C = 32 °F).
-//   delta    — a difference between two readings (e.g. daily spread,
-//              room-to-room spread): converts via deltaToCanonical()/
-//              deltaFromCanonical(), which must NEVER apply an offset (a 0 °C
-//              difference is a 0 °F difference, not 32 °F).
-//   rate     — a delta per unit time (e.g. a trend in °C/h): uses the exact
-//              same value-conversion factor as delta — only the time unit
-//              differs, and this module does not touch time units at all, so
-//              "rate" and "delta" share one code path.
-//
-// An unknown quantityKind throws rather than defaulting: silently picking the
-// wrong path would produce a plausible-looking number that is off by 32.
+// `quantityKind` picks the path: `absolute` via toCanonical/fromCanonical (applies the
+// Fahrenheit offset), `delta` and `rate` via deltaToCanonical/deltaFromCanonical (no
+// offset). An unknown kind throws rather than default to a plausible-looking wrong number.
+// See the internal dev doc, §5 "Unit-, Range-, Trend- und Scale-System".
 
 export function convertUnitValue(value, quantityKind, fromProfile, toProfile) {
   if (quantityKind === "absolute") {

@@ -1,11 +1,9 @@
 // Registry-aware convenience over METRIC_DEFINITIONS.
 //
-// The primitives in domain/units/ deliberately take profile and tier OBJECTS, with
-// no registry lookup, so they stay usable for a metric kind that is not registered
-// yet. These wrappers add the lookup for the common case, and they THROW rather
-// than returning undefined: an unknown metric kind or unit profile at this point
-// means a caller resolved something wrong, and a silent undefined would surface
-// much later as a NaN in a rendered value.
+// The primitives in domain/units/ take profile/tier OBJECTS with no registry lookup, so
+// they stay usable for an unregistered metric kind. These wrappers add the lookup and
+// THROW rather than return undefined: an unknown kind here is a caller error, and a
+// silent undefined would surface much later as a NaN in a rendered value.
 
 import {
   convertUnitValue,

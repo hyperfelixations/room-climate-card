@@ -1,13 +1,6 @@
-// Module-load self-check for translation key parity.
-//
-// Runs once, when the card is loaded, and warns if a language's key set
-// differs from the reference language. A missing or extra key in a new or
-// edited translation is therefore caught immediately — by whoever loads the
-// card, including a community contributor testing their own translation —
-// instead of silently falling back to English at runtime, where nobody would
-// notice which key was actually missing.
-//
-// Cheap: a set difference over ~80 keys per language, once per page load.
+// Module-load self-check for translation key parity: warns (console) once per page
+// load when a language's key set differs from the reference language, so a missing
+// or extra key surfaces at load instead of as a silent English fallback at runtime.
 
 export function verifyTranslationKeyParity(translations, referenceLanguage) {
   const referenceKeys = new Set(Object.keys(translations[referenceLanguage]));

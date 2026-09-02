@@ -1,24 +1,14 @@
 // Classifying a numeric reading against a profile.
 //
-// Returns TOKENS, never rendered text: a built-in tier carries a `levelKey` that
-// the presentation layer translates, while a custom profile carries a `level`
-// string the user wrote and that must stay verbatim. Both are returned as they
-// are and the caller picks — `level || t(levelKey)` — so translation stays out of
-// the domain entirely.
+// Returns TOKENS, never rendered text and never a finished colour: a tier carries
+// `levelKey`/`level` (caller picks `level || t(levelKey)`) and either an explicit colour
+// or a signed distance from optimal, which palette-color.js turns into a hex.
 //
-// It returns no finished COLOUR either, for the same reason. What a tier knows is
-// where it sits — an explicit colour the profile named, or how far it is from optimal
-// on a scale the profile owns. Turning that into a hex value is palette-color.js's job,
-// and keeping the two apart is what lets one profile be shown in any palette without
-// saying anything twice.
-//
-// The profile handed in must already be projected into the unit the value is
-// expressed in; comparing a Fahrenheit reading against Celsius thresholds is the
-// one mistake this whole layer is built to prevent.
+// The profile handed in must already be projected into the unit the value is expressed
+// in — a Fahrenheit reading against Celsius thresholds is the mistake this layer prevents.
 
-// What a profile that declares no invalid classification of its own falls back to.
-// Deliberately colourless: "no judgement is possible here" is a statement the palette
-// answers, not this file.
+// Fallback when a profile declares no invalid classification of its own. Colourless: the
+// palette answers "no judgement is possible here".
 const FALLBACK_INVALID = {
   score: null,
   levelKey: "level.invalidReading",
@@ -26,24 +16,17 @@ const FALLBACK_INVALID = {
 };
 
 // First tier whose threshold the value passes, using the profile's own comparison
-// operator. ">=" makes a boundary belong to the tier above it, ">" makes it belong to the
-// tier below. Every built-in profile reads its thresholds the first way — the threshold
-// itself belongs to its tier — and `>` is a choice a YAML profile can make.
+// operator (">=" keeps a boundary in the tier that names it; ">" is a YAML-only choice).
 //
-// PARTIAL, and the caller has to answer for it. A `>` profile's open-ended final tier sits
-// at -Infinity, and nothing is strictly above -Infinity — so a reading that reached
-// -Infinity passes no threshold at all and there is no tier to return.
+// PARTIAL: under `>` the open-ended final tier sits at -Infinity, and nothing is strictly
+// above -Infinity, so a reading of -Infinity returns no tier. Callers handle undefined.
 export function selectTier(profile, value) {
   return profile.tiers.find((candidate) => (profile.comparison === ">" ? value > candidate.min : value >= candidate.min));
 }
 
-// How far this profile reaches in each direction, counted in tiers away from optimal.
-//
-// Only tiers that take their colour from the palette count. A tier that named its own
-// colour is not on the ramp at all, and its `score` is under no obligation to be a
-// distance — that freedom is what keeps every profile written before palettes existed
-// valid. A one-sided profile such as CO2 simply reaches 0 downwards, which is not a
-// special case anywhere: nothing ever asks its `below` wing for a colour.
+// How far this profile reaches each direction, in tiers away from optimal. Only colourless
+// tiers count — a tier that names its own colour is not on the ramp and its `score` need
+// not be a distance. A one-sided profile just reaches 0 downwards; no special case.
 export function deviationSpanOf(profile) {
   let above = 0;
   let below = 0;
@@ -59,13 +42,9 @@ export function deviationSpanOf(profile) {
 
 export function classifyNumericValue(profile, value) {
   const tier = selectTier(profile, value);
-  // TWO WAYS TO HAVE NO CLASSIFICATION, and one answer. The profile may declare the value
-  // impossible, or no tier may cover it — and the second is the same statement as the
-  // first: there is no place on this profile's ramp for this number. Reachable only through
-  // a `>` profile and a reading of -Infinity (see selectTier), and before this the tier's
-  // `.color` was read off the undefined that came back, which threw out of setConfig() and
-  // left Home Assistant painting a red card. No FINITE reading is affected: every one of
-  // them is strictly above -Infinity.
+  // Two ways to have no classification, one answer: the profile calls the value impossible,
+  // or no tier covers it (only a `>` profile at -Infinity — see selectTier; no finite
+  // reading is affected). Both mean "no place on this ramp for this number".
   if (profile.invalidWhen?.(value) || tier === undefined) {
     const invalid = profile.invalidClassification || FALLBACK_INVALID;
     return {
@@ -74,9 +53,7 @@ export function classifyNumericValue(profile, value) {
       score: invalid.score ?? null,
       zone: invalid.zone ?? "invalid",
       explicitColor: invalid.color || null,
-      // An impossible reading is not a distance from optimal — it is off the scale
-      // entirely. Reading its score as a distance would paint an unusable value in a
-      // ramp colour, which is precisely the wrong impression.
+      // An impossible reading is off the scale, not a distance from optimal — no ramp colour.
       deviation: null,
       deviationSpan: null,
       invalid: true,

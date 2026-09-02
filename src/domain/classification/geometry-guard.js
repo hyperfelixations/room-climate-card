@@ -1,20 +1,15 @@
 // Rejects a profile that becomes degenerate when projected into a display unit.
 //
-// Projection rounds every boundary independently (integer Fahrenheit, so that a
-// displayed boundary and the boundary actually used for classification can never
-// disagree). Rounding is order-preserving but not injective: two canonical values
-// that are still distinct in Celsius can round to the SAME Fahrenheit value,
-// collapsing a band to zero width or making a tier permanently unreachable. The
-// classifier compares against these exact rounded numbers, so a collapse is a
-// real classification bug, not a cosmetic one.
+// Projection rounds every boundary independently (integer Fahrenheit). Rounding is
+// order-preserving but not injective: two values still distinct in Celsius can round to
+// the same Fahrenheit value, collapsing a band to zero width or making a tier
+// unreachable. The classifier compares against these rounded numbers, so a collapse is a
+// real bug, not a cosmetic one.
 //
-// Every property checked here is already guaranteed in the canonical profile —
-// by the custom-profile validation for YAML profiles, by hand for the built-in
-// ones. This only catches what ROUNDING introduced, which is why each check first
-// confirms the canonical values were actually ordered. Built-in profiles never
-// trigger it in practice (their gaps are >= 1 °C, well above the ~0.56 °C needed
-// to survive integer Fahrenheit rounding); it exists for custom profiles with
-// narrow, freely configured gaps.
+// Every property checked here is already guaranteed in the canonical profile, so each
+// check first confirms the canonical values were ordered — this only catches what
+// ROUNDING introduced. Built-in profiles never trigger it (gaps >= 1 °C, well above the
+// ~0.56 °C that survives integer Fahrenheit rounding); it exists for narrow custom gaps.
 
 export function assertProjectedGeometry(canonical, projected, metricKind, displayProfile) {
   const unitLabel = displayProfile.displayUnit || displayProfile.key;

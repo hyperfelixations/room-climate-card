@@ -1,13 +1,5 @@
-// The view registry: which view is rendered by which module, in which order.
-//
-// Composed by walking VIEW_DEFINITIONS, so declaration order remains the ONE place
-// on-screen left-to-right order (and therefore auto-slide order) is decided. There is
-// deliberately no second array to keep in step: an implementation table keyed by view
-// key is looked up per definition, and every way the two can disagree fails at module
-// load rather than as an empty carousel slot at runtime.
-//
-// The registry is not imported by the card shell. The composition root hands it in, so
-// the shell has no way to name a view and no way to acquire an opinion about one.
+// Compose renderers in VIEW_DEFINITIONS order, the sole screen/auto-slide ordering source.
+// Validate definition/implementation drift at module load; composition injects the result into the view-agnostic shell.
 
 import { VIEW_DEFINITIONS } from "../presentation/view-model/view-state.js";
 import { rangeView } from "./range.js";

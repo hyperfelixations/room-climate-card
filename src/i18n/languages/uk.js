@@ -1,7 +1,6 @@
-// Ukrainian UI strings.
-//
-// Key set must stay identical to en.js. Ukrainian has one/few/many plural
-// categories, so count-dependent room nouns use the shared CLDR helper.
+// Ukrainian UI strings. Same key set as en.js (reference + per-key fallback), checked
+// at load by ../integrity.js. one/few/many plural categories: count-dependent room
+// nouns use the shared CLDR helper. Value shapes and plural rules: interne Doku §5.
 
 import { selectPlural } from "../formatters.js";
 

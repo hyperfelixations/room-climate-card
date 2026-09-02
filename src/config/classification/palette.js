@@ -2,56 +2,39 @@
 //
 // Three spellings, tried in this order, and the order is the contract:
 //
-//   palette: vivid                    one of the palettes the card ships
-//   palette: teal                     any CSS colour name, or a hex — a ramp in that
-//                                     one colour, derived rather than written down
-//   palette: blue-red                 two or three colours joined by hyphens — a ramp
-//                                     interpolated between them
+//   palette: vivid                    a shipped palette
+//   palette: teal                     any CSS colour name or hex — a derived one-colour ramp
+//   palette: blue-red                 two or three hyphen-joined colours — an interpolated ramp
 //   palette: {optimal, above, below}  a palette written out
 //
-// A shipped palette always wins over a colour name, and a colour name over a hyphenated
-// pair. That is what lets a future palette take a word like `teal` back without anything
-// else changing, and it means the names the card ships can be read as a closed list rather
-// than as exceptions.
+// A shipped palette wins over a colour name, and a name over a hyphenated pair. That order
+// also makes the hyphen safe: the five two-way CSS colours (orangered/orange-red, …) and
+// the two hyphenated shipped palettes (color-vision, protan-deutan) resolve before the
+// split is tried, so nothing had to be reserved.
 //
-// THE ORDER IS ALSO WHAT MAKES THE HYPHEN SAFE. Five CSS colours can be written either way
-// — `orangered` and `orange-red`, and the same for blueviolet, greenyellow, limegreen and
-// yellowgreen — and two shipped palettes are spelled with one (`color-vision`,
-// `protan-deutan`). Every one of those keeps the meaning it already had, because it
-// resolves before the split is ever tried; only a spelling that is neither reaches it.
-// Nothing had to be reserved, and no existing configuration changes meaning.
+// The literal form is lenient by design (`optimal: #1DB85D` is a YAML COMMENT): a colour
+// may be written with or without `#`, quoted or not, or by name; a wing may be a list or
+// comma-separated; only `optimal` is required. Everything is normalized to the resolver's
+// one shape before it leaves this file.
 //
-// WRITTEN FOR SOMEONE TYPING, not for a parser. The strict spelling of a colour is a trap
-// in YAML rather than a safeguard: `optimal: #1DB85D` is a COMMENT, and what the parser
-// hands over is nothing at all. So a colour here may be written with or without the `#`,
-// quoted or not, or by name; a wing may be a list, a single colour, or colours separated
-// by commas; and only `optimal` is required, because a card in one colour and a profile
-// with nothing below it are both things people legitimately want. Everything is
-// normalized to the one shape the resolver reads before it leaves this file, so nothing
-// downstream has to know that any of this was allowed.
+// Palette lookups are INJECTED like the unit and zone lookups next door — the config layer
+// must not import the domain registry. parseColorToken() is imported directly from core:
+// what counts as a written colour is what CSS says, not domain knowledge.
 //
-// The palette lookups are INJECTED, exactly like the unit and zone lookups next door:
-// which palettes exist, and what makes one usable, is domain knowledge, and the
-// configuration layer must not import the domain registry. parseColorToken() is a core
-// primitive and imported directly — what counts as a written colour is not domain
-// knowledge, it is what CSS says.
+// Full contract: internal dev doc, §5 "Der YAML-Palettenvertrag".
 
 import { parseColorToken } from "../../core/color.js";
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
 import { pathError } from "../errors.js";
 
-// The single most likely first mistake, and it produces an EMPTY value rather than a
-// wrong one — so the message has to explain an absence, which "must be a hex color"
-// never could.
+// A stray `#` produces an EMPTY value, not a wrong one, so the message explains an absence.
 const COMMENT_HINT =
   "a `#` after a space starts a comment in YAML, so writing `#1DB85D` leaves this empty — write it without the `#` (1DB85D), in quotes (\"#1DB85D\"), or as a color name (teal)";
 
 const COLOR_FORMS = 'a hex color such as 1DB85D or "#1DB85D", or a CSS color name such as teal';
 
-// The advice for a value YAML turned into a number is different from the advice for a
-// misspelt word, so the two get different sentences. A number arrives here only when the
-// user wrote nothing but digits, and then exactly two things can be wrong with it: too
-// few digits to tell a colour from a shorthand, or too many to be a colour at all.
+// A digits-only value YAML turned into a number: too few digits to tell a colour from a
+// shorthand, or too many to be a colour. Its own sentence, distinct from a misspelt word.
 const NUMBER_HINT =
   'a color written only in digits has to be six of them — put shorter or longer values in quotes, for example "080" or "#0808080"';
 
@@ -65,16 +48,15 @@ function normalizeColor(value, path) {
   return color;
 }
 
-// One wing. Absent means the palette does not reach that way, which is allowed and is not
-// the same as present-and-empty: `above:` with nothing after it is almost always a `#`
-// that turned the value into a comment, so that gets the explanation rather than silence.
+// One wing. Absent (`!(key in palette)`) means the palette does not reach that way, which
+// is allowed; present-and-empty is almost always a `#` comment and gets the explanation.
 function normalizeWing(palette, key, path) {
   if (!(key in palette)) return [];
   const raw = palette[key];
   if (raw === undefined || raw === null) pathError(`${path}.${key}`, COMMENT_HINT);
 
-  // A string may carry several colours. Nesting the same split under an array entry costs
-  // nothing and rescues `above: ["FD9808, EE2046"]`, which is a thing people write.
+  // A string may carry several colours; splitting inside an array entry too rescues
+  // `above: ["FD9808, EE2046"]`.
   const tokens = (Array.isArray(raw) ? raw : [raw]).flatMap((entry) =>
     typeof entry === "string" ? entry.split(/[\s,]+/).filter(Boolean) : [entry]
   );
@@ -82,9 +64,8 @@ function normalizeWing(palette, key, path) {
   return tokens.map((token, index) => normalizeColor(token, `${path}.${key}[${index + 1}]`));
 }
 
-// The three ways a hyphenated value can be wrong, each named specifically. Returns without
-// complaint when the value is not hyphenated at all, so the caller falls through to the
-// general message.
+// The three ways a hyphenated value can be wrong, each named specifically. Returns silently
+// when the value is not hyphenated, so the caller falls through to the general message.
 function gradientError(text, limit) {
   if (!text.includes("-")) return;
   const parts = text.trim().split("-");
@@ -108,16 +89,13 @@ export function normalizePalette(value, { paletteForName, paletteForColor, palet
   if (value === undefined || value === null) return paletteForName(null);
 
   if (typeof value === "string" || typeof value === "number") {
-    // Blank means "not configured", the same as leaving the option out — a stray space is
-    // not a palette name anyone meant to write.
+    // Blank means "not configured", the same as leaving the option out.
     const name = typeof value === "number" ? String(value) : optionalString(value)?.toLowerCase();
     if (!name) return paletteForName(null);
     const palette = paletteForName(name) || paletteForColor(value) || paletteForGradient(String(value));
     if (!palette) {
-      // A value with a hyphen in it was almost certainly MEANT as a gradient, so it gets a
-      // message about the part that failed rather than the general list. Diagnosed here
-      // rather than returned from the lookup: which part of what somebody typed was wrong is
-      // a question about their configuration, and this is the layer that owns those.
+      // A hyphenated value was probably meant as a gradient, so name the part that failed.
+      // Diagnosed here, not in the lookup: a config question belongs to the config layer.
       gradientError(String(value), paletteGradientLimit);
       const known = paletteKeys().map((id) => `"${id}"`).join(", ");
       pathError(
@@ -133,10 +111,8 @@ export function normalizePalette(value, { paletteForName, paletteForColor, palet
   if (!("optimal" in value)) {
     pathError("palette", `needs an optimal color — that is the one thing a palette cannot do without. Write ${COLOR_FORMS}.`);
   }
-  // Validated by the same function the shipped palettes go through, so there is one
-  // definition of "a usable palette" whichever road it came in on. It cannot fail here —
-  // everything above has already been normalized to it — which is exactly why it is worth
-  // keeping: the day these two drift apart, this is where it is noticed.
+  // Validated by the same assertPalette() the shipped palettes go through, so "a usable
+  // palette" has one definition. It cannot fail here; it stays as the drift check.
   return completePalette(
     assertPalette(
       {

@@ -1,12 +1,5 @@
-// The extreme-value view: two metric cards for the coldest and the warmest room.
-//
-// The two slots are role-keyed, not entity-keyed: when a different room becomes the
-// coldest, the same card node is patched with the new room's data rather than being
-// replaced. A focused card therefore never loses focus just because the room behind
-// it changed.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Role-keyed coldest/warmest slots preserve focused nodes as room identities change.
+// Template-literal indentation is shipped markup and baseline-pinned.
 
 import { patchMetricCardPair, renderMetricCards } from "../render/primitives/metric-card.js";
 

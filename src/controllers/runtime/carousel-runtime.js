@@ -1,19 +1,6 @@
-// The carousel controller: everything that MOVES, and everything that has to be
-// cleaned up afterwards.
-//
-// It owns four pieces of state and nothing else owns them: the active view index, the
-// resume timer, the accessibility-sync timer, and the one animation frame that follows
-// an animation start. Keeping them together gives every timer one explicit reset owner.
-//
-// What it is NOT allowed to know is deliberate and complete: no hass, no configuration
-// object, no domain model, no renderer, no view model. It receives four things —
-// a platform, two narrow DOM ports, and a handful of scalar values — and everything
-// else is a callback into the element for a decision it genuinely cannot make itself
-// (is the user currently touching the card?).
-//
-// The wall-clock model is what makes it testable: nothing here reads a clock, it asks
-// the platform. A fake platform therefore makes the entire auto-slide deterministic,
-// which is the only way to assert an animation phase without waiting for one.
+// Owns carousel position, resume/A11y timers and the animation-start frame. It knows no
+// hass, config object, model or renderer; clock and DOM access arrive through narrow ports.
+// Contract: internal documentation §5 "Carousel, Swipe und Accessibility".
 
 import { clamp } from "../../core/numbers.js";
 import { SLIDE_EASING_CSS } from "../../core/easing.js";
@@ -30,23 +17,14 @@ import {
   waitFromTimestampUntilViewHold,
 } from "./carousel-timing.js";
 
-// Guards against a 0ms re-arm loop if a phase lands exactly on — or a floating-point
-// hair past — a flip boundary.
-//
-// It is a floor on SCHEDULING, and deliberately not a moment longer than it has to be:
-// whatever it is set to, a flip that turns out to be due sooner than that is applied
-// that much late. At 50ms it was long enough to be seen — a timer that fired a hair
-// before its own flip deferred that flip by a twentieth of a second. 4ms is the point
-// below which browsers clamp nested timeouts anyway, so nothing shorter is schedulable
-// and nothing longer is needed to break a zero-delay loop.
+// Scheduling floor that breaks zero-delay re-arm loops without delaying a due flip beyond
+// the browser's own nested-timeout clamp.
 const MIN_RESCHEDULE_MS = 4;
 
-// How long the eased settle after a manual swipe takes, and how long the card waits
-// before it even considers rejoining the synchronized animation.
+// Manual swipe settle duration; synchronized rejoin has a separate delay.
 const SETTLE_MS = 420;
 
 export function createCarouselController({ platform, getTrack, getViewElements, getTimingConfig, isInteracting }) {
-  // ---- owned state ----------------------------------------------------------
   let viewKeys = [];
   let activeIndex = 0;
   let resumeTimer = null;
@@ -56,12 +34,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   const viewCount = () => viewKeys.length;
   const interacting = () => Boolean(isInteracting?.());
 
-  // ---- timing ---------------------------------------------------------------
-  // PULLED, not pushed. Three scalars, read on demand from the one place that owns
-  // them. A pushed copy would need a synchronization point before every timing read —
-  // and there is one that happens before any render at all: a card connected before its
-  // first hass update starts the rotation, which would then run against stale zeros.
-  // The controller still cannot see the configuration object, only these three numbers.
+  // Pull timing scalars on demand; a pushed copy could be stale before the first render.
   const config = () => getTimingConfig() || {};
   const holdSecondsOf = () => Number(config().rotationSeconds);
   const slideSecondsOf = () => Number(config().slideSeconds);
@@ -74,10 +47,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
       nowMs: platform.now(),
     });
 
-  // Auto-rotation needs at least two views, positive durations, an explicit opt-in and
-  // a user who has not asked for reduced motion. Note that this gates only the timer
-  // and the synchronized CSS animation — swiping is a separate decision the element
-  // makes, and is not read here at all.
+  // Swipe is independent; this gates only synchronized animation and its timers.
   const hasAutoSlide = () => {
     const holdSeconds = holdSecondsOf();
     const slideSeconds = slideSecondsOf();
@@ -94,10 +64,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
 
   const maxTrackOffsetPct = () => -((Math.max(1, viewCount()) - 1) * viewWidthPct(viewCount()));
 
-  // ---- track manipulation ---------------------------------------------------
-  // Every path that takes manual control marks the track "rtc-manual" and kills the
-  // animation. That class is also the single signal for "the JS index IS the visible
-  // position", which currentVisualIndex() reads back.
+  // `rtc-manual` means the JS index, not the animation phase, is visibly authoritative.
   function takeManualControl(track) {
     track.classList.add("rtc-manual");
     track.style.animation = "none";
@@ -121,8 +88,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     track.style.transform = `translate3d(${-(activeIndex || 0) * viewWidthPct(viewCount())}%,0,0)`;
   }
 
-  // Freezes the synchronized animation exactly where it currently is, so a swipe that
-  // starts mid-slide does not jump.
+  // Freeze the rendered transform so a swipe beginning mid-slide does not jump.
   function pauseTrackAtCurrentPosition(track) {
     const currentTranslate = trackTranslatePct(track);
     takeManualControl(track);
@@ -131,9 +97,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     return currentTranslate;
   }
 
-  // The same freeze, but the controller finds its own track — so the interaction runtime
-  // never has to query the DOM. With no track mounted there is nothing to freeze and the
-  // index-derived position is the honest answer.
+  // DOM-owning variant; without a track, use the index-derived position.
   function freezeTrackAtCurrentPosition() {
     const track = getTrack();
     if (!track) return -(activeIndex || 0) * viewWidthPct(viewCount());
@@ -154,57 +118,20 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     track.style.transition = enable ? `transform ${SETTLE_MS}ms ${SLIDE_EASING_CSS}` : "none";
   }
 
-  // ---- which view is actually in front --------------------------------------
-  // The phase the track is VISIBLY at, which is not the same thing as the phase the
-  // wall clock is at.
-  //
-  // The synchronized animation is started with `animation-delay: -phaseMs` read from
-  // the wall clock, but it only begins with the frame that applies that declaration.
-  // However long that frame took becomes a fixed offset between the two for the whole
-  // life of that animation — ~23 ms measured on a fast machine, and bounded by nothing
-  // on a slow one. Anything derived from the wall clock is therefore that much AHEAD of
-  // what is on screen.
-  //
-  // That is not a rounding detail for accessibility. The accessible view flips
-  // holdMs + 35.4 % of slideMs into a segment, i.e. 53 ms after the hold ends for this
-  // card's own defaults. Once the offset exceeds that, the flip lands while the track
-  // is still parked: assistive technology announces the next view while the current one
-  // is unmoved and fully on screen. It was observed exactly there, as a reproducible CI
-  // failure on a slower machine.
-  //
-  // Asking the animation removes the offset by construction, on every machine. The wall
-  // clock stays the fallback and stays the SOURCE of the synchronization — two cards on
-  // one dashboard still agree because both derive their delay from it; this only reads
-  // back where the resulting animation actually got to.
-  //
-  // "Where it got to" means NOW, including from the timer callback below, where an
-  // animation clock read raw would still be reporting the last painted frame. The
-  // platform port owns that correction; see msSinceAnimationFrame() in
-  // browser-platform.js.
+  // The wall clock synchronizes cards, but start-frame latency makes it lead the rendered
+  // animation. A11y flips at holdMs + 35.4% of slideMs, so use the animation's corrected
+  // current phase for what is visible; keep wall time only as fallback. See browser-platform.js
+  // and internal documentation §5 "Carousel, Swipe und Accessibility".
   function visiblePhaseMs(track, current) {
     const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
-    // A running animation still carries the PREVIOUS cycle length for a moment after
-    // rotation_seconds/slide_seconds change. Reading the new schedule at the old
-    // animation's phase would be worse than the offset this exists to remove.
+    // Reject a phase that belongs to the previous timing configuration.
     if (!animation || Math.round(animation.cycleMs) !== Math.round(current.cycleMs)) return current.phaseMs;
     return animation.phaseMs;
   }
 
-  // ONE reading of the situation, and everything the accessibility pass derives from it.
-  //
-  // "Which view is accessible now" and "how long until that stops being true" are two
-  // answers about a single instant, and they have to come from a single reading of the
-  // phase. The sync timer is armed to fire exactly ON a flip, so whenever it runs the
-  // boundary is at most a hair away in either direction — and the phase is extrapolated
-  // to *now* on every read, so two reads a few hundred microseconds apart can land on
-  // opposite sides of it. A pass that read twice could therefore write the OUTGOING view
-  // and then arm as though the flip were already behind it, leaving the wrong view
-  // announced to assistive technology for a full hold. Measured in Chromium: in every
-  // captured occurrence the last attribute write landed 0.7–2.3 ms before its own flip
-  // and nothing followed for the rest of the segment.
-  //
-  // The phase is read only where it can mean anything: the moment anything takes manual
-  // control, the JS index IS the visible position and there is no flip to wait for.
+  // Derive visible index and next flip from ONE phase read: near an exact flip, two reads can
+  // straddle the boundary and re-arm past a view that was never announced. In manual mode the
+  // JS index is authoritative and there is no phase/flip to read.
   function accessibilitySnapshot() {
     const track = getTrack();
     const current = timing();
@@ -218,20 +145,13 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     };
   }
 
-  // The single shared answer, used both by the accessibility sync and by the
-  // active-view preservation across a structural rebuild, so the two can never quietly
-  // disagree. While the synchronized animation drives the track, the JS index is stale
-  // between discrete updates and the phase is authoritative.
+  // Shared by A11y sync and active-view preservation; animation phase wins while engaged.
   function currentVisualIndex() {
     return accessibilitySnapshot().visibleIndex;
   }
 
-  // Keeps offscreen views out of the tab order and hidden from assistive technology.
-  // Every view stays permanently mounted, so without this a keyboard user could tab
-  // into a card that is not on screen.
-  //
-  // The index is a parameter so that a caller who has already read the phase applies
-  // THAT reading rather than taking a second one of its own.
+  // Permanently mounted offscreen views must be inert and hidden. Accept the index so callers
+  // apply the phase they already read instead of taking a boundary-crossing second read.
   function updateViewAccessibility(visibleIndex = currentVisualIndex()) {
     const views = getViewElements();
     if (!views) return;
@@ -243,19 +163,14 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     });
   }
 
-  // One precisely-timed timer per flip rather than continuous polling. Re-arms itself
-  // for as long as the track stays in synchronized mode; a hidden document stops the
-  // chain entirely, because nothing can be looked at and a background tab throttles the
-  // timer anyway.
+  // One timer per flip, no polling; hidden/manual tracks stop the chain.
   function scheduleAccessibilitySync() {
     clearA11yTimer();
     const snapshot = accessibilitySnapshot();
     updateViewAccessibility(snapshot.visibleIndex);
     if (platform.isDocumentHidden()) return;
     if (!snapshot.autoEngaged) return;
-    // Armed against the same phase the attributes were just written from, so the timer
-    // fires when the FLIP is due on screen rather than when the wall clock says it is —
-    // and so that it can never arm past a flip it has not yet applied.
+    // Arm from the same phase used to write attributes; never skip an unapplied flip.
     const waitMs = Math.max(MIN_RESCHEDULE_MS, msUntilNextAccessibilityFlip(snapshot.phaseMs, snapshot.timing));
     a11yTimer = platform.setTimeout(() => {
       a11yTimer = null;
@@ -263,7 +178,6 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     }, waitMs);
   }
 
-  // ---- engaging and leaving the synchronized animation ----------------------
   function applyAutoSlideStyles() {
     const track = getTrack();
     if (!track || interacting()) return;
@@ -281,17 +195,8 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     track.style.animation = `${TRACK_ANIMATION_NAME} ${current.cycleMs}ms linear infinite`;
     track.style.animationDelay = `-${current.phaseMs}ms`;
     scheduleAccessibilitySync();
-    // The animation declared on the two lines above does not EXIST until the frame that
-    // applies them. The sync just scheduled therefore had nothing to ask and fell back
-    // to the wall clock — the one clock that is guaranteed to be wrong here, because the
-    // animation is about to lag it by however long that frame takes. Worse, the fallback
-    // does not merely mislabel this instant: msUntilNextAccessibilityFlip() then arms the
-    // chain against the same wrong phase, so a card can sit on the wrong accessible view
-    // for close to a full segment before anything reconsiders.
-    //
-    // One frame later there is something to ask. This is a single frame per animation
-    // start, not per flip, so the "one precisely-timed timer instead of polling" property
-    // is untouched.
+    // The animation exists only after this declaration's frame. Resync once then so the
+    // A11y chain uses animation phase, not the guaranteed-leading wall-clock fallback.
     clearAnimationStartFrame();
     animationStartFrame = platform.requestAnimationFrame(() => {
       animationStartFrame = null;
@@ -299,9 +204,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     });
   }
 
-  // Rejoin the synchronized animation only once its global phase already HOLDS the
-  // view the user is parked on. Handing the track back at any other moment would make
-  // it visibly jump to wherever the wall clock happens to be.
+  // Rejoin only while global phase holds the parked view, avoiding a visible jump.
   function resumeWhenAligned(targetIndex, minDelayMs = 10000) {
     clearResumeTimer();
     if (!hasAutoSlide()) return;
@@ -312,8 +215,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     resumeTimer = platform.setTimeout(() => {
       resumeTimer = null;
       if (interacting() || !hasAutoSlide()) return;
-      // The phase may have drifted past the window while the timer was pending — a
-      // slow frame, a throttled background tab. Re-aim rather than hand over wrongly.
+      // A slow/throttled timer may miss its window; re-aim instead of jumping.
       if (!phaseHoldsView(index)) {
         resumeWhenAligned(index, 0);
         return;
@@ -335,7 +237,6 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     return isPhaseInStableViewHold(targetIndex, current.phaseMs, current);
   }
 
-  // ---- timers ---------------------------------------------------------------
   function clearResumeTimer() {
     if (resumeTimer !== null) {
       platform.clearTimeout(resumeTimer);
@@ -364,7 +265,6 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   }
 
   return {
-    // ---- state the controller owns ------------------------------------------
     get activeIndex() {
       return activeIndex;
     },
@@ -375,13 +275,11 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
       return viewKeys;
     },
 
-    // The element hands over the resolved view list after each render; the timing is
-    // pulled through getTimingConfig() instead (see there).
+    // View list is pushed after render; timing remains pulled on demand.
     setViews(keys) {
       viewKeys = Array.isArray(keys) ? keys : [];
     },
 
-    // ---- queries -------------------------------------------------------------
     timing,
     hasAutoSlide,
     holdSequence: () => holdSequence(viewCount()),
@@ -389,17 +287,12 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     trackAnimationCss: () => trackAnimationCss(timing(), activeIndex),
     slideKeyframes: () => slideKeyframes(timing()),
     maxTrackOffsetPct,
-    // Whether the track is currently detached from the synchronized animation. The
-    // interaction runtime needs to know this — a tap must not schedule a resume for a
-    // state that never applied — and asking the controller keeps the "rtc-manual" class
-    // an implementation detail of exactly one module.
+    // Keeps the `rtc-manual` class private to this DOM owner.
     isTrackManual: () => Boolean(getTrack()?.classList.contains("rtc-manual")),
     currentVisualIndex,
     phaseHoldsView,
     delayUntilPhaseHolds,
-    // The raw handles, not booleans. The element exposes them read-only for tests that
-    // assert "no timer lingers"; a derived boolean would be a second representation of
-    // the same fact and could drift from it.
+    // Expose owner handles read-only; booleans would duplicate state.
     get resumeTimerHandle() {
       return resumeTimer;
     },
@@ -410,7 +303,6 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
       return animationStartFrame;
     },
 
-    // ---- commands ------------------------------------------------------------
     start: applyAutoSlideStyles,
     stop,
     restart() {
@@ -431,8 +323,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     setTrackTranslate,
     setTrackTransition,
 
-    // Everything this controller could still be holding. Called on disconnect, and
-    // safe to call twice.
+    // Release every owned timer/frame; idempotent.
     destroy: stop,
   };
 }

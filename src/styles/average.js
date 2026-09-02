@@ -1,17 +1,7 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
+// SHIPPED STYLESHEET SLICE: average button/value/unit/trend states.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-// The average: its button and disabled shapes, the value, the unit and the trend arrow.
-
-export const AVERAGE_CSS = `        /* padding belongs here for the same reason every other line does: appearance:none
-           removes the widget look, not the UA box. Chrome gives a button 1px 6px, other
-           engines give it something else, and whatever is left over ends up deciding how
-           the card is spaced. Zero here, and every button states its own. */
+export const AVERAGE_CSS = `        /* appearance:none removes widget styling, not engine-specific UA padding. */
         button {
           appearance: none;
           -webkit-appearance: none;
@@ -23,11 +13,7 @@ export const AVERAGE_CSS = `        /* padding belongs here for the same reason 
           text-align: left;
         }
 
-        /* The headline is a <button> when the value belongs to one entity and a <div>
-           when it is a consensus (see render/primitives/average.js). Both carry THIS
-           class, so stating the indentation here is what makes the two shapes the same
-           box — the card no longer moves when a main entity drops out and the consensus
-           takes over, and it no longer depends on which engine is rendering it. */
+        /* Entity-button and consensus-div headlines share this engine-independent box. */
         .rtc-avg-button {
           position: relative;
           display: block;
@@ -53,18 +39,8 @@ export const AVERAGE_CSS = `        /* padding belongs here for the same reason 
           outline-offset: 2px;
         }
 
-        /* Clipped like every other single-line label on the card (see the header
-           subtitle, the room-chip label and the extreme cards). The caption sits in a
-           narrow column, so a long one paints straight across the view beside it. Until
-           2.37.0 the text here was always a short translated constant and the overflow
-           was unreachable; a single-room card now captions itself with the room's own
-           name, which the user writes and which can be any length.
-
-           contain:inline-size is what keeps that decision intact now that the column
-           sizes itself to its content: overflow:hidden clips the PAINT but leaves the
-           intrinsic width alone, so a long caption would otherwise drag the column open
-           to its full length and take the space away from the view. The caption is
-           declared not to have a say in how wide its own column is; the value does. */
+        /* contain:inline-size prevents a long caption's intrinsic width from widening
+           its column; overflow then clips only the paint. */
         .rtc-avg-label {
           contain: inline-size;
           display: block;
@@ -78,11 +54,7 @@ export const AVERAGE_CSS = `        /* padding belongs here for the same reason 
           text-overflow: ellipsis;
         }
 
-        /* The clip is the backstop, not the mechanism: the column grows to fit this text
-           (see .rtc-main-panel), so in normal use there is nothing to clip. It matters
-           once the column has grown as far as the view's own floor permits — a reading
-           past that point is a broken sensor, and an ellipsis on the value is a better
-           answer than paint across the view beside it. */
+        /* Ellipsis is the backstop after the value column reaches the view's floor. */
         .rtc-avg-value {
           display: block;
           margin-top: 4px;

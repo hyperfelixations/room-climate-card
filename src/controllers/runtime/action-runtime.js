@@ -1,24 +1,13 @@
-// Handing a user action to Home Assistant.
-//
-// The card does not open a dialog, navigate or call a service itself. It dispatches one
-// `hass-action` event with a config attached, and the dashboard does the rest — which is
-// why the whole of this module is about assembling that config correctly and dispatching
-// it into the right realm.
-//
-// It receives neither hass nor the element. `dispatch` is a single narrow callback, and
-// the two configuration lookups return exactly what they say: the rooms array and the
-// card-level action pair.
+// Builds one action config and dispatches one realm-correct `hass-action` event. It owns
+// no state and receives neither hass nor the element. Contract: internal documentation
+// §5 "Swipe-, Tap-, Hold- und Action-System".
 
 const MORE_INFO = "more-info";
 
-// A clicked element carries its own entity, and a room chip additionally carries the
-// index of the room it came from. A room's own action wins over the card-level one — a
-// per-room override would otherwise be silently ignored on exactly the element it was
-// configured for.
+// Room actions override card actions; the target supplies its entity and room index.
 export function cloneAction(action, entityId) {
   const cloned = { ...(action || { action: MORE_INFO }) };
-  // more-info without an entity would open nothing. Filling it in from the clicked
-  // element is what makes `tap_action: more-info` work as a card-wide default.
+  // `more-info` needs the clicked entity when none was configured explicitly.
   if (cloned.action === MORE_INFO && !cloned.entity) cloned.entity = entityId;
   return cloned;
 }
@@ -41,18 +30,14 @@ export function createActionRuntime({ platform, getRooms, getCardActions, dispat
     fire(target, action) {
       if (!target?.dataset?.entity) return;
       const entityId = target.dataset.entity;
-      // Only these two exist; anything else is treated as a tap rather than dropped,
-      // because a gesture the user made should never silently do nothing.
+      // Treat anything except the one explicit hold token as a tap.
       const eventAction = action === "hold" ? "hold" : "tap";
       const actionConfig = buildActionConfig(target, entityId);
       const selectedAction = actionConfig[`${eventAction}_action`];
-      // `none` is a deliberate configuration, not a missing one: it means "this gesture
-      // does nothing here".
+      // `none` is an explicit no-op, not a missing action.
       if (!selectedAction || selectedAction.action === "none") return;
 
-      // Constructed in the card's CURRENT realm (see browser-platform.js): an event from
-      // a foreign realm fails the listener's own instanceof check, and the dashboard
-      // would silently ignore it.
+      // A foreign-realm event can fail the dashboard listener's instanceof check.
       const event = platform.createEvent("hass-action", { bubbles: true, composed: true });
       event.detail = { config: actionConfig, action: eventAction };
       dispatch(event);

@@ -1,11 +1,6 @@
-// The accepted Home Assistant action types for tap_action/hold_action.
-//
-// Trust model: the configuration comes from the dashboard owner, the same as
-// for any other Lovelace card, and URL/navigate/service parameters stay
-// dashboard-owner-trusted by design. The action NAME is nevertheless checked
-// against this list, because it ends up in a dispatched `hass-action` event —
-// an unknown or missing value has to fall back safely rather than being passed
-// through raw. This is a name allowlist, not full payload validation.
+// The accepted Home Assistant action types for tap_action/hold_action: a name
+// allowlist, not full payload validation. Trust model in interne Doku §4
+// „Sicherheits- und HTML-Escaping-Vertrag".
 
 import { isPlainObject } from "./primitives.js";
 
@@ -21,10 +16,8 @@ export function allowedActionTypes() {
 }
 
 // Validates a tap_action/hold_action object; an invalid or missing value falls
-// back to `fallback` (a card-level default, or null for a per-room override
-// that should inherit the card-level action) instead of being passed through
-// raw. The object is copied so a later mutation cannot reach back into the
-// user's config or the defaults.
+// back to `fallback` (a card-level default, or null for a per-room override that
+// inherits the card-level action). The object is copied.
 export function normalizeAction(value, fallback) {
   if (isPlainObject(value) && typeof value.action === "string" && isAllowedActionType(value.action)) {
     return { ...value };

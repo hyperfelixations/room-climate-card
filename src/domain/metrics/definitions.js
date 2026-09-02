@@ -2,45 +2,23 @@ import { CLASSIFICATION_PROFILE_REGISTRY } from "../classification/registry.js";
 
 // MetricDefinition / UnitProfile / QuantityKind registry.
 //
-// One entry per measurement kind. Each owns its canonical unit, the key of
-// the UnitProfile that IS that canonical unit, references to the canonical
-// classification tiers/bands, and every UnitProfile it can be displayed in.
+// One entry per measurement kind, each owning its canonical unit, the key of the
+// UnitProfile that IS that unit, references to the canonical classification tiers/bands
+// (not a second copy), and every UnitProfile it can be displayed in. canonicalUnit is
+// stated HERE and read from here by the presentation metadata, never the reverse.
 //
-// canonicalUnit is defined HERE and referenced by the presentation metadata
-// (METRIC_META.unitFallback), not the other way round: the canonical unit is
-// a measurement fact, and there must be exactly one place that states it.
-
-// All four supported metrics use the same registry contract: temperature provides
-// Celsius/Fahrenheit/Kelvin profiles, while humidity/co2/pm25 each use an
-// identity UnitProfile so unit validation and conversion follow the same
-// atomic path everywhere. _resolveMetricContext() canonicalizes values;
-// classification profiles are projected back into the resolved display
-// profile before classification, scale, or icon decisions.
-//
-// A "quantityKind" distinguishes three fundamentally different numeric
-// semantics that must never share a conversion path:
-//   absolute — an actual reading (e.g. today's temperature): converts via
-//              toCanonical()/fromCanonical(), which DOES apply the
-//              Fahrenheit offset (0 °C = 32 °F).
-//   delta    — a difference between two readings (e.g. daily spread,
-//              room-to-room spread): converts via deltaToCanonical()/
-//              deltaFromCanonical(), which must NEVER apply an offset
-//              (a 0 °C difference is a 0 °F difference, not 32 °F).
-//   rate     — a delta per unit time (e.g. a trend in °C/h): uses the
-//              exact same value-conversion factor as delta — only the
-//              time unit differs, and this module does not touch time
-//              units at all, so "rate" and "delta" share one code path.
-//
-// Celsius stays the canonical temperature unit. The indoor profile's
-// tiers and bands are referenced directly below from
-// CLASSIFICATION_PROFILE_REGISTRY rather than copied into a second table.
+// Temperature has Celsius/Fahrenheit/Kelvin; humidity/co2/pm25 each use an identity
+// profile so validation and conversion follow one atomic path. A `quantityKind` picks
+// the conversion path: `absolute` via toCanonical/fromCanonical (applies the Fahrenheit
+// offset), `delta` and `rate` via deltaToCanonical/deltaFromCanonical (never an offset);
+// `rate` differs from `delta` only in a time unit this module does not touch. See
+// domain/units/conversion.js.
 export const METRIC_DEFINITIONS = {
   temperature: {
     metricKind: "temperature",
     canonicalUnit: "°C",
-    // Which unitProfiles key IS the canonical unit — lets the measurement
-    // pipeline look this up generically instead of
-    // hard-coding the string "celsius" at every call site.
+    // Which unitProfiles key IS the canonical unit, so the pipeline looks it up
+    // generically instead of hard-coding "celsius" at every call site.
     canonicalProfileKey: "celsius",
     canonicalClassificationTiers: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.tiers,
     canonicalComfortBand: CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.comfort,
@@ -68,16 +46,11 @@ export const METRIC_DEFINITIONS = {
         deltaToCanonical: (v) => (v * 5) / 9,
         deltaFromCanonical: (v) => (v * 9) / 5,
         baseDisplayStep: 2,
-        // Fahrenheit classification/comfort/
-        // optimal/base-scale boundaries are always whole numbers, so a
-        // displayed boundary and the boundary actually used for
-        // classification never disagree.
+        // Round projected boundaries to whole °F, so a displayed boundary and the one
+        // used for classification never disagree.
         thresholdRounding: (v) => Math.round(v),
-        // The dynamic scale's rounding step depends on
-        // how wide the actually-displayed span is — a narrow span rounds
-        // to a fine 2°F step, a wide one to a coarse 10°F step, so the
-        // axis never ends up with an absurdly fine or coarse grid.
-        // Celsius/Kelvin omit this field and keep a fixed baseDisplayStep of 1.
+        // Dynamic scale step by displayed span: fine for a narrow range, coarse for a
+        // wide one. Celsius/Kelvin omit this and keep a fixed baseDisplayStep of 1.
         dynamicDisplaySteps: [
           { maxSpan: 20, step: 2 },
           { maxSpan: 40, step: 5 },
@@ -98,9 +71,8 @@ export const METRIC_DEFINITIONS = {
       },
     },
   },
-  // Humidity, CO2 and PM2.5 use single-entry identity UnitProfiles so every
-  // metric atomically resolves and validates its unit through the same registry.
-  // An unresolvable unit never falls back to the canonical profile.
+  // Humidity, CO2 and PM2.5 use a single identity UnitProfile each; an unresolvable unit
+  // never falls back to the canonical profile.
   humidity: {
     metricKind: "humidity",
     canonicalUnit: "%",
@@ -164,15 +136,7 @@ export const METRIC_DEFINITIONS = {
       },
     },
   },
-  // A future metric kind is added here as
-  // its own key, e.g.:
-  //   absolute_humidity: {
-  //     metricKind: "absolute_humidity",
-  //     canonicalUnit: "g/m³",
-  //     canonicalClassificationTiers: [...],       // once defined
-  //     canonicalComfortBand: {...}, canonicalOptimalBand: {...}, canonicalBaseScaleBand: {...},
-  //     unitProfiles: { gram_per_m3: {...}, milligram_per_m3: {...} },
-  //   }
-  // Conversion and derivation never branch on a specific metricKind; tests
-  // exercise them with a synthetic, unregistered profile.
+  // A future metric kind is another key of the same shape (canonicalUnit, tier/band
+  // references, unitProfiles). Conversion and derivation never branch on a specific
+  // metricKind; tests exercise them with a synthetic, unregistered profile.
 };

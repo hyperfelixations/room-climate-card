@@ -1,30 +1,20 @@
-// Which classification profile applies, and how a value is classified against
-// it once it has been chosen.
+// Which classification profile applies, and how a value is classified against it.
 //
-// Two separate decisions live here:
+//   resolveClassificationProfile()  card-wide policy: a custom YAML profile, a named
+//                                   built-in, or the metric kind's default.
+//   resolveValueClassification()    per-value priority: forced entity attributes, then
+//                                   complete entity attributes in `auto`, then numeric.
 //
-//   resolveClassificationProfile()  the card-wide policy: a custom profile from
-//                                  YAML, a named built-in, or the metric kind's
-//                                  default.
-//   resolveValueClassification()    the per-value priority: forced entity
-//                                  attributes, then complete entity attributes
-//                                  in automatic mode, then the numeric profile.
-//
-// The second one takes the numeric path as a THUNK rather than a value. That is
-// not a style choice: the numeric path projects the profile into the display unit
-// and can legitimately throw on a degenerate custom profile. Computing it eagerly
-// would make a card in `entity` mode start failing on a profile it never looks
-// at.
+// The numeric path is passed as a THUNK: it projects the profile and can throw on a
+// degenerate custom profile, so an `entity`-mode card must not evaluate it eagerly.
 
 import { readEntityClassification } from "./entity-attributes.js";
 
 const NO_LEVEL = "—";
 
-// An entity-provided classification in the shape the colour resolver reads. Its colour
-// is EXPLICIT — whatever the integration supplied, or nothing — and it carries no
-// distance from optimal at all: the integration's `value_score` is a number on the
-// integration's own scale, and reading it as a distance in the card's palette would
-// invent a relationship that does not exist.
+// An entity-provided classification in the shape the colour resolver reads. Its colour is
+// EXPLICIT (whatever the integration supplied, or nothing) and it carries no deviation:
+// `value_score` is on the integration's own scale, not the card's palette.
 function fromEntityAttributes(entity, level) {
   return {
     level,
@@ -40,14 +30,10 @@ function fromEntityAttributes(entity, level) {
   };
 }
 
-// lenient: an entity's OWN metric kind has to be probed before kind-based
-// filtering has run, so at that point a card-wide profile scoped to a DIFFERENT
-// kind (e.g. an outdoor temperature profile, probed for an incidental humidity
-// room) is not yet known to be irrelevant. Falling back to that kind's own
-// default instead of throwing lets the later kind filter do its job. Every other
-// caller passes the card's actually-resolved kind, so a genuine mismatch between
-// the primary entity's kind and the configured profile still surfaces as the
-// documented config error.
+// lenient: while probing a room's OWN metric kind (before kind filtering has run), a
+// card-wide profile scoped to a different kind is not yet known to be irrelevant, so fall
+// back to that kind's default instead of throwing. Every other caller passes the resolved
+// kind, so a genuine primary/profile mismatch still surfaces as the documented config error.
 export function resolveClassificationProfile(registryForKind, policy, metricKind, { lenient = false } = {}) {
   if (!registryForKind) throw new Error(`No classification profiles registered for metric kind "${metricKind}"`);
   if (policy.source === "custom") {
@@ -68,14 +54,9 @@ export function resolveClassificationProfile(registryForKind, policy, metricKind
   return profile;
 }
 
-// The per-value priority. `attributes` is the entity's raw attribute object (or
-// null when the entity does not exist); `numericFallback` is the thunk described
-// above.
-//
-// In forced `entity` mode the card shows whatever the integration provides and
-// never falls back to a numeric tier — a neutral colour and an em dash stand in
-// for missing metadata, so it stays visible that the entity, not the card, owns
-// the classification.
+// `attributes` is the entity's raw attribute object (null when it does not exist);
+// `numericFallback` is the thunk. `entity` mode never falls back to a numeric tier —
+// a neutral colour and an em dash stand in for missing metadata.
 export function resolveValueClassification({ policy, attributes, numericFallback }) {
   if (policy.source === "entity") {
     const entity = readEntityClassification(attributes, { allowPartial: true });

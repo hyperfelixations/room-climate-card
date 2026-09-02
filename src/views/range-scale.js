@@ -1,12 +1,5 @@
-// The daily-range scale view.
-//
-// The same bar as the main scale view, with today's minimum and maximum as markers
-// instead of the coldest and warmest room, and a top row of three labels above their
-// own markers instead of a single comfort pill. The cold and warm marker classes are
-// reused for min and max: identical shape and CSS, a different meaning in this view.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Daily-range scale reuses the shared bar and cold/warm marker shapes for min/max semantics.
+// Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../core/text.js";
 import { patchMarker, renderMarker } from "../render/primitives/marker.js";
@@ -17,8 +10,7 @@ import { resolveRangeScaleLabels } from "../render/layout/range-scale-labels.js"
 const VIEW_CLASS = "rtc-range-scale-view";
 const CONTAINER_SELECTOR = `.${VIEW_CLASS}`;
 
-// The initial percentage lefts. The layout pass converts them to pixels once it can
-// measure the rendered widths; until then the percentage is the honest approximation.
+// Layout replaces initial percentage anchors with measured pixel positions.
 const SIDE_LABEL_CLASS = { min: "rtc-range-scale-label-min", max: "rtc-range-scale-label-max" };
 
 function renderTopRow(content) {
@@ -48,9 +40,7 @@ function renderMarkers(content) {
 export const rangeScaleView = {
   key: "range_scale",
 
-  // The optional nodes of this view's markup (see scaleView.structureSignature()).
-  // The three top labels and the three markers are always emitted here, so only the
-  // two bands, the optimal label and the footer can appear or disappear.
+  // Top labels/markers are fixed; only bands, optimal label and footer are structural.
   structureSignature(content) {
     return [
       content.showComfortBand ? "c" : "-", // .rtc-comfort-band
@@ -97,10 +87,7 @@ export const rangeScaleView = {
     if (!content) return;
     const containerEl = root.querySelector(CONTAINER_SELECTOR);
     if (!containerEl) return;
-    // This view has two label groups to resolve: the shared optimal label under the
-    // bar, and its own three top labels. Resolving only the second would leave the
-    // first at its unresolved initial percentage through the first render, a resize
-    // and font-ready, catching up only on the next data update.
+    // Resolve both shared lower and view-specific upper label groups on every layout trigger.
     resolveOptimalLabelPosition(containerEl, content);
     resolveRangeScaleLabels(containerEl, content);
   },

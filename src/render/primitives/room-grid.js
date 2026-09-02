@@ -1,12 +1,5 @@
-// The room chips, and the grid they sit in.
-//
-// Each row is its own CSS grid with its own column count, because a single native
-// grid cannot vary the column count per row. A single row — the unconfigured default
-// up to seven rooms — renders identically to a flat grid, just wrapped one level
-// deeper.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Each room row owns its grid/column count; native grid cannot vary columns per row.
+// Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
 import { applyFocusFallback } from "./focus.js";
@@ -34,9 +27,7 @@ export function renderRoomChip(chip) {
       `;
 }
 
-// Field-for-field mirror of renderRoomChip(). Used for BOTH reused chips and freshly
-// created ones: a new chip is first parsed for its skeleton shape and then patched
-// here too, so exactly one place knows which fields a chip has.
+// Mirror renderRoomChip() for both reused and newly parsed chip skeletons.
 export function patchRoomChip(element, chip) {
   element.setAttribute("data-entity", chip.entity);
   element.setAttribute("data-room-index", String(chip.index));
@@ -49,9 +40,7 @@ export function patchRoomChip(element, chip) {
   element.classList.toggle("rtc-room-unavailable", Boolean(chip.unavailable));
   const shortEl = element.querySelector(".rtc-room-short");
   shortEl.textContent = chip.displayLabel;
-  // toggleAttribute rather than a conditional setAttribute: chip nodes are reused
-  // across renders, so a stale "true" from a previous configuration has to be
-  // actively removed once the label no longer qualifies.
+  // Reused nodes must actively remove a stale short-guaranteed flag.
   shortEl.toggleAttribute("data-short-guaranteed", chip.shortGuaranteed);
   element.querySelector(".rtc-room-mark").textContent = chip.mark;
   element.querySelector(".rtc-room-value-num").textContent = chip.valueText;
@@ -69,20 +58,9 @@ export function renderRoomGridRows(viewModel) {
     .join("");
 }
 
-// Entity-keyed reconciliation instead of rebuilding the grid on every update.
-//
-// The row wrappers are cheap, unkeyed, non-focusable layout containers; only the chip
-// buttons carry identity and focus, and they are reused by data-entity wherever in
-// the new row structure they end up.
-//
-// A real browser blurs a focused node the instant appendChild/insertBefore is called
-// on it, EVEN when the node is already exactly where it is being moved to: the DOM
-// insert algorithm unconditionally removes and reinserts an already-connected node,
-// and the focus fixup rule fires on that removal step alone. The fix is to never
-// issue the move at all for a chip that is already correctly positioned — by far the
-// common case, since a plain value update touches zero positions. Row wrappers are
-// only ever GROWN before repositioning (a detached wrapper would blur through the
-// same rule) and trimmed afterwards, once guaranteed empty.
+// Reconcile focus-bearing chips by entity; row wrappers are unkeyed layout containers.
+// Browsers blur even a no-op insertion of a focused connected node, so never move an already
+// positioned chip. Grow connected row wrappers before moves and trim empty extras afterwards.
 export function updateRoomGrid(context, root, roomGridEl, viewModel) {
   if (!roomGridEl) return;
 
@@ -113,8 +91,6 @@ export function updateRoomGrid(context, root, roomGridEl, viewModel) {
 
   while (roomGridEl.children.length > rows.length) roomGridEl.removeChild(roomGridEl.lastElementChild);
 
-  // Covers both ways a focused chip can lose focus: its room disappeared, or it
-  // genuinely had to move. Comparing before and after catches both uniformly instead
-  // of trying to predict which happened.
+  // Restore focus after either removal or a genuine move.
   if (focusedChip && root?.activeElement !== focusedChip) applyFocusFallback(root);
 }

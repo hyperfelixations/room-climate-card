@@ -1,22 +1,6 @@
-// The CardViewModel: the domain model projected into everything the renderers
-// need, and nothing they do not.
-//
-// This is where language, locale and CSS enter the pipeline. Below this line a
-// reading is numbers and semantic tokens; from here on it is titles, labels,
-// formatted values, percentages, pixel offsets and rgba() colours. Keeping that
-// boundary sharp is what lets the whole data path be tested once,
-// language-independently, instead of once per locale.
-//
-// The contract with the rendering layer is that a renderer NEVER translates,
-// formats, resolves a profile, classifies a value, recomputes a tone, reads a view
-// option or reaches into the configuration. Everything a renderer or a DOM patcher
-// interpolates is a finished value on this model. That is what makes the render path
-// a pure function of this object, and what makes the render path testable without a
-// hass object.
-//
-// `texts` is the only collaborator, and it is deliberately narrow — a translator, a
-// number formatter, a unit-aware formatter and a time formatter. It is not a service
-// locator: it cannot reach the card, the DOM or the configuration.
+// Presentation boundary: finish translation, formatting, geometry and paint values here.
+// Renderers receive no config or hass and perform none of those decisions themselves.
+// `texts` is the only collaborator: translation plus number, unit and time formatting.
 
 import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
@@ -33,9 +17,7 @@ import { rgba } from "../../core/color.js";
 
 const PLACEHOLDER_STATUSES = new Set([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE]);
 
-// The tone of NOTHING TO SAY. It carries the neutral colour at both names because there is no
-// classification behind it to adjust: the card chose this grey precisely so it can be read on
-// either theme, and measured, the mechanic leaves it alone on both.
+// No-data has no classification to adjust, so neutral colour and ink are identical.
 function buildNeutralTone(icon, texts) {
   return {
     label: texts.t("status.noData"),
@@ -50,10 +32,8 @@ function buildNeutralTone(icon, texts) {
   };
 }
 
-// Joins calculation rooms with display-only placeholders by YAML index. Missing
-// and incompatible sources never enter this list, and placeholders carry no
-// numeric value, classification or colour that a calculation could accidentally
-// consume.
+// Join usable rooms with display-only placeholders by YAML index; never add missing or
+// incompatible sources, or numeric data to placeholders.
 function buildDisplayRooms(domainModel, config) {
   const usableByIndex = new Map((domainModel.rooms?.declared || []).map((room) => [room.index, room]));
   const availabilityByIndex = new Map((domainModel.rooms?.availability || []).map((room) => [room.index, room]));
@@ -105,39 +85,22 @@ function buildSubtitleText(subtitle, texts, metricKind) {
   } else {
     text = texts.t("subtitle.inComfort");
   }
-  // Appended rather than folded into the sentence above: it is an independent
-  // statement, and every language phrases it as its own clause.
+  // Missing rooms form an independent localized clause.
   if (subtitle.missingRooms > 0) {
     text += texts.t("subtitle.missingRooms", { count: subtitle.missingRooms });
   }
   return text;
 }
 
-// The signed hourly rate, as displayed. -0 is normalized to 0 so a rate that rounds
-// to zero from below does not render as "-0.0". `trend` is the trend MODEL, which is
-// null whenever there is no usable rate — the empty string is the right answer then,
-// because the footer segment and the ARIA clause are both omitted.
+// Normalize -0 and return empty text when footer and ARIA should omit an unusable trend.
 export function buildTrendText(trend, texts) {
   if (!trend) return "";
   const value = Object.is(trend.value, -0) ? 0 : trend.value;
   return `${value > 0 ? "+" : ""}${texts.fmt(value)} ${trend.unit}`;
 }
 
-// What the headline value is CALLED.
-//
-// The caption exists to tell the big number apart from the other values on the card.
-// That is the whole rule, and the four cases fall out of it:
-//
-//   an explicit entity_label  the user said what it is called, including "" for
-//                             "call it nothing" — always wins
-//   the headline IS a room    that room's name; `name` already falls back through
-//                             short to the entity id (see config/rooms.js)
-//   there are no rooms        nothing to tell it apart from, and the card title
-//                             already names the measurement — so no caption at all
-//   otherwise                 it stands among room chips, so it says which one it is
-//
-// Every branch reads configuration only. A sensor dropping out can change the VALUE,
-// never what it is called.
+// Config-stable headline label priority: explicit value, direct-room name, none for a lone
+// primary, otherwise the localized home average.
 function resolveHeadlineLabel({ config, topology, roomIndex, texts }) {
   if (config.entity_label !== null) return config.entity_label;
   if (roomIndex !== null) return config.rooms[roomIndex].name;
@@ -149,28 +112,17 @@ function buildAverage({ domainModel, config, topology, texts, tone, position, tr
   const { value, entity, source, roomIndex } = domainModel.average;
   const trend = domainModel.trend.model;
   const label = resolveHeadlineLabel({ config, topology, roomIndex, texts });
-  // Carried as its own fact rather than left for each consumer to re-derive from an
-  // empty string. The renderer omits the whole element when it is false, which makes
-  // this a STRUCTURAL property — see cardStructureSignature().
-  //
-  // `entity_label: ""` and `show.entity_label: false` are two ways of asking for the same
-  // absent node and meet here. The tooltip wording below reads the same boolean on purpose:
-  // a tooltip that opened with a caption nobody can see would name a thing that is not there.
+  // Collapse empty label and show-switch into one structural and tooltip decision.
   const hasLabel = label !== "" && config.show.entity_label;
   const valueText = texts.fmtWithUnit(value);
 
-  // A calculated average gets its own tooltip wording: it is not a reading of the
-  // configured entity, and saying so is the honest thing to show on hover. Without a
-  // caption the label-prefixed forms would produce a tooltip starting with ": ", so
-  // each has a captionless twin.
+  // Calculated and captionless headlines use wording that does not imply an entity or colon.
   const tooltipKey = source === "calculated"
     ? (hasLabel ? "value.tooltipCalculated" : "value.tooltipCalculatedNoLabel")
     : (hasLabel ? "value.tooltip" : "value.tooltipNoLabel");
   const tooltip = texts.t(tooltipKey, { value: valueText, label });
 
-  // A headline that IS a room announces that room by name, reusing the same phrasing
-  // its chip uses. Otherwise the generic "open the average" wording applies, and a
-  // headline that opens nothing falls back to describing itself.
+  // Direct rooms reuse chip ARIA wording; unattributed averages describe themselves.
   const ariaBase = !entity
     ? tooltip
     : roomIndex !== null
@@ -187,9 +139,7 @@ function buildAverage({ domainModel, config, topology, texts, tone, position, tr
     hasLabel,
     entity,
     source,
-    // The configured room the headline is, or null. The renderer forwards it as
-    // data-room-index so a tap resolves against that room's own action overrides
-    // through the ordinary action path.
+    // Forward direct-room ownership into the ordinary action path.
     roomIndex,
     color: tone.color,
     position,
@@ -210,17 +160,8 @@ function noDataHeadlineSource(domainModel, config, topology) {
   return { entity: null, status: null, source: "calculated", roomIndex: null };
 }
 
-// WHAT EACH REASON READS AS. One row per way of being unusable, which is the whole point
-// of the reason vocabulary: before this, five different causes produced three sentences,
-// and two of those sentences were wrong. A reading of 800 % is not "currently
-// unavailable" — it is there, it is just impossible — and a ppm sensor without a
-// device_class is not an incompatibility between sources, it is one sensor that has not
-// said what it measures.
-//
-// `entity: true` marks the rows that NAME the sensor, and that is a rule rather than a
-// case-by-case judgement: a message asking the reader to change something has to say what
-// to change. A message about a passing data condition does not, because the source of the
-// big value is not in doubt and a shorter sentence fits the line better.
+// One text mapping per unusable reason. `entity: true` marks actionable messages that must
+// name what the reader should fix. Details: internal docs §4 “No-Data-Vertrag”.
 const REASON_TEXTS = {
   [UNUSABLE_REASON.UNAVAILABLE]: { kind: "value-unavailable", key: "availability.valueUnavailable" },
   [UNUSABLE_REASON.NOT_NUMERIC]: { kind: "value-not-numeric", key: "availability.valueNotNumeric" },
@@ -231,39 +172,17 @@ const REASON_TEXTS = {
   [UNUSABLE_REASON.KIND_MISMATCH]: { kind: "incompatible", key: "availability.incompatible" },
 };
 
-// The line under the title: what it says, and how it behaves when it is too long.
-//
-// THE ORDER IS THE CONTRACT, and it is not the same order `title` uses. A title is a NAME,
-// so a user's own always wins. A subtitle is the card describing its own state, and when
-// that state is "there is nothing to show", the reason is the only thing worth saying:
-//
-//   no-data explanation  ->  the user's own text  ->  the automatic sentence
-//
-// A card that showed `--` under a cheerful custom line and no explanation would be
-// withholding the one fact its reader needs. The custom line comes back the moment data
-// does; the explanation is temporary by definition.
-//
-// `text: ""` is a real answer meaning "no line here" — the node is then not rendered at
-// all rather than rendered empty, which is why hasSubtitle has to travel with it.
+// Subtitle priority: forced no-data explanation, configured text, automatic sentence.
+// Empty text removes the node; forced explanations temporarily outrank show.subtitle.
 function buildHeaderSubtitle(config, automatic, { forced = null } = {}) {
   const own = config.subtitle?.text;
   const text = forced !== null ? forced : own === null || own === undefined ? automatic : own;
-  // TWO ROADS TO THE SAME ABSENT NODE, collapsed here into one boolean: `subtitle: ""`
-  // says the line has nothing to say, `show.subtitle: false` says it should not be drawn,
-  // and the renderer needs one answer rather than two facts to combine.
-  //
-  // The one exception is the forced line. A card showing `--` with no reason given would
-  // withhold the one fact its reader needs, so the no-data explanation outranks the switch —
-  // and it is temporary by definition, since it disappears the moment data returns.
+  // Collapse both absence requests; forced no-data explanation is the sole exception.
   const hasSubtitle = text !== "" && (forced !== null || config.show.subtitle);
   return { subtitle: text, hasSubtitle, subtitleOverflow: config.subtitle?.overflow || "clip" };
 }
 
-// The title, in the same shape and by the same rules as the line under it.
-//
-// `title:` unwritten means the card names itself after what it measures; `title: ""` means
-// the line has nothing to say; `show.title: false` means it should not be drawn. The last
-// two produce the same absent node, which is why they meet here rather than at the renderer.
+// Unwritten title uses the metric; empty text and show.title:false both remove the node.
 function buildHeaderTitle(config, automatic) {
   const own = config.title?.text;
   const text = own === null || own === undefined ? automatic : own;
@@ -283,8 +202,7 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
     count: missingRooms.length,
     entities: missingRooms.map((room) => room.entity).join(", "),
   });
-  // A missing configured room is independently actionable information. Keep it
-  // visible even when the headline has its own outage or incompatibility reason.
+  // Missing rooms remain visible beside any headline-specific reason.
   const appendMissingRooms = (result) => missingRooms.length === 0
     ? result
     : {
@@ -305,9 +223,7 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
       text: texts.t(explained.key, explained.entity ? { entity: headline.entity } : undefined),
     });
   }
-  // Unreached from a headline the model built — every unusable status carries a reason.
-  // Kept because this function is also the fallback for a headline that has none at all
-  // (a calculated source), and losing the old sentence there would be a regression.
+  // Fallback for calculated headlines without a reason; modeled entities always have one.
   if ([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(headline.status)) {
     return appendMissingRooms({ kind: "value-unavailable", text: texts.t("availability.valueUnavailable") });
   }
@@ -329,9 +245,7 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
   return { kind: "source-unavailable", text: texts.t("availability.valueUnavailable") };
 }
 
-// No data is a normal card shell, not a separate error component. It uses the
-// same header, headline and keyed room-grid contracts as the data state, with a
-// deliberately collapsed view area and neutral presentation values.
+// No-data keeps the normal shell contracts, neutral paint and a collapsed view area.
 function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta }) {
   const title = headerTitle.title;
   const headline = noDataHeadlineSource(domainModel, config, topology);
@@ -348,8 +262,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
   const icon = config.icon || meta?.emptyIcon || "mdi:home-thermometer-outline";
   const tone = buildNeutralTone(icon, texts);
   const noData = buildNoDataSubtitle({ domainModel, headline, texts });
-  // Forced: in the no-data state the explanation outranks a custom line (see
-  // buildHeaderSubtitle) and there is always one, so the header always has a subtitle.
+  // No-data always forces its explanation into the subtitle.
   const headerSubtitle = buildHeaderSubtitle(config, noData.text, { forced: noData.text });
 
   const displayRooms = buildDisplayRooms(domainModel, config);
@@ -371,17 +284,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     noData: { hintKind: noData.kind },
     tone,
     toneStyle: toneStyleDeclaration(tone),
-    // Whether the shell draws the bar across its top edge. Carried on both view models
-    // because one shell renders both states, and a no-data card that looked different from
-    // the card beside it would be an inconsistency nobody reports and everybody notices.
+    // Shared shell decisions for data and no-data states.
     accentLine: config.show.accent_line,
-    // Whether the middle block — the headline and the views beside it — is drawn at all.
-    // Hiding it is visual only: every room still feeds the extrema, the comfort count and
-    // the spread, exactly as a hidden chip grid does.
     hasPanel: config.show.panel,
-    // What the card says when the `show:` block has left it with nothing to draw. Carried
-    // as finished text because a renderer never translates; whether it is USED is a question
-    // about which nodes exist, and that is the shell's to answer.
     hiddenHint: texts.t("layout.nothingShown"),
     header: { icon, ...headerTitle, ...headerSubtitle, statusLabel, hasIcon: config.show.icon, hasPill: config.show.pill },
     average: {
@@ -423,10 +328,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
 }
 
 export function buildCardViewModel({ domainModel, config, texts }) {
-  // Which sources this card actually refers to. Decides the headline's caption and
-  // whether a chip would only repeat it, so both read the same single answer — taken
-  // from the model rather than recomputed, because deciding it needs `states` (an id
-  // Home Assistant does not know is not a source) and this layer has none.
+  // Reuse state-resolved topology for label and chip redundancy decisions.
   const topology = domainModel.topology;
   const metricKind = domainModel.metric.kind;
   const meta = metricKind ? metricMetaFor(metricKind) : null;
@@ -442,18 +344,14 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const classification = domainModel.classification.average;
   const tone = buildTone({
     classification,
-    // The one adjustment, already worked out for every score this palette can show — see
-    // tone-legibility.js. Looked up here, never computed: a score change must not cost a search.
+    // Look up the precomputed tint recipe; score changes must not trigger a search.
     tintRecipes: domainModel.tintRecipes,
-    // config.icon wins outright; then the active profile's own icon; then the
-    // metric's stable default, so a kind without icon tiers is never forced into a
-    // semantically dubious icon family.
+    // Icon priority: config, active profile, stable metric default.
     icon: config.icon || domainModel.classification.profileIcon || meta.icon,
     texts,
   });
 
-  // Decorated once, in declaration order, then reused for both the visible chip list
-  // and the extremes — so a room object is the same object wherever it appears.
+  // Decorate once in declaration order and reuse object identity across consumers.
   const decoratedByIndex = new Map();
   const displayRooms = buildDisplayRooms(domainModel, config);
   const decoratedDeclared = displayRooms.map((room) => {
@@ -465,16 +363,12 @@ export function buildCardViewModel({ domainModel, config, texts }) {
 
   const average = domainModel.average.value;
   const rooms = domainModel.rooms;
-  // Everything that dereferences an extreme is gated on the extremes object itself
-  // rather than on rooms.comparable. The domain guarantees the two agree; keying off the
-  // object means a single place decides, and no branch can read `.value` off null.
+  // Gate dereferences on the extrema object itself, the domain's single decision.
   const hasExtremes = Boolean(domainModel.extremes);
   const coolest = hasExtremes ? domainModel.extremes.coolest : null;
   const warmest = hasExtremes ? domainModel.extremes.warmest : null;
 
-  // The main axis must cover the average as well as the room extrema: an
-  // independently sourced average can fall outside [coolest, warmest], and an axis
-  // built from the rooms alone would clamp its marker to an edge.
+  // Include an independent average outside room extrema so its marker never clamps.
   const scaleMarkerValues = { avg: average };
   if (hasExtremes) {
     scaleMarkerValues.coolest = coolest.value;
@@ -517,9 +411,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     trendText,
   });
 
-  // One marker per participating room, always built when there are rooms — the
-  // `markers:all` option decides whether the scale view USES them, not whether they
-  // exist, and the extreme-value view needs the same colours.
+  // Build shared room markers once; view options decide whether to display them.
   const roomMarkers = hasExtremes
     ? rooms.byValue.map((room) =>
         buildRoomMarker({
@@ -557,12 +449,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     config,
   });
 
-  // Everything the four per-view content builders share. Assembled once so no
-  // builder needs the domain model, the config or a formatter of its own.
-  //
-  // buildRangeScaleAxis is a thunk on purpose: the daily-range axis is only ever
-  // computed from inside the range-scale branch, so an available-but-not-requested
-  // view costs nothing.
+  // Shared finished inputs keep builders independent of domain/config/formatters.
+  // Range-scale geometry stays lazy when the view is available but unrequested.
   const shared = {
     metricKind,
     unit,
@@ -583,10 +471,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     buildRangeScaleAxis: () =>
       buildScaleAxis({
         ...axisInputs,
-        // The daily-range axis has the same requirement as the main one and for the
-        // same reason: the average can sit outside [min, max] when the range entity
-        // updates less often than the primary, and the edge labels would then
-        // contradict a clamped marker.
+        // Include an average outside stale daily extrema so labels and marker agree.
         low: Math.min(domainModel.range.min, average),
         high: Math.max(domainModel.range.max, average),
         markers: { current: average, min: domainModel.range.min, max: domainModel.range.max },
@@ -617,20 +502,13 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     title,
     subtitle: headerSubtitle.subtitle,
     tone,
-    // The card root's own custom properties, built once and reused by the patch path.
+    // Reused by the patch path.
     toneStyle: toneStyleDeclaration(tone),
-    // See buildNoDataViewModel() for why both view models carry it.
+    // Shared shell decisions for data and no-data states.
     accentLine: config.show.accent_line,
-    // Whether the middle block — the headline and the views beside it — is drawn at all.
-    // Hiding it is visual only: every room still feeds the extrema, the comfort count and
-    // the spread, exactly as a hidden chip grid does.
     hasPanel: config.show.panel,
-    // What the card says when the `show:` block has left it with nothing to draw. Carried
-    // as finished text because a renderer never translates; whether it is USED is a question
-    // about which nodes exist, and that is the shell's to answer.
     hiddenHint: texts.t("layout.nothingShown"),
-    // The header's four slots, referencing the same strings rather than recomputing
-    // them — a cohesive group for the renderer, not a second copy.
+    // Cohesive header slots share the already resolved strings.
     header: { icon: tone.icon, ...headerTitle, ...headerSubtitle, statusLabel: tone.label, hasIcon: config.show.icon, hasPill: config.show.pill },
     average: averageModel,
     rooms: {
@@ -638,19 +516,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       rowSizes: layout.rowSizes,
       count: rooms.count,
       comparable: rooms.comparable,
-      // Whether the chip grid is DRAWN. Deliberately independent of `comparable`:
-      // those are two different facts, and tying them together is why a card with a
-      // primary and one room used to show no chip for it at all.
-      //
-      //   false   no grid; the rooms stay full data sources regardless
-      //   true    a chip for every usable room — an explicit request outranks the
-      //           redundancy rule below
-      //   "auto"  chips unless the only room IS the headline, where a chip would
-      //           print the same value twice
-      //
-      // Everything derived from the rooms — extrema, comfort count, spread, the
-      // scale's markers — is unaffected by all three, because the rooms remain full
-      // data sources whether or not they are drawn.
+      // Grid visibility is independent of comparability and calculations: false hides,
+      // true overrides redundancy, auto hides only a direct single-room duplicate.
       showChips:
         config.show.rooms !== false &&
         chips.length >= 1 &&
@@ -676,10 +543,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     },
     carousel: {
       hint: texts.t("rotator.hint"),
-      // Shown instead of the view area when a view WAS requested but is systemically
-      // unavailable — a state the user can actually fix. A deliberately empty views:
-      // list collapses instead (views.collapsed), so a card configured with no views
-      // does not display a hint that looks like a misconfiguration.
+      // Hint only when requested views are unavailable; an explicit empty list collapses.
       noActiveViewsHint: texts.t("views.none"),
     },
   };

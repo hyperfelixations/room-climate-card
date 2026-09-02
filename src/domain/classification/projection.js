@@ -1,15 +1,13 @@
 // Re-expressing a canonical profile in the unit the card actually displays.
 //
-// Profiles are authored and stored in each metric's canonical unit. Every
-// comparison the card makes — tier selection, comfort counting, scale geometry,
-// icon choice — happens against the DISPLAYED value, so the profile has to be
-// projected first. Doing it the other way round (converting the reading back to
-// canonical for each comparison) would compare against unrounded boundaries and
-// let a displayed "68 °F comfort" edge classify as if it were 67.9 °F.
+// Profiles are stored in each metric's canonical unit, but every comparison the card
+// makes — tier selection, comfort counting, scale geometry, icon choice — runs against
+// the DISPLAYED value. Projecting the profile (rather than converting each reading back)
+// is what keeps the printed band equal to the applied band: it stops a displayed
+// "68 °F comfort" edge from classifying as if it were 67.9 °F.
 //
-// Absolute boundaries go through fromCanonical() plus the profile's own rounding;
-// the step and headroom are DELTAS and go through deltaFromCanonical(), which must
-// never pick up a unit offset.
+// Absolute boundaries go through fromCanonical() plus the profile's rounding; step and
+// headroom are DELTAS via deltaFromCanonical(), which must never pick up a unit offset.
 
 import { isOutsideRange } from "../../core/numbers.js";
 import { assertProjectedGeometry } from "./geometry-guard.js";
@@ -29,11 +27,9 @@ export function projectProfileToDisplayUnit(canonical, definition, unitProfile, 
     minInclusive: canonical.validRange.minInclusive,
     maxInclusive: canonical.validRange.maxInclusive,
   };
-  // A validity window has to be RE-DERIVED in the display unit, or a Fahrenheit card
-  // would compare its readings against Celsius limits: -300 °F is -184 °C and a
-  // perfectly possible reading, while the canonical predicate would reject it. Every
-  // built-in profile declares a window; a custom profile written without `valid_range` has
-  // none, and keeps the null it already carries.
+  // The validity window is re-derived in the display unit (a canonical predicate would
+  // reject -300 °F, which is -184 °C and a real reading). A custom profile without
+  // `valid_range` has no window and keeps its null.
   const invalidWhen = projectedValidRange ? (reading) => isOutsideRange(reading, projectedValidRange) : canonical.invalidWhen;
 
   const projected = {

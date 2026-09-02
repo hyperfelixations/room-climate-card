@@ -1,12 +1,5 @@
-// PART OF THE SHIPPED STYLESHEET.
-//
-// Every byte below — including the indentation, the blank lines and the comments —
-// reaches the browser verbatim and is pinned by test/baseline/styles/full.css. This
-// file is a contiguous slice of one stylesheet, not a self-contained block: the
-// sections are concatenated in the order styles/index.js lists them, and reordering,
-// reindenting or reformatting any of them changes the shipped CSS.
-
-// The main scale view's own layout and its comfort pill.
+// SHIPPED STYLESHEET SLICE: main scale layout and comfort label.
+// Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const SCALE_VIEW_CSS = `        .rtc-scale-view {
           height: 70px;
@@ -26,11 +19,8 @@ export const SCALE_VIEW_CSS = `        .rtc-scale-view {
           white-space: nowrap;
         }
 
-        /* The left offset here is a starting approximation only: the layout pass
-           replaces it with a measured pixel value that keeps the label inside this row
-           (see render/layout/comfort-label.js). The clip is what that pass falls back on
-           when even the whole row is narrower than the text — the same convention every
-           other single-line label on the card uses. */
+        /* Measured layout replaces the initial offset and caps text only when the row
+           cannot contain its natural width. */
         .rtc-scale-comfort-label {
           position: absolute;
           top: 0;

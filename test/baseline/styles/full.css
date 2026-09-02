@@ -119,14 +119,8 @@
           color: var(--tone-ink);
         }
 
-        /* A header that is missing a part needs the column it is missing to be missing too.
-           A grid column holding nothing is still a column: it brings its 11px gap, and the
-           title would start 11px from the left edge instead of at it.
-
-           One override per subset, and none for the full set — the ordinary card carries no
-           data-parts attribute at all and therefore meets none of these rules. The pill is
-           pushed to the right edge only where it lands in a stretching track; where it sits
-           in a content-sized track at the end of the row it is already there. */
+        /* Remove absent header columns and their gaps; the full header needs no override.
+           Right-align a lone pill only when its remaining track stretches. */
         .rtc-root[data-parts="icon title"] .rtc-header {
           grid-template-columns: auto 1fr;
         }
@@ -167,9 +161,7 @@
           color: var(--primary-text-color);
         }
 
-        /* title: clip — the mirror image of the subtitle's override below. The title wraps
-           by default and the subtitle clips by default, so each rule states the departure
-           from its own line's habit and neither touches the ordinary card. */
+        /* Title wraps by default; this attribute opts into clipping. */
         .rtc-root[data-title="clip"] .rtc-title {
           white-space: nowrap;
           overflow: hidden;
@@ -187,13 +179,8 @@
           text-overflow: ellipsis;
         }
 
-        /* subtitle: wrap — the line runs onto as many lines as it needs and the card
-           grows under it. Written as an override rather than as two variants of the rule
-           above, so the default is literally unchanged.
-
-           overflow-wrap: anywhere is not decoration: the no-data explanations name entity
-           ids, and an id is one unbreakable token that would otherwise run out of the
-           card sideways instead of wrapping. */
+        /* Subtitle clips by default; this attribute opts into wrapping. anywhere breaks
+           otherwise-unbreakable entity ids in no-data explanations. */
         .rtc-root[data-subtitle="wrap"] .rtc-subtitle {
           white-space: normal;
           overflow: visible;
@@ -212,21 +199,8 @@
           border: 1px solid var(--tone-border);
         }
 
-        /* The two columns negotiate their own widths. The first is the headline value,
-           the second the view beside it.
-
-           minmax(<floor>, auto) means "as wide as the value needs, never narrower than
-           <floor>". The floor is the width this column used to be capped at, so every
-           reading that fits today produces exactly the column it produces today and the
-           view keeps every pixel it has. Only a value that would have painted across the
-           view — four-digit CO2, three-digit PM2.5, a negative two-digit temperature —
-           makes the column grow, and only by what it is short.
-
-           minmax(40%, 1fr) is the other side of that bargain: the view yields width, but
-           never falls below 40% of the panel. Without that one implausible reading could
-           take the view away altogether. The rotator carries min-width:0, so in the rare
-           container that has no definite width of its own the percentage resolves to zero
-           and the pair behaves exactly as it did before. */
+        /* Let the headline grow beyond its 106px floor while the adjacent view keeps at least
+           40% of a definite panel width; min-width:0 on the rotator permits negotiation. */
         .rtc-main-panel {
           display: grid;
           grid-template-columns: minmax(106px, auto) minmax(40%, 1fr);
@@ -238,10 +212,7 @@
           border: 1px solid var(--rtc-hairline);
         }
 
-        /* padding belongs here for the same reason every other line does: appearance:none
-           removes the widget look, not the UA box. Chrome gives a button 1px 6px, other
-           engines give it something else, and whatever is left over ends up deciding how
-           the card is spaced. Zero here, and every button states its own. */
+        /* appearance:none removes widget styling, not engine-specific UA padding. */
         button {
           appearance: none;
           -webkit-appearance: none;
@@ -253,11 +224,7 @@
           text-align: left;
         }
 
-        /* The headline is a <button> when the value belongs to one entity and a <div>
-           when it is a consensus (see render/primitives/average.js). Both carry THIS
-           class, so stating the indentation here is what makes the two shapes the same
-           box — the card no longer moves when a main entity drops out and the consensus
-           takes over, and it no longer depends on which engine is rendering it. */
+        /* Entity-button and consensus-div headlines share this engine-independent box. */
         .rtc-avg-button {
           position: relative;
           display: block;
@@ -283,18 +250,8 @@
           outline-offset: 2px;
         }
 
-        /* Clipped like every other single-line label on the card (see the header
-           subtitle, the room-chip label and the extreme cards). The caption sits in a
-           narrow column, so a long one paints straight across the view beside it. Until
-           2.37.0 the text here was always a short translated constant and the overflow
-           was unreachable; a single-room card now captions itself with the room's own
-           name, which the user writes and which can be any length.
-
-           contain:inline-size is what keeps that decision intact now that the column
-           sizes itself to its content: overflow:hidden clips the PAINT but leaves the
-           intrinsic width alone, so a long caption would otherwise drag the column open
-           to its full length and take the space away from the view. The caption is
-           declared not to have a say in how wide its own column is; the value does. */
+        /* contain:inline-size prevents a long caption's intrinsic width from widening
+           its column; overflow then clips only the paint. */
         .rtc-avg-label {
           contain: inline-size;
           display: block;
@@ -308,11 +265,7 @@
           text-overflow: ellipsis;
         }
 
-        /* The clip is the backstop, not the mechanism: the column grows to fit this text
-           (see .rtc-main-panel), so in normal use there is nothing to clip. It matters
-           once the column has grown as far as the view's own floor permits — a reading
-           past that point is a broken sensor, and an ellipsis on the value is a better
-           answer than paint across the view beside it. */
+        /* Ellipsis is the backstop after the value column reaches the view's floor. */
         .rtc-avg-value {
           display: block;
           margin-top: 4px;
@@ -392,12 +345,8 @@
         .rtc-rotator-solo {
           min-width: 0;
           height: 70px;
-          /* Keep the carousel clipped horizontally, but extend its paint
-             viewport upward for RangeScale's collision-only upper label.
-             overflow:hidden and paint containment both clipped at the
-             border box, which cut the label under Home Assistant's real
-             font metrics. The directional clip changes paint only: layout,
-             row heights, and the scale-bar position remain untouched. */
+          /* Extend paint upward for RangeScale's upper label while clipping horizontally;
+             the directional clip does not alter layout or bar geometry. */
           overflow: visible;
           clip-path: inset(-10px 0 0 0);
           border-radius: 14px;
@@ -410,14 +359,8 @@
         }
 
         .rtc-no-views {
-          /* _renderNoActiveViews(): a requested-but-unavailable view (e.g.
-             range_scale with no valid range_entity) falls back to this
-             localized one-line hint instead of the usual view content.
-             Previously unstyled — it inherited plain block/left/top text
-             instead of matching the rest of the card's centered, muted
-             typography. Same box as .rtc-rotator-solo above (this class is
-             always combined with it, never alone), so centering here only
-             needs flex on that existing 70px-tall box. */
+          /* Requested-but-unavailable views use the existing 70px solo box for a
+             centered localized hint. */
           display: flex;
           align-items: center;
           justify-content: center;
@@ -471,11 +414,8 @@
           white-space: nowrap;
         }
 
-        /* The left offset here is a starting approximation only: the layout pass
-           replaces it with a measured pixel value that keeps the label inside this row
-           (see render/layout/comfort-label.js). The clip is what that pass falls back on
-           when even the whole row is narrower than the text — the same convention every
-           other single-line label on the card uses. */
+        /* Measured layout replaces the initial offset and caps text only when the row
+           cannot contain its natural width. */
         .rtc-scale-comfort-label {
           position: absolute;
           top: 0;
@@ -484,12 +424,7 @@
           text-overflow: ellipsis;
         }
 
-        /* "rangeScale" view (optional, requested via views:
-           [{type:"range_scale"}]): same overall
-           layout as .rtc-scale-view, but its top row holds three labels
-           (current/min/max) above their markers instead of one centered
-           "Komfort" pill — positions set/corrected in JS, see
-           _renderRangeScaleView()/_resolveRangeScaleLabels(). */
+        /* Shared scale geometry with current/min/max labels resolved by JS. */
         .rtc-range-scale-view {
           height: 70px;
           box-sizing: border-box;
@@ -513,27 +448,14 @@
         .rtc-range-scale-label-max {
           position: absolute;
           top: 0;
-          /* JS sets style.left to a resolved center px value (see
-             _resolveRangeScaleLabels()), which this transform then centers
-             on. current is a FIXED pivot — always exactly centered on the
-             .rtc-marker-avg current-value marker, never repositioned by
-             collision avoidance. Only min/max drift off-center from their
-             own marker, and only when they'd otherwise overlap current or
-             each other. Ellipsis only actually engages when
-             _resolveRangeScaleLabels()/_layoutSideLabelGroup() sets an
-             explicit max-width (a side group doesn't fit even at natural
-             width, or — rarely — current alone is wider than the whole bar)
-             — harmless no-op otherwise. */
+          /* JS supplies center pixels: current stays fixed on its marker; only min/max
+             drift for collisions. Ellipsis engages only with an explicit max-width. */
           transform: translateX(-50%);
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        /* When one historical label cannot fit between the fixed current
-           pivot and its outer edge, only that colliding label moves to the
-           upper line. Current and any non-colliding historical label share
-           the lower line. The row height itself stays 12px, so the scale
-           bar's grid position never changes. */
+        /* Lift only colliding historical labels; fixed row height preserves bar geometry. */
         .rtc-range-scale-top-row.rtc-range-scale-has-upper
           .rtc-range-scale-label-current,
         .rtc-range-scale-top-row.rtc-range-scale-has-upper
@@ -548,14 +470,8 @@
           .rtc-range-scale-label-upper {
           top: -8px;
           line-height: 12px;
-          /* The generic label rule clips horizontally for the genuine
-             narrow-bar ellipsis fallback. A lifted min/max label instead
-             sits partly outside its normal line box; Home Assistant's real
-             font rasterization can paint glyph ink beyond that tight box
-             (most visibly the i-dot in "min"). Let the short historical
-             label paint freely in both axes so neither min nor max can
-             self-clip. Position, row height, and therefore the bar stay
-             byte-for-byte unchanged. */
+          /* Lifted short labels may paint glyph ink beyond their tight line box; allow
+             free paint without changing position, row height or bar geometry. */
           overflow: visible;
           text-overflow: clip;
         }
@@ -623,10 +539,8 @@
         .rtc-scale-labels span {
           position: absolute;
           top: 0;
-          /* Ellipsis only actually engages on .rtc-scale-label-center, and
-             only when _resolveOptimalLabelPosition() sets an explicit
-             max-width (no non-overlapping position fits) — harmless no-op
-             on min/max, which never get a max-width. */
+          /* Ellipsis engages only when measured layout caps the center label;
+             min/max never receive max-width. */
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -742,9 +656,7 @@
         }
 
         .rtc-room-grid {
-          /* One .rtc-room-row per row (see _roomGridRows()) — a plain flex
-             column, since native CSS grid can't vary column count per row
-             within a single grid. gap here is the vertical row gap. */
+          /* Flex stacks per-row grids because native grid cannot vary column count by row. */
           display: flex;
           flex-direction: column;
           gap: 6px;
@@ -787,14 +699,8 @@
           min-width: 0;
         }
 
-        /* Guarantees full visibility for an exactly-two-uppercase-letter
-           label (see TWO_UPPER_LETTER_RE / validRooms.shortGuaranteed) --
-           overflow:visible alone would not be enough, since .rtc-room-chip
-           itself clips at narrow widths (see the 460px/600px breakpoints
-           below) and .rtc-room-short competes for space in .rtc-room-top
-           with the fixed 15px .rtc-room-mark and its 4px gap. Presence-only
-           attribute selector: _patchRoomChip() sets/clears this via
-           toggleAttribute(), which does not guarantee the "true" value. */
+        /* Reserve full width for validated two-uppercase-letter labels beside the fixed mark.
+           Presence-only selector matches toggleAttribute() semantics. */
         .rtc-room-short[data-short-guaranteed] {
           flex: 0 0 auto;
           min-width: max-content;

@@ -1,18 +1,5 @@
-// Which view gets a content model, and in which order.
-//
-// The table is keyed by view key and composed by walking VIEW_DEFINITIONS, so
-// declaration order stays the ONE place on-screen order is decided. A definition
-// without a builder here, or a builder without a definition, fails at module load
-// (see assertContentBuildersMatchDefinitions() below) rather than silently producing
-// a view that renders nothing.
-//
-// Only ACTIVE views get a content model; every inactive one is null. That is not an
-// optimization detail, it is the contract: the daily-range scale is available
-// whenever the range entity reports a usable min/max pair, but it is off unless
-// explicitly listed, and building its axis, its markers and its three decluttered
-// labels for a view nobody asked for is work with no observable result. The axis
-// therefore arrives as a thunk that is only ever called from inside the range-scale
-// branch.
+// Builds content in VIEW_DEFINITIONS order and fails fast on registry mismatches.
+// Inactive views remain null; range-scale geometry is invoked lazily only when active.
 
 import { VIEW_DEFINITIONS } from "../view-state.js";
 import { buildRangeViewContent } from "./range.js";
@@ -27,8 +14,7 @@ const CONTENT_BUILDERS = {
   extremes: (shared, options) => buildExtremesViewContent(shared, options),
 };
 
-// Runs once, at module load. A mismatch here is a wiring mistake that would
-// otherwise surface as an empty carousel slot at runtime.
+// Module-load assertion prevents silent empty carousel slots.
 function assertContentBuildersMatchDefinitions() {
   const definitionKeys = VIEW_DEFINITIONS.map((definition) => definition.key);
   const duplicates = definitionKeys.filter((key, index) => definitionKeys.indexOf(key) !== index);
@@ -47,8 +33,7 @@ function assertContentBuildersMatchDefinitions() {
 
 assertContentBuildersMatchDefinitions();
 
-// The declaration-ordered key list, exported so the rendering layer can compose its
-// own registry against the same single source of order.
+// Shared declaration order for content and rendering registries.
 export const VIEW_CONTENT_KEYS = VIEW_DEFINITIONS.map((definition) => definition.key);
 
 export function buildViewContent({ shared, viewState }) {

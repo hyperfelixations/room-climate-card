@@ -1,16 +1,13 @@
 // The `classification:` policy, in all four of its forms.
 //
-//   auto     use complete entity attributes when present, else the built-in
-//            profile (the default)
+//   auto     complete entity attributes when present, else the built-in profile (default)
 //   entity   entity attributes only, even partial ones
 //   profile  force a named built-in profile
 //   custom   a fully user-defined profile from YAML
 //
-// A custom profile is written in the user's own unit and converted to the
-// metric's canonical unit here, once, so everything downstream compares against
-// one unit. The unit lookup is INJECTED: resolving a unit string to a metric kind
-// and unit profile is domain knowledge, and the configuration layer must not
-// import the domain registry.
+// A custom profile is written in the user's unit and converted to canonical here, once.
+// The unit lookup is INJECTED: mapping a unit string to a metric kind is domain
+// knowledge, and the config layer must not import the domain registry.
 
 import { isOutsideRange } from "../../core/numbers.js";
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
@@ -36,8 +33,8 @@ export function normalizeClassificationConfig(value, collaborators) {
   }
   if (!isPlainObject(value)) pathError("classification", "must be a string or object");
 
-  // A block carrying `tiers` is a custom profile even without an explicit
-  // source, because that is the only form in which tiers can appear.
+  // A block carrying `tiers` is a custom profile even without an explicit source — that
+  // is the only form in which tiers can appear.
   const inferredSource = value.source ?? (value.tiers !== undefined ? "custom" : "auto");
   if (!["auto", "entity", "profile", "custom"].includes(inferredSource)) {
     pathError("classification.source", 'must be "auto", "entity", "profile", or "custom"');
@@ -86,9 +83,8 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   const sourceValidRange = normalizeValidRange(value.valid_range);
   const { iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind);
 
-  // Everything above is in the user's own unit. From here on it is canonical:
-  // absolute readings via toCanonical(), the rounding step and the headroom via
-  // deltaToCanonical(), because a difference must never pick up a unit offset.
+  // Everything above is in the user's unit; from here it is canonical. Absolute readings
+  // via toCanonical(), step and headroom via deltaToCanonical() (a difference takes no offset).
   const toCanonical = sourceUnitProfile.toCanonical;
   const deltaToCanonical = sourceUnitProfile.deltaToCanonical;
   const convertBand = (band) => ({ min: toCanonical(band.min), max: toCanonical(band.max) });
@@ -98,8 +94,8 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     minInclusive: sourceValidRange.minInclusive,
     maxInclusive: sourceValidRange.maxInclusive,
   };
-  // The same comparison the built-in profiles use, from the same place, so a written
-  // window and a declared one can never disagree about where their edges are.
+  // The same comparison (isOutsideRange) the built-in profiles use, so a written window
+  // and a declared one cannot disagree about their edges.
   const invalidWhen = canonicalValidRange ? (reading) => isOutsideRange(reading, canonicalValidRange) : null;
 
   return {
@@ -109,23 +105,19 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     tiers: sourceTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
     comfort: convertBand(sourceComfort),
     optimal: convertBand(sourceOptimal),
-    // null all the way through when the profile declares no reference range: there is
-    // nothing to convert, and an invented range would be indistinguishable from a
-    // declared one everywhere downstream.
+    // null all the way through when there is no reference range: nothing to convert, and
+    // an invented range would be indistinguishable from a declared one downstream.
     scale: sourceScale && convertBand(sourceScale),
     step: deltaToCanonical(sourceStep),
     headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
     oneSided,
-    // The one field a built-in profile had that YAML could not express. It needs no
-    // conversion — it says whether the axis is pinned to `scale`, not where — and
-    // reaches the axis maths untouched: projectProfileToDisplayUnit() spreads it and
-    // scaleConfigFor() reads it straight off the display profile.
+    // Needs no conversion — it says whether the axis is pinned to `scale`, not where — and
+    // reaches the axis maths untouched.
     anchorScale,
     invalidWhen,
     validRange: canonicalValidRange,
-    // Colourless: a custom profile that named no colours takes them from the palette,
-    // and an invalid reading takes the palette's own invalid colour rather than a fixed
-    // one that would clash with every palette but the default.
+    // Colourless: a custom profile takes tier colours from the palette, and an invalid
+    // reading takes the palette's own invalid colour.
     invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
     iconTiers: sourceIconTiers && sourceIconTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
   };

@@ -1,7 +1,4 @@
-// The daily-range view: two metric cards for today's minimum and maximum.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literal is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Daily-range min/max cards; template-literal indentation is shipped markup and baseline-pinned.
 
 import { patchMetricCardPair, renderMetricCards } from "../render/primitives/metric-card.js";
 

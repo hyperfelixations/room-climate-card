@@ -1,29 +1,18 @@
-// sRGB <-> Oklch, the space a colour ramp can actually be reasoned about in.
+// sRGB <-> Oklch, the space a colour ramp can be reasoned about in: L for lightness,
+// C for colourfulness, h for hue.
 //
-// A ramp is a statement about lightness and colourfulness — "the same colour, paler",
-// "the same colour, deeper" — and neither is a straight line in RGB. A polar perceptual
-// space says exactly those three things as three numbers: L for lightness, C for
-// colourfulness, h for hue.
-//
-// WHY OKLAB AND NOT CIELAB, which is the older and more familiar choice. CIELAB has a
-// well known defect in the blues: a line of constant CIELAB hue bends towards purple as
-// lightness or chroma change. It is not a rounding error, it is the size of the whole
-// problem — CSS `blue` (#0000FF) sits at CIELAB hue 306 degrees, which is blue-violet,
-// so lightening it along "its own hue" produces lilac. An earlier draft of the
-// monochrome generator did exactly that and shipped a lilac ramp for `palette: blue`.
-// Oklab (Björn Ottosson, 2020) was fitted to fix that specific failure; the same colour
-// sits at 264 degrees there and stays blue the whole way up.
-//
-// The matrices below are Oklab's published definition: linear sRGB -> LMS -> cube root
-// -> Oklab, and back. D65 throughout, the white point sRGB is defined against.
+// Oklab, not CIELAB: a line of constant CIELAB hue bends towards purple in the blues
+// (CSS `blue` sits at CIELAB hue 306°, so lightening it "along its own hue" goes lilac).
+// Oklab (Ottosson, 2020) was fitted to fix that; the same colour is at 264° and stays
+// blue. The matrices below are Oklab's published definition (linear sRGB -> LMS -> cbrt
+// -> Oklab and back, D65 throughout).
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const toEncoded = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * clamp01(c) ** (1 / 2.4) - 0.055);
 
-// The four CSS hex lengths, reduced to three 0..1 channels. An alpha channel is dropped
-// rather than honoured: a ramp position is a colour, and its transparency is decided
-// where it is painted.
+// The four CSS hex lengths, reduced to three 0..1 channels. Any alpha is dropped — a ramp
+// position is a colour, its transparency is decided where it is painted.
 function hexToRgb(hex) {
   const value = String(hex).replace("#", "").trim();
   const full = value.length <= 4 ? value.slice(0, 3).split("").map((digit) => digit + digit).join("") : value.slice(0, 6);
@@ -52,51 +41,31 @@ function oklabToLinear([lightness, a, b]) {
   ];
 }
 
-// L runs 0..1 here, not 0..100 — Oklab's own scale, kept rather than rescaled so the
-// numbers in this file can be checked against the published definition directly.
+// L runs 0..1 here (Oklab's own scale), so the numbers match the published definition.
 export function hexToOklch(hex) {
   const [lightness, a, b] = linearToOklab(hexToRgb(hex).map(toLinear));
   const hue = (Math.atan2(b, a) * 180) / Math.PI;
   return { lightness, chroma: Math.hypot(a, b), hue: hue >= 0 ? hue : hue + 360 };
 }
 
-// How far apart two colours look, as a plain straight-line distance.
-//
-// That it IS a plain distance is the reason this space was chosen. Oklab was fitted so
-// that equal steps in its coordinates look like equal steps, which is exactly what CIELAB
-// famously fails at and what CIEDE2000 exists to patch up with a page of correction
-// terms. A generator that has to decide "is this step big enough to see" needs one number
-// and gets it here; the more elaborate CIEDE2000 stays in the test suite, where measuring
-// a finished ramp with an INDEPENDENT instrument is the whole point.
+// How far apart two colours look, as a plain straight-line distance — which it can be
+// because Oklab was fitted so equal coordinate steps look equal (what CIEDE2000 patches
+// CIELAB for). CIEDE2000 stays in the test suite as an independent instrument.
 export function oklabDistance(hexA, hexB) {
   const a = linearToOklab(hexToRgb(hexA).map(toLinear));
   const b = linearToOklab(hexToRgb(hexB).map(toLinear));
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
-// HOW FAR APART TWO COLOURS LOOK ON A REAL SCREEN, which is a different question.
-//
-// oklabDistance() above answers "how different are these two colours". This answers "would
-// someone notice one of them painted on the other", and the two part company at the dark
-// end. Oklab takes a cube root, so a luminance of 0.0106 (Home Assistant's dark card,
-// #1C1C1C) lands 0.226 away from black — a large number, as if the two were obviously
-// different. In a lit room they are not: light from the room reflects off the screen and
-// adds a constant to everything, and near-blacks disappear into each other.
-//
-// WCAG models exactly that with the +0.05 in its contrast ratio, and it is right to. What
-// WCAG then gets wrong is the other end: its ratio saturates near white and goes blind to
-// colourfulness, so it scores a saturated red on mid grey at 1.01 — "invisible" — when the
-// two could hardly be more different.
-//
-// So the flare term is applied FIRST, in linear light, and the perceptually uniform
-// distance is measured afterwards. Raising the dark end also compresses chroma there,
-// which is what the eye does anyway: colour discrimination falls away at low luminance.
-//
-// F was chosen by measurement rather than taste. Against a hand-labelled table of colour /
-// background pairs (test/fixtures/palette-fit-calibration.js), F = 0.02 is the only value
-// that separates the visible pairs from the invisible ones at all: F = 0 leaves black on
-// #1C1C1C looking distinguishable, and F >= 0.04 starts calling dark-slate-grey on black
-// invisible. The separation is narrow, which is honest — these are genuinely hard cases.
+// How far apart two colours look ON A REAL SCREEN — a different question from
+// oklabDistance(), and they part company at the dark end. Oklab's cube root puts #1C1C1C
+// (HA's dark card) 0.226 from black, as if obviously different; in a lit room, screen
+// flare adds a constant and near-blacks merge. WCAG models that with its +0.05 but then
+// saturates near white and goes blind to chroma (saturated red on mid grey scores 1.01).
+// So a flare term is added FIRST, in linear light, then the uniform distance is measured;
+// raising the dark end also compresses chroma there, as the eye does. F = 0.02 is
+// measured — the only value that separates the calibration fixture's visible pairs from
+// the invisible ones. Full derivation: internal dev doc, §5 "Das Instrument".
 const SCREEN_FLARE = 0.02;
 
 // Linear light plus the flare a lit room adds, renormalised so white stays white.
@@ -118,17 +87,10 @@ function inGamut(linear) {
   return linear.every((channel) => channel >= -GAMUT_EPSILON && channel <= 1 + GAMUT_EPSILON);
 }
 
-// The inverse, with the one compromise every such conversion has to make somewhere: a
-// lightness/chroma pair can name a colour sRGB cannot show.
-//
-// HOW that is resolved is the whole point of this function. Clamping the three channels
-// — the obvious way, and what the CIELAB version of this file used to do — moves the
-// HUE, because each channel clips at a different moment. That is fatal here: the one
-// promise a monochrome ramp makes is that every step is the same colour. So the colour
-// is brought back into gamut by reducing CHROMA at fixed lightness and fixed hue
-// instead, by bisection. Chroma zero is a grey, which is always inside the gamut for any
-// lightness in 0..1, so the search always terminates with an answer and the hue it
-// returns is exactly the hue it was asked for.
+// The inverse. A lightness/chroma pair can name a colour sRGB cannot show; clamping the
+// channels would move the HUE (each clips at a different moment), and a monochrome ramp's
+// one promise is a constant hue. So the colour is brought into gamut by reducing CHROMA
+// at fixed L and h, by bisection — chroma zero is always in gamut, so the search terminates.
 export function oklchToHex({ lightness, chroma, hue }) {
   const radians = (hue * Math.PI) / 180;
   const at = (c) => oklabToLinear([lightness, c * Math.cos(radians), c * Math.sin(radians)]);

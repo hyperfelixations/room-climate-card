@@ -1,12 +1,5 @@
-// The main scale view.
-//
-// A dynamic axis with a comfort band, an optimal band and one to N markers. This
-// module knows how those are drawn and patched; it decides nothing about what they
-// mean. Every string, colour, percentage and pixel offset it interpolates is already
-// finished on the view model.
-//
-// NOTE ON WHITESPACE: the indentation INSIDE the template literals is shipped markup
-// and is captured verbatim by the DOM characterization baselines.
+// Draw/patch the view-model-complete dynamic scale without interpreting its semantics.
+// Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../core/text.js";
 import { patchMarker, renderMarker } from "../render/primitives/marker.js";
@@ -44,9 +37,7 @@ function renderMarkers(content) {
 }
 
 function renderTopRow(content) {
-  // The long form and the percentage are the honest approximation until the layout pass
-  // can measure; both are then replaced with measured values (see renderScaleBar()'s
-  // note on the optimal label, which works exactly the same way).
+  // Long form/percentage are initial approximations until measured layout runs.
   const comfortLabelHtml = content.comfortLabel
     ? `<span class="rtc-scale-comfort-label" style="left:${content.comfortLabel.center}%"${content.comfortLabel.visible ? "" : " hidden"}>${escapeHtml(content.comfortLabel.long)}</span>`
     : "";
@@ -57,10 +48,7 @@ function renderTopRow(content) {
       `;
 }
 
-// `markers: all` is a keyed, data-driven marker set. Room availability can change
-// while the view itself stays mounted, so the markers are patched by the room's
-// original YAML index rather than by assuming the initial count is stable. These
-// markers are non-interactive, so adding and removing them cannot disturb focus.
+// Reconcile non-interactive room markers by stable YAML index as availability changes.
 function patchRoomMarkers(context, containerEl, content) {
   const bar = containerEl.querySelector(".rtc-scale-bar");
   if (!bar) return;
@@ -85,17 +73,8 @@ function patchRoomMarkers(context, containerEl, content) {
 export const scaleView = {
   key: "scale",
 
-  // Which parts of this view's markup are OPTIONAL and NOT reconciled by patch().
-  //
-  // A patcher can only change nodes that exist, so a change here means the view has to
-  // be rebuilt rather than patched. The list enumerates the optional NODES rather than
-  // the conditions behind them — two of them happen to share a condition today, and
-  // listing them separately means a later divergence between a band and its label is
-  // already covered without editing this function.
-  //
-  // The room markers are deliberately absent: patchRoomMarkers() creates and removes
-  // them itself, so listing them would cost a full rebuild — and a reset carousel —
-  // every time a single room came or went.
+  // Sign optional nodes patch() cannot create/remove. Room markers stay out because their
+  // keyed reconciler owns their lifecycle without rebuilding/resetting the carousel.
   structureSignature(content) {
     return [
       content.showComfortBand ? "c" : "-", // .rtc-comfort-band
@@ -107,8 +86,7 @@ export const scaleView = {
     ].join("");
   },
 
-  // The string renderers ignore the context — they produce markup, not nodes. The
-  // parameter is part of the registry's uniform contract.
+  // Context is unused by string renderers but belongs to the uniform registry contract.
   render(context, viewModel) {
     const content = viewModel.views.byKey.scale;
     return renderScaleBar({
@@ -127,18 +105,14 @@ export const scaleView = {
     resolveOptimalLabelPosition(containerEl, content);
     if (!containerEl) return;
 
-    // Visibility only. Both the text and the position belong to the layout pass, the
-    // same division of labour the optimal label has (see patchScaleBar()): which of the
-    // two forms shows and where it sits are one decision about rendered width, and one
-    // decision belongs in one place. Visibility is set FIRST, because a hidden label has
-    // no box the layout pass could measure.
+    // Set visibility first; measured layout exclusively owns comfort-label form/position.
     const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
     if (comfortLabelEl && content.comfortLabel) {
       comfortLabelEl.hidden = !content.comfortLabel.visible;
     }
     resolveComfortLabelPosition(containerEl, content);
 
-    // The extrema markers only exist in room mode; the guards simply no-op otherwise.
+    // Extrema markers exist only in room mode.
     if (content.markers.extremes) {
       patchMarker(containerEl.querySelector(".rtc-marker-cold"), content.markers.extremes.cold, { useShift: true });
       patchMarker(containerEl.querySelector(".rtc-marker-warm"), content.markers.extremes.warm, { useShift: true });
@@ -151,8 +125,7 @@ export const scaleView = {
     }
   },
 
-  // Two measured labels, one above the bar and one below it, both re-derived from the
-  // rendered geometry on every render, resize and fonts-ready.
+  // Re-derive upper/lower labels on render, resize and fonts-ready.
   resolveLayout(context, root, viewModel) {
     const content = viewModel.views.byKey.scale;
     if (!content) return;

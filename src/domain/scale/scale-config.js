@@ -1,19 +1,14 @@
 // The axis parameters a profile contributes.
 //
-// Takes an already-projected display profile and pulls out exactly the fields the
-// scale maths needs, with the two defaults made explicit rather than left to
-// `undefined` checks scattered across call sites:
+// Takes an already-projected display profile and pulls out the fields the scale maths
+// needs, with both defaults made explicit here instead of in scattered `undefined` checks:
 //
-//   oneSided     the metric has no "too low" end (CO2, PM2.5), so the lower
-//                bound never grows away from the reference scale
-//   anchorScale  true unless a profile opts out. Outdoor temperature does opt
-//                out: its readings are seasonal, so the axis follows the live
-//                data instead of being pinned to a reference range that would be
-//                wrong for most of the year.
+//   oneSided     the metric has no "too low" end (CO2, PM2.5): the lower bound never
+//                grows away from the reference scale
+//   anchorScale  true unless a profile opts out (outdoor temperature does)
 //
-// `scale` is null for exactly the profiles that opt out — they declare no reference
-// range at all, and normalising it here means the axis maths sees one shape of "there
-// is none" whether the profile came from YAML or from src/domain/classification/.
+// `scale` is null for the opt-out profiles; normalising it here means the axis maths sees
+// one shape of "there is none" whether the profile came from YAML or a built-in.
 
 export function scaleConfigFor(displayProfile) {
   return {

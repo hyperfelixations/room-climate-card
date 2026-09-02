@@ -1,16 +1,12 @@
-// Numeric primitives: reading numbers out of untrusted input, and the small
-// amount of arithmetic every layer above shares.
+// Numeric primitives: reading numbers out of untrusted input, and the arithmetic every
+// layer above shares.
 //
-// Two distinct parsers live here on purpose, because they guard two different
-// trust boundaries and must not be confused:
+// Two distinct parsers, guarding two trust boundaries that must not be confused:
 //
-//   parseNumericState()  a Home Assistant entity state or attribute — arrives
-//                        as a string, may use a comma decimal separator, and
-//                        has a fixed set of "not a measurement" sentinels.
-//   parseConfigNumber()  a YAML configuration value written by the dashboard
-//                        owner — may legitimately already be a number, and
-//                        must reject types that Number() would silently
-//                        coerce.
+//   parseNumericState()  an HA entity state/attribute — a string, maybe with a comma
+//                        decimal, with a fixed set of "not a measurement" sentinels.
+//   parseConfigNumber()  a YAML value from the dashboard owner — may already be a number,
+//                        and must reject types Number() would silently coerce.
 
 // Home Assistant state values that never represent a usable measurement.
 const UNAVAILABLE_STATES = new Set(["", "unknown", "unavailable", "none", "null", "undefined"]);
@@ -23,14 +19,10 @@ export function isUnavailableState(raw) {
   return UNAVAILABLE_STATES.has(String(raw).trim().toLowerCase());
 }
 
-// Shared numeric parser for entity states and attributes: accepts comma
-// decimals, treats HA's non-numeric states as invalid, and handles attributes
-// HA already delivers as a real number instead of a string. Validates the full
-// (normalized) string against a strict numeric format before parsing, rather
-// than handing it straight to parseFloat() — parseFloat() happily extracts a
-// numeric prefix from garbage like "25 °C" or "12abc", which would silently
-// legitimize a malformed/corrupted sensor value instead of treating it as
-// invalid.
+// Shared numeric parser for entity states and attributes: accepts comma decimals, treats
+// HA's non-numeric states as invalid, handles attributes HA delivers as a real number.
+// Validates the whole normalized string against a strict numeric format first — parseFloat()
+// would extract a prefix from "25 °C" or "12abc" and legitimize a corrupted value.
 export function parseNumericState(raw) {
   if (raw === undefined || raw === null) return null;
   const rawString = String(raw).trim().toLowerCase();
@@ -41,13 +33,9 @@ export function parseNumericState(raw) {
   return Number.isFinite(value) ? value : null;
 }
 
-// Strict shared numeric parser for optional cosmetic/layout config fields:
-// only an actual `number` or a numeric-looking string is accepted.
-// Number(value) alone would silently coerce booleans (Number(true) === 1) and
-// other unintended types through, letting a typo'd YAML value like
-// `room_columns: true` or `decimals: true` pass as a valid 1 instead of being
-// rejected. Returns null for anything else (including non-finite results);
-// callers apply their own range checks on top.
+// Strict parser for optional cosmetic/layout config fields: only an actual `number` or a
+// numeric-looking string. Number() alone would coerce `room_columns: true` to a valid 1.
+// Returns null for anything else (including non-finite); callers add their own range checks.
 export function parseConfigNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value !== "string") return null;
@@ -57,17 +45,10 @@ export function parseConfigNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-// Whether a value falls OUTSIDE an interval, where either bound may be absent
-// (null) and each carries its own inclusive flag.
-//
-// One implementation, because the same interval is written down in three places
-// that have to agree: the physical limits a built-in classification profile
-// declares, the `classification.valid_range` a user writes, and the projection of
-// either into the unit the card displays. Three copies of four comparisons would
-// be three chances to get one edge wrong in only one of them.
-//
-// The range must carry all four fields; no caller is allowed to hand in a
-// half-written one, and none does.
+// Whether a value falls OUTSIDE an interval; either bound may be null and each carries its
+// own inclusive flag. One implementation shared by the built-in profiles, a user's
+// `classification.valid_range`, and the projection of either into the display unit, so a
+// single edge cannot be got wrong in only one of them. The range must carry all four fields.
 export function isOutsideRange(value, range) {
   if (range.min !== null && (range.minInclusive ? value < range.min : value <= range.min)) return true;
   return range.max !== null && (range.maxInclusive ? value > range.max : value >= range.max);

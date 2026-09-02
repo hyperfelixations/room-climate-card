@@ -1,21 +1,11 @@
-// The main scale view's content model.
-//
-// A dynamic axis with a comfort band, an optimal band and one to N markers. The
-// marker set is an option: "average" leaves only the average, "extremes" is the
-// established coldest+warmest+average set, "all" adds every valid room.
-//
-// The band toggles are purely visual. The comfort and optimal bounds, the
-// classification, the footer text and the marker colours are all computed
-// independently and never read them, so switching a band off changes what is drawn
-// and nothing else.
+// Main dynamic scale with optional bands and average, extrema or all-room markers.
+// Band toggles affect drawing only, never classification, footer data or colours.
 
 import { extremeRoomLabel } from "../metric-meta.js";
 import { buildMarker } from "../marker.js";
 import { buildScaleBarContent } from "./scale-bar.js";
 
-// The room-bound footer: how many rooms sit inside the comfort band, how far apart
-// the extremes are, and — only when a trend entity is configured and reporting — the
-// signed rate as an independently optional third segment.
+// Room footer combines comfort count, spread and an optional reporting trend.
 function buildFooterText(shared) {
   const { texts, comfort, rooms, spread, trend } = shared;
   const segments = [
@@ -29,8 +19,7 @@ function buildFooterText(shared) {
 export function buildScaleViewContent(shared, options) {
   const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind, hideFooter } = shared;
   const markersMode = options.markers;
-  // With every room marked, the average needs extra visual weight to stay findable
-  // among them.
+  // Emphasize average among all-room markers.
   const emphasizeAverage = markersMode === "all" && Boolean(extremes);
 
   return {
@@ -40,13 +29,10 @@ export function buildScaleViewContent(shared, options) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Deliberately tied to rooms.comparable: two of the three segments are statements
-      // about rooms. The global hide_footer and this view's own show_footer are ANDed with it.
+      // Room-dependent footer also respects global and per-view visibility.
       footerText: rooms.comparable && !hideFooter && options.show_footer ? buildFooterText(shared) : null,
     }),
-    // A PAIR of texts, not one, for the same reason the optimal label is a pair (see
-    // view-content/scale-bar.js): which of the two fits is a question about rendered
-    // width, and only the layout pass can measure that.
+    // Layout selects long or short comfort text from measured width.
     comfortLabel: options.show_comfort_band
       ? (() => {
           const range = `${texts.fmt(comfort.min, 0)}–${texts.fmtWithUnit(comfort.max, 0, false)}`;
@@ -60,9 +46,7 @@ export function buildScaleViewContent(shared, options) {
       : null,
     emphasizeAverage,
     markers: {
-      // Gated on the extremes object itself, never on rooms.comparable: one source of
-      // truth for "there are two rooms to compare", and no branch that could read a
-      // position off null.
+      // The extremes object alone proves positions are available.
       extremes:
         extremes && markersMode === "extremes"
           ? {
@@ -84,8 +68,7 @@ export function buildScaleViewContent(shared, options) {
       average: buildMarker({
         position: average.position,
         color: average.color,
-        // Mirrors the headline's caption, including its absence: a card without one
-        // must not give its average marker a tooltip starting with ": ".
+        // Mirror optional headline caption without producing an empty tooltip prefix.
         title: texts.t(average.hasLabel ? "value.tooltip" : "value.tooltipNoLabel", {
           value: texts.fmtWithUnit(average.value),
           label: average.label,

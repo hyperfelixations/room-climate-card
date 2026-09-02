@@ -1,17 +1,8 @@
 // The value-level building blocks every configuration field is built from.
 //
-// Two deliberately different failure modes run through this file, and the split
-// is a product decision rather than an implementation detail:
-//
-//   throw    a structurally invalid value the card cannot work around — a
-//            a missing required room entity, a malformed supplied entity id, or a
-//            malformed classification block.
-//   fall back  a malformed OPTIONAL value — a typo in `decimals` or
-//            `room_columns` degrades to the built-in default instead of taking
-//            the whole dashboard card down with it.
-//
-// Which fields belong to which category is fixed by the public contract; see
-// each function.
+// Two failure modes, fixed per field by the public contract (see each function):
+// a structurally invalid required value throws; a malformed OPTIONAL value falls
+// back to the built-in default. See interne Doku §4 „Config-Normalisierungsvertrag".
 
 import { parseConfigNumber } from "../core/numbers.js";
 import { pathError } from "./errors.js";
@@ -46,13 +37,9 @@ export function optionalString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-// Optional label text, where an EXPLICIT empty string is a real answer.
-//
-// The difference from optionalString() is the whole point: for a label, "" means "show
-// no label here", which is not the same as "not configured, use the default". Collapsing
-// the two — as optionalString() does — makes it impossible to ask for a bare number.
-// null therefore means only "absent", and every other string, including "", is honoured
-// as written.
+// Optional label text where an explicit "" is a real answer ("show no label here"),
+// distinct from null ("not configured, use the default"). Unlike optionalString(),
+// every string including "" is kept as written.
 export function optionalLabel(value) {
   return typeof value === "string" ? value.trim() : null;
 }
@@ -65,20 +52,10 @@ export function stringOrDefault(value, fallback) {
   return String(value);
 }
 
-// ONE way to read a boolean option, so that every one of them accepts the same
-// values and explains a rejection in the same words.
-//
-// Returns `undefined` for a key that was not written, because the two callers mean
-// different things by that: a top-level option falls back to its default, while the
-// `show:` block must say NOTHING about a decision the user did not touch, or writing
-// the block would reset the parts it is silent about. Leaving that to the caller is
-// what lets both use one reader.
-//
-// STRICT, like the view options already are: a value that is neither true nor false
-// is far more likely to be a mistake than an intention, so it is diagnosed and the
-// default applies. For the top-level switches that is no change of outcome — the
-// tolerant `!== false` reading this replaces gave every non-false value the default
-// too — what is new is that the card says so instead of shrugging.
+// ONE reader for every boolean option: strict (only true/false pass), any other
+// value is diagnosed and the default applies. Returns `undefined` for a key that was
+// not written; the caller decides whether that means "default" (top-level) or
+// "stay silent" (the `show:` block). See interne Doku §3 „Konfigurationsvertrag".
 export function booleanOption(value, path, diagnostics) {
   if (value === undefined || value === null) return undefined;
   if (value === true || value === false) return value;

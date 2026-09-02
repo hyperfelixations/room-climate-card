@@ -1,27 +1,17 @@
-// The card shape both the daily-range view and the extreme-value view use.
-//
-// One model, two callers, so the two views can never drift apart visually. Every
-// string and every custom property is resolved here: the render path interpolates
-// them into markup, the patch path assigns the same values to an existing node, and
-// neither decides anything of its own.
-//
-// The two visibility flags are independent and both default to shown. A hidden
-// field is omitted from the tooltip and the ARIA label too, not just from the
-// visible text — otherwise it would still be exposed on hover.
+// Shared finished model for daily-range and extreme-value cards.
+// Independent visibility flags also govern tooltip and accessibility text.
 
 import { rgba } from "../../core/color.js";
 
-// The four alphas a card's own custom properties are derived at.
+// Metric-card paint recipe.
 const CARD_BG_ALPHA = 0.09;
 const CARD_BORDER_ALPHA = 0.36;
 const CARD_LINE_SHADOW_ALPHA = 0.24;
 
-// The placeholder for a value or a name that is configured but currently absent.
-// The card stays clickable — a missing reading is not a broken card.
+// Missing readings retain a clickable placeholder card.
 const MISSING = "–";
 
-// The neutral colour a card falls back to when nothing classified it. A CSS
-// variable rather than a hex, so it follows the dashboard theme.
+// Theme-following fallback for unclassified cards.
 const NEUTRAL_COLOR = "var(--rtc-muted)";
 
 export function buildMetricCardModel({
@@ -48,8 +38,7 @@ export function buildMetricCardModel({
     nameText,
     numText,
     unitText,
-    // undefined/null both mean "not a real room", so the action layer falls back to
-    // the card's default actions instead of a nonexistent room index.
+    // Null means use card actions rather than a room override.
     roomIndex: roomIndex ?? null,
     entity: entity ?? "",
     color: cardColor,

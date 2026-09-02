@@ -1,9 +1,8 @@
 // Turning values into positions on the axis, as percentages.
 //
-// Percentages rather than pixels: the card's width is decided by the dashboard
-// layout, so the only stable description of "where does this marker go" is a
-// fraction of the bar. Everything here is a pure number — the pixel-level
-// collision avoidance for LABELS is a rendering concern and lives elsewhere.
+// Percentages, not pixels: the card's width is set by the dashboard layout, so the only
+// stable position is a fraction of the bar. Pure numbers — pixel-level label collision
+// avoidance is a rendering concern and lives elsewhere.
 
 import { percentInRange } from "../../core/numbers.js";
 
@@ -17,9 +16,8 @@ export function rangePosition(minValue, maxValue, scaleMin, scaleMax) {
   };
 }
 
-// Everything needed to draw one scale bar's bands and edges. Both scale views use
-// this same function with different bounds, which is what structurally guarantees
-// identical geometry for identical input rather than leaving it to convention.
+// Everything needed to draw one scale bar's bands and edges. Both scale views call this
+// with different bounds, so identical input gives identical geometry by construction.
 export function scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, scaleMin, scaleMax) {
   const comfortBand = rangePosition(comfortMin, comfortMax, scaleMin, scaleMax);
   const optimalBand = rangePosition(optimalMin, optimalMax, scaleMin, scaleMax);
@@ -34,10 +32,9 @@ export function scaleGeometry(comfortMin, comfortMax, optimalMin, optimalMax, sc
     optimalLeft: optimalBand.left,
     optimalWidth: optimalBand.width,
     optimalCenter: optimalBand.left + optimalBand.width / 2,
-    // A data-anchored axis can legitimately sit wholly outside the semantic bands
-    // (a winter outdoor scale at -3..9 °C, say). Their configured bounds stay in
-    // the model, but a zero-width band or a label pinned to an axis edge would be
-    // actively misleading, so visibility is reported separately.
+    // A data-anchored axis can sit wholly outside the semantic bands (a winter outdoor
+    // scale at -3..9 °C). Their bounds stay in the model, but a zero-width band or an
+    // edge-pinned label would mislead, so visibility is reported separately.
     comfortVisible: comfortMax > scaleMin && comfortMin < scaleMax,
     optimalVisible: optimalMax > scaleMin && optimalMin < scaleMax,
   };

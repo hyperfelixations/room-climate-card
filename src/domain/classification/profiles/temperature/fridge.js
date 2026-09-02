@@ -1,31 +1,15 @@
-// Refrigerator temperature. An appliance, not a room.
+// Refrigerator temperature — an appliance, not a room.
 //
-// A classification profile is one atomic semantic unit: tiers with their
-// thresholds, score and zone, the comfort/optimal/scale bands, physical
-// validity, and the profile-specific icons. Everything that has to stay
-// coherent for a reading to be judged consistently lives here together;
-// unit conversion is deliberately separate (see ../../../metrics/definitions.js).
-//
-// It names no colours. `score` is the tier's distance from OPTIMAL -- 0 is the right
-// value, positive is too much, negative is too little -- and which colour sits at that
-// distance is the palette's decision, not the profile's. That is what lets the same
-// profile be shown in any palette without restating itself, and it is why a profile with
-// only one direction to go wrong needs no special case. See ../../palettes/registry.js.
-//
-// Values are product decisions, not implementation details. Do not round,
-// reorder or "tidy" them without a documented reason.
+// One atomic profile: tiers (threshold/score/zone), comfort/optimal/scale bands,
+// physical validity, icons. `score` is the signed distance from optimal that the
+// palette turns into a colour. Values are product decisions — do not reorder or "tidy".
 
 import { physicalRange } from "../../validity.js";
 
-// Appliance profile, not a room: target band follows common food-
-// safety guidance (e.g. FDA/EU "at or below 5 C", ideal ~3-4 C) —
-// the internationally cited "danger zone" for holding food starts
-// at 8 C, so the tiers widen that headroom on the warm side, the
-// direction that actually risks spoilage. anchorScale stays at its
-// default (true, unlike outdoor): a fridge's normal operating band
-// is narrow and well-defined by the compressor's own cycling, so a
-// fixed reference axis is more useful here than one that floats
-// with every door-open spike.
+// Target band follows food-safety guidance (FDA/EU "at or below 5 C", ideal ~3-4 C);
+// tiers widen headroom on the warm side, where spoilage risk is. anchorScale keeps its
+// default true (unlike outdoor): a fridge's operating band is narrow, so a fixed axis
+// beats one that floats with every door-open spike.
 export const fridge = {
   id: "fridge",
   metricKind: "temperature",

@@ -1,17 +1,6 @@
-// Presentation metadata per metric kind.
-//
-// Everything here is about how a reading is PRESENTED — which title to translate,
-// which icon to show, how many decimals to print, which noun to use for the
-// coldest/warmest-equivalent room, how many chips fit in a row. None of it is a
-// measurement fact, which is why it lives in the presentation layer and not next
-// to the metric definitions.
-//
-// unitFallback is the one exception in the other direction: the canonical unit IS
-// a measurement fact, so it is read from the metric definition rather than spelled
-// out a second time. It is only used when an entity reports no unit of its own.
-//
-// Comfort, optimal and base-scale bands deliberately do NOT appear here. They are
-// semantic decisions and belong to the classification profiles.
+// Presentation-only metadata for titles, icons, formatting and chip density.
+// Canonical-unit fallbacks come from metric definitions; classification bands
+// remain in the semantic profiles.
 
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 
@@ -66,22 +55,17 @@ export const METRIC_META = {
   },
 };
 
-// An unknown or missing metric kind resolves to temperature, so a card in the
-// mixed-kind state still has a sensible title and icon instead of blanks.
+// Unknown kinds use temperature metadata so mixed-kind cards remain presentable.
 export function metricMetaFor(metricKind) {
   return METRIC_META[metricKind] || METRIC_META.temperature;
 }
 
-// Max chips per row in fully automatic grid mode. Kept conservative enough that a
-// chip's number plus unit never has to shrink to fit.
+// Conservative automatic-grid limit that keeps values and units readable.
 export function autoRoomColumnsFor(metricKind) {
   return metricMetaFor(metricKind).autoRoomColumns || 7;
 }
 
-// The noun for the coldest/warmest-equivalent room. "cold"/"warm" are the two
-// structural roles; the wording itself is metric-specific ("driest room" for
-// humidity, "lowest" for co2 and pm25), which is why the caller passes a role and
-// not a translation key.
+// Maps the structural low/high role to metric-specific wording.
 export function extremeRoomLabel(role, metricKind, texts) {
   const meta = metricMetaFor(metricKind);
   return texts.t(role === "cold" ? meta.lowRoomKey : meta.highRoomKey);
