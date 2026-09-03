@@ -6,7 +6,7 @@
 // the shorter arc (so `blue-red` runs through violet). Five steps per wing, always. The middle
 // of a three-colour palette is always `optimal`, whatever the classification underneath looks
 // like. Rationale, and why this sits alongside monochrome.js: see internal dev doc §5
-// "Mehrfarbpaletten: zwei oder drei genannte Farben".
+// "Mehrfarbpaletten-Generator".
 
 import { hexToOklch, oklchToHex } from "../../../core/oklch.js";
 import { WING_STEPS, mix, placeAlong } from "./geometry.js";

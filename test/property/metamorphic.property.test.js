@@ -6,7 +6,7 @@
 // this asks whether a card is consistent with its neighbour. The relations, with their
 // preconditions and reasoning, are in ./metamorphic.js; this file runs them.
 // The coverage assertion — every relation must apply to a real share of the population — is
-// load-bearing. Rationale: see internal dev doc §4 "Die metamorphe Schicht: zwei Karten statt einer".
+// load-bearing. Rationale: see internal dev doc §4 "Die metamorphe Schicht".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

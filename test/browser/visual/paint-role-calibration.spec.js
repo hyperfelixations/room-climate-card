@@ -4,7 +4,7 @@
 // each palette colour lands and what is composited behind it, on that element, in that
 // order, over that background. The unit guard (test/unit/domain/paint-roles.test.js) checks
 // the alphas against the modules; only a real cascade checks the composition. Rationale:
-// see internal dev doc §5 "Worauf die Karte gemalt ist" and §5 "Die Darstellungsmechanik: Pille, Icon und Chipmarke".
+// see internal dev doc §5 "Ermittlung des Kartenhintergrunds" and §5 "Tönungsanpassung von Pille, Icon und Chipmarke".
 //
 // It also renders the bracketing cases as a plate a person can look at — the separation
 // factors were set by eye at 400px on a light theme. The plate is attached each run, not a

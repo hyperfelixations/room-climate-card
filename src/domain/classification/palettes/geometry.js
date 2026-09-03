@@ -95,8 +95,8 @@ export function placeAlong(from, to, steps) {
 }
 
 // The floor for "would a reader see two steps here", in screenDistance() — the instrument the
-// whole visibility layer is calibrated on. Bracketed by rendered pairs; see internal dev doc §5
-// "Die Transformation: eine Palette, die hier nicht lesbar ist, lesbar machen" refers back here:
+// whole visibility layer is calibrated on. Bracketed by rendered pairs; see internal dev doc
+// §5 "Die legible-Anpassungsstrategie" refers back here:
 //
 //   0.0027   #020202 / #000000   one colour   (CIEDE2000 0.31)
 //   0.0129   #0C0C0C / #020202   one colour   (CIEDE2000 1.61)

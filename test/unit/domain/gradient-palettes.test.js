@@ -5,7 +5,7 @@
 // hues and has to travel between them, so most of this is about the journey — the short way
 // round the hue circle, no colour nobody named, steps spaced by what a reader sees. The
 // shared promise: the named colours are the ends (and, with three, the middle), to the
-// digit. See internal dev doc §5 "Mehrfarbpaletten: zwei oder drei genannte Farben".
+// digit. See internal dev doc §5 "Mehrfarbpaletten-Generator".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -9,7 +9,7 @@
 //
 // Worked out on the plain instance: the colour on a tint of itself over the card, at the pill's
 // weight. Rationale, the search axes and the comfort bracket: see internal dev doc §5
-// "Die Darstellungsmechanik: Pille, Icon und Chipmarke".
+// "Tönungsanpassung von Pille, Icon und Chipmarke".
 
 import { compositeOver } from "../../core/color.js";
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";

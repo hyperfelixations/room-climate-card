@@ -2,7 +2,7 @@
 // It knows no colour: render signatures compare the platform's fresh surface reading.
 // Sources are colour-scheme changes, unfiltered root attributes (never subtree), and this
 // card's filtered style/class attributes. Event bursts coalesce onto one animation frame;
-// polling is intentionally absent. See internal dev doc §5 "Wann die Karte erneut fragt".
+// polling is intentionally absent. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
 
 export function createSurfaceWatch({ platform, onChange }) {
   let unlistenColorScheme = null;

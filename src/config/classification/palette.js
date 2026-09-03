@@ -21,7 +21,7 @@
 // must not import the domain registry. parseColorToken() is imported directly from core:
 // what counts as a written colour is what CSS says, not domain knowledge.
 //
-// Full contract: see internal dev doc §5 "Der YAML-Palettenvertrag ist für Menschen geschrieben".
+// Full contract: see internal dev doc §5 "YAML-Palettenvertrag".
 
 import { parseColorToken } from "../../core/color.js";
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";

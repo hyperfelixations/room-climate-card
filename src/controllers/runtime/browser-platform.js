@@ -58,7 +58,7 @@ function readAnimationPhase(element, animationName) {
 
 // Read exactly `--primary-text-color`, which the stylesheet uses for track/chip tints.
 // Return opaque hex or null; guessing from `style.color` would measure a colour those tints
-// do not use. Reading ladders: see internal dev doc §5 "Die Leseleiter".
+// do not use. Reading ladders: see internal dev doc §5 "Lesung von Hintergrund und Textfarbe".
 function readTextColor(element) {
   try {
     const view = element?.ownerDocument?.defaultView;
@@ -75,7 +75,7 @@ function readTextColor(element) {
 // Return every opaque surface sample: gradient stops plus interior blends; else opaque
 // background; else translucent background composed over the first opaque ancestor; else theme
 // card properties; else []. `url(...)` images are unreadable and deliberately fall through.
-// All CSSOM reads use the element's realm. Details: see internal dev doc §5 "Die Leseleiter".
+// All CSSOM reads use the element's realm. Details: see internal dev doc §5 "Lesung von Hintergrund und Textfarbe".
 function readBackgroundSamples(element) {
   try {
     const view = element?.ownerDocument?.defaultView;

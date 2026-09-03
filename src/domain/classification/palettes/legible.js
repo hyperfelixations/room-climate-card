@@ -9,8 +9,7 @@
 // monotone lightness correction that frees every step. Candidates are produced lazily,
 // best-first, and each is judged by holds(); `null` when nothing works.
 //
-// See internal dev doc §5 "Die Transformation: eine Palette, die hier nicht lesbar ist, lesbar
-// machen".
+// See internal dev doc §5 "Die legible-Anpassungsstrategie".
 
 import { hexToOklch, oklchToHex, screenDistance } from "../../../core/oklch.js";
 import { evaluatePaletteFit } from "../palette-fit.js";

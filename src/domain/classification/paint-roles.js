@@ -10,7 +10,7 @@
 //
 // Every role corresponds to a real CSS rule (named in its `what`), and a test holds the two
 // together: every `--tone-*` / `--room-*` property the stylesheet paints with must be covered.
-// Role table and factor rationale: see internal dev doc §5 "Wo eine Palettenfarbe wirklich landet".
+// Role table and factor rationale: see internal dev doc §5 "Malrollen einer Palettenfarbe".
 
 import { compositeOver } from "../../core/color.js";
 

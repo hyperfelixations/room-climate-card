@@ -6,8 +6,7 @@
 // which carry a reason on every row.
 // Boundary: a unit test importing src directly; how the assembled element reads its own
 // background lives in test/component/rendering/background-reading.test.js.
-// Rationale for the fit model: see internal dev doc §5 "Ob eine Palette auf diesem Grund
-// gesehen werden kann".
+// Rationale for the fit model: see internal dev doc §5 "Sichtbarkeitsprüfung einer Palette".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

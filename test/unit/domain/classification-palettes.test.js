@@ -395,8 +395,8 @@ test("the same profiles under the second palette differ everywhere and stay cohe
 
 // The colour-vision palette is a set of anchored hex codes like every other shipped
 // palette. What an edit can break — reach, separation, order and contrast — is checked here
-// with the ordinary instrument; the derivation and its measurements are in internal dev doc §5
-// "Eine Palette für alle drei Sehweisen, und warum es nicht zwei sind" and the RCC changelog.
+// with the ordinary instrument; the derivation and its measurements are in internal dev doc
+// §5 "Die color-vision-Palette" and the RCC changelog.
 // The numbers are floors just under what the palette reaches today.
 const COLOR_VISION_LIMITS = { wing: 30, ends: 48, step: 4, onLight: 2.4, onDark: 2.6 };
 

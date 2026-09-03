@@ -9,7 +9,7 @@
 // palette produces after adaptation.
 // Boundary: that the three places receive the same answer is
 // test/component/rendering/tone-and-chip-legibility.test.js. See internal dev doc §5 "Die
-// Transformation: eine Palette, die hier nicht lesbar ist, lesbar machen" and §5 "Die Darstellungsmechanik: Pille, Icon und Chipmarke".
+// legible-Anpassungsstrategie" and §5 "Tönungsanpassung von Pille, Icon und Chipmarke".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -7,7 +7,7 @@
 //
 // Not measured against colour vision deficiency: green-vs-red is the pair red-green deficiency
 // loses, and that is what a traffic light is made of. `color-vision` is the palette for that
-// (see internal dev doc §5 "Eine Palette für alle drei Sehweisen, und warum es nicht zwei sind").
+// (see internal dev doc §5 "Die color-vision-Palette").
 
 export const signal = {
   id: "signal",

@@ -29,8 +29,8 @@ export const NEUTRAL_COLOR = "#7D7D7D";
 // `derived` (a ramp the card computed from `palette: teal` / `palette: blue-red`) may be
 // adapted; `custom` (a palette written out in YAML) is left alone. Declared, not measured —
 // nothing about the colours says whether a person chose them — and fixed at construction, so
-// it cannot drift. `custom` is the default. See internal dev doc §5 "Welche Paletten die Karte
-// überhaupt anfassen darf".
+// it cannot drift. `custom` is the default. See internal dev doc §5 "Anpassbare Paletten nach
+// Herkunft".
 export const PALETTE_ORIGINS = Object.freeze(["builtin", "derived", "custom"]);
 const DEFAULT_ORIGIN = "custom";
 

@@ -150,7 +150,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // A theme switch, an OS dark-mode flip, a card-mod repaint — none changes an
       // entity or the config, so nothing else would bring the card back to re-read what
       // it is standing on. The watch supplies the occasion; _render()'s data signature
-      // decides whether anything changed. See internal dev doc §5 "Wann die Karte erneut fragt".
+      // decides whether anything changed. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
       this._surfaceWatch = createSurfaceWatch({
         platform: this._platform,
         onChange: () => {
@@ -276,8 +276,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // Strong exception safety: everything that can throw runs first and writes nothing;
     // the commit phase cannot fail. HA's live YAML editor calls setConfig() on every
     // keystroke, so invalid calls are the norm and must leave the card untouched. See
-    // internal dev doc §3 "setConfig() und YAML-Normalisierung" and §5 "setConfig() ist auch
-    // für renderzeitige Fehler atomar".
+    // internal dev doc §3 "setConfig() und YAML-Normalisierung" and §5 "Atomare
+    // setConfig()-Probe für renderzeitige Fehler".
     setConfig(config) {
       // ---- validate: no observable state may change in here --------------------
       const normalized = this._normalizeConfig(config);
@@ -600,7 +600,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // the candidate is installed for one synchronous call and removed again (the real
     // path, not a reconstruction), and everything it can write — memoization and one
     // deduplicated warning — is restored. No hass, nothing to rehearse. See internal dev doc
-    // §5 "setConfig() ist auch für renderzeitige Fehler atomar".
+    // §5 "Atomare setConfig()-Probe für renderzeitige Fehler".
     _assertRenderable(candidate) {
       if (!this._hass) return;
       const saved = {
@@ -626,7 +626,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // theme, not what card-mod or a per-card style put under this card. `hass` is the
     // fallback before paint or in a realm that will not answer; HA's light default is
     // last. Memoized on the readings themselves — a theme switch changes both, which is
-    // exactly when the answer must change. Full ladder: see internal dev doc §5 "Die Leseleiter".
+    // exactly when the answer must change. Full ladder: see internal dev doc §5 "Lesung von Hintergrund und Textfarbe".
     _surface() {
       const root = this.shadowRoot?.querySelector(".rtc-card") ?? this;
       const samples = this._platform.readBackgroundSamples(root);

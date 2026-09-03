@@ -10,8 +10,7 @@
 //
 // A generated ramp does not promise the contrast a hand-designed palette does — it cannot also
 // change hue. Full rationale (Oklab vs CIELAB, the anchors, why eleven steps do not fit one
-// readable band, the reach calibration): see internal dev doc §5 "Monopaletten: ein Generator statt
-// Dateien".
+// readable band, the reach calibration): see internal dev doc §5 "Monopaletten-Generator".
 
 import { hexToOklch, oklchToHex } from "../../../core/oklch.js";
 import { MIN_STEP, WING_STEPS, mix, pathLength, placeAlong } from "./geometry.js";
@@ -70,7 +69,7 @@ const REACH_CANDIDATES = 16;
 // tiny span. So it is pushed outwards until its path can hold five steps MIN_STEP apart, or it
 // hits the edge of the space — and the push stops as soon as the steps fit, because reaching
 // past an anchor costs contrast on one card background. Reach value (0.20) and the
-// eleven-steps-do-not-fit reasoning: see internal dev doc §5 "Monopaletten: ein Generator statt Dateien".
+// eleven-steps-do-not-fit reasoning: see internal dev doc §5 "Monopaletten-Generator".
 function reachedOut(base, side, aim, limit) {
   const wanted = WING_STEPS * MIN_STEP;
   if (pathLength(base, endOf(base, side, aim)) >= wanted) return aim;

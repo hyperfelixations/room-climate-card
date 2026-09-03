@@ -4,7 +4,7 @@
 // case (drop rooms, drop configuration, pull an entity back to an ordinary one) and after
 // each edit asks whether it still fails. Deterministic by construction, and the result is a
 // description — JSON, a fixture. Greedy and one-directional: a candidate is kept only if it
-// still fails. See internal dev doc §4 "Die metamorphe Schicht: zwei Karten statt einer" (Shrinking).
+// still fails. See internal dev doc §4 "Die metamorphe Schicht" (Shrinking).
 
 const { describeScenario } = require("../fixtures/scenario.js");
 const { isDeepStrictEqual } = require("node:util");
