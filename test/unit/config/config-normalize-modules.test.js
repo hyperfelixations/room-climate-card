@@ -6,8 +6,8 @@
 // runs in, are asserted literally. Collaborators are stubbed, which is the point of
 // injecting them.
 // Boundary: config-primitives.test.js owns the small readers, classification-normalize.test.js
-// the classification sub-tree; this file owns the assembly. See interne Doku §4
-// „Config-Normalisierungsvertrag".
+// the classification sub-tree; this file owns the assembly. See internal dev doc §4
+// "Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

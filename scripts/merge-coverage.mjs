@@ -65,7 +65,7 @@ async function browserMap() {
 
 // Every .js file under src/, read from the directory (not from any layer): Istanbul reports
 // only files it was handed, so an unmeasured module vanishes from the summary rather than
-// showing 0%. See interne Doku §4 "Coverage in drei Schichten".
+// showing 0%. See internal dev doc §4 "Coverage in drei Schichten".
 function sourceFileInventory(directory = path.join(ROOT, "src"), found = []) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);

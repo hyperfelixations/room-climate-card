@@ -2,7 +2,7 @@
 //
 // Two failure modes, fixed per field by the public contract (see each function):
 // a structurally invalid required value throws; a malformed OPTIONAL value falls
-// back to the built-in default. See interne Doku §4 „Config-Normalisierungsvertrag".
+// back to the built-in default. See internal dev doc §4 "Config-Normalisierungsvertrag".
 
 import { parseConfigNumber } from "../core/numbers.js";
 import { pathError } from "./errors.js";
@@ -55,7 +55,7 @@ export function stringOrDefault(value, fallback) {
 // ONE reader for every boolean option: strict (only true/false pass), any other
 // value is diagnosed and the default applies. Returns `undefined` for a key that was
 // not written; the caller decides whether that means "default" (top-level) or
-// "stay silent" (the `show:` block). See interne Doku §3 „Konfigurationsvertrag".
+// "stay silent" (the `show:` block). See internal dev doc §3 "Konfigurationsvertrag".
 export function booleanOption(value, path, diagnostics) {
   if (value === undefined || value === null) return undefined;
   if (value === true || value === false) return value;

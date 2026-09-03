@@ -65,7 +65,7 @@ export function oklabDistance(hexA, hexB) {
 // So a flare term is added FIRST, in linear light, then the uniform distance is measured;
 // raising the dark end also compresses chroma there, as the eye does. F = 0.02 is
 // measured — the only value that separates the calibration fixture's visible pairs from
-// the invisible ones. Full derivation: internal dev doc, §5 "Das Instrument".
+// the invisible ones. Full derivation: see internal dev doc §5 "Das Instrument".
 const SCREEN_FLARE = 0.02;
 
 // Linear light plus the flare a lit room adds, renormalised so white stays white.

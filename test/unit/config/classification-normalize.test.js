@@ -6,7 +6,7 @@
 // Collaborators are stubbed, which is the point of injecting them.
 // Boundary: this file owns the classification sub-tree (built-in profiles, a YAML custom
 // profile, the parts a profile is assembled from); how the result fits into the finished
-// config is config-normalize-modules.test.js. See interne Doku §4 „Config-Normalisierungsvertrag".
+// config is config-normalize-modules.test.js. See internal dev doc §4 "Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

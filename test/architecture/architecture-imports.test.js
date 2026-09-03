@@ -3,7 +3,7 @@
 // Enforces the source layering contract: every file lands in exactly one layer,
 // imports are relative and resolvable inside src/, the graph is acyclic, and
 // imports only ever point downwards (sideways only within one group). Full
-// contract: interne Doku §4 "Import- und Layervertrag". Layer prefixes and the
+// contract: see internal dev doc §4 "Import- und Layervertrag". Layer prefixes and the
 // forbidden-global lists are data in source-architecture.js, which this drives.
 //
 //   0 core/   1 config|i18n|domain   2 application/model   3 presentation/view-model

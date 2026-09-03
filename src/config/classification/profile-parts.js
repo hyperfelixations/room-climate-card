@@ -5,7 +5,7 @@
 // next to the error message it produces (the messages are a user-facing contract). The
 // zone vocabulary is INJECTED — the config layer must not import the domain registry.
 //
-// Full contract: internal dev doc, §3 "Custom-Profile-Vertrag".
+// Full contract: see internal dev doc §5 "Custom-Profile-Vertrag".
 
 import { isHexColor } from "../../core/color.js";
 import { assertAllowedKeys, isPlainObject, numberAtPath } from "../primitives.js";

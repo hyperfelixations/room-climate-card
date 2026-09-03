@@ -4,7 +4,7 @@
 // Validated at MODULE LOAD, like the translation registry: a palette with a hole in it makes
 // an invisible value, and the build is the honest place to catch it. assertPalette() runs
 // over user-written palettes too (via normalizePalette()), so there is one definition of "a
-// usable palette". See interne Doku §5 „Farbpaletten".
+// usable palette". See internal dev doc §5 "Farbpaletten".
 
 import { isHexColor, parseColorToken } from "../../../core/color.js";
 import { colorVision } from "./color-vision.js";
@@ -22,14 +22,14 @@ export const DEFAULT_PALETTE_ID = "pastel";
 // "No judgement is possible", in one colour: `invalid` when the palette names none, and a
 // value the entity classified itself without a colour. THIS grey is measured — #7D7D7D
 // reaches 4,12 : 1 on both a light and a dark card, the most a single grey can do — and it
-// belongs to no palette, because this value sits on no ramp. See interne Doku §5 „Farbpaletten".
+// belongs to no palette, because this value sits on no ramp. See internal dev doc §5 "Farbpaletten".
 export const NEUTRAL_COLOR = "#7D7D7D";
 
 // WHERE A PALETTE CAME FROM, which decides whether the card may change it: `builtin` and
 // `derived` (a ramp the card computed from `palette: teal` / `palette: blue-red`) may be
 // adapted; `custom` (a palette written out in YAML) is left alone. Declared, not measured —
 // nothing about the colours says whether a person chose them — and fixed at construction, so
-// it cannot drift. `custom` is the default. See interne Doku §5 „Welche Paletten die Karte
+// it cannot drift. `custom` is the default. See internal dev doc §5 "Welche Paletten die Karte
 // überhaupt anfassen darf".
 export const PALETTE_ORIGINS = Object.freeze(["builtin", "derived", "custom"]);
 const DEFAULT_ORIGIN = "custom";

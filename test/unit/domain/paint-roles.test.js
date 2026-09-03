@@ -5,8 +5,8 @@
 // group below is the shape it exists for — `palette: lime` on a light dashboard is legible
 // as a ramp and unreadable as a status label, because the label paints the colour on a 20%
 // tint of itself.
-// Boundary: the measurement itself is in palette-fit.test.js. See interne Doku §5 „Worauf
-// die Karte gemalt ist" and „Die Darstellungsmechanik".
+// Boundary: the measurement itself is in palette-fit.test.js. See internal dev doc §5 "Worauf
+// die Karte gemalt ist" and §5 "Die Darstellungsmechanik: Pille, Icon und Chipmarke".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

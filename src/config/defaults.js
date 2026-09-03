@@ -3,7 +3,7 @@
 // Not here: mode-dependent title/unit/icon/decimals (metric registries and
 // classification profiles own those), and the `show:` block's defaults
 // (SHOW_SWITCHES in show.js). The source-minimum requirement is checked in
-// normalize-config.js — see interne Doku §3 „Konfigurationsvertrag".
+// normalize-config.js — see internal dev doc §3 "Konfigurationsvertrag".
 
 export const DEFAULT_CONFIG = {
   rotation_seconds: 14, // hold time per view

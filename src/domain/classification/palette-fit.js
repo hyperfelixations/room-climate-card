@@ -5,7 +5,7 @@
 // What comes back is a FINDING, not a yes/no: a method that moves lightness needs to know which
 // steps collide and by how much, one that moves chroma needs it cut differently. The instrument
 // is screenDistance() (core/oklch.js). Rationale, and why this replaced a declared `tunedFor`:
-// interne Doku §5 „Ob eine Palette auf diesem Grund gesehen werden kann".
+// see internal dev doc §5 "Ob eine Palette auf diesem Grund gesehen werden kann".
 
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
 import { describePalette } from "./palettes/geometry.js";
@@ -24,7 +24,7 @@ export const VISIBILITY_THRESHOLD = 0.16;
 // The contiguous runs of colliding steps for one role, in ramp order — what answers "change
 // the whole palette, or only part". A region reports FACTS about where it sits (which steps,
 // whether it reaches either end) rather than a "start"/"middle"/"end" label, which is lossy
-// for a palette whose first element is `optimal`. See interne Doku §5 „Ob eine Palette…".
+// for a palette whose first element is `optimal`. See internal dev doc §5 "Ob eine Palette auf diesem Grund gesehen werden kann".
 function regionsOf(steps, role) {
   const regions = [];
   let run = null;

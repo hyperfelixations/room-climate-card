@@ -1,13 +1,13 @@
 // A traffic light rather than a gradient: green = in place, amber = drifted, red = act.
 //
-// Two steps per wing by design (interne Doku §5 „Farbpaletten"); both wings carry the same
+// Two steps per wing by design (see internal dev doc §5 "Farbpaletten"); both wings carry the same
 // pair because the message is distance from optimal, not direction. A longer profile collapses
 // onto these colours by construction. Neighbouring steps ΔE00 ~49 and ~38; contrast 2,17:1
 // light / 4,00:1 dark — pinned by classification-palettes.test.js.
 //
 // Not measured against colour vision deficiency: green-vs-red is the pair red-green deficiency
 // loses, and that is what a traffic light is made of. `color-vision` is the palette for that
-// (interne Doku §5 „Eine Palette für alle drei Sehweisen…").
+// (see internal dev doc §5 "Eine Palette für alle drei Sehweisen, und warum es nicht zwei sind").
 
 export const signal = {
   id: "signal",

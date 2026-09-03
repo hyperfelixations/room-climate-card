@@ -6,7 +6,7 @@
 // calls setConfig() on every keystroke, so half-typed blocks arrive as real configs.
 // Fallbacks record a diagnostic; the element surfaces them. Returns only the keys the
 // user wrote, not the finished answer — normalize-config.js layers the defaults and
-// the older spellings underneath. See interne Doku §3 „Der show:-Block".
+// the older spellings underneath. See internal dev doc §3 "Der show:-Block".
 
 import { booleanOption, isPlainObject } from "./primitives.js";
 

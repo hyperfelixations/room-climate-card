@@ -17,7 +17,7 @@ const WIDTHS = [280, 300, 320, 360, 460, 700];
 const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 
 // A minimal display:block `ha-card` stand-in so the @container breakpoints are testable —
-// see interne Doku §4 "`ha-card` im Offline-Harness".
+// see internal dev doc §4 "ha-card im Offline-Harness".
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!customElements.get("ha-card")) {

@@ -1,5 +1,5 @@
 // Owns pointer/drag/click-suppression state and interprets gestures through narrow ports.
-// Carousel owns movement; thresholds live in interaction-logic.js. See internal documentation §5 “Carousel, Swipe und Accessibility”.
+// Carousel owns movement; thresholds live in interaction-logic.js. See internal dev doc §5 "Carousel, Swipe und Accessibility".
 
 import {
   CLICK_SUPPRESSION_MS,

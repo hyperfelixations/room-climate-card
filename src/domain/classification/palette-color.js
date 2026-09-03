@@ -8,7 +8,7 @@
 //   explicit colour  a profile that named a colour gets it (keeps pre-palette custom profiles)
 //   otherwise        the ramp, at the tier's distance from optimal
 //
-// See interne Doku §5 „Farbpaletten".
+// See internal dev doc §5 "Farbpaletten".
 
 import { NEUTRAL_COLOR } from "./palettes/registry.js";
 
@@ -17,7 +17,7 @@ import { NEUTRAL_COLOR } from "./palettes/registry.js";
 // and no error case: deviation 0 is the middle; deviation ±k maps k of the profile's own `span`
 // steps onto that many palette steps. `ceil` not `round` — the first step away from optimal
 // must already leave the middle colour. Equal reach maps one to one; a short palette collapses;
-// a short profile reaches the ramp's ends. See interne Doku §5 „Farbpaletten".
+// a short profile reaches the ramp's ends. See internal dev doc §5 "Farbpaletten".
 
 export function rampColorFor(deviation, span, palette, describe = "classification") {
   if (deviation === 0) return palette.optimal;

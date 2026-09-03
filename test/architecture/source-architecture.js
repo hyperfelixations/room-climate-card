@@ -35,7 +35,7 @@ const COMPOSITION_ROOT = { layer: 8, name: "composition root", group: "(root)" }
 const RENDER_LAYER_NAMES = ["render/primitives", "render/layout", "styles", "views", "render/composition"];
 
 // Ambient environment surface that must not appear in the application layer;
-// see interne Doku §4 "Keine Browserglobals in fachlichen Schichten". Matched as
+// see internal dev doc §4 "Keine Browserglobals in fachlichen Schichten". Matched as
 // whole identifiers against code only (comments and string/template text are
 // stripped first — see stripCommentsAndStringText). Everything environmental
 // arrives as an argument.
@@ -143,7 +143,7 @@ const FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS = [
 // The controller layer schedules, times and observes only through the platform
 // object, which has exactly one production implementation (BROWSER_ADAPTER) — the
 // single file that touches a timer, observer, clock or document directly. See
-// interne Doku §4 "Platform-Adapter-Vertrag".
+// internal dev doc §4 "Platform-Adapter-Vertrag".
 const BROWSER_ADAPTER = "controllers/runtime/browser-platform.js";
 const FORBIDDEN_CONTROLLER_GLOBALS = [
   "globalThis",

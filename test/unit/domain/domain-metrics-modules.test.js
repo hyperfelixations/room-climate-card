@@ -3,8 +3,8 @@
 // Direct unit tests for src/domain/metrics/* and src/domain/units/*: which metric kind an
 // entity reports, which unit it is in, and how to move a value between units without ever
 // mixing an absolute reading with a difference. A mistake here produces a plausible number
-// wrong by 32, or classifies humidity against temperature tiers. See interne Doku §5
-// „Unit-, Range-, Trend- und Scale-System".
+// wrong by 32, or classifies humidity against temperature tiers. See internal dev doc §5
+// "Unit-, Range-, Trend- und Scale-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

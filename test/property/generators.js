@@ -5,7 +5,7 @@
 // YAML surface the card accepts. WEIGHTS is exported and measured by generators.test.js
 // against the realised distribution. Output is a plain-JSON description for
 // test/fixtures/scenario.js, not a card; it shrinks structurally (shrink.js).
-// Rationale and the coverage guard: see interne Doku §4 „Die Property-Schicht".
+// Rationale and the coverage guard: see internal dev doc §4 "Die Property-Schicht".
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
 const {

@@ -16,8 +16,8 @@ const WIDTHS = [360, 375, 390, 393, 412, 460];
 // are only meaningful in this locale.
 const LANGUAGE = "de";
 
-// A minimal display:block `ha-card` stand-in so the @container queries match — see interne
-// Doku §4 "`ha-card` im Offline-Harness".
+// A minimal display:block `ha-card` stand-in so the @container queries match — see internal
+// dev doc §4 "ha-card im Offline-Harness".
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!customElements.get("ha-card")) {

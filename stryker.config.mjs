@@ -1,5 +1,5 @@
 // Mutation testing, deliberately narrow: three compact domain modules run through their
-// direct-source unit tests. Scope and rationale: interne Doku §4 "Mutationstesten".
+// direct-source unit tests. Scope and rationale: see internal dev doc §4 "Mutationstesten".
 
 // @ts-check
 

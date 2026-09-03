@@ -1,7 +1,7 @@
 // Saturated alternative to `pastel` for dashboards where the soft ramp reads as washed out.
 // Same middle and same hue journey — a change of intensity, not of meaning.
 //
-// Names no `invalid`; completePalette() fills in NEUTRAL_COLOR (interne Doku §5 „Farbpaletten").
+// Names no `invalid`; completePalette() fills in NEUTRAL_COLOR (see internal dev doc §5 "Farbpaletten").
 // The deepest blue stops at L* 42: any darker drops below the dark-card contrast every
 // shipped palette must hold.
 

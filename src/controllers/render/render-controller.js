@@ -1,6 +1,6 @@
 // Owns render-path selection and the state that describes the last successful DOM.
 // Signatures and deferred-render debt commit only after a render callback succeeds.
-// Details: internal documentation §4 "Commit-on-Success" and "Render-Signaturvertrag".
+// Details: see internal dev doc §4 "Commit-on-Success" and §4 "Render-Signaturvertrag".
 
 import { cardStructureSignature } from "../../render/composition/card-shell.js";
 

@@ -5,8 +5,8 @@
 // window, whether a timer is left behind on disconnect. Nothing waits — a millisecond is set
 // and an exact answer asserted; the real browser test is the integration proof.
 // Boundary: the environment the carousel runs in (capability degradation, realm-bound
-// handles, ResizeObserver, fonts-ready) is runtime-platform.test.js. See interne Doku §5
-// „Carousel, Swipe und Accessibility".
+// handles, ResizeObserver, fonts-ready) is runtime-platform.test.js. See internal dev doc §5
+// "Carousel, Swipe und Accessibility".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -1,8 +1,8 @@
 // The whole `setConfig()` contract, as one pure function. normalizeConfig() returns
 // the normalized config or throws the error the user needs; a malformed views: entry
 // or show: key records a diagnostic on _configDiagnostics instead, and the element
-// decides when to surface it. Transaction semantics: interne Doku §3
-// „setConfig() und YAML-Normalisierung".
+// decides when to surface it. Transaction semantics: see internal dev doc §3
+// "setConfig() und YAML-Normalisierung".
 //
 // Injected collaborators, because config/ must not import the domain, i18n or view
 // registries. This list is authoritative:
@@ -54,7 +54,7 @@ export function normalizeLanguage(value, isSupportedLanguage) {
 // The two older spellings of a `show:` decision, read WITHOUT a default of their own,
 // so SHOW_SWITCHES stays the one place these defaults live. `show_rooms` speaks only
 // for YAML's real booleans; `unavailable_values` only for the literal `hide`. Every
-// other value means what the absent key means. See interne Doku §3 „Der show:-Block".
+// other value means what the absent key means. See internal dev doc §3 "Der show:-Block".
 export function legacyShowRequests(userConfig) {
   const requests = {};
   if (userConfig.show_rooms === true) requests.rooms = true;
@@ -68,7 +68,7 @@ export function legacyShowRequests(userConfig) {
 // only), `""` (no line), or `{text, overflow}`. A bare `clip`/`wrap` is read as the
 // overflow mode, so those two words cannot be the text — escape via `{text: wrap}`.
 // Defaults differ and are measured from the stylesheet: title wraps, subtitle clips.
-// Malformed values fall back. See interne Doku §3 „Konfigurationsvertrag" (Kopfzeilen).
+// Malformed values fall back. See internal dev doc §3 "Konfigurationsvertrag" (Kopfzeilen).
 export const HEADER_LINE_OVERFLOWS = ["clip", "wrap"];
 
 export function normalizeHeaderLine(value, defaultOverflow) {
@@ -136,7 +136,7 @@ export function normalizeConfig(config, collaborators) {
   // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else. The block wins WHERE IT
   // SPEAKS — per decision, not per block — over the two older top-level spellings, which
   // are on their way out (backlog, next major). Everything downstream sees `config.show`
-  // only. See interne Doku §3 „Der show:-Block".
+  // only. See internal dev doc §3 "Der show:-Block".
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
   const show = resolveShowConfig({ ...legacyShowRequests(userConfig), ...requestedShow });
 

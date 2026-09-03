@@ -1,6 +1,6 @@
 // Total card-picker helpers for entity-first suggestions and browse-path stubs.
 // Both reuse runtime metric detection and guard arbitrary frontend inputs without catch-all
-// error suppression. Details: internal docs §4 “Card-Picker-Vertrag”.
+// error suppression. Details: see internal dev doc §4 "Card-Picker-Vertrag".
 
 import { CARD_TYPE } from "../../core/card-metadata.js";
 import { AVAILABILITY, buildEntityModel, metricKindForEntity } from "./entity-model.js";

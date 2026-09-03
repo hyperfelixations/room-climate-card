@@ -1,6 +1,6 @@
 // The accepted Home Assistant action types for tap_action/hold_action: a name
-// allowlist, not full payload validation. Trust model in interne Doku §4
-// „Sicherheits- und HTML-Escaping-Vertrag".
+// allowlist, not full payload validation. Trust model: see internal dev doc §4
+// "Sicherheits- und HTML-Escaping-Vertrag".
 
 import { isPlainObject } from "./primitives.js";
 

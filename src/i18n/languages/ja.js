@@ -1,5 +1,5 @@
 // Japanese UI strings. Same key set as en.js (reference + per-key fallback), checked
-// at load by ../integrity.js. Value shapes and plural rules: interne Doku §5.
+// at load by ../integrity.js. Value shapes and plural rules: see internal dev doc §5 "i18n und sprachabhängige Formatierung".
 
 export const ja = {
   "title.temperature": "温度",

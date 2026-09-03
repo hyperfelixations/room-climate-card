@@ -1,6 +1,6 @@
 // Owns carousel position, resume/A11y timers and the animation-start frame. It knows no
 // hass, config object, model or renderer; clock and DOM access arrive through narrow ports.
-// Contract: internal documentation §5 "Carousel, Swipe und Accessibility".
+// Contract: see internal dev doc §5 "Carousel, Swipe und Accessibility".
 
 import { clamp } from "../../core/numbers.js";
 import { SLIDE_EASING_CSS } from "../../core/easing.js";
@@ -121,7 +121,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   // The wall clock synchronizes cards, but start-frame latency makes it lead the rendered
   // animation. A11y flips at holdMs + 35.4% of slideMs, so use the animation's corrected
   // current phase for what is visible; keep wall time only as fallback. See browser-platform.js
-  // and internal documentation §5 "Carousel, Swipe und Accessibility".
+  // and internal dev doc §5 "Carousel, Swipe und Accessibility".
   function visiblePhaseMs(track, current) {
     const animation = platform.readAnimationPhase?.(track, TRACK_ANIMATION_NAME);
     // Reject a phase that belongs to the previous timing configuration.

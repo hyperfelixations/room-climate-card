@@ -6,7 +6,7 @@
 // `quantityKind` picks the path: `absolute` via toCanonical/fromCanonical (applies the
 // Fahrenheit offset), `delta` and `rate` via deltaToCanonical/deltaFromCanonical (no
 // offset). An unknown kind throws rather than default to a plausible-looking wrong number.
-// See the internal dev doc, §5 "Unit-, Range-, Trend- und Scale-System".
+// See internal dev doc §5 "Unit-, Range-, Trend- und Scale-System".
 
 export function convertUnitValue(value, quantityKind, fromProfile, toProfile) {
   if (quantityKind === "absolute") {

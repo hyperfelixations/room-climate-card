@@ -4,7 +4,7 @@
 // degradation, realm-bound handles, ResizeObserver and fonts-ready lifecycle. Carousel
 // integration appears only where it proves the platform clock is used. Nothing waits — a
 // millisecond is set and an exact answer asserted; the real browser test is the integration
-// proof. See interne Doku §4 „Platform-Adapter-Vertrag" and §5 „Resize- und Fonts-Ready-System".
+// proof. See internal dev doc §4 "Platform-Adapter-Vertrag" and §5 "Resize- und Fonts-Ready-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

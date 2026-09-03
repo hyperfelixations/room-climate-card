@@ -3,7 +3,7 @@
 // A platform implementation whose clock, timers and animation frames a test drives by
 // hand, making wall-clock carousel questions deterministic and exact. It lives in the test
 // suite because the shipped bundle must contain exactly one implementation of the contract
-// (interne Doku §4 "Platform-Adapter-Vertrag").
+// (see internal dev doc §4 "Platform-Adapter-Vertrag").
 
 function createFakePlatform(options = {}) {
   let now = options.now ?? 1750000000000;

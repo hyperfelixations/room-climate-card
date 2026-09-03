@@ -1,7 +1,7 @@
 // The card's default colour ramp — the colours every built-in profile shows under `pastel`.
 //
 // Wings run from the centre out: `above[0]` is one step off optimal, `above[4]` the far end.
-// Palette shape, wing lengths and how a score maps onto a step: interne Doku §5 „Farbpaletten".
+// Palette shape, wing lengths and how a score maps onto a step: see internal dev doc §5 "Farbpaletten".
 //
 // Reads best on a dark card; a note only — the card measures fit against the real background
 // (../palette-fit.js), never a palette's own word.

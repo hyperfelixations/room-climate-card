@@ -2,7 +2,7 @@
 // Declaration, not live availability, owns card form; outages may change only the value.
 // Unknown ids are not sources. Foreign-kind rooms are excluded only when a primary declares
 // the card kind; unreadable and untyped rooms remain availability/arbitration concerns.
-// Details: internal docs §3 “EntityModel und MeasurementContext”.
+// Details: see internal dev doc §3 "EntityModel und MeasurementContext".
 
 import { hasEntity, metricKindForEntity } from "./entity-model.js";
 

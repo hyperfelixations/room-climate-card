@@ -4,7 +4,7 @@
 // captured by the three allowlisted characterization suites (element-ownership.test.js
 // LEGACY_DTO_ALLOWLIST). Nothing may be added — an extra field would be an untested
 // contract and force a baseline re-record, which this file exists to avoid. Not importable
-// from src/. See interne Doku §4 "Baseline- und Golden-Vertrag".
+// from src/. See internal dev doc §4 "Baseline- und Golden-Vertrag".
 //
 // The daily-range marker positions default to 0 when that view is inactive, since the flat
 // shape exposes them unconditionally.

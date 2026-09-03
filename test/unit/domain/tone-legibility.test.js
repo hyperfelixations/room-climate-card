@@ -8,8 +8,8 @@
 // clears a target above the floor, not the floor itself. Every colour below is one a real
 // palette produces after adaptation.
 // Boundary: that the three places receive the same answer is
-// test/component/rendering/tone-and-chip-legibility.test.js. See interne Doku §5 „Die
-// Transformation" and „Die Darstellungsmechanik".
+// test/component/rendering/tone-and-chip-legibility.test.js. See internal dev doc §5 "Die
+// Transformation: eine Palette, die hier nicht lesbar ist, lesbar machen" and §5 "Die Darstellungsmechanik: Pille, Icon und Chipmarke".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

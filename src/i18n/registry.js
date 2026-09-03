@@ -1,6 +1,6 @@
 // The translation registry: one entry per supported language.
 //
-// Adding a language: interne Doku §6 „Neue Sprache". The load-time self-check
+// Adding a language: see internal dev doc §6 "Neue Sprache". The load-time self-check
 // below lists any key a new file has missing or extra vs the reference language;
 // resolution and lookup (translate.js) read this table generically by key.
 

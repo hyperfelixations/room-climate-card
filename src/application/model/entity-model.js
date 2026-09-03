@@ -25,7 +25,7 @@ export const AVAILABILITY = Object.freeze({
 });
 
 // Explanation vocabulary kept separate from AVAILABILITY policy decisions.
-// Details: internal docs §3 “EntityModel und MeasurementContext”.
+// Details: see internal dev doc §3 "EntityModel und MeasurementContext".
 export const UNUSABLE_REASON = Object.freeze({
   NONE: "none",
   // The configured id is not in hass.states at all.

@@ -6,7 +6,7 @@
 // supplies the occasion and nothing else: it says "ask again", and the data signature
 // answers with a string comparison.
 // No timer, ever: the three sources are events; the tests assert the absence of timers
-// directly. See interne Doku §5 „Wann die Karte erneut fragt".
+// directly. See internal dev doc §5 "Wann die Karte erneut fragt".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

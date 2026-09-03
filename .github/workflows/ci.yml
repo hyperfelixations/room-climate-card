@@ -1,7 +1,7 @@
 # CI for the standalone room-climate-card repository. Two independent jobs with no `needs:`
 # between them; each builds the bundle itself so no job reports green against an artifact it
 # did not produce. The large property sweep and mutation testing run weekly, not here. See
-# interne Doku §4 "GitHub-Workflows".
+# internal dev doc §4 "GitHub-Workflows".
 
 name: CI
 

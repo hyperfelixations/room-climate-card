@@ -3,7 +3,7 @@
 // The invariants: statements that must hold for every card the generator can describe. Each
 // returns a list of violation strings rather than throwing, so a failing case reports
 // everything wrong with it at once. Nothing here asserts that a configuration produces a
-// particular card — that is the hand-written tests' job. See interne Doku §4 „Die
+// particular card — that is the hand-written tests' job. See internal dev doc §4 "Die
 // Property-Schicht".
 
 const { VIEWS } = require("../manifests/product-surface.js");

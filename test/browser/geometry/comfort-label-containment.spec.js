@@ -11,8 +11,8 @@ const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../hel
 
 const CO2 = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
 
-// A block-level `ha-card` stand-in so the container queries apply — see interne Doku §4
-// "`ha-card` im Offline-Harness". Installed per test, not in a beforeEach, so the rest of
+// A block-level `ha-card` stand-in so the container queries apply — see internal dev doc §4
+// "ha-card im Offline-Harness". Installed per test, not in a beforeEach, so the rest of
 // the file measures what it did before.
 test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
   async function gotoHarnessWithBlockCard(page) {

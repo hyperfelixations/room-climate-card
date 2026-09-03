@@ -1,7 +1,7 @@
 // The keys a card configuration may carry at its top level, and what to say about one
 // it may not. An unknown top-level key warns rather than refusing (a nested object
 // still throws) — full rationale, the two contract tests, and the FRAMEWORK_KEYS
-// ageing concern in interne Doku §3 „#### Der Schlüsselvertrag der obersten Ebene".
+// ageing concern: see internal dev doc §3 "Der Schlüsselvertrag der obersten Ebene".
 //
 // The two lists differ in kind:
 //   TOP_LEVEL_KEYS   what the card OWNS: every key normalizeConfig() reads. Held in

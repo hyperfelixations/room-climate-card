@@ -2,7 +2,7 @@
 // observers, fonts, realm-correct events, surface and animation/transform reads.
 // New capabilities resolve from the card's current document; existing timer/rAF handles
 // retain cancellation bound to the realm that created them. Details and full port list:
-// internal documentation §4 "Platform-Adapter-Vertrag".
+// see internal dev doc §4 "Platform-Adapter-Vertrag".
 
 // Transform reading needs both computed style and DOMMatrixReadOnly from the element's realm.
 import { compositeOver, cssColorToHex, gradientSamples } from "../../core/color.js";
@@ -23,7 +23,7 @@ function readTranslateXPx(element) {
 
 // Animation timelines advance between rendered frames, so timer callbacks see a frame-old
 // phase. Extrapolate by the frame age only while running; paused/finished animations must
-// remain still. Missing clocks yield the unextrapolated phase. Details: internal documentation
+// remain still. Missing clocks yield the unextrapolated phase. Details: see internal dev doc
 // §4 "Platform-Adapter-Vertrag".
 function msSinceAnimationFrame(element, animation) {
   if (animation?.playState !== "running") return 0;
@@ -38,7 +38,7 @@ function msSinceAnimationFrame(element, animation) {
 
 // Read the named animation's own clock: its start-frame latency creates a persistent offset
 // from the wall clock. Return cycleMs with phaseMs so callers can reject a phase belonging to
-// stale timing. Details: internal documentation §5 "Carousel, Swipe und Accessibility".
+// stale timing. Details: see internal dev doc §5 "Carousel, Swipe und Accessibility".
 function readAnimationPhase(element, animationName) {
   if (typeof element?.getAnimations !== "function") return null;
   try {
@@ -58,7 +58,7 @@ function readAnimationPhase(element, animationName) {
 
 // Read exactly `--primary-text-color`, which the stylesheet uses for track/chip tints.
 // Return opaque hex or null; guessing from `style.color` would measure a colour those tints
-// do not use. Reading ladders: internal documentation §5 "Die Leseleiter".
+// do not use. Reading ladders: see internal dev doc §5 "Die Leseleiter".
 function readTextColor(element) {
   try {
     const view = element?.ownerDocument?.defaultView;
@@ -75,7 +75,7 @@ function readTextColor(element) {
 // Return every opaque surface sample: gradient stops plus interior blends; else opaque
 // background; else translucent background composed over the first opaque ancestor; else theme
 // card properties; else []. `url(...)` images are unreadable and deliberately fall through.
-// All CSSOM reads use the element's realm. Details: internal documentation §5 "Die Leseleiter".
+// All CSSOM reads use the element's realm. Details: see internal dev doc §5 "Die Leseleiter".
 function readBackgroundSamples(element) {
   try {
     const view = element?.ownerDocument?.defaultView;

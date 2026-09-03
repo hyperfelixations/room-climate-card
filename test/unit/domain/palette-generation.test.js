@@ -6,7 +6,7 @@
 // asked for is the colour on the card, at the `optimal` position.
 // It deliberately does not claim what a two-hue palette can — with a single hue the two
 // directions read by paleness and depth, and neighbouring steps sit closer than on the
-// card's own ramp. See interne Doku §5 „Monopaletten: ein Generator statt Dateien".
+// card's own ramp. See internal dev doc §5 "Monopaletten: ein Generator statt Dateien".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

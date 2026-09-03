@@ -1,8 +1,8 @@
 // The two canonical backgrounds. They have two jobs: the last rung of the reading ladder in
 // the element (when the browser will not say what the card is painted on, `hass.themes.darkMode`
 // picks one) and the reference for the palette measurements. Bucketing backgrounds or palettes
-// into these two is not one of them — that is measured (./palette-fit.js). See interne Doku §5
-// „Was von `surface.js` übrig ist".
+// into these two is not one of them — that is measured (./palette-fit.js). See internal dev doc §5
+// "Was von surface.js übrig ist".
 
 export const SURFACES = Object.freeze(["light", "dark"]);
 

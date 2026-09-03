@@ -1,5 +1,5 @@
 // Pure string signatures for cheap render invalidation; every visible input must occur in
-// one of them. Contract: internal documentation §4 "Render-Signaturvertrag".
+// one of them. Contract: see internal dev doc §4 "Render-Signaturvertrag".
 
 // `last_updated` captures attribute-only changes that leave `last_changed` untouched.
 export function entityDataSignature({ config, states, language, activeViewIndex, surface }) {

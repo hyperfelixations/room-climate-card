@@ -1,5 +1,5 @@
 // Builds one action config and dispatches one realm-correct `hass-action` event. It owns
-// no state and receives neither hass nor the element. Contract: internal documentation
+// no state and receives neither hass nor the element. Contract: see internal dev doc
 // §5 "Swipe-, Tap-, Hold- und Action-System".
 
 const MORE_INFO = "more-info";

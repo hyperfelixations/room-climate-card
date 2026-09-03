@@ -3,7 +3,7 @@
 # a custom card is not developed every day and a job that usually reports nothing goes
 # unread. Two independent jobs: the property sweep (model + metamorphic, different case
 # counts because a metamorphic case costs ~3x a model one) and mutation, kept parallel so a
-# slow mutation cycle cannot hide the sweep result. See interne Doku §4 "GitHub-Workflows".
+# slow mutation cycle cannot hide the sweep result. See internal dev doc §4 "GitHub-Workflows".
 # A property failure prints a locally minimized scenario as lossless JSON, usable directly
 # as a scenario(...) fixture; the JSON report records seed and census for replay. Known
 # defects (test/known-issues.js) do not fail this job.

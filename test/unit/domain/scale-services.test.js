@@ -3,7 +3,7 @@
 // Direct unit tests for scale configuration, dynamic axes, and marker/band geometry — the
 // src/domain/scale family, which evolves together.
 // Boundary: classification projection, palette choice and icons are
-// domain-services-modules.test.js. See interne Doku §5 „Scale- und Geometry-System".
+// domain-services-modules.test.js. See internal dev doc §5 "Scale- und Geometry-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

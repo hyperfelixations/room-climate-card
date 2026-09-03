@@ -1,5 +1,5 @@
 // Pure carousel arithmetic derived from view count, hold/slide durations and caller time.
-// Wall-clock phase synchronizes independent cards; see internal documentation §5 “Carousel, Swipe und Accessibility”.
+// Wall-clock phase synchronizes independent cards; see internal dev doc §5 "Carousel, Swipe und Accessibility".
 
 import { clamp } from "../../core/numbers.js";
 import { A11Y_FLIP_TIME_FRACTION, SLIDE_EASING_CSS } from "../../core/easing.js";

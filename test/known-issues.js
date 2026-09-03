@@ -7,7 +7,7 @@
 // reproduction to fail; if it ever passes, the run fails and the entry must be retired and
 // the reproduction promoted to an ordinary test. Each id matches a BUG-xx section in the
 // internal RCC backlog, which carries the full reproduction and assessment. Mechanism:
-// interne Doku §4 "Testarchitektur", subsection "Bekannte Fehler: das Register".
+// see internal dev doc §4 "Bekannte Fehler: das Register".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

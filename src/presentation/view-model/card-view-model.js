@@ -161,7 +161,7 @@ function noDataHeadlineSource(domainModel, config, topology) {
 }
 
 // One text mapping per unusable reason. `entity: true` marks actionable messages that must
-// name what the reader should fix. Details: internal docs §4 “No-Data-Vertrag”.
+// name what the reader should fix. Details: see internal dev doc §4 "No-Data-Vertrag".
 const REASON_TEXTS = {
   [UNUSABLE_REASON.UNAVAILABLE]: { kind: "value-unavailable", key: "availability.valueUnavailable" },
   [UNUSABLE_REASON.NOT_NUMERIC]: { kind: "value-not-numeric", key: "availability.valueNotNumeric" },

@@ -4,7 +4,7 @@
 // room-climate-card.js as committed baseline files, verbatim down to whitespace and CSS
 // bytes, so an unintended change during a refactor fails even when a behavioural assertion
 // would let it pass. Visual/layout contracts live in test/browser/visual-golden.spec.js
-// instead; jsdom has no layout engine. Contract: interne Doku §4 "Baseline- und
+// instead; jsdom has no layout engine. Contract: see internal dev doc §4 "Baseline- und
 // Golden-Vertrag".
 //
 // Determinism requirements, all load-bearing:

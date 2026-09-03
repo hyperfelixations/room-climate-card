@@ -9,7 +9,7 @@
 // The fluent chain only assembles the same description buildScenario() takes, so a case a
 // generator finds is JSON: printable, shrinkable, pasteable into a hand-written test.
 // Attributes are described key-and-value separately so a generator can misspell the key
-// (`device_clas`) without touching the value. siehe interne Doku §4 „Der Szenariobauer".
+// (`device_clas`) without touching the value. See internal dev doc §4 "Der Szenariobauer".
 
 const { METRICS, METRIC_KINDS, DEFAULT_LANGUAGE } = require("../manifests/product-surface.js");
 

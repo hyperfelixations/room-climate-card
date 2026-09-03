@@ -2,9 +2,9 @@
 // the card-picker entry. Computes nothing.
 //
 // The `customElements`/`window` reads below are the one allowed exception to the
-// platform contract (interne Doku §4 „Keine Browserglobals in fachlichen Schichten"):
+// platform contract (see internal dev doc §4 "Keine Browserglobals in fachlichen Schichten"):
 // a card can only register itself against the real global registry. The build wraps
-// this tree in the dependency-free IIFE — see interne Doku §4 „Build-/Dist-Vertrag".
+// this tree in the dependency-free IIFE — see internal dev doc §4 "Build-/Dist-Vertrag".
 
 import { CARD_NAME, CARD_TYPE, CARD_VERSION } from "./core/card-metadata.js";
 import { suggestionsForEntity } from "./application/model/card-suggestions.js";

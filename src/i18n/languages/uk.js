@@ -1,6 +1,6 @@
 // Ukrainian UI strings. Same key set as en.js (reference + per-key fallback), checked
 // at load by ../integrity.js. one/few/many plural categories: count-dependent room
-// nouns use the shared CLDR helper. Value shapes and plural rules: interne Doku §5.
+// nouns use the shared CLDR helper. Value shapes and plural rules: see internal dev doc §5 "i18n und sprachabhängige Formatierung".
 
 import { selectPlural } from "../formatters.js";
 

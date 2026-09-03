@@ -4,7 +4,7 @@
 // inert follow the live auto-slide position throughout a cycle, not just at the discrete
 // JS transition — the A11Y-01 defect. The jsdom unit layer
 // (accessibility-carousel-timing.test.js) checks the timing arithmetic; only Chromium has
-// the real animation clock. Mechanism and the two-clocks rationale: interne Doku §5
+// the real animation clock. Mechanism and the two-clocks rationale: see internal dev doc §5
 // "Carousel, Swipe und Accessibility"; the flake-was-a-real-defect history is in the RCC
 // Changelog.
 //

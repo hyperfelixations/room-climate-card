@@ -1,5 +1,5 @@
 // Builds dist/room-climate-card.js: one dependency-free, non-minified IIFE, plugin-free.
-// Full contract: interne Doku §4 "Build-/Dist-Vertrag" and §5 "Build, Rollup und
+// Full contract: see internal dev doc §4 "Build-/Dist-Vertrag" and §5 "Build, Rollup und
 // HACS-Artefakt". The output is deterministic per source state and Rollup version but not
 // a literal concatenation of the sources. Line endings are pinned to LF (.gitattributes).
 

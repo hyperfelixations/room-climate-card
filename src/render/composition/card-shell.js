@@ -1,5 +1,5 @@
 // View-agnostic card shell; registry-injected renderers optionally own resolveLayout().
-// Template-literal indentation is shipped markup and baseline-pinned; see internal documentation §4 “Render-Primitives und Composition”.
+// Template-literal indentation is shipped markup and baseline-pinned; see internal dev doc §4 "Render-Primitive-/Composition-Vertrag".
 
 import { escapeHtml } from "../../core/text.js";
 import { renderAverage, updateAverage } from "../primitives/average.js";

@@ -4,7 +4,7 @@
 // idempotence, postcondition (fits, or `null` = not achievable here), determinism — which is
 // what the shared strategy test suite checks and what makes methods comparable. Hue
 // preservation is deliberately NOT in the contract. `identity` stays registered as the
-// "do not adapt" reference. See interne Doku §5 „Die Naht zur Transformation".
+// "do not adapt" reference. See internal dev doc §5 "Die Naht zur Transformation".
 
 import { VISIBILITY_THRESHOLD, evaluatePaletteFit, fitKeyFor } from "../palette-fit.js";
 import { surfaceOf } from "../paint-roles.js";
@@ -24,7 +24,7 @@ export const DEFAULT_ADAPTATION_STRATEGY = "legible";
 
 // Which palettes the card may change: only the ones it made itself (`builtin` and `derived`).
 // A palette written out in YAML is a set of deliberate choices and is left alone. The line is
-// where the colours came from, not how they were spelled. See interne Doku §5 „Welche Paletten
+// where the colours came from, not how they were spelled. See internal dev doc §5 "Welche Paletten
 // die Karte überhaupt anfassen darf".
 export function isAdaptable(palette) {
   return Boolean(palette) && palette.origin !== "custom";

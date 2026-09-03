@@ -6,7 +6,7 @@
 // themselves live in properties.js and the generators in generators.js.
 // The load-bearing assertion is the outcome census — if the share of rendered / empty /
 // refused cases leaves its band the run fails, because it is then no longer testing what it
-// claims. Rationale: see interne Doku §4 „Die Property-Schicht".
+// claims. Rationale: see internal dev doc §4 "Die Property-Schicht".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

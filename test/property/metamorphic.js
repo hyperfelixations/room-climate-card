@@ -5,7 +5,7 @@
 // to one card in order, and states what must and must not have moved between the first card
 // and the last; derive() returns null when the relation does not apply to a case.
 // Why the layer exists, the BUG-12 shape it was built for, `needsRenderedBase`, and the
-// coverage guard in the runner: see interne Doku §4 „Die metamorphe Schicht: zwei Karten
+// coverage guard in the runner: see internal dev doc §4 "Die metamorphe Schicht: zwei Karten
 // statt einer".
 
 const { METRICS } = require("../manifests/product-surface.js");
@@ -53,7 +53,7 @@ function observe(model) {
 
 // Numbers are compared with a relative tolerance, not rounded to fixed decimals: two cards
 // often sum the same terms in a different order, and float addition is not associative. See
-// interne Doku §4 „Die metamorphe Schicht".
+// internal dev doc §4 "Die metamorphe Schicht: zwei Karten statt einer".
 const RELATIVE_TOLERANCE = 1e-9;
 
 function numbersAgree(one, other) {
@@ -382,8 +382,8 @@ const RELATIONS = [
       }
       // Zone and comfort counts are deliberately not asserted: the card rounds projected
       // thresholds into the displayed unit, so a Fahrenheit household can get a different
-      // verdict at a boundary than a Celsius one. See interne Doku §4 „Die metamorphe
-      // Schicht" and the head of src/domain/classification/projection.js.
+      // verdict at a boundary than a Celsius one. See internal dev doc §4 "Die metamorphe
+      // Schicht: zwei Karten statt einer" and the head of src/domain/classification/projection.js.
       return violations;
     },
   },

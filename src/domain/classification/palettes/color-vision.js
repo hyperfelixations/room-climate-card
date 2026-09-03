@@ -5,7 +5,7 @@
 // Derived with a Brettel 1997 dichromacy simulation, now an anchored hex set like any other.
 // Derivation and the measured tables: RCC changelog. Reach, separation, order and contrast
 // under all four ways of seeing: pinned by classification-palettes.test.js. Rationale:
-// interne Doku §5 „Eine Palette für alle drei Sehweisen…".
+// see internal dev doc §5 "Eine Palette für alle drei Sehweisen, und warum es nicht zwei sind".
 
 export const colorVision = {
   id: "color-vision",

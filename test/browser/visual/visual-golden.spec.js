@@ -4,8 +4,8 @@
 // visual-golden.spec.js-snapshots/. A representative cross-section, not the full
 // mode x language x width x theme matrix: all four modes once, no-data, 1-4 views, one
 // narrow and one wide width, light and dark, one non-English language. Each PNG is mapped
-// to the card function it exercises in interne Doku §4 "Golden-Inventar"; budget and the
-// guard test are in §4 "Baseline- und Golden-Vertrag".
+// to the card function it exercises; see internal dev doc §4 "Golden-Inventar" for that
+// mapping and §4 "Baseline- und Golden-Vertrag" for the budget and the guard test.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");

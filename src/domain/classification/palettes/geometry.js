@@ -12,7 +12,7 @@ import { hexToOklch, oklchToHex, screenDistance } from "../../../core/oklch.js";
 // Steps per wing of a DERIVED ramp — always five, both sides. The card's own profiles run
 // -5..+5, so a computed ramp maps onto them one to one; a different length would quietly
 // re-map every tier onto a different colour. Built-in and written-out palettes are not bound
-// by this (`signal` is two a wing on purpose). See interne Doku §5 „Farbpaletten".
+// by this (`signal` is two a wing on purpose). See internal dev doc §5 "Farbpaletten".
 export const WING_STEPS = 5;
 
 // How far apart a wing AIMS to space its steps, in screenDistance(). An aim, not a filter:
@@ -95,8 +95,8 @@ export function placeAlong(from, to, steps) {
 }
 
 // The floor for "would a reader see two steps here", in screenDistance() — the instrument the
-// whole visibility layer is calibrated on. Bracketed by rendered pairs; interne Doku §5
-// „Die Transformation…" refers back here:
+// whole visibility layer is calibrated on. Bracketed by rendered pairs; see internal dev doc §5
+// "Die Transformation: eine Palette, die hier nicht lesbar ist, lesbar machen" refers back here:
 //
 //   0.0027   #020202 / #000000   one colour   (CIEDE2000 0.31)
 //   0.0129   #0C0C0C / #020202   one colour   (CIEDE2000 1.61)

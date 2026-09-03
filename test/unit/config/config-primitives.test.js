@@ -6,7 +6,7 @@
 // Collaborators are stubbed, which is the point of injecting them.
 // Boundary: this file owns the primitive readers (optional strings, enums, integers) and
 // the structured readers for actions, rooms and views; whole-configuration assembly is
-// config-normalize-modules.test.js. See interne Doku §4 „Config-Normalisierungsvertrag".
+// config-normalize-modules.test.js. See internal dev doc §4 "Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

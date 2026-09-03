@@ -4,7 +4,7 @@
 // average, which become neutral placeholders, which disappear, and what the headline
 // says when no source can answer. One decision, not four — an unavailable room is still
 // a configured source and the answer depends on the other sources at the same moment.
-// Pure arbitration lives in unit/application/; siehe interne Doku §4 „No-Data-Vertrag".
+// Pure arbitration lives in unit/application/; see internal dev doc §4 "No-Data-Vertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -314,7 +314,7 @@ test("focus falls back safely when a no-data placeholder disappears", () => {
 
 // Why, as distinct from whether. Five ways to be unusable, each with its own reason
 // string; AVAILABILITY still answers only "may this source be used" and the reason rides
-// alongside. siehe interne Doku §4 „No-Data-Vertrag".
+// alongside. See internal dev doc §4 "No-Data-Vertrag".
 test("every way of being unusable has its own reason, and availability is unchanged by it", () => {
   const { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } = entityModel;
   const cases = [

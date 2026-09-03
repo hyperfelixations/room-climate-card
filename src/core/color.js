@@ -327,7 +327,7 @@ export function gradientSamples(value, { between = 3 } = {}) {
 // decimal spelling and left-padded to six. Refused: fewer than four digits (80 is
 // ambiguous between #000080 and shorthand #080) or more than six. Unfixable: `0808080`
 // also arrives as 808080 — the readme says to quote anything longer than six digits.
-// Full contract: internal dev doc, §5 "Der YAML-Palettenvertrag".
+// Full contract: see internal dev doc §5 "Der YAML-Palettenvertrag ist für Menschen geschrieben".
 export function parseColorToken(value) {
   if (typeof value === "number") {
     if (!Number.isInteger(value) || value < 0 || value > 999999) return null;

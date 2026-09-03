@@ -6,7 +6,7 @@
 // sweep every tier boundary just below, on, and just above.
 // Tier selection is re-implemented here from the documented rule (first tier whose `min`
 // the value passes, under the profile's own operator); the production path is covered by
-// the element-level suites. See interne Doku §5 „Classification und Profile".
+// the element-level suites. See internal dev doc §5 "Classification und Profile".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
