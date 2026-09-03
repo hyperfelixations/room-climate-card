@@ -108,10 +108,6 @@ function asRamp(palette) {
   return [...[...palette.below].reverse(), palette.optimal, ...palette.above];
 }
 
-function asRamp(palette) {
-  return [...[...palette.below].reverse(), palette.optimal, ...palette.above];
-}
-
 // The smallest gap between neighbouring steps — a ramp can span a huge distance and still
 // have two adjacent steps nobody can tell apart.
 function smallestNeighbourStep(ramp) {
