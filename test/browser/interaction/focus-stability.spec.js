@@ -1,22 +1,17 @@
 "use strict";
 
-// Real Chromium confirms that
-// keyed DOM-patching actually preserves keyboard focus, not just node
-// object identity in jsdom (test/component/interaction/keyed-dom-patching.test.js covers the
-// full Pflichtmatrix there) — a genuine browser's focus/activeElement
-// semantics (including how a shadow root's own activeElement is exposed)
-// are the real-world claim under test, and jsdom's approximation, while
-// good enough for the exhaustive matrix, isn't a substitute for one
-// end-to-end confirmation against real Chromium.
+// Real Chromium confirms keyed DOM-patching preserves keyboard focus, not just node
+// identity as in jsdom (test/component/interaction/keyed-dom-patching.test.js covers the
+// full matrix). A browser's focus/activeElement semantics — including a shadow root's own
+// activeElement — are the claim under test.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-// 3 rooms (not 2): removing one to trigger the focus-fallback test must
-// leave >=2 valid rooms, or roomsComparable itself flips false -- a
-// structural change routed through _renderAll(), not the _updateRoomGrid()
-// patch path this file is actually testing.
+// 3 rooms, not 2: removing one for the focus-fallback test must leave >=2 valid rooms, or
+// roomsComparable flips false and routes through _renderAll() instead of the
+// _updateRoomGrid() patch path under test.
 function fourAreaStates(overrides) {
   return {
     "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
@@ -36,9 +31,8 @@ function fourAreaConfig() {
   };
 }
 
-// Reads which element (if any) is focused inside the card's own shadow
-// root, identified by its data-entity so the test can assert on it without
-// holding a live element handle across the page.evaluate() boundary.
+// Which element (if any) is focused inside the card's shadow root, by its data-entity so
+// the test need not hold a live handle across the page.evaluate() boundary.
 async function focusedEntity(page, cardId) {
   return page.evaluate((id) => {
     const el = document.getElementById(id);

@@ -1,26 +1,13 @@
 "use strict";
 
-// Proves the extracted pipeline independently of the custom element.
-//
-// The element-level characterization test builds a real card in jsdom — a shadow root,
-// a config setter, a hass setter — and compares the result against the committed
-// baselines. That is a valid integration test, but it cannot tell you whether the LOGIC
-// moved correctly or whether the element is quietly compensating for a difference. This
-// file bypasses the element entirely — it composes
-//
-//   resolveMeasurementContext -> buildCardDomainModel -> buildCardViewModel
-//                             -> toLegacyData
-//
-// by hand, runs the full characterization scenario catalog through it, and compares
-// the result against the SAME committed model baselines the element-level test
-// compares against.
-//
-// If both pass, the pipeline is provably equivalent AND provably reachable without
-// a browser. If only the element-level one passes, something in the element is
-// papering over a difference.
-//
-// TZ is pinned before any Intl formatter exists: the range timestamps are rendered
-// in local time.
+// Proves the extracted pipeline independently of the custom element. The element-level
+// characterization test builds a real card in jsdom and compares against the committed
+// baselines — a valid integration test, but it cannot tell whether the logic moved
+// correctly or whether the element is compensating. This file bypasses the element and
+// composes resolveMeasurementContext -> buildCardDomainModel -> buildCardViewModel ->
+// toLegacyData by hand, runs the full scenario catalogue, and compares against the same
+// committed model baselines. If both pass, the pipeline is provably equivalent and
+// browser-free. TZ is pinned before any Intl formatter exists.
 process.env.TZ = "UTC";
 
 const test = require("node:test");
@@ -48,12 +35,9 @@ let resolveUnitProfileKey;
 let normalizeUnitToken;
 let palettes;
 
-// WHAT THE CARD IS STANDING ON, because the pipeline's answer depends on it and the element's
-// answer does too. Home Assistant's own default light background is what the element resolves
-// to when nothing readable has been painted — which is exactly the situation the DTO baselines
-// were captured in. Leaving it out would not make this test purer; it would make it a
-// characterization of a card that is nowhere, and the same baselines are produced through the
-// element in model.test.js.
+// The surface the card is standing on. HA's default light background is what the element
+// resolves to when nothing readable is painted — the situation the DTO baselines were
+// captured in.
 let PAINTED_ON;
 
 test.before(async () => {
@@ -91,9 +75,8 @@ function configCollaborators() {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
-    // The full palette collaborator set, exactly as element/room-climate-card.js wires it.
-    // A partial stub would still pass every baseline here — they all use a palette name —
-    // while hiding the day one of them stops resolving and takes the colour road instead.
+    // The full palette collaborator set, as element/room-climate-card.js wires it. A partial
+    // stub would still pass every (palette-name) baseline while hiding a colour-road regression.
     paletteForName: (name) => (name === null ? palettes.DEFAULT_PALETTE : palettes.paletteForName(name)),
     paletteForColor: palettes.paletteForColor,
     paletteKeys: palettes.paletteKeys,
@@ -102,9 +85,8 @@ function configCollaborators() {
   };
 }
 
-// The presentation collaborator, mirroring what the element builds. The digit
-// resolution (explicit argument, then the config override, then the metric's own
-// default) is part of the contract and is reproduced here rather than simplified.
+// The presentation collaborator, mirroring the element. Digit resolution (argument, then
+// config override, then metric default) is part of the contract.
 function buildTexts(config, hass, unit, metricKind) {
   const language = resolveLanguage(config.language, hass);
   const digitsFor = (digits) => digits ?? config.decimals ?? metricMetaFor(metricKind).decimals;

@@ -1,10 +1,8 @@
 "use strict";
 
-// Direct unit tests for src/config/* — the static configuration foundations.
-//
-// These are the values a dashboard owner's YAML is measured against, so they
-// are asserted literally rather than "reasonably": a silently widened action
-// allowlist or a changed default rotation speed is a behaviour change for
+// Direct unit tests for src/config/* — the static configuration foundations. These are the
+// values a dashboard owner's YAML is measured against, so they are asserted literally: a
+// widened action allowlist or a changed default rotation speed is a behaviour change for
 // every existing installation.
 
 const test = require("node:test");
@@ -34,17 +32,15 @@ test("the card defaults match the public contract", () => {
 });
 
 test("no default of a `show:` decision is stated a second time here", () => {
-  // SHOW_SWITCHES owns every one of them, and the older top-level spellings are read
-  // without a default of their own. A key here for one of those decisions would be a
-  // second statement of the same default, and the two would drift apart in silence.
+  // SHOW_SWITCHES owns every one of them; a key here for one of those decisions would be a
+  // second statement of the same default.
   for (const key of ["show", "show_rooms", "unavailable_values", "accent_line", "rooms"]) {
     assert.equal(key in defaults.DEFAULT_CONFIG, false, `DEFAULT_CONFIG must not restate ${key}`);
   }
 });
 
 test("the defaults declare no entities", () => {
-  // No source is invented by defaults; normalizeConfig enforces that callers
-  // provide `entity`, at least one room, or both.
+  // Defaults invent no source; normalizeConfig requires `entity`, a room, or both.
   assert.equal("entity" in defaults.DEFAULT_CONFIG, false);
   assert.equal("rooms" in defaults.DEFAULT_CONFIG, false);
   assert.equal("range_entity" in defaults.DEFAULT_CONFIG, false);

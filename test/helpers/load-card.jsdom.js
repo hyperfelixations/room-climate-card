@@ -1,27 +1,17 @@
 "use strict";
 
-// Runs the built distribution artifact (dist/room-climate-card.js — a
-// dependency-free browser IIFE with no exports, exactly the bytes Home
-// Assistant loads) inside a fresh jsdom window per test file, so component,
-// contract and property tests can instantiate the real custom element.
+// Runs the built artifact (dist/room-climate-card.js, the bytes Home Assistant
+// loads) inside a fresh jsdom window per test file, so component, contract and
+// property tests instantiate the real custom element. Every public test script
+// builds first, so the artifact under test is always this checkout's src/.
 //
-// Testing the ARTIFACT rather than the sources is deliberate: it is the only
-// thing users ever execute, and it keeps the whole suite honest about the
-// build. dist/ is generated, not stored: every public test script runs
-// `npm run build` first, so the artifact under test is always the one this
-// checkout's src/ produces and a stale bundle cannot be silently tested.
+// jsdom has no layout engine (getBoundingClientRect returns zeros, no font
+// metrics) — anything depending on rendered geometry belongs in test/browser/.
 //
-// jsdom has no real layout engine (getBoundingClientRect always returns zeros,
-// no font metrics) — anything that depends on actual rendered geometry belongs
-// in test/browser/ (Playwright/Chromium) instead.
-//
-// jsdom does not implement ResizeObserver, matchMedia, or the CSS Font
-// Loading API (document.fonts) at all; the card is defensive
-// about ResizeObserver/document.fonts (feature-detected/optional-chained)
-// but calls window.matchMedia unconditionally through optional chaining, so
-// it degrades safely without a stub too — the stubs below exist so those
-// code paths (bind/unbind lifecycle, reduced-motion branch, font-ready
-// promise chain) get real test coverage instead of being silently skipped.
+// jsdom implements neither ResizeObserver, matchMedia nor document.fonts; the
+// card degrades safely without them, and the stubs below exist so those code
+// paths (bind/unbind lifecycle, reduced-motion branch, font-ready chain) get
+// real coverage instead of being skipped.
 
 const fs = require("fs");
 const path = require("path");
@@ -34,10 +24,8 @@ test.afterEach(() => {
   for (const cleanup of environmentCleanups) cleanup();
 });
 
-// The single place in the test suite that knows where the built artifact
-// lives. Everything else (including test/component/data/i18n.test.js, which
-// loads the bundle a second time to observe its module-load self-check)
-// imports this constant rather than rebuilding the path.
+// The one place that knows where the built artifact lives; everything else imports
+// this constant rather than rebuilding the path.
 const CARD_SOURCE_PATH = path.join(__dirname, "..", "..", "dist", "room-climate-card.js");
 if (!fs.existsSync(CARD_SOURCE_PATH)) {
   throw new Error(
@@ -53,11 +41,9 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-// Creates one isolated jsdom window + loads the card script into it. Call
-// once per test file (e.g. in a `before()` hook), not once per test case —
-// re-registering the same custom element tag on a second window is fine
-// (each jsdom window has its own CustomElementRegistry), but there is no
-// reason to pay the eval cost per test.
+// Creates one isolated jsdom window and loads the card script into it. Call once
+// per test file (e.g. in a `before()` hook), not per test case — it is correct
+// per case but pays the eval cost each time.
 function createTestEnvironment() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: "http://localhost/",
@@ -80,8 +66,8 @@ function createTestEnvironment() {
 
   window.ResizeObserver = ResizeObserverStub;
   window.document.fonts = { ready: Promise.resolve() };
-  // Guarded by try/catch in the card (_getTrackTranslatePct()); stubbed
-  // anyway so that code path runs instead of always hitting the catch.
+  // Guarded by try/catch in the card; stubbed so that path runs instead of
+  // always hitting the catch.
   window.DOMMatrixReadOnly = class DOMMatrixReadOnly {
     constructor() {
       this.m41 = 0;
@@ -105,14 +91,9 @@ function createTestEnvironment() {
       if (hass !== undefined) el.hass = hass;
       if (config !== undefined) el.setConfig(config);
     } catch (error) {
-      // A card whose very first setConfig was refused was never created. Leaving it
-      // attached leaks it: the caller is in a catch block, holds no reference, and has
-      // nothing to clean up. Measured before this existed — a property run creating cards
-      // from randomly broken configurations retained about 3.8 MB per refusal and ran the
-      // heap out at four thousand cases.
-      //
-      // This is the FIRST setConfig only. Refusing a LATER one must leave the card exactly
-      // as it was, which is the atomicity contract and is tested separately.
+      // A card whose first setConfig was refused was never created; detach it so it does
+      // not leak (the caller is in a catch block with no reference). First setConfig only —
+      // refusing a later one must leave the card as it was (atomicity, tested separately).
       cleanup(el);
       throw error;
     }
@@ -129,16 +110,12 @@ function createTestEnvironment() {
   }
 
   // The environment owns every card it creates, including one stranded by an assertion
-  // before a hand-written cleanup line. The module-level afterEach hook is registered while
-  // the test file is still being declared; environments join its cleanup registry here.
+  // before a hand-written cleanup line; it joins the module-level afterEach registry here.
   environmentCleanups.add(cleanupAll);
 
-  // Create, use, and clean up — even when the body throws.
-  //
-  // The manual `const el = createCard(...); ...; cleanup(el);` shape leaks the card on
-  // every FAILING assertion, which is precisely when a leaked card does most harm: the
-  // resume timer keeps running and the next test in the same file inherits it. This wraps
-  // the pair so the failure that matters is the assertion, not the mess it left behind.
+  // Create, use, and clean up even when the body throws. The manual
+  // create/use/cleanup shape leaks the card (and its running resume timer) on a failing
+  // assertion, and the next test in the file inherits it.
   function withCard(config, hass, body) {
     const el = createCard(config, hass);
     try {
@@ -170,22 +147,14 @@ function createTestEnvironment() {
   };
 }
 
-// vm.runInContext() gives room-climate-card.js a genuinely separate V8
-// realm — correct isolation, but it means every array/plain-object value
-// returned by a card method (e.g. _computeViewModel(), _carousel.holdSequence()) has that
-// realm's Array.prototype/Object.prototype, not this process's. Array.isArray
-// is realm-safe by design and still reports true, but assert.deepStrictEqual
-// (and assert/strict's deepEqual, which is an alias for it) also compares
-// prototype identity and fails on an otherwise value-identical array/object
-// pulled from the vm context. normalize() rebuilds arrays/plain objects using
-// this realm's constructors before assertions; primitives (including NaN,
-// Infinity, null, undefined) pass through unchanged. Only ever call this on
-// pure data returned by the card's data-only methods (_holdSequence(),
-// _computeViewModel(), _roomGridRows(), ...) — never on a live element/DOM node,
-// which this deliberately does not special-case.
+// vm.runInContext() puts the card in a separate V8 realm, so every array/plain
+// object it returns carries that realm's prototypes. assert/strict's deepEqual
+// compares prototype identity and fails on an otherwise value-identical value
+// from the vm context. normalize() rebuilds arrays/plain objects with this
+// realm's constructors; primitives pass through. Call it only on pure data from
+// the card's data-only methods, never on a live element or DOM node.
 function normalize(value) {
-  // Array.from (this realm's, not the foreign array's own .map()/species
-  // constructor) is what actually rehomes the result into this realm.
+  // Array.from (this realm's) is what rehomes the result into this realm.
   if (Array.isArray(value)) return Array.from(value, normalize);
   if (value && typeof value === "object") {
     const out = {};

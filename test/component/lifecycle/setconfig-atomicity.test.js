@@ -1,22 +1,12 @@
 "use strict";
 
-// setConfig() is all-or-nothing, including for the errors that only a RENDER can find.
-//
-// Some configuration mistakes are invisible in the configuration alone. A classification
-// profile is scoped to a measurement, and which measurement a card shows comes from its
-// entities — so "this profile is written in %, but your sensor reads °C" cannot be
-// decided until both are present. The check therefore lives in the model builders, and
-// it throws.
-//
-// Home Assistant's live YAML editor calls setConfig() on every keystroke, so most calls
-// during editing are invalid. If one of those committed its configuration before the
-// render rejected it, the card would be left holding a configuration that every later
-// render throws on too: one keystroke, and a working card is dark until the whole
-// dashboard is reloaded. Nothing about the failure would point at the keystroke.
-//
-// So this file asserts the guarantee end to end on a card that is already RUNNING —
-// which is the only state in which the bug is reachable, and the reason it hid for so
-// long behind tests that only ever rejected a first configuration.
+// setConfig() is all-or-nothing, including for errors only a render can find. A
+// classification profile is scoped to a measurement, and which measurement a card shows
+// comes from its entities, so "profile in %, sensor in °C" is only decidable once both
+// exist — the check lives in the model builders and throws. HA's live YAML editor calls
+// setConfig() per keystroke, so a doomed call that committed before the render rejected it
+// would leave the card dark until a full reload. Asserted end to end on a running card,
+// the only state in which the bug is reachable.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -46,8 +36,7 @@ function runningCard() {
   );
 }
 
-// Everything a rejected setConfig() must leave untouched, read the way a user would
-// notice it: what is configured, what is on screen, and what is still scheduled.
+// Everything a rejected setConfig() must leave untouched: config, screen, scheduled timers.
 function observableState(card) {
   return {
     config: JSON.stringify(card._config, (key, value) => (typeof value === "function" ? "[Function]" : value)),
@@ -59,8 +48,7 @@ function observableState(card) {
   };
 }
 
-// Valid on its own — it normalizes without complaint — and impossible for this card,
-// which reads °C. The mismatch is only decidable once the entities are known.
+// Valid on its own, impossible for this °C card — the mismatch is only decidable with entities.
 const HUMIDITY_PROFILE = {
   source: "custom",
   unit: "%",
@@ -89,9 +77,8 @@ test("a rejected setConfig() leaves a running card exactly as it was", () => {
   env.cleanup(card);
 });
 
-// The other half of the guarantee, and the one a snapshot cannot see: the render
-// bookkeeping must be untouched too. The commit phase invalidates the data signature, so
-// if any of it had run, an unchanged repeat would re-render instead of being skipped.
+// The render bookkeeping must be untouched too: the commit phase invalidates the data
+// signature, so if it had run, an unchanged repeat would re-render instead of being skipped.
 test("a rejected setConfig() does not disturb the render bookkeeping", () => {
   const card = runningCard();
   const hass = card._hass;
@@ -104,8 +91,7 @@ test("a rejected setConfig() does not disturb the render bookkeeping", () => {
   env.cleanup(card);
 });
 
-// And the card must still be usable afterwards — a rejected keystroke may not cost the
-// next, correct one.
+// The card must still be usable — a rejected keystroke may not cost the next, correct one.
 test("a card that rejected a configuration still accepts the next one", () => {
   const card = runningCard();
   assert.throws(() => card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE }), /humidity/);
@@ -116,10 +102,8 @@ test("a card that rejected a configuration still accepts the next one", () => {
   env.cleanup(card);
 });
 
-// The rehearsal runs the real render path, so it could in principle leave the memoized
-// context or the deduplicated warning behind. It must not — for an ACCEPTED
-// configuration either, or the next render would read a context keyed on a
-// configuration that is no longer installed.
+// The rehearsal runs the real render path, so it could leave memoized context or a
+// deduplicated warning behind. It must not — for an accepted configuration either.
 test("the rehearsal leaves no memoized state behind, accepted or rejected", () => {
   const card = runningCard();
   const before = { hass: card._metricContextCacheHass, config: card._metricContextCacheConfig };
@@ -138,8 +122,7 @@ test("the rehearsal leaves no memoized state behind, accepted or rejected", () =
   env.cleanup(card);
 });
 
-// With no hass there is nothing to rehearse against — and nothing renders either, so a
-// configuration that can only fail against entities must still be accepted here.
+// With no hass there is nothing to rehearse against, so an entity-dependent failure is still accepted.
 test("a configuration set before hass arrives is not rehearsed", () => {
   const card = env.document.createElement("room-climate-card");
   env.document.body.appendChild(card);

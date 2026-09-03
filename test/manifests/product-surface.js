@@ -1,24 +1,12 @@
 "use strict";
 
-// THE PRODUCT SURFACE, WRITTEN OUT BY HAND.
-//
-// Every list below is what the Room Climate Card is supposed to support, stated
-// independently of the code that supports it. Nothing here is imported from src/ — that is
-// the entire point. A test that iterates `Object.keys(TRANSLATIONS)` proves that the card
-// is self-consistent; it cannot prove that the card supports Ukrainian, because a
-// forgotten language disappears from the expectation at the same moment it disappears from
-// the product.
-//
-// So this file is the expectation, and product-surface.test.js is the one place the two
-// are compared. Adding a language means changing exactly two things: the card, and this
-// file. Before this existed the same fifteen codes were written out in six test files, and
-// the git history shows what that costs — Ukrainian had to be chased through several
-// commits, and one list (range-and-spread) was still at eleven languages afterwards.
-//
-// USING IT. Generic matrices — "do this in every language", "for each metric" — import
-// from here. A CURATED subset does not: narrow-width-overflow.spec.js deliberately picks
-// five typographically extreme languages, and widening it to fifteen would quadruple a
-// slow browser spec to prove nothing new. Such a list stays local and says so.
+// The product surface, written out by hand. Every list below is what the Room Climate Card
+// is supposed to support, stated independently of the code — nothing here is imported from
+// src/. A test iterating Object.keys(TRANSLATIONS) proves self-consistency, not that the
+// card supports Ukrainian: a forgotten language leaves the expectation the moment it leaves
+// the product. This file is the expectation; product-surface.test.js compares the two.
+// Generic matrices import from here; a curated subset (narrow-width-overflow.spec.js picks
+// five typographically extreme languages) stays local and says so.
 
 // The fifteen languages the card ships translations for. English is the reference every
 // other language is key-checked against.
@@ -49,25 +37,21 @@ const DEFAULT_PALETTE_ID = "pastel";
 // absence of one.
 const CLASSIFICATION_ZONES = ["optimal", "comfort", "outside", "invalid"];
 
-// Public YAML shapes. These lists are deliberately independent of the normalizers: the
-// generator consumes them and the architecture suite prevents another complete copy from
-// silently becoming a second source of truth.
+// Public YAML shapes, independent of the normalizers: the generator consumes them and the
+// architecture suite blocks a second complete copy.
 const TOP_LEVEL_CONFIG_KEYS = [
   "entity", "rooms", "range_entity", "trend_entity", "classification", "palette",
   "title", "subtitle", "entity_label", "icon", "decimals", "language", "room_sort",
   "room_label", "show", "room_columns", "room_rows",
   "auto_slide", "swipe", "rotation_seconds", "slide_seconds",
   "tap_action", "hold_action", "views", "start_view",
-  // Older spellings the card still accepts. Each is outranked by its entry in the show:
-  // block where both are written, and each is listed for removal at the next major.
-  // hide_footer is the exception on both counts: it is not in the block, because the footer
-  // is a view's own business, and it is the only way to turn every view's footer off at once.
+  // Older spellings the card still accepts; each is outranked by its show: block entry and
+  // listed for removal at the next major. hide_footer is the exception: not in the block
+  // (the footer is a view's business) and the only way to turn every view's footer off at once.
   "show_rooms", "unavailable_values", "hide_footer",
 ];
 
-// Which PARTS the card draws. Every one of them is a switch except `rooms`, which has a
-// third answer — chips unless they would only repeat the headline — and that answer is the
-// default, so it cannot be spelled as a boolean.
+// Which parts the card draws: all switches except `rooms`, whose default third answer (auto) is not a boolean.
 const SHOW_KEYS = {
   accent_line: "bool",
   icon: "bool",

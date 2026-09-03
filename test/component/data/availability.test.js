@@ -1,17 +1,10 @@
 "use strict";
 
-// AVAILABILITY, as the assembled card resolves it.
-//
-// Not "is this entity unavailable" - that is one boolean and the entity model owns it - but
-// what the CARD does once some of its sources have gone quiet: which rooms still count
-// towards the average, which become neutral placeholders, which disappear, and what the
-// headline says when none of them can answer.
-//
-// Kept together because those are one decision, not four: a room that is unavailable is
-// still a configured source, and the card's answer depends on what the OTHER sources are
-// doing at the same moment. Splitting them by symptom would lose exactly that.
-//
-// The pure arbitration rules live in unit/application/; this is the assembled result.
+// Availability as the assembled card resolves it: which rooms still count toward the
+// average, which become neutral placeholders, which disappear, and what the headline
+// says when no source can answer. One decision, not four — an unavailable room is still
+// a configured source and the answer depends on the other sources at the same moment.
+// Pure arbitration lives in unit/application/; siehe interne Doku §4 „No-Data-Vertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -75,9 +68,8 @@ test("MeasurementContext exposes typed availability for the primary and every ro
 });
 
 test("fallback arbitration marks the rooms that supply the winning metric usable", () => {
-  // The primary carries no device_class and no unit, so it says nothing about what this
-  // card measures and the rooms decide. A primary that DOES declare a kind is the case
-  // below, and it decides the other way round.
+  // The primary carries no device_class and no unit, so the rooms decide what this card
+  // measures. A declaring primary is the next test and decides the other way.
   const context = measurementContext.resolveMeasurementContext({
     "sensor.primary": state("sensor.primary", "unavailable", {}),
     "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
@@ -93,10 +85,8 @@ test("fallback arbitration marks the rooms that supply the winning metric usable
 });
 
 test("a declaring primary keeps the card its own kind even while it cannot be read", () => {
-  // device_class is a statement about a SENSOR, not a reading. An unreachable CO2 sensor
-  // still measures CO2, so a humidity room is as foreign here as it would be if the
-  // primary were readable — and the card says so instead of quietly becoming a
-  // humidity card.
+  // device_class is a statement about a sensor, not a reading: an unreachable CO2 sensor
+  // still measures CO2, so a humidity room stays foreign and the card says so.
   const context = measurementContext.resolveMeasurementContext({
     "sensor.primary": state("sensor.primary", "unavailable", CO2),
     "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
@@ -280,9 +270,8 @@ test("no-data updates patch stable text and rebuild only real structure changes"
     assert.equal(el.shadowRoot.querySelector(".rtc-root"), noDataRoot, "same no-data structure is patched");
     assert.equal(el.shadowRoot.activeElement, headline, "a stable button keeps focus through the patch");
 
-    // A DIFFERENT reason is a different card, though: "unavailable" and "does not report a
-    // number" are two things, the card now says which, and the explanation is part of the
-    // no-data structure rather than text that can be swapped in place.
+    // A different reason is a different structure: the explanation is part of the no-data
+    // signature, not text swapped in place.
     el.hass = mkHass({ "sensor.primary": state("sensor.primary", "garbage") });
     assert.notEqual(el.shadowRoot.querySelector(".rtc-root"), noDataRoot, "a new explanation rebuilds");
     assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The entity does not report a number.");
@@ -308,15 +297,12 @@ test("focus falls back safely when a no-data placeholder disappears", () => {
   try {
     const chip = el.shadowRoot.querySelector('[data-entity="sensor.a"]');
     chip.focus();
-    // sensor.a stops existing at all — not "unavailable", GONE from the state machine.
-    // Home Assistant only does that for an id it no longer knows, so the card is now a
-    // one-room card and says so: no chip for the vanished room, and its single
-    // remaining source becomes the interactive headline.
+    // sensor.a is GONE, not unavailable — HA drops an id it no longer knows. The card is
+    // now a one-room card: no chip for it, the last source becomes the headline.
     el.hass = mkHass({ "sensor.b": state("sensor.b", "unavailable") });
     assert.equal(el.shadowRoot.querySelector('[data-entity="sensor.a"]'), null);
-    // Focus lands on that headline rather than on .rtc-root: focusFallbackTarget()
-    // prefers a real control when one exists, and here one now does. What matters for a
-    // keyboard user is that focus never leaves the card, which both targets satisfy.
+    // focusFallbackTarget() prefers a real control when one exists; either way focus stays
+    // in the card.
     const headline = el.shadowRoot.querySelector("button.rtc-avg-button");
     assert.ok(headline, "the one remaining room is the headline, and it is interactive");
     assert.equal(el.shadowRoot.activeElement, headline);
@@ -326,23 +312,16 @@ test("focus falls back safely when a no-data placeholder disappears", () => {
   }
 });
 
-// ------------------------------------------- why, as distinct from whether ---
-
-// Five different things go wrong, and before this they produced three sentences — two of
-// which were wrong. A reading of 800 % is not "currently unavailable": it is there, it is
-// just impossible. A ppm sensor with no device_class is not an incompatibility BETWEEN
-// sources; it is one sensor that has not said what it measures, and saying so is the
-// difference between a user fixing it in a minute and not knowing where to look.
-//
-// AVAILABILITY is unchanged by all of this and still answers the only question the rest
-// of the card asks it — may this source be used. The reason rides alongside.
+// Why, as distinct from whether. Five ways to be unusable, each with its own reason
+// string; AVAILABILITY still answers only "may this source be used" and the reason rides
+// alongside. siehe interne Doku §4 „No-Data-Vertrag".
 test("every way of being unusable has its own reason, and availability is unchanged by it", () => {
   const { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } = entityModel;
   const cases = [
     ["sensor.gone", null, AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING],
     ["sensor.off", state("sensor.off", "unavailable"), AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE],
     ["sensor.text", state("sensor.text", "heating"), AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC],
-    // The supervisor's own scenario: a humidity sensor reading 800 %.
+    // A humidity sensor reading 800 %: present, but impossible.
     ["sensor.wet", state("sensor.wet", 800, HUMIDITY), AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.OUT_OF_RANGE],
     // ppm belongs to five Home Assistant device classes, so the unit decides nothing.
     ["sensor.air", mkState("sensor.air", 700, { unit_of_measurement: "ppm" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIT_AMBIGUOUS],
@@ -359,9 +338,8 @@ test("every way of being unusable has its own reason, and availability is unchan
   }
 });
 
-// The card-wide fact an entity cannot know about itself. Only the two rewrites that mean
-// "this source measures something else" change the reason; a sentinel whose kind cannot
-// be identified keeps the more useful explanation it already had.
+// A card-wide fact the entity cannot know about itself: only the two rewrites meaning
+// "measures something else" change the reason; an unidentifiable kind keeps its own.
 test("a room measuring something else is a mismatch, and an unavailable one still reads as unavailable", () => {
   const { UNUSABLE_REASON } = entityModel;
   const context = measurementContext.resolveMeasurementContext(

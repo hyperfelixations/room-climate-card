@@ -1,18 +1,11 @@
 "use strict";
 
-// Direct unit tests for the card domain model and semantic view state.
-//
-// Where the card decides what the WHOLE ROOM SET amounts to, and what the carousel should
-// therefore show: which rooms participate, which classification colour each one gets, what
-// the summary sentence says, and which views are active given the configuration and the
-// availability. Every one of those is a pure function and is exercised as one.
-//
-// The boundary to application-entity-context.test.js next door: that file settles what a
-// SINGLE entity is — its kind, its unit, whether it is a measurement at all — and this one
-// starts from the point where those answers already exist. A test that would fail because
-// one entity was parsed wrongly belongs there; a test that would fail because the set was
-// summarised wrongly belongs here. measurement-context.js is imported by both, deliberately:
-// it is the seam, and each file asks it a different question.
+// Direct unit tests for the card domain model and semantic view state: what the whole room
+// set amounts to and which views the carousel shows — participating rooms, each room's
+// classification colour, the summary sentence, active views given config and availability.
+// All pure functions.
+// Boundary: application-entity-context.test.js settles what a single entity is; this file
+// starts from where those answers exist. measurement-context.js is the shared seam.
 
 process.env.TZ = "UTC";
 
@@ -33,8 +26,7 @@ function st(state, attributes) {
   return { state: String(state), attributes: attributes || {} };
 }
 
-// A normalized-config stand-in: only the fields the pipeline reads, so a test does
-// not have to run the whole normalizer to exercise one decision.
+// A normalized-config stand-in: only the fields the pipeline reads.
 function cfg(overrides = {}) {
   return {
     entity: "sensor.avg",
@@ -83,8 +75,8 @@ test("the empty model keeps its minimal shape and names the configuration state"
   assert.equal(model.missingRooms, 1, "only the entity absent from states counts as missing");
   assert.equal(model.configurationState, null, "nothing usable is not a mixed-kind state");
 
-  // A mixed-kind state needs nobody able to settle it: the primary here carries neither a
-  // device_class nor a unit, so it says nothing about what the card measures.
+  // A mixed-kind state needs nobody able to settle it: the primary carries neither
+  // device_class nor unit.
   const mixed = domainFor(
     cfg({ rooms: [room("sensor.r1"), room("sensor.h")] }),
     { "sensor.avg": st("unavailable", {}), "sensor.r1": st(21, C), "sensor.h": st(55, RH) }
@@ -120,9 +112,8 @@ test("a grid cap limits nothing but the chip count", () => {
 });
 
 test("the domain model carries no rendering geometry at all", () => {
-  // The layer boundary: an axis, a band rectangle, a marker
-  // percentage and a pixel nudge are all statements about a RENDERED bar, not about
-  // the measurement. Only the axis POLICY belongs here.
+  // The layer boundary: an axis, band rectangle, marker percentage and pixel nudge are about
+  // a rendered bar, not the measurement. Only the axis policy belongs here.
   const states = {
     "sensor.avg": st(22, C),
     "sensor.r1": st(20, C),
@@ -147,8 +138,8 @@ test("the domain model carries no rendering geometry at all", () => {
   for (const forbidden of ["markerPositions", "coolestShift", "warmestShift", "comfortLeft", "optimalCenter", "displayStep", "boundaryLabels"]) {
     assert.ok(!serialized.includes(forbidden), `${forbidden} must not appear anywhere in the domain model`);
   }
-  // Nor a CSS-ready colour. A validated hex from a profile or an entity attribute is
-  // a semantic classification value and IS allowed; an rgba() derivation is not.
+  // Nor a CSS-ready colour: a validated hex is a semantic classification value and allowed;
+  // an rgba() derivation is not.
   assert.ok(!serialized.includes("rgba("), "no CSS-ready colour in the domain model");
   assert.match(model.extremes.coolestColor, /^#[0-9a-f]{3,8}$/i, "the semantic classification colour stays");
 });
@@ -159,7 +150,7 @@ test("every participating room gets exactly one classification colour, keyed by 
     { "sensor.avg": st(22, C), "sensor.r1": st(18, C), "sensor.r2": st(22, C), "sensor.r3": st(28, C) }
   );
   assert.deepEqual(Object.keys(model.roomColors).sort(), ["0", "1", "2"]);
-  // The extremes read the SAME entry, so a room can never appear in two colours.
+  // The extremes read the same entry, so a room can never appear in two colours.
   assert.equal(model.extremes.coolestColor, model.roomColors[0]);
   assert.equal(model.extremes.warmestColor, model.roomColors[2]);
 });
@@ -336,9 +327,8 @@ test("a configured option overrides its default and the rest keep theirs", () =>
 });
 
 test("the older footer:false folds onto show_footer, and the newer key wins when both are written", () => {
-  // The one legacy fold in this layer, and the reason it is here rather than in
-  // config/views.js: that module is schema-driven and deliberately knows nothing about what
-  // an option MEANS. The definitions do, and they are in this file's subject.
+  // The one legacy fold in this layer: config/views.js is schema-driven and knows nothing
+  // about what an option means; the definitions do.
   const resolve = (key, options) =>
     viewState.resolveViewOptions(
       viewState.VIEW_DEFINITIONS.find((definition) => definition.key === key),
@@ -362,8 +352,7 @@ test("the older footer:false folds onto show_footer, and the newer key wins when
 });
 
 test("the view definitions carry no render or update callback", () => {
-  // The whole point of the split: these are semantic definitions, and the
-  // composition root binds the renderers separately.
+  // These are semantic definitions; the composition root binds the renderers separately.
   for (const definition of viewState.VIEW_DEFINITIONS) {
     assert.deepEqual(
       Object.keys(definition).sort(),

@@ -34,14 +34,11 @@ const COMPOSITION_ROOT = { layer: 8, name: "composition root", group: "(root)" }
 // element out of the render path.
 const RENDER_LAYER_NAMES = ["render/primitives", "render/layout", "styles", "views", "render/composition"];
 
-// Ambient environment surface that must not appear in the application layer.
-// Matched as whole identifiers, against code only (comments and string/template
-// TEXT are removed first — see stripCommentsAndStringText).
-//
-// The point is not tidiness: a model module that reaches for a global is a
-// module that cannot be unit-tested without a browser, cannot be reasoned about
-// deterministically, and quietly reintroduces the coupling the layer boundaries
-// exist to prevent. Everything environmental has to arrive as an argument.
+// Ambient environment surface that must not appear in the application layer;
+// see interne Doku §4 "Keine Browserglobals in fachlichen Schichten". Matched as
+// whole identifiers against code only (comments and string/template text are
+// stripped first — see stripCommentsAndStringText). Everything environmental
+// arrives as an argument.
 const FORBIDDEN_APPLICATION_GLOBALS = [
   // Realm
   "globalThis",
@@ -84,21 +81,16 @@ const FORBIDDEN_APPLICATION_GLOBALS = [
   "matchMedia",
 ];
 
-// Direct wall-clock reads are called out separately, because the fix is
-// different: not "pass the DOM in" but "pass a clock in". Receiving and
-// processing an already-supplied Date value stays fine, so only the reading
-// entry points are forbidden.
+// Wall-clock reads are separate: the fix is "pass a clock in". Processing an
+// already-supplied Date stays fine, so only the reading entry points are listed.
 const FORBIDDEN_CLOCK_READS = [/\bDate\s*\.\s*now\b/, /\bnew\s+Date\s*\(\s*\)/, /\bperformance\s*\.\s*now\b/];
 
-// The rendering layers DO touch the DOM — that is their job — but never through an
-// ambient global. Every document, window and element they use arrives as an
-// argument, either on the RenderContext or as the node being patched. That is what
-// makes a render module testable against a foreign jsdom realm, and what stops the
-// render path from depending on which document happens to be global.
-//
-// The timer and observer entries are not about the DOM at all: scheduling belongs to
-// the controller layer, and a renderer that armed its own timer would be able to
-// change the card after the render it was asked for.
+// The rendering layers touch the DOM, but never through an ambient global: every
+// document/window/element arrives on the RenderContext or as the node being
+// patched, so a render module stays testable against a foreign jsdom realm. The
+// timer and observer entries are not about the DOM — scheduling belongs to the
+// controller layer, and a renderer must not change the card after the render it
+// was asked for.
 const FORBIDDEN_RENDER_GLOBALS = [
   "globalThis",
   "window",
@@ -127,24 +119,17 @@ const FORBIDDEN_RENDER_GLOBALS = [
   "getComputedStyle",
 ];
 
-// These names are forbidden as GLOBALS, not as property names. `defaultView
-// .getComputedStyle(el)` is exactly the realm-correct form the contract asks for,
-// while a bare `getComputedStyle(el)` silently resolves against whichever document
-// happens to be ambient. The lookbehind is what distinguishes the two.
+// Forbidden as globals, not as property names: `defaultView.getComputedStyle(el)`
+// is the realm-correct form, a bare `getComputedStyle(el)` is not. The lookbehind
+// distinguishes the two.
 function referencesGlobal(code, identifier) {
   return new RegExp(`(?<![.\\w$])${identifier}\\b`).test(code);
 }
 
-// The custom element must never reach a renderer. Historically every render and
-// update function took the card itself as a generic context and helped itself to
-// whatever it needed — the formatter, the config, the translator, the classifier —
-// which is precisely why the render path could not be tested or reasoned about
-// separately. These identifiers are the fingerprints of that shape.
-//
-// `card` is included as a whole identifier. Longer names are unaffected
-// (`cardColor`, `metricCardModel`, `cardEl` all pass), so the cost is a small
-// naming convention in the render layers and the benefit is a rule a machine can
-// actually check.
+// A renderer must not receive the custom element as a generic context. These
+// identifiers are the fingerprints of that shape. `card` is matched as a whole
+// identifier — `cardColor`, `metricCardModel`, `cardEl` all pass — so the cost is
+// a naming convention in the render layers.
 const FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS = [
   "card",
   "hass",
@@ -155,12 +140,10 @@ const FORBIDDEN_RENDER_CONTEXT_IDENTIFIERS = [
   "this",
 ];
 
-// The controller layer schedules, times and observes — which is precisely why it must
-// not reach any of it ambiently. Everything comes from the platform object, and the
-// platform has exactly ONE production implementation. That one file is the only place
-// in the whole source tree where a timer, an observer, a clock or a document is
-// touched directly, which makes "what does this card do to the browser" a question
-// with a single file for an answer.
+// The controller layer schedules, times and observes only through the platform
+// object, which has exactly one production implementation (BROWSER_ADAPTER) — the
+// single file that touches a timer, observer, clock or document directly. See
+// interne Doku §4 "Platform-Adapter-Vertrag".
 const BROWSER_ADAPTER = "controllers/runtime/browser-platform.js";
 const FORBIDDEN_CONTROLLER_GLOBALS = [
   "globalThis",
@@ -234,21 +217,13 @@ function resolveSpecifier(fromRelPath, specifier) {
   return path.posix.normalize(path.posix.join(fromDir === "." ? "" : fromDir, specifier));
 }
 
-// Removes comments and the TEXT of string/template literals, while keeping
-// everything that is actually evaluated — in particular the `${...}`
-// substitutions inside template literals.
-//
-// A regex that deletes whole templates would hide the most likely way a global
-// sneaks into a model module: `` `${window.innerWidth}px` ``. This is therefore a
-// small character-by-character scanner rather than a set of replacements. It
-// tracks template nesting depth so a template inside a substitution inside a
-// template still ends up in the right state.
-//
-// Regex literals are deliberately NOT parsed away. Distinguishing `/` as
-// division from `/` as a regex start needs real parsing, and getting that wrong
-// would silently disable the whole check. Leaving regex bodies in can only ever
-// produce a false positive, which is safe: it fails loudly and is trivial to
-// resolve by renaming or restructuring.
+// Removes comments and string/template text while keeping evaluated code — in
+// particular the `${...}` substitutions, since `` `${window.innerWidth}px` `` is
+// a likely way a global sneaks in. A character scanner, not regex replacements:
+// it tracks template nesting depth so a template inside a substitution inside a
+// template lands in the right state. Regex literals are deliberately not parsed
+// away — telling `/` division from a regex start needs real parsing, and a left-in
+// regex body can only ever produce a safe, loud false positive.
 function stripCommentsAndStringText(source) {
   let out = "";
   let i = 0;

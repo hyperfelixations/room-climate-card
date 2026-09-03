@@ -1,9 +1,9 @@
 "use strict";
 
-// PALETTE INTEGRATION: end-to-end colour selection across shipped, written,
-// generated, and profile-driven palettes.
-// This file owns configuration-to-ViewModel wiring through the assembled card; pure ramp
-// generation, fitting, and classification mapping remain direct domain-unit concerns.
+// Palette integration: end-to-end colour selection across shipped, written, generated and
+// profile-driven palettes. Owns configuration-to-ViewModel wiring through the assembled
+// card; pure ramp generation, fitting and classification mapping stay direct domain-unit
+// concerns.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -32,8 +32,7 @@ function temperatureHass(value = 25.5, attributes = {}) {
 
 // ---------------------------------------------------------------- palettes --
 
-// End to end through a real card: the palette option is what decides the colour a value
-// is shown in, and the profile decides only where on the ramp that value sits.
+// The palette option decides the colour; the profile decides where on the ramp a value sits.
 function paletteCard(palette, value = 22) {
   return env.createCard({ entity: "sensor.avg", palette }, temperatureHass(value));
 }
@@ -51,8 +50,7 @@ test("a card shows its configured palette's colour for the same reading", () => 
 });
 
 test("a palette written out in YAML colours the card from its own ramp", () => {
-  // Five colours per wing, matching the indoor profile's reach, so the mapping is one
-  // to one and visible.
+  // Five colours per wing, matching the indoor profile's reach: a one-to-one mapping.
   const written = {
     below: ["#0B0B0B", "#0C0C0C", "#0D0D0D", "#0E0E0E", "#0F0F0F"],
     optimal: "#060606",
@@ -69,8 +67,7 @@ test("a palette written out in YAML colours the card from its own ramp", () => {
   env.cleanup(cold);
 });
 
-// A palette with less resolution than the profile is a legitimate choice, not an error:
-// it simply says "three colours is all I want to distinguish".
+// A palette with less resolution than the profile is legitimate: fewer colours to distinguish.
 test("a palette shorter than the profile collapses onto what it has", () => {
   const tiny = { below: ["#0000FF"], optimal: "#00FF00", above: ["#FF0000"] };
   for (const [value, expected] of [[30, "#FF0000"], [23.5, "#FF0000"], [22, "#00FF00"], [20.5, "#0000FF"], [10, "#0000FF"]]) {
@@ -87,11 +84,10 @@ test("an unknown palette name stops the card with a message naming the known one
   );
 });
 
-// The two roads a single word can take, through a real card.
+// A single word: colour name vs palette name.
 test("a colour name gives a ramp in that colour, and a palette name still wins", () => {
   const teal = env.createCard({ entity: "sensor.avg", palette: "teal" }, temperatureHass(22));
-  // The promise of a monochrome palette, through a real card: name a colour, get that
-  // colour. 22 °C is optimal, so the middle of the ramp — and the middle IS #008080.
+  // Monochrome palette: name a colour, get it. 22 °C is optimal, so the ramp's middle, #008080.
   assert.equal(teal._computeViewModel().tone.color, "#008080");
   env.cleanup(teal);
 
@@ -116,8 +112,7 @@ test("a custom profile without tier colours takes them from the palette", () => 
       { default: true, score: -1, level: "Cold", zone: "outside" },
     ],
   };
-  // Three tiers on an eleven-colour ramp: the two ends reach the ramp's ends rather than
-  // picking neighbours out of its middle, and optimal is its middle.
+  // Three tiers on an 11-colour ramp: the ends reach the ramp's ends, optimal its middle.
   for (const [value, expected] of [[25, "#B85F67"], [22, "#79A86C"], [10, "#8A88C9"]]) {
     const card = env.createCard({ entity: "sensor.avg", classification: colourless }, temperatureHass(value));
     assert.equal(card._computeViewModel().tone.color, expected, `${value} °C`);
@@ -142,7 +137,6 @@ test("a custom profile without tier colours takes them from the palette", () => 
   env.cleanup(painted);
 });
 
-// The two traps, through a real card rather than through the resolver alone.
 test("entity mode without a value_color stays neutral, and never borrows a ramp colour", () => {
   const card = env.createCard(
     { entity: "sensor.avg", classification: "entity", palette: "vivid" },
@@ -152,11 +146,9 @@ test("entity mode without a value_color stays neutral, and never borrows a ramp 
   env.cleanup(card);
 });
 
-// A physically impossible reading never reaches the classifier from a rendered card —
-// it is filtered upstream and shown as no data, in either palette. Pinned here because
-// the alternative reading of the palette work would be that such a value now takes a
-// ramp colour, and it must not: the classifier's own invalid branch is covered in
-// classification-palettes.test.js.
+// A physically impossible reading never reaches the classifier from a rendered card: it is
+// filtered upstream and shown as no data in either palette. The classifier's own invalid
+// branch is covered in classification-palettes.test.js.
 test("a physically impossible reading is no data, not a colour from the ramp", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 120, HUMIDITY),
@@ -168,8 +160,7 @@ test("a physically impossible reading is no data, not a colour from the ramp", (
   }
 });
 
-// A profile that reaches further than the palette does needs no declaration: both are
-// anchored at optimal, so the wings simply scale.
+// A profile reaching further than the palette needs no declaration: both anchor at optimal, wings scale.
 test("a profile reaching further than the palette is spread across it", () => {
   const twenty = {
     source: "custom",
@@ -190,10 +181,8 @@ test("a profile reaching further than the palette is spread across it", () => {
   }
 });
 
-// A semantically broken ramp must stop the card, not render a misleading colour. The
-// distance is checked at the configuration boundary, so this arrives as a setConfig()
-// error with the exact path — the same treatment every other meaning-changing mistake in
-// a classification block gets.
+// A semantically broken ramp stops the card rather than rendering a misleading colour —
+// a setConfig() error with the exact path, like any meaning-changing classification mistake.
 test("a profile whose scores contradict its thresholds is refused by the card", () => {
   const broken = {
     source: "custom",

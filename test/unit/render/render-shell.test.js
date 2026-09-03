@@ -1,20 +1,12 @@
 "use strict";
 
 // Direct unit tests for card-shell composition, structure signatures and assembled styles.
-//
-// Markup and DOM patching are pure functions of a view model, and these tests take that
-// literally: no custom element anywhere in this file, no hass object, no configuration, and —
-// for most of it — no global document either. A view model is written by hand, a renderer is
-// called, and the resulting string or DOM is asserted.
-//
-// This file owns the SHELL: the markup around the views, which node changes force a rebuild
-// rather than a patch, what escaping the shell applies, and the stylesheet the card emits. It
-// also holds the realm check, because the shell is what builds the shadow root and is
-// therefore where a renderer reaching for the ambient document would show first.
-//
-// The boundary to render-views.test.js next door: everything INSIDE one view — its markup,
-// its patch path, its geometry — is that file's subject. The registry appears in both, from
-// opposite sides: here as the thing the shell mounts, there as the thing that mounts.
+// Markup and DOM patching are pure functions of a view model: no custom element, no hass, no
+// configuration, mostly no global document. This file owns the shell — the markup around the
+// views, which node changes force a rebuild rather than a patch, the escaping the shell
+// applies, the stylesheet, and the realm-independence check.
+// Boundary: everything inside one view (its markup, patch path, geometry) is
+// render-views.test.js.
 
 process.env.TZ = "UTC";
 
@@ -37,8 +29,8 @@ test.before(async () => {
 
 // ------------------------------------------------------------------ fixtures --
 
-// A fresh jsdom window per call. Used both as "the" document and, deliberately, as a
-// SECOND, foreign realm — no render module may care which one it is handed.
+// A fresh jsdom window per call, used both as "the" document and as a second foreign realm —
+// no render module may care which one it is handed.
 function makeRealm() {
   const jsdom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>");
   const ownerDocument = jsdom.window.document;
@@ -52,8 +44,8 @@ function makeRealm() {
 
 // ------------------------------------------------------------------ card shell --
 
-// A synthetic registry: two views that record what they were handed. Proves the shell
-// composes whatever it is given, in the order it is given, and never names a view.
+// A synthetic registry: two views that record what they were handed, proving the shell
+// composes whatever it is given, in order, and never names a view.
 function syntheticRegistry(calls) {
   const make = (key) => ({
     key,
@@ -211,8 +203,8 @@ test("every optional node of the scale view changes the signature", () => {
 });
 
 test("a part the view reconciles itself must NOT change the signature", () => {
-  // Room markers and marker values are patched in place. Listing them would cost a
-  // full rebuild — and a reset carousel — on every routine data change.
+  // Room markers and marker values are patched in place; listing them would cost a full
+  // rebuild and a reset carousel on every routine data change.
   const reference = cardShell.cardStructureSignature(viewModel(), registry.VIEW_RENDERERS);
 
   const withRoomMarkers = viewModel();
@@ -256,8 +248,8 @@ test("a view that reconciles everything declares no signature, and is skipped", 
 // ---------------------------------------------- realm independence and safety --
 
 test("the whole render path works with no global document at all", () => {
-  // The strongest form of the contract: temporarily remove the ambient document, then
-  // render and patch a card end to end through a context built from a foreign realm.
+  // Remove the ambient document, then render and patch a card end to end through a context
+  // built from a foreign realm.
   const realm = makeRealm();
   const hadGlobal = "document" in globalThis;
   const previous = globalThis.document;
@@ -306,8 +298,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
     },
   });
   const html = cardShell.renderCardBody(realm.context, model, registry.VIEW_RENDERERS);
-  // The angle brackets are what makes an injection an injection. The payload's TEXT is
-  // expected to survive verbatim — escaped — which is exactly the point.
+  // The angle brackets make an injection an injection; the payload's text survives escaped.
   assert.ok(!html.includes("<img"), "no injected tag may survive");
   assert.match(html, /&lt;img/, "it survives as text instead");
 
@@ -330,8 +321,7 @@ test("the stylesheet is assembled from its sections with nothing inserted betwee
   assert.match(css, /width: 300%;/, "the track spans viewCount * 100%");
   assert.match(css, /flex: 0 0 33\.3333%;/);
   assert.match(css, /animation: none;/);
-  // The section order is normative: a token block before the card, motion overrides
-  // last, or the cascade changes.
+  // The section order is normative: token block before the card, motion overrides last.
   assert.ok(css.indexOf(":host {") < css.indexOf(".rtc-card {"));
   assert.ok(css.indexOf(".rtc-card {") < css.indexOf("@container rtc-card"));
   assert.ok(css.indexOf("@container rtc-card") < css.indexOf("prefers-reduced-motion"));
@@ -344,6 +334,6 @@ test("the stylesheet is a pure function of its four inputs", () => {
 });
 
 test("a zero view count still yields a usable track width", () => {
-  // Before the first render this._views is empty; the track must not collapse to 0%.
+  // Before the first render the view list is empty; the track must not collapse to 0%.
   assert.match(styles.buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 0, viewWidthPct: 100 }), /width: 100%;/);
 });

@@ -1,11 +1,8 @@
 "use strict";
 
-// The scenario catalog behind the characterization baselines (see
-// characterization.js for the harness and the rationale).
-//
-// Every entry is a fully deterministic {config, states, language} triple. The
-// catalog deliberately spans the card's major input and presentation axes, so
-// a regression in any one of them shows up as a baseline diff:
+// The scenario catalog behind the characterization baselines (harness: characterization.js).
+// Each entry is a deterministic {config, states, language} triple; the catalog spans the
+// card's input and presentation axes:
 //
 //   configuration cases   A (minimal) / B (rooms) / C (range) / D (full)
 //   metric kinds          temperature, humidity, CO2, PM2.5
@@ -17,9 +14,8 @@
 //   presentation          room grid caps, sorting, labels, overrides, i18n
 //   carousel config       auto_slide/swipe off, custom timings
 //
-// States use fixed last_changed/last_updated timestamps: the render signature
-// in _render() incorporates last_updated, so a live `new Date()` would make
-// the captured markup depend on when the suite ran.
+// Timestamps are fixed: the render signature incorporates last_updated, so a live
+// `new Date()` would make the captured markup depend on when the suite ran.
 
 const { CO2, HUMIDITY, PM25, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../fixtures/attributes.js");
 const FIXED_TS = "2026-07-24T05:00:00Z";
@@ -40,9 +36,8 @@ const K = TEMPERATURE_K;
 const RH = HUMIDITY;
 const PM = PM25;
 
-// Seven rooms with stable, spread-out Celsius values (two outside the 20-24
-// comfort band in each direction, so subtitle/comfort counting/extrema/spread
-// all have non-trivial values).
+// Seven rooms with spread-out Celsius values, two outside the 20-24 comfort band in each
+// direction, so comfort counting / extrema / spread all have non-trivial values.
 const SEVEN_ROOM_VALUES = [19.2, 20.8, 21.6, 22.3, 23.1, 24.4, 25.7];
 const SEVEN_ROOMS = SEVEN_ROOM_VALUES.map((value, index) => ({
   name: `Room ${index + 1}`,
@@ -244,9 +239,8 @@ const SCENARIOS = [
     },
   },
   {
-    // The same rooms, and a primary that cannot be read but still declares temperature.
-    // The declaration settles it: the thermometer carries the card and the hygrometer is
-    // excluded by name, exactly as it would be if the primary could be read.
+    // Same rooms, plus a primary that cannot be read but still declares temperature: the
+    // declaration settles it, the thermometer carries the card and the hygrometer is excluded.
     name: "state-arbitrated-by-declaring-primary",
     config: {
       entity: "sensor.avg",

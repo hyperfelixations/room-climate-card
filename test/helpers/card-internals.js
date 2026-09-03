@@ -1,17 +1,10 @@
 "use strict";
 
-// Test-only compositions for pure functions that also require live card state.
-//
-// Each one below combines a pure module function with something only a live card has:
-// the hass states map, the classification policy derived from the configuration, or the
-// text/formatting bundle. Production composes the same functions inside
-// presentation/view-model. The card is the first argument rather than `this`, which
-// makes the dependency on card state explicit at every call site, and each helper names
-// the real module it is exercising.
-//
-// This is deliberately NOT a general-purpose façade: nothing here exists that no test
-// needs, and anything a test can reach through a controller (el._carousel, el._interaction,
-// el._renderController) is not duplicated here.
+// Test-only compositions of pure module functions with something only a live card has (the
+// hass states map, the config-derived classification policy, the text bundle). Production
+// composes the same functions inside presentation/view-model; each helper names the module
+// it exercises and takes the card as its first argument. Not a general-purpose façade:
+// anything reachable through a controller is not duplicated here.
 
 const SPECS = {
   classification: "../../src/application/model/classification.js",
@@ -131,7 +124,7 @@ async function loadCardInternals() {
     entityModel: (el, entityId, sourceRole) =>
       m.entityModel.buildEntityModel(el._hass?.states, el._config, entityId, sourceRole),
 
-    // The data-following scale. Passing the dynamic steps only for a REGISTERED metric
+    // The data-following scale. Passing the dynamic steps only for a registered metric
     // kind is what keeps the registry guard in the loop.
     dynamicScale(el, coolestValue, warmestValue, metricType, unitProfile) {
       return m.dynamicScale.dynamicScale(

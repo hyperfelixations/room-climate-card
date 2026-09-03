@@ -1,43 +1,23 @@
 "use strict";
 
-// Real ResizeObserver + real document.fonts.ready — jsdom stubs both
-// (test/unit/ tests the bind/unbind lifecycle and the promise-chain logic
-// with those stubs, but a stub can't reproduce the actual bug history
-// here). Covers: the 2.14.0 resize-bug root cause (label stays stale after
-// a pure container resize with no accompanying hass update) and the
-// 2.12.0 font-ready correction, both for the main scale AND the rangeScale
-// view.
+// Real ResizeObserver and real document.fonts.ready, which jsdom stubs. Covers a label
+// staying stale after a pure container resize with no hass update, and the font-ready
+// correction, for both the main scale and the rangeScale view.
 //
-// NO FIXED TIMEOUTS. These tests assert label positions to within a pixel. A flat
-// timeout is not a contract, it is a guess about how busy the machine is, and it failed
-// once under load. Everything below waits on the mechanism instead — see
-// settledLabels().
-//
-// settledLabels() stays local rather than deferring to waitForStableLayout() in
-// test/helpers/browser-helpers.js, which every other measuring spec now uses. The
-// shared helper answers "has the layout settled"; this one answers that AND returns the
-// measurements from the SAME page evaluation, so nothing can move between the check and
-// the values it vouches for. That atomicity is this file's entire subject, and splitting
-// it across two round-trips would give it up to save a little code.
+// Waits on the mechanism, not a duration (see settledLabels below). settledLabels() stays
+// local rather than using waitForStableLayout() in test/helpers/browser-helpers.js: it
+// returns the measurements from the same page evaluation as the settled check, so nothing
+// can move between the check and the values — that atomicity is this file's subject.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-// Reads the three scale labels once the card has finished re-measuring at its current
-// width. Four conditions, all observable, none of them a duration:
-//
-//   1. the resize runtime has no animation frame outstanding. Its ResizeObserver
-//      callback coalesces every resize notification onto exactly one frame, so a
-//      pending frame means a measurement is still queued.
-//   2. document.fonts.ready has settled. Web fonts finishing is the other thing that
-//      moves a label after the fact, and it is the whole subject of half this file.
-//   3. the card is actually at the width the test asked for, so a reading can never be
-//      taken from the layout that is about to be replaced.
-//   4. the measured positions are identical across two consecutive animation frames.
-//
-// All four are read inside ONE page evaluation, so nothing can settle differently
-// between the checks and the values that are returned.
+// Reads the three scale labels once the card has re-measured at its current width. Four
+// observable conditions, none a duration: no resize animation frame outstanding,
+// document.fonts.ready settled, the card at the asked width, and identical positions across
+// two consecutive frames — all inside one page evaluation so nothing settles between the
+// check and the returned values.
 async function settledLabels(page, cardId, { scope = "", widthPx }) {
   let labels = null;
   await expect
@@ -101,9 +81,8 @@ test("a pure container resize (no hass update) re-resolves the optimal label via
   await setWidth(page, cardId, 300);
   const narrow = await settledLabels(page, cardId, { widthPx: 300 });
 
-  // A card that never re-measures never reaches a settled layout that differs from the
-  // wide one, so waiting on the mechanism cannot hide the bug this test guards against:
-  // it would time out above, and fail here.
+  // A card that never re-measures never settles into a different layout, so waiting on the
+  // mechanism times out rather than hiding the bug.
   expect(
     Math.abs(narrow.center.x - wide.center.x),
     "the label's absolute position must actually move after a pure resize"
@@ -134,11 +113,9 @@ test("UI-03: a pure resize also re-resolves the rangeScale view's shared optimal
 
   expect(Math.abs(narrow.center.x - wide.center.x)).toBeGreaterThan(0.5);
 
-  // The assertion above is, on its own, weaker than it looks: the optimal label is
-  // positioned with `left: N%`, so its absolute x moves with the container whether or
-  // not anything re-measured. The non-overlap invariant is the part that can only hold
-  // if the SHARED optimal label was genuinely re-resolved against the new rendered
-  // widths — which is what UI-03 was about.
+  // The optimal label is positioned with `left: N%`, so its x moves with the container
+  // regardless of re-measurement. The non-overlap invariant is the part that only holds if
+  // the label was genuinely re-resolved against the new widths.
   expect(narrow.center.x).toBeGreaterThanOrEqual(narrow.min.x + narrow.min.width - 1);
   expect(narrow.center.x + narrow.center.width).toBeLessThanOrEqual(narrow.max.x + 1);
 });
@@ -156,8 +133,8 @@ test("disconnecting the card cleanly stops the ResizeObserver (no error on a sub
     const el = document.getElementById(id);
     el.remove(); // triggers disconnectedCallback -> _unbindResizeObserver()
     el.style.width = "250px";
-    // Two frames plus a macrotask turn: enough for a surviving observer to have both
-    // fired and run its coalescing frame, with no reliance on how long that takes.
+    // Two frames plus a macrotask turn: enough for a surviving observer to fire and run its
+    // coalescing frame.
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))));
   }, cardId);
 

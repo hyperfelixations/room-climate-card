@@ -1,29 +1,17 @@
 "use strict";
 
-// Real pointer gestures (Playwright's mouse API dispatches real
-// pointerdown/pointermove/pointerup in Chromium) — the jsdom unit layer
-// (pointer-logic.test.js) calls _handlePointerCancel()/_handlePointerUp()
-// directly with a synthetic pointer shape; this drives the actual DOM event
-// listeners end to end, including the >=10px horizontal-swipe detection in
-// _handlePointerMove() and the width*0.18 swipe threshold in
-// _handlePointerUp(). Covers the carousel and lifecycle contracts:
-// threshold swipe both directions, pointercancel/pointerleave, an HA update
-// arriving mid-drag.
+// Real pointer gestures through Chromium's DOM event listeners end to end, where the jsdom
+// unit layer (pointer-logic.test.js) calls the handlers directly with a synthetic pointer.
+// Covers the >=10px direction threshold, the width*0.18 swipe threshold,
+// pointercancel/pointerleave, and an HA update arriving mid-drag.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-// TIMING-SENSITIVE, AND RETRIED FOR THAT REASON ALONE.
-//
-// The gestures below are driven by real mouse.move() sequences whose settling depends on how
-// promptly the browser gets a frame. Under CPU contention that occasionally slips, and the
-// failure is the machine rather than the card: the same case passes on the retry and on the
-// next run.
-//
-// The rest of the suite runs with retries: 0 (see playwright.config.js), so this is a local
-// exception a reader can see, not a blanket policy that also quietly retries the golden
-// screenshots. If a case here fails on the retry as well, it is real.
+// Timing-sensitive: real mouse.move() sequences whose settling depends on getting a frame
+// promptly, so this file requests local retries (see playwright.config.js, retries: 0
+// elsewhere). A failure on the retry as well is real.
 test.describe.configure({ retries: 2 });
 
 
@@ -41,12 +29,8 @@ async function swipe(page, rotatorBox, dxPx) {
   const startY = rotatorBox.y + rotatorBox.height / 2;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  // Several intermediate moves, each yielding briefly, so
-  // _handlePointerMove()'s >=10px horizontal detection and the running
-  // translate both see realistic deltas even under parallel-worker CPU
-  // load (a tight synchronous loop of mouse.move() calls was observed to
-  // be flaky under 8 concurrent workers on this machine — the small waits
-  // let each event actually get dispatched/processed before the next one).
+  // Several intermediate moves, each yielding briefly, so the direction detection and the
+  // running translate see realistic deltas under parallel-worker CPU load.
   const steps = 8;
   for (let i = 1; i <= steps; i++) {
     await page.mouse.move(startX + (dxPx * i) / steps, startY, { steps: 1 });
@@ -66,14 +50,9 @@ test("a rightward swipe past the threshold moves to the next view", async ({ pag
   await page.evaluate((id) => { document.getElementById(id).style.width = "400px"; }, cardId);
   await page.waitForTimeout(100);
   const card = page.locator(`#${cardId}`);
-  // Freeze at a known index (0) into manual mode before swiping — matching
-  // the "leftward" test's own pattern. Reading the live this._activeView
-  // instead (the previous approach) raced against the wall-clock,
-  // CSS-driven auto-slide phase: with 3 views (range/scale/extremes) now
-  // correctly active (sensor.range needs its own unit_of_measurement
-  // requirement, threeViewStates()), the auto-slide could tick an extra
-  // step during the ~600ms interaction window, occasionally landing on an
-  // endIndex the startIndex-relative assertion didn't anticipate.
+  // Freeze at a known index (0) in manual mode before swiping: reading the live
+  // this._activeView instead races the wall-clock auto-slide, which can tick during the
+  // ~600ms interaction window.
   await card.evaluate((el) => { el._activeView = 0; el._updateTrackTransform(false); });
   const rotator = card.locator(".rtc-rotator");
   const box = await rotator.boundingBox();
@@ -124,19 +103,11 @@ test("a swipe below the threshold snaps back to the nearest view instead of adva
 });
 
 test("pointercancel settles the track without throwing and clears the drag state", async ({ page }) => {
-  // Empirically, Chromium keeps routing pointermove to the element that
-  // received pointerdown for as long as the (mouse) button stays held —
-  // real mouse movement never actually triggers pointerleave/pointercancel
-  // on the rotator mid-drag this way (verified directly: moving the
-  // simulated mouse hundreds of pixels below the whole card while the
-  // button is held produces zero "leave"/"cancel" events). A genuine
-  // pointercancel happens for OS-level reasons (a touch gesture getting
-  // reinterpreted as a system gesture, stylus lift, etc.) that Playwright's
-  // mouse API cannot reproduce geometrically. This dispatches a real
-  // PointerEvent("pointercancel") at the DOM level instead — still exercises
-  // the actual registered shadowRoot listener and real getBoundingClientRect-
-  // based geometry end to end, just skips trying to force the browser into
-  // firing it naturally.
+  // Chromium routes pointermove to the pointerdown target while the mouse button is held,
+  // so mouse movement never fires pointerleave/pointercancel on the rotator mid-drag. A
+  // real pointercancel is OS-level (touch reinterpreted as a system gesture, stylus lift)
+  // and Playwright's mouse API cannot reproduce it, so this dispatches a real
+  // PointerEvent("pointercancel") at the DOM level against the registered listener.
   await gotoHarness(page);
   const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, threeViewStates());
   await page.evaluate((id) => { document.getElementById(id).style.width = "400px"; }, cardId);

@@ -1,9 +1,9 @@
 "use strict";
 
-// Direct unit tests for lazy per-view content construction and range-scale activation.
-// This file owns whether requested views build their content and expensive geometry.
-// The neighbouring presentation suite owns shared CardViewModel composition and formatting,
-// keeping activation/laziness failures separate from general presentation mapping.
+// Direct unit tests for lazy per-view content construction and range-scale activation:
+// whether requested views build their content and expensive geometry.
+// Boundary: shared CardViewModel composition and formatting is the neighbouring
+// presentation suite, keeping laziness failures separate from general mapping.
 
 process.env.TZ = "UTC";
 
@@ -21,13 +21,9 @@ test.before(async () => {
 
 // ------------------------------------------------- lazy view content models --
 
-// The daily-range scale is AVAILABLE whenever the range entity reports a usable
-// min/max pair, but it is off unless a views: list explicitly asks for it. Building its
-// axis, its three markers and its decluttered labels for a view nobody requested is
-// work with no observable result, so the pipeline skips it unless requested.
-//
-// The axis therefore arrives as a thunk. These tests call buildViewContent() directly
-// with a counting thunk, which is the only way to prove a negative like this.
+// The daily-range scale is available whenever the range entity reports a usable min/max
+// pair, but off unless a views: list asks for it. Its axis arrives as a thunk; these tests
+// call buildViewContent() with a counting thunk to prove it is not built when unrequested.
 function sharedFor(overrides = {}) {
   const texts = stubTexts();
   const geometry = {

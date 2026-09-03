@@ -1,31 +1,11 @@
 "use strict";
 
-// WEIGHTED GENERATORS over scenario descriptions.
-//
-// The point of a property test is not to try strange things; it is to try ORDINARY things
-// in strange COMBINATIONS, and occasionally something strange as well. A generator that
-// draws uniformly from an extreme set spends its whole budget in territory no user ever
-// reaches, and one that only draws sensible values never finds anything. So every axis below
-// is weighted: mostly what a dashboard really looks like, sometimes a mistake somebody really
-// makes, rarely something absurd.
-//
-// THE AMBITION IS COVERAGE OF THE WHOLE YAML SURFACE. Everything the card accepts in
-// configuration is generated here — not only entities and palettes but titles, subtitles,
-// decimals, room grids, sort and label modes, actions, view lists, per-view options,
-// classification overrides, and the two auxiliary entities. Anything a person can write,
-// this can write, and it can write it slightly wrong.
-//
-// EVERY AXIS IS NAMED AND WEIGHTED IN ONE PLACE. WEIGHTS is exported and generators.test.js
-// measures the realised distribution against it. A generator whose weights have drifted from
-// its intent is exactly the failure this suite has already had once — the previous randomized
-// test drew fine and asserted nothing, because its entities were missing a unit and every
-// card it built landed in the no-data state. Nothing measured that, so nothing reported it
-// for five hundred iterations.
-//
-// WHAT COMES OUT IS A DESCRIPTION, NOT A CARD. Everything here emits plain JSON for
-// test/fixtures/scenario.js. That is what makes a failure reportable: the case prints, it
-// shrinks structurally (see shrink.js), and the minimised result is a fixture a person can
-// paste into a hand-written test unchanged.
+// Weighted generators over scenario descriptions: every axis draws mostly what a dashboard
+// really looks like, sometimes a real mistake, rarely something absurd, and covers the whole
+// YAML surface the card accepts. WEIGHTS is exported and measured by generators.test.js
+// against the realised distribution. Output is a plain-JSON description for
+// test/fixtures/scenario.js, not a card; it shrinks structurally (shrink.js).
+// Rationale and the coverage guard: see interne Doku §4 „Die Property-Schicht".
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
 const {
@@ -69,9 +49,8 @@ const THRESHOLDS = {
   pm25: [5, 15, 25, 35, 50],
 };
 
-// The enumerated options, with their real domains. Every one of these is also generated
-// slightly wrong, through typo() — which is how `value_dsc`, `Auto`, `shortt` and `hidee`
-// get tried without anybody listing them.
+// The enumerated options with their real domains. Each is also generated slightly wrong via
+// typo(), so misspellings get tried without being listed.
 const ENUMS = {
   room_sort: ["configured", "name", "value_asc", "value_desc"],
   room_label: ["auto", "short", "name"],
@@ -129,16 +108,14 @@ const WEIGHTS = {
     [3, "curatedTypo"],
     [2, "mechanicalTypo"],
   ],
-  // What a sensor is called. Home Assistant guarantees `domain.object_id` in lower-case
-  // ASCII, but the id in a card configuration is whatever a person typed into a YAML file, so
-  // the card sees the other kinds too.
+  // A card-configured id is whatever a person typed, not the `domain.object_id` lower-case
+  // ASCII Home Assistant guarantees, so the card sees other shapes too.
   entityId: [
     [92, "conventional"],
     [8, "impossible"],
   ],
-  // Which timestamps the sensor reports. The card compares them across renders to decide
-  // what has changed, so a sensor that reports none, or reports a time in the future, is
-  // asking the comparison a question it was not written for.
+  // Which timestamps the sensor reports. The card compares them across renders, so none, or
+  // a future time, tests a comparison it was not written for.
   timestamps: [
     [70, "identical"],
     [16, "normal"],
@@ -146,15 +123,15 @@ const WEIGHTS = {
     [4, "future"],
     [4, "malformed"],
   ],
-  // Extra attributes on the entity itself. The range view takes its numbers from them and a
-  // value colour on the entity overrides the palette, so each shape lands on a decision.
+  // Extra attributes on the entity: the range view takes its numbers from them, and a
+  // value colour on the entity overrides the palette.
   extraAttributes: [
     [88, "none"],
     [6, "plausible"],
     [6, "awkward"],
   ],
-  // What the `hass` object is missing. A complete one nearly always, because an incomplete
-  // one is a moment rather than a state — but it is a moment every card lives through.
+  // What the `hass` object is missing. Complete nearly always; an incomplete one is a
+  // transient moment every card still lives through.
   hassShape: [
     [91, "complete"],
     [6, "oneGap"],
@@ -249,15 +226,14 @@ const OPTION_PRESENCE = {
   classification: 0.08,
   range_entity: 0.1,
   trend_entity: 0.08,
-  // A key nobody meant to write. The card names it and offers the option it was probably
-  // meant to be, so generating them keeps a generated card exercising that path.
+  // A key nobody meant to write; the card names it and suggests the intended option.
   misspelledKey: 0.06,
 };
 
 // ------------------------------------------------------------------------ machinery --
 
-// Draws from a [[weight, label], …] table. The table is not normalised in advance on
-// purpose: a weight added without adjusting the others should just work.
+// Draws from a [[weight, label], …] table, not normalised in advance so a weight can be
+// added without adjusting the others.
 function weighted(rng, table) {
   const total = table.reduce((sum, [weight]) => sum + weight, 0);
   let roll = rng.float() * total;
@@ -382,9 +358,8 @@ function generateEntity(rng, metric, { unitChoice, forcedUnitValue }) {
   entity.unit = generateUnit(rng, metric, unitChoice, forcedUnitValue);
   entity.deviceClass = generateDeviceClass(rng, metric);
 
-  // Attributes the card reads for the range and trend views, on the entity itself. Most
-  // sensors do not carry them; the ones that do are where the range view gets its numbers,
-  // and where an entity can overrule the palette with a colour of its own.
+  // Attributes the card reads on the entity: the range view's numbers, and a value colour
+  // that overrules the palette.
   const extras = weighted(rng, WEIGHTS.extraAttributes);
   if (extras === "plausible") {
     entity.extraAttributes = {
@@ -429,9 +404,8 @@ function generatePalette(rng) {
         "#1DB85D-#FD9808",
       ]);
     case "written":
-      // A palette written out in YAML is a CUSTOM palette: the card must never adapt it to
-      // the background, whatever it looks like there. Generated in every shape the contract
-      // allows — one colour, one wing, both wings, an explicit invalid colour.
+      // A palette written out in YAML is a custom palette the card must never adapt to the
+      // background. Generated in every shape the contract allows.
       return rng.pick([
         { optimal: "#3D9970" },
         { optimal: "#3D9970", above: ["#FFDC00", "#FF851B"] },
@@ -440,8 +414,8 @@ function generatePalette(rng) {
         { optimal: "#000000", above: ["#0C0C0C"], below: ["#111111"] },
       ]);
     case "broken":
-      // Deliberately invalid: setConfig must refuse this ATOMICALLY, leaving the previous
-      // configuration intact rather than a half-applied one.
+      // Deliberately invalid: setConfig must refuse it atomically, leaving the previous
+      // configuration intact.
       return rng.pick([
         { optimal: "not-a-colour" },
         { above: ["#FFF"] },
@@ -461,9 +435,8 @@ function generatePalette(rng) {
 function generateViews(rng) {
   switch (weighted(rng, WEIGHTS.views)) {
     case "subset": {
-      // An AUTHORITATIVE list: whatever it names is what the card shows, and it is perfectly
-      // allowed to leave `scale` out. An earlier property test asserted that `scale` appeared
-      // exactly once, which is simply not true of this configuration.
+      // An authoritative list: whatever it names is what the card shows, and it may leave
+      // `scale` out.
       const count = rng.int(1, VIEWS.length);
       const shuffled = [...VIEWS].sort(() => rng.float() - 0.5);
       const chosen = shuffled.slice(0, count);
@@ -496,8 +469,7 @@ function generateViewOptions(rng, type) {
     if (!rng.bool(0.6)) continue;
     options[domain === "bool" ? name : name] = domain === "bool" ? boolValue(rng) : enumValue(rng, domain);
   }
-  // An option the view does not have. The card diagnoses and drops these rather than
-  // failing, and the run should keep proving it.
+  // An option the view does not have; the card diagnoses and drops it rather than failing.
   if (rng.bool(0.15)) options[V.typo(rng, Object.keys(schema)[0] || "option")] = true;
   return options;
 }
@@ -520,12 +492,9 @@ function generateAction(rng) {
   }
 }
 
-// The show: block, in the shapes a person actually produces on the way to a working card.
-//
-// Two things make this worth generating rather than writing down: the block can be reached
-// with a half-typed value at every keystroke, and it OVERLAPS with three older top-level keys
-// whose combinations are where a precedence rule breaks. The card with both spellings and
-// contradictory answers is generated on purpose.
+// The show: block, in the shapes a person produces on the way to a working card. It overlaps
+// three older top-level keys, and a card carrying both spellings with contradictory answers
+// is generated on purpose to exercise the precedence rule.
 function generateShow(rng) {
   switch (rng.int(0, 5)) {
     case 0:
@@ -553,10 +522,8 @@ function generateShow(rng) {
 }
 
 function generateHeaderLine(rng) {
-  // Three shapes, and the two words that are reserved. `subtitle: clip` sets the WRAPPING;
-  // `subtitle: Ground floor` sets the TEXT. Getting one of those two words slightly wrong
-  // therefore changes the meaning completely — `clipp` is text, `clip` is a mode — which is
-  // exactly the kind of thing worth generating. The title takes the same four shapes.
+  // `subtitle: clip` sets the wrapping mode; `subtitle: Ground floor` sets the text. A slight
+  // misspelling flips the meaning (`clipp` is text, `clip` a mode). Title takes the same shapes.
   switch (rng.int(0, 5)) {
     case 0:
       return rng.pick(ENUMS.header_overflow);
@@ -574,9 +541,8 @@ function generateHeaderLine(rng) {
 }
 
 function generateClassification(rng, metric) {
-  // The heaviest configuration surface the card has. Generated in the shapes that matter:
-  // a source override, a named profile, and a written-out tier ramp — including one that
-  // breaks the ramp contract, which must be refused rather than silently coloured wrong.
+  // The heaviest configuration surface: a source override, a named profile, and a written-out
+  // tier ramp, including one that breaks the ramp contract and must be refused.
   const validCustom = {
     source: "custom",
     unit: METRICS[metric].canonicalUnit,
@@ -597,8 +563,8 @@ function generateClassification(rng, metric) {
     case 2:
       return validCustom;
     case 3:
-      // A ramp whose scores do not descend. The card refuses this; before it did, an
-      // optimal reading could be painted in the most extreme colour of the palette.
+      // A ramp whose scores do not descend; the card must refuse it rather than paint an
+      // optimal reading in the palette's most extreme colour.
       return { ...validCustom, tiers: validCustom.tiers.map((tier, index) => index === 1 ? { ...tier, score: 5 } : tier) };
     default:
       return { source: "custom", unit: METRICS[metric].canonicalUnit, tiers: [] };
@@ -689,9 +655,8 @@ function auxiliaryEntities(rng, config, metric) {
   return extras;
 }
 
-// The one entry point. Returns a plain description; nothing here touches the card.
-// What Home Assistant hands the card, and what it sometimes does not. See the note beside
-// hassGaps in test/fixtures/scenario.js for why each of these is a state a card really meets.
+// What Home Assistant hands the card, and what it sometimes does not. See the hassGaps note
+// in test/fixtures/scenario.js for why each is a state a card really meets.
 function generateHassShape(rng) {
   let shape;
   switch (weighted(rng, WEIGHTS.hassShape)) {
@@ -707,8 +672,8 @@ function generateHassShape(rng) {
     default:
       shape = {};
   }
-  // Theme and missing fields are independent properties of Home Assistant's environment.
-  // Keeping them exclusive made `theme + no themes API` structurally unreachable.
+  // Theme and missing fields are independent; keeping them exclusive would make `theme + no
+  // themes API` unreachable.
   if (rng.bool(0.03)) shape.theme = rng.bool(0.5) ? "dark" : "light";
   return shape;
 }
@@ -719,10 +684,9 @@ function generateDescription(seedOrRng) {
 
   const agreement = weighted(rng, WEIGHTS.unitAgreement);
   const unitChoice = weighted(rng, WEIGHTS.unitValue);
-  // With "uniform" every entity is handed the same unit VALUE, so the card sees one
-  // measurement; "twoUnits" mixes two units of the same metric, which the card must convert;
-  // "perRoom" lets every room draw its own, which is where the incompatible combinations
-  // live — °C beside % beside K on one card.
+  // "uniform" hands every entity the same unit value; "twoUnits" mixes two units of the metric
+  // that the card must convert; "perRoom" lets each room draw its own, where the incompatible
+  // combinations live (°C beside % beside K on one card).
   const uniformUnit =
     agreement === "uniform" && unitChoice !== "missing" ? generateUnit(rng, metric, unitChoice).value : undefined;
   const twoUnits =
@@ -763,18 +727,15 @@ function generateDescription(seedOrRng) {
     config,
   };
 
-  // THE SAME SENSOR AS THE AVERAGE AND AS A ROOM. A perfectly reasonable thing to write —
-  // one sensor is both the reading the card is about and one of the rooms it lists — and the
-  // card then has one entity in two roles, which is where a marker can be drawn twice or an
-  // average can count a room it already counted.
+  // The same sensor as the average and as a room: one entity in two roles, where a marker
+  // could be drawn twice or an average could count a room it already counted.
   if (description.primary && description.rooms.length && rng.bool(0.05)) {
     const room = rng.int(0, description.rooms.length - 1);
     description.rooms[room] = { ...description.rooms[room], id: description.primary.id || "sensor.avg" };
   }
 
-  // A card with neither a primary entity nor a room is not a card. It is also not
-  // interesting: setConfig refuses it, and config-validation.test.js already says so
-  // precisely. Give it the one thing it needs to be a card at all.
+  // A card with neither a primary nor a room is refused by setConfig, and
+  // config-validation.test.js already covers that. Give it the one thing it needs to be a card.
   if (!description.primary && description.rooms.length === 0) {
     description.primary = generateEntity(rng, metric, unitFor(0));
   }

@@ -242,11 +242,8 @@ test("DATA-01 integration: rooms hidden by room_columns/room_rows still count in
 });
 
 test("DATA-01 integration: which rooms get capped-out is decided by configuration order, not by value (a room near the middle of the value range never flickers in/out as values change through the day)", () => {
-  // Values are deliberately NOT in configuration order, so "cap by config
-  // order" and "cap by value order" would select two different sets of 3
-  // rooms — R1/R3/R2 (the 3 smallest values, 20/21/22) vs R0/R1/R2 (the
-  // first 3 declared). The visible set is then sorted by value for display,
-  // but the SELECTION itself must be R0/R1/R2 (config order).
+  // Values are not in config order, so "cap by config order" (R0/R1/R2) and "cap by value"
+  // (R1/R3/R2) pick different sets. Selection must be config order; display is sorted by value.
   const states = { "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) };
   const rooms = [
     { name: "R0", entity: "sensor.r0" }, // 23

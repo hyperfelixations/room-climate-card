@@ -1,16 +1,11 @@
 "use strict";
 
-// Disconnect and reconnect with real pointer events, a real compositor and a real
-// document move.
-//
-// The jsdom layer proves the contract by calling the handlers; this proves it end to
-// end. It also covers the one thing jsdom cannot express at all: adoptNode into a second
-// document, where the card carries its runtimes with it but every capability — timers,
-// animation frames, the fonts promise — belongs to the new realm.
-//
-// A detached element cannot be found by id any more, so each test parks a reference on
-// `window.__card` first. Every test listens for `pageerror`: the failure this file
-// guards against is silent — the card simply stops updating.
+// Disconnect and reconnect with real pointer events, a real compositor and a real document
+// move, where jsdom proves the contract by calling the handlers. It also covers the thing
+// jsdom cannot express: adoptNode into a second document, where the card carries its
+// runtimes but every capability (timers, frames, the fonts promise) belongs to the new
+// realm. A detached element cannot be found by id, so each test parks a reference on
+// `window.__card`. Every test listens for `pageerror` — the failure here is silent.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
@@ -91,10 +86,8 @@ test("a card removed mid-drag and reinserted keeps updating", async ({ page }) =
 });
 
 test("an update received during a real drag is on screen after a real reconnect, with no further update", async ({ page }) => {
-  // The same contract as the jsdom layer, with a genuine pointer gesture and a genuine
-  // document removal. Nothing is pushed into the card after the reconnect and no private
-  // render entry point is called: what Home Assistant already handed over must simply be
-  // visible again.
+  // Same contract as jsdom, with a real gesture and document removal. Nothing is pushed
+  // after the reconnect and no private render entry point is called.
   const { card, errors } = await setUpCard(page);
   const box = await card.locator(".rtc-rotator").boundingBox();
   expect(await card.locator(".rtc-avg-value-num").innerText()).toContain("22");
@@ -133,8 +126,8 @@ test("after catching up on reconnect, auto-slide and the accessibility sync run 
   await page.mouse.up();
   await page.evaluate(() => document.getElementById("stage").appendChild(window.__card));
 
-  // The catch-up render can rebuild the whole shadow DOM. Whatever it did, the card must
-  // end up animating again and keeping its accessibility state in step with the track.
+  // The catch-up render can rebuild the whole shadow DOM; the card must still animate again
+  // and keep its accessibility state in step with the track.
   expect(await page.evaluate(() => window.__card.shadowRoot.querySelector(".rtc-avg-value-num").textContent)).toContain("30");
   expect(
     await page.evaluate(() => window.__card._carousel.accessibilityTimerHandle !== null),

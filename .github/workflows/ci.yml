@@ -1,22 +1,7 @@
-# CI for the standalone room-climate-card repository.
-#
-# Two independent jobs, deliberately with no `needs:` between them. They answer different
-# questions — "are the Node layers right" and "does it behave in real browsers" — and a failure in
-# one says nothing about the other. Chaining them would hide the browser result on every Node
-# failure, exactly when knowing both is most useful.
-#
-# Both jobs build the bundle themselves. That repeats one Rollup build, which is cheap, and it
-# is what makes each status check meaningful on its own: no browser job can ever report green
-# while testing an artifact that some other job produced.
-#
-# WHAT THIS WORKFLOW DOES NOT DO, on purpose:
-#
-#   * it does not run a large property sweep. That belongs in the weekly job (property.yml) so
-#     that a pull request stays fast and, more importantly, DETERMINISTIC — a check that fails
-#     on a different seed every time is a check nobody trusts.
-#   * it does not run mutation testing. That narrowly scoped but slower semantic check belongs
-#     beside the weekly property sweep. Coverage here is source-normalized across direct unit,
-#     bundle and Chromium layers and does enforce its calibrated merged quality floor.
+# CI for the standalone room-climate-card repository. Two independent jobs with no `needs:`
+# between them; each builds the bundle itself so no job reports green against an artifact it
+# did not produce. The large property sweep and mutation testing run weekly, not here. See
+# interne Doku §4 "GitHub-Workflows".
 
 name: CI
 
@@ -32,16 +17,15 @@ permissions:
 
 jobs:
   unit:
-    # Keep the established check name: branch-protection rules outside this repository may
-    # refer to it. The command itself runs every Node layer, not only direct unit tests.
+    # Keep the established check name: external branch-protection rules may refer to it. The
+    # command runs every Node layer, not only direct unit tests.
     name: Code & Unit Tests
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
-          # Nothing here pushes; leaving the token in .git/config would let any later step
-          # write to the repository with it.
+          # Nothing here pushes; a persisted token would let a later step write to the repo.
           persist-credentials: false
 
       - uses: actions/setup-node@v6
@@ -51,24 +35,16 @@ jobs:
 
       - run: npm ci
 
-      # dist/ is not in the repository: the bundle is what src/ produces, and this is where it
-      # gets produced. Every later step loads that artifact, so this has to come first.
-      #
-      # The steps after it deliberately use the internal *:run scripts. The public commands
-      # (npm run check / test:node) build first themselves, which is what makes them safe to
-      # run on their own — but in a pipeline that would repeat the same Rollup build for no
-      # added guarantee.
+      # dist/ is not committed; build it here, before every step that loads it. The steps
+      # after use the internal *:run scripts so the pipeline does not repeat this build.
       - name: Build the bundle from src/
         run: npm run build
 
       - name: Syntax check
         run: npm run check:run
 
-      # Everything under test/ that ends in .test.js: unit, component, contract, architecture,
-      # characterization, the known-defect register and the small deterministic property run.
-      #
-      # The property run used to be listed again as a separate step, which executed it TWICE
-      # per job for no additional evidence — the glob already matched the file.
+      # Every test/**/*.test.js: unit, component, contract, architecture, characterization,
+      # the known-defect register and the small deterministic property run.
       - name: All Node test layers
         run: npm run test:node:run
 
@@ -88,8 +64,7 @@ jobs:
 
       - run: npm ci
 
-      # Repeated on purpose — see the file header. This job must not be able to pass against a
-      # bundle it did not produce from the source it checked out.
+      # Repeated on purpose: this job must not pass against a bundle another job produced.
       - name: Build the bundle from src/
         run: npm run build
 
@@ -99,9 +74,7 @@ jobs:
       - name: Source-normalized coverage across unit, bundle and browser layers
         run: npm run coverage
 
-      # coverage already executes the complete Chromium-owned browser suite. Run only the
-      # deliberately smaller Firefox/WebKit core here; invoking the full Playwright matrix
-      # first would repeat every Chromium spec without adding evidence.
+      # coverage already ran the full Chromium suite; run only the Firefox/WebKit core here.
       - name: Firefox and WebKit core
         run: npm run test:browser:cross-engine:run
 
@@ -113,13 +86,8 @@ jobs:
           path: coverage/
           retention-days: 14
 
-      # A FLAKY result is a pass, and it is also the result whose evidence is most likely to be
-      # thrown away: the job succeeds, so a `failure()` condition never fires and the trace from
-      # the retry is gone. Two files ask for retries (see playwright.config.js), so a flaky
-      # result there is exactly the thing worth keeping.
-      #
-      # `always()` rather than a cleverer condition: the report is small, and a rule that
-      # sometimes keeps the evidence is not much better than one that never does.
+      # `always()`: a flaky result passes the job, so a `failure()` condition would drop the
+      # retry trace — and two specs ask for retries (playwright.config.js).
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v6

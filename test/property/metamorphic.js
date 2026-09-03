@@ -1,92 +1,31 @@
 "use strict";
 
-// RELATIONS BETWEEN TWO CARDS, rather than statements about one.
-//
-// WHY THIS LAYER HAD TO EXIST. Every invariant in properties.js looks at a single card and
-// asks whether it is self-consistent — no NaN, positions inside the track, nothing unescaped
-// in the DOM. That catches a card which is *wrong*. It cannot catch a card which is merely
-// *worse than it should be*, because "worse" is a comparison and there was nothing to
-// compare against.
-//
-// BUG-12 had exactly that shape, and this layer is what found it. A card whose only usable
-// source is a room that is also its primary rendered perfectly. Adding a room reporting a
-// metric it could never use moved the number not by a hair — but the caption above it
-// changed from the room's name to "Home avg." and the tap target changed with it. Both cards
-// were self-consistent; every single-card invariant passed on both. Only putting them side
-// by side showed that a room the card ignores had changed what the card says it is showing.
-//
-// HOW A RELATION IS WRITTEN. Each one derives a SEQUENCE of configurations from the original
-// description and what the ORIGINAL CARD turned out to be, applies them to one card in order,
-// and states what must and must not have moved between the original card and the last one.
-// The derivation returns null when the relation does not apply to that case: most do not
-// apply to most descriptions, and a relation that quietly applied anyway would be asserting
-// something it was never given grounds for.
-//
-// A SEQUENCE RATHER THAN A SECOND DESCRIPTION, because two of the relations are about
-// re-applying rather than about the description: an outage that ENDS is
-// [unavailable, original], and setConfig being called twice with the same thing is
-// [original, original]. Both are ordinary sequences, and neither needs the runner to be told
-// anything special.
-//
-// WHAT A SEQUENCE IS MADE OF IS BUILT SCENARIOS, not descriptions, and that is not a
-// convenience. "The order the rooms are written in" is a statement about the CONFIGURATION,
-// and a description cannot express it: the scenario builder names an unnamed room after its
-// position and derives its value from that position, so reordering a description swaps the
-// identities and the readings of the rooms rather than reordering them. The relation has to
-// reach the config to say what it means. Measured, both mistakes first showed up as
-// violations that turned out to be in the derivation rather than in the card.
-//
-// THE PRECONDITIONS ARE THE CAREFUL PART. "Adding a room the card cannot use changes
-// nothing" is FALSE for a card with no primary entity and no other room: there the added
-// room is the only source, so of course everything changes. Every relation below therefore
-// says what it needs, and says why — an over-eager precondition produces a test that fails
-// on correct behaviour, which is worse than no test at all.
-//
-// SOME PRECONDITIONS CANNOT BE CHECKED ON THE DESCRIPTION ALONE. A relation may declare
-// `needsRenderedBase`, and the runner then skips it whenever the original card rendered
-// nothing — which is a statement about the built card, not about the description.
-//
-// It matters more than it sounds. A card whose every sensor contradicts itself
-// (`device_class: pm25` with `unit_of_measurement: Gcal`) renders nothing at all, and adding
-// a well-formed room to it correctly changes everything, because the added room is then the
-// only source the card has: it may become a temperature card, and it may even be refused
-// outright if the configuration pinned a classification profile that suits no temperature.
-// Both were reported as violations before this existed, and both turned out to be correct
-// behaviour. A relation about what a card PRESERVES has nothing to say about a card that was
-// showing nothing.
+// Relations between two cards derived from one description. Each relation derives a sequence
+// of configurations from the original description and the rendered base card, applies them
+// to one card in order, and states what must and must not have moved between the first card
+// and the last; derive() returns null when the relation does not apply to a case.
+// Why the layer exists, the BUG-12 shape it was built for, `needsRenderedBase`, and the
+// coverage guard in the runner: see interne Doku §4 „Die metamorphe Schicht: zwei Karten
+// statt einer".
 
 const { METRICS } = require("../manifests/product-surface.js");
 const { buildScenario } = require("../fixtures/scenario.js");
 
-// A reading the card and JavaScript agree is a number.
-//
-// `Number()` is more generous than the card, and the difference matters here more than
-// anywhere else: this file RESTATES readings, so a state the card rejects but Number()
-// accepts comes back as a plain decimal the card does accept, and a room that was missing
-// from the first card appears on the second. Measured, `""`, `"  "`, `"0x10"` and `"21."` all
-// do that — Number() gives 0, 0, 16 and 21, and the card shows none of them.
-//
-// So a relation that restates a reading may only touch one both sides read the same way.
+// `Number()` accepts states the card rejects ("", "  ", "0x10", "21."), and this file
+// restates readings, so a relation that restates one may only touch a plain decimal both
+// sides read the same way.
 const PLAIN_DECIMAL = /^\s*[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?\s*$/;
 
 // ------------------------------------------------------------------ observation --
 
-// WHAT IS COMPARED, and it is deliberately not the whole model.
-//
-// Two cards derived from one description differ in things nobody promised would match — a
-// tooltip naming a different entity, a room's own colour, the order chips happen to sit in.
-// What a relation is about is the INFORMATION the card is showing: whether it gave up, which
-// sources it used, where it put them, and what it concluded.
-//
-// Room-level facts are collected as a SET keyed by entity rather than as a list, so that
-// "these rooms are on the card" is separable from "they are in this order" — one relation
-// below is precisely about the difference.
+// Compared is the information the card shows — whether it gave up, which sources it used,
+// where it put them, what it concluded — not the whole model. Room facts are keyed by
+// entity, so "which rooms are on the card" is separable from "in what order"; one relation
+// below is about that difference.
 function observe(model) {
   if (!model) return null;
-  // Stored RAW. Rounding here and comparing there would be two instruments doing one job,
-  // and the pair fights: rounding to a fixed grid can push two values that differ by 1e-9
-  // onto neighbouring grid points a whole 1e-6 apart, which the tolerance then refuses. That
-  // happened, and the case it reported was a reordered sum. agree() below does the whole job.
+  // Raw, not rounded here: rounding here and applying a tolerance there are two instruments
+  // fighting over one job. agree() below does the whole job.
   const markers = (model.roomMarkers || []).map((marker) => ({
     entity: marker.entity,
     value: marker.value,
@@ -101,10 +40,7 @@ function observe(model) {
     average: model.average ? { value: model.average.value, position: model.average.position, source: model.average.source } : null,
     comfort: model.comfort ? { ...model.comfort } : null,
     spread: model.spread,
-    // By entity, so a comparison can ask "is this room still on the card" without caring
-    // where it ended up.
     markersByEntity: new Map(markers.map((marker) => [marker.entity, marker])),
-    // And in order, for the one relation that is about order.
     markerOrder: markers.map((marker) => marker.entity),
     extremes: model.extremes
       ? {
@@ -115,19 +51,9 @@ function observe(model) {
   };
 }
 
-// NUMBERS ARE COMPARED WITH A RELATIVE TOLERANCE, not rounded to a fixed number of digits.
-//
-// Two cards derived from one description often compute the same quantity by summing the same
-// terms in a different ORDER, and floating-point addition is not associative: reversing four
-// room readings moved an average from 1043.805 to 1043.8049999999998 and a marker position by
-// one part in a hundred million. Neither is a difference anybody could see, and neither is a
-// defect.
-//
-// Rounding to a fixed number of decimals was tried first and is the wrong instrument: it
-// merely moves the boundary, and a pair that straddles it still reports. A relative tolerance
-// scales with the magnitude, which is how the error actually behaves — and at 1e-9 it is six
-// orders of magnitude above the noise a reordered sum produces and far below any difference
-// the card could mean.
+// Numbers are compared with a relative tolerance, not rounded to fixed decimals: two cards
+// often sum the same terms in a different order, and float addition is not associative. See
+// interne Doku §4 „Die metamorphe Schicht".
 const RELATIVE_TOLERANCE = 1e-9;
 
 function numbersAgree(one, other) {
@@ -143,9 +69,8 @@ function agree(one, other) {
     return typeof one === "number" && typeof other === "number" && numbersAgree(one, other);
   }
   if (one === null || other === null || typeof one !== "object" || typeof other !== "object") return one === other;
-  // A Map has no own enumerable keys, so the object branch below would call any two of them
-  // equal. Nothing passes one today — the per-entity markers are looked up and compared as
-  // plain objects — and this is here so that nothing can start to without noticing.
+  // A Map/Set has no own enumerable keys, so the object branch below would call any two
+  // equal. Nothing passes one today; this guards against that starting unnoticed.
   if (one instanceof Map || other instanceof Map || one instanceof Set || other instanceof Set) {
     throw new Error("agree() compares plain values; unpack the Map before calling it");
   }
@@ -167,14 +92,13 @@ const scenariosOf = (...descriptions) => descriptions.map((description) => build
 
 const roomsOf = (description) => (Array.isArray(description.rooms) ? description.rooms : []);
 
-// The attribute name Home Assistant uses. A description can override it — that is how a
-// generator writes `device_clas` on an otherwise well-formed sensor — and behind a
-// misspelled name the card never reads the value at all.
+// Home Assistant's attribute name. A description can override it (a generator writing
+// `device_clas`), and behind a misspelled name the card never reads the value.
 const DEVICE_CLASS_KEY = "device_class";
 
-// The device_class attribute an entity in this description carries, NAME AND VALUE, resolved
-// the way the scenario builder resolves it: what the entity says, then what the scenario
-// says, then what the metric is. `null` at either level means the sensor reports none.
+// The device_class attribute (name and value) an entity carries, resolved the way the
+// scenario builder resolves it: entity, then scenario default, then metric. `null` at either
+// level means the sensor reports none.
 function declaredDeviceClass(entity, description) {
   const own = entity && entity.deviceClass;
   if (own === null) return null;
@@ -184,23 +108,11 @@ function declaredDeviceClass(entity, description) {
   return { ...canonical, ...(fallback || {}), ...(own || {}) };
 }
 
-// The device classes the card actually recognises, taken from the manifest rather than
-// listed again here.
+// The device classes the card recognises, from the manifest rather than listed again here. A
+// device class the card does not know (`timestamp`) declares nothing, so a card carrying one
+// has no arbiter and a disagreement between its rooms genuinely empties it.
 const KNOWN_DEVICE_CLASSES = new Set(Object.values(METRICS).map((metric) => metric.deviceClass));
 
-// Whether a description carries a primary entity that DECLARES what it measures.
-//
-// The declaration is what matters and not the reading: `device_class: temperature` is a
-// statement about the sensor, and an unavailable sensor still measures temperature. Several
-// relations below rest on that, because it is the fact that lets the card arbitrate between
-// rooms that disagree.
-//
-// A DEVICE CLASS THE CARD DOES NOT KNOW DECLARES NOTHING. `device_class: timestamp` tells
-// this card no more than an absent one, so a card carrying it has no arbiter and a
-// disagreement between its rooms genuinely empties it — the documented answer when nobody
-// can settle which measurement the card is about. Counting such a value as a declaration
-// made the relation assert that the card knew which kind was its own when it did not, and
-// the generator reaches it: seed 0x13bb863d, a pm25 card whose primary declares `timestamp`.
 // The entity id a description gives its primary.
 const primaryIdOf = (description) => description.primary && (description.primary.id || "sensor.avg");
 
@@ -208,23 +120,16 @@ const primaryIdOf = (description) => description.primary && (description.primary
 // its position.
 const roomIdAt = (room, index) => room.id || `sensor.room${index}`;
 
-// WHICH DESCRIPTION ACTUALLY AUTHORED the primary entity's state object.
-//
-// Usually the primary's own. But buildScenario() writes the rooms AFTER the primary, so a
-// room configured with the primary's id overwrites it — and the generator does that often
-// enough to have a test of its own ("sometimes one sensor is both the average and a room").
-// A relation that reads the PRIMARY's description in that case is reading something the card
-// never sees: measured on seed 0x5e0da25a, the primary described `device_class: pm25` while
-// the room that overwrote it declared none, so the card had no arbiter at all and was right
-// to give up on a disagreement.
+// Which description authored the primary entity's state. Usually the primary's own, but
+// buildScenario() writes rooms after the primary, so a room configured with the primary's id
+// overwrites it; a relation reading the primary's description then reads something the card
+// never sees.
 function primaryStateDescription(description) {
   if (!description.primary) return null;
   const primaryId = primaryIdOf(description);
-  // AND THE CARD HAS TO BE ABLE TO FIND IT. setConfig() trims the id it is given, while the
-  // builder stores the state under the id exactly as written — so a padded `"  sensor.x  "`
-  // is configured as `sensor.x` and resolves to nothing at all. The generator issues ids
-  // Home Assistant would never accept on purpose, and a primary the card cannot find
-  // declares no more than a missing one does. Seed 0x639fe77d.
+  // And the card has to be able to find it: setConfig() trims the id while the builder stores
+  // state under the id verbatim, so a padded `"  sensor.x  "` resolves to nothing and
+  // declares no more than a missing primary.
   if (typeof primaryId !== "string" || primaryId !== primaryId.trim() || !primaryId) return null;
   const authors = description.primary.present === false ? [] : [description.primary];
   roomsOf(description).forEach((room, index) => {
@@ -233,9 +138,8 @@ function primaryStateDescription(description) {
   return authors.length ? authors[authors.length - 1] : null;
 }
 
-// Whether the primary entity is ALSO one of the configured rooms. Then taking the primary
-// away necessarily takes that room away as well — they are one entity — and a relation about
-// losing "no other" source has nothing to say.
+// Whether the primary entity is also a configured room. Then taking the primary away takes
+// that room with it, and a relation about losing "no other" source has nothing to say.
 function primaryIsAlsoARoom(description) {
   if (!description.primary) return false;
   const primaryId = primaryIdOf(description);
@@ -246,24 +150,15 @@ function hasDeclaringPrimary(description) {
   const authored = primaryStateDescription(description);
   if (!authored) return false;
   const declared = declaredDeviceClass(authored, description);
-  // BOTH HALVES have to be right, and the generator misses each of them separately: a
-  // misspelled attribute NAME hides a perfectly good value (seed 0x42b771f0, `device_class `
-  // with a trailing space), and a VALUE the card does not know says nothing behind a correct
-  // name (seed 0x13bb863d, `device_class: timestamp`).
+  // Both halves must hold: a misspelled attribute name hides a good value, and a value the
+  // card does not know says nothing behind a correct name.
   return Boolean(declared) && declared.key === DEVICE_CLASS_KEY && KNOWN_DEVICE_CLASSES.has(declared.value);
 }
 
-// A room reporting something THIS CARD is not about.
-//
-// Chosen against the kind the card actually resolved to, not against the kind the description
-// asked for. Those are not always the same: a description of a pm25 card whose sensors all
-// carry a mismatched unit can end up rendering as something else entirely, and a "foreign"
-// room picked from the description would then be the card's own kind — perfectly usable, and
-// the relation would be asserting that a usable room changes nothing. Measured, that is
-// exactly what happened: the average moved, correctly, and it was reported as a defect.
-//
-// Built from a real metric rather than from a nonsense value, so that the card ignoring it is
-// a legitimate decision and not a rejection of malformed input.
+// A room reporting a metric this card is not about, chosen against the kind the card
+// actually resolved to (not the kind the description asked for — they differ when every
+// sensor carries a mismatched unit) and built from a real metric, so the card ignoring it is
+// a legitimate decision rather than a rejection of malformed input.
 function foreignRoom(actualKind, id) {
   const own = Object.keys(METRICS).find((metric) => METRICS[metric].deviceClass === actualKind || metric === actualKind);
   const other = Object.keys(METRICS).find((metric) => metric !== own);
@@ -286,7 +181,7 @@ const RELATIONS = [
       "A room reporting a different metric is not data the card can show, and it is not a " +
       "reason to stop showing the data it can. Both cards have a primary entity declaring a " +
       "measurement the card knows, so both know which kind is theirs.",
-    // Only meaningful against a card that was showing something — see the note above.
+    // Only meaningful against a card that was already showing something.
     needsRenderedBase: true,
     derive(description, base) {
       // Needs an arbiter, or the added room genuinely does change what the card is about.
@@ -294,11 +189,9 @@ const RELATIONS = [
       const rooms = roomsOf(description);
       if (!rooms.length) return null;
       if (!base.metricKind) return null;
-      // A CARD WHOSE ONLY SOURCE IS ONE ROOM IS INCLUDED, deliberately. The added room
-      // reports a measurement this card is not about, so it is not a source of it at all
-      // (see src/application/model/source-topology.js) and the card stays the single-room
-      // card it was — same caption, same tap target. That is exactly what BUG-12 got wrong,
-      // and excluding the case here would have been excluding the defect.
+      // A single-room card is included on purpose: the foreign room is not a source of this
+      // card's metric (src/application/model/source-topology.js), so the card stays the
+      // single-room card it was. BUG-12 got this wrong; excluding the case excludes the defect.
       const next = clone(description);
       next.rooms = [...next.rooms, foreignRoom(base.metricKind, "sensor.foreign_kind")];
       return scenariosOf(next);
@@ -330,15 +223,13 @@ const RELATIONS = [
       "It may cost the card that entity's own contribution; it may not cost it the others.",
     needsRenderedBase: true,
     derive(description) {
-      // The primary is made unavailable, because that is the source whose loss could plausibly
-      // be read as "the card has nothing left" — and, for a card with rooms, is not.
+      // The primary is made unavailable: its loss is the one that could plausibly read as
+      // "the card has nothing left" — and, for a card with rooms, does not.
       if (!description.primary || description.primary.present === false) return null;
       if (description.primary.state === "unavailable") return null;
       if (roomsOf(description).length < 1) return null;
-      // ONE ENTITY CANNOT BE TAKEN AWAY AND KEPT. When the primary is also configured as a
-      // room, that room IS the primary, and losing it is the loss this relation permits
-      // rather than a second source going with it. Reported as a violation before this
-      // existed — seed 0x8168eec, where `sensor.avg` was both — and the card was right.
+      // One entity cannot be taken away and kept: when the primary is also a room, losing it
+      // is the loss this relation permits, not a second source going with it.
       if (primaryIsAlsoARoom(description)) return null;
       const next = clone(description);
       next.primary = { ...next.primary, state: "unavailable" };
@@ -346,17 +237,14 @@ const RELATIONS = [
     },
     compare(base, derived) {
       const violations = [];
-      // Only rooms are compared. The AVERAGE legitimately disappears when the primary was
-      // the source of it, and the scale may legitimately move if the primary was defining
-      // its range — neither is a room being lost.
+      // Only rooms are compared: the average legitimately disappears when the primary was its
+      // source, and the scale may legitimately move if the primary defined its range.
       const lost = entitiesOf(base).filter((entity) => !derived.markersByEntity.has(entity));
       if (lost.length) {
         violations.push(`rooms lost when only the primary went unavailable: ${lost.join(", ")}`);
       }
-      // ONLY WHEN THERE WAS SOMETHING ELSE TO SHOW. A card whose rooms are all unavailable
-      // too has nothing left when its primary goes, and emptying is then the right answer.
-      // Reported as a violation without this guard, and the minimal case it produced was a
-      // correct card: one room, itself unavailable, on a card whose primary then went as well.
+      // Only when there was something else to show: a card whose rooms are all unavailable
+      // too is right to empty when its primary goes.
       if (!base.empty && derived.empty && base.markerOrder.length > 0) {
         violations.push(
           `the whole card emptied when only the primary went unavailable, discarding ${base.markerOrder.length} usable room(s)`
@@ -395,9 +283,8 @@ const RELATIONS = [
     derive(description) {
       const rooms = roomsOf(description);
       if (rooms.length < 2) return null;
-      // THE CONFIGURATION IS REORDERED AND NOTHING ELSE IS. `hass` is the same object, so
-      // every sensor keeps its id, its reading and its attributes; only the order the card was
-      // told about them in differs.
+      // Only the configuration is reordered: `hass` is the same object, so every sensor keeps
+      // its id, reading and attributes; only the order the card is told about them differs.
       const scenario = buildScenario(description);
       return [scenario, { config: { ...scenario.config, rooms: [...scenario.config.rooms].reverse() }, hass: scenario.hass }];
     },
@@ -435,16 +322,10 @@ const RELATIONS = [
       "21 °C and 69.8 °F are one temperature. The number on the card differs and the unit " +
       "label differs; which sensors the card shows, and which of them is the warmest, do not.",
     needsRenderedBase: true,
-    // STATED ON THE BUILT SCENARIO rather than on the description, because what has to be
-    // true is a fact about the ENTITIES: every one the card reads reports °C, spelled the
-    // canonical way, with a finite number for a state. A description cannot say that — it can
-    // say what it asked for, and the builder, the defaults and a misspelt attribute key all
-    // sit between the asking and the result.
-    //
-    // Written against the description first, and it never once applied across 300 generated
-    // cases: the generator states a unit or a device class on nearly every entity, and the
-    // precondition excluded all of them. The coverage assertion in the runner is what caught
-    // that, which is the whole reason it is there.
+    // Stated on the built scenario, not the description: what must hold is a fact about the
+    // entities (every one the card reads reports °C, canonical spelling, finite state), which
+    // a description cannot express. An earlier description-level form never applied across the
+    // generated cases; the runner's coverage assertion caught that.
     derive(description) {
       const scenario = buildScenario(description);
       const states = scenario.hass && scenario.hass.states;
@@ -468,10 +349,8 @@ const RELATIONS = [
       for (const id of ids) {
         const entity = states[id];
         const fahrenheit = toFahrenheit(Number(entity.state));
-        // A reading near the floating-point ceiling overflows on the way: -1e308 °C is
-        // -1.8e308 °F, which is -Infinity. The card refuses such a reading, and rightly — but
-        // it would be refusing a number THIS FILE invented rather than one the description
-        // asked for, so the pair says nothing and the relation stands down.
+        // -1e308 °C overflows to -Infinity °F; the card refuses it, but that would be a number
+        // this file invented, so the relation stands down.
         if (!Number.isFinite(fahrenheit)) return null;
         converted[id] = {
           ...entity,
@@ -492,32 +371,19 @@ const RELATIONS = [
       for (const entity of base.markersByEntity.keys()) {
         if (!derived.markersByEntity.has(entity)) violations.push(`${entity} is on the °C card and not on the °F one`);
       }
-      // THE ORDER, AND NOT THE POSITIONS. The two are not the same thing, and asserting the
-      // positions was wrong: the card rounds its scale bounds to a whole step IN THE UNIT ON
-      // SCREEN, so that the boundary labels read as numbers a person would write. A whole °F
-      // is a smaller share of the same physical range than a whole °C, so the padding at each
-      // end differs and every marker shifts by a percent or two — measured at up to seven
-      // points on a narrow scale. That is the card doing its job, not a disagreement about
-      // the readings. What cannot change is which room is colder than which.
+      // The order, not the positions: the card rounds scale bounds to a whole step in the
+      // displayed unit, so end padding differs between °C and °F and every marker shifts a
+      // little. What cannot change is which room is colder than which.
       if (base.markerOrder.join(",") !== derived.markerOrder.join(",")) {
         violations.push(`the rooms changed order between °C and °F: ${base.markerOrder.join(",")} -> ${derived.markerOrder.join(",")}`);
       }
       if (!agree(base.extremes, derived.extremes)) {
         violations.push(`the extremes changed between °C and °F: ${JSON.stringify(base.extremes)} -> ${JSON.stringify(derived.extremes)}`);
       }
-      // NEITHER THE ZONE NOR THE COMFORT COUNTS ARE ASSERTED, and that is a finding rather
-      // than a gap. The card projects its thresholds into the unit on screen AND ROUNDS THEM,
-      // so that the band it prints is the band it applies. The reasoning is written out at the
-      // top of src/domain/classification/projection.js, which says in as many words that the
-      // alternative would let a displayed 68 degree Fahrenheit comfort edge classify as if it
-      // were 67.9.
-      //
-      // The consequence is real and was measured here: 23.9 C is `comfort`, and the same
-      // temperature written as 75.02 F is `outside`, because 24 C projects to 75.2 F and
-      // prints as 75. A household reading Fahrenheit gets a different verdict at the boundary
-      // than one reading Celsius. That is a deliberate trade of physical exactness for
-      // agreement with what the card says, so this relation states what survives it instead of
-      // contradicting it.
+      // Zone and comfort counts are deliberately not asserted: the card rounds projected
+      // thresholds into the displayed unit, so a Fahrenheit household can get a different
+      // verdict at a boundary than a Celsius one. See interne Doku §4 „Die metamorphe
+      // Schicht" and the head of src/domain/classification/projection.js.
       return violations;
     },
   },

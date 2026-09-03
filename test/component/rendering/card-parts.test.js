@@ -1,21 +1,13 @@
 "use strict";
 
-// WHICH PARTS OF THE CARD ARE DRAWN, and what the card looks like when one of them is not.
-//
-// The `show:` block turns seven parts on and off — the bar across the top, the icon, the two
-// header lines, the caption over the headline, the status pill, the middle panel — plus the
-// room chips, which keep a third answer of their own. Every one of them is a NODE: hiding it
-// removes the element rather than styling it away, for the same reason `subtitle: ""` has
-// always removed the subtitle. An element with `display: none` is still an element, and it
-// still brings the gap its grid column reserves for it.
-//
-// THE DEFAULT COMES FIRST in every test below, because the promise the block has to keep is
-// that a card which asks for nothing looks exactly as it always has — to the byte, which is
-// what the DOM characterization baselines pin and what these tests state in readable form.
-//
-// The boundary to accent-line.test.js next door: that file owns the bar across the top edge
-// and its own older top-level spelling. This one owns the block, the combinations, and what
-// the card says when the combination leaves nothing at all.
+// Which parts of the card are drawn, and what the card looks like when one is not. The
+// `show:` block turns seven parts on and off (accent bar, icon, the two header lines, the
+// headline caption, the status pill, the middle panel), plus the room chips with a third
+// answer of their own. Each is a node: hiding it removes the element, like `subtitle: ""`.
+// The default comes first in every test — a card that asks for nothing must look exactly
+// as it always has, which the DOM characterization baselines pin. Boundary: accent-line
+// .test.js owns the top bar and its older top-level spelling; this file owns the block,
+// the combinations, and what the card says when nothing is left.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -174,8 +166,7 @@ test("a card with every part hidden says so instead of showing nothing", () => {
 });
 
 test("the bar across the top does not count as something to show", () => {
-  // Three pixels of colour make no statement, so a card carrying only the accent line is
-  // still a card with nothing on it.
+  // The 3px accent line is not "something shown".
   const card = cardWith({ icon: false, title: false, subtitle: false, pill: false, panel: false, rooms: false });
   assert.ok(card.shadowRoot.querySelector(".rtc-top-line"), "the line itself is still drawn");
   assert.ok(parts(card).nothing);
@@ -215,9 +206,7 @@ test("the explanation outranks a hidden subtitle, because it is the one fact lef
 // ============================================ the render path ===================
 
 test("toggling a part forces a rebuild rather than a patch", () => {
-  // A patch can change a text and a colour; it cannot create or delete a node. Every part
-  // therefore has to appear in the structure signature, and this is the check that says so
-  // in terms of what the card actually does.
+  // A patch cannot create or delete a node, so every part must appear in the structure signature.
   const built = scenario().rooms(2).build();
   const card = env.createCard(built.config, built.hass);
   assert.ok(parts(card).pill);
@@ -230,8 +219,7 @@ test("toggling a part forces a rebuild rather than a patch", () => {
 });
 
 test("a card with no panel arms no rotation timer", () => {
-  // The carousel lives inside the panel. With the panel gone there is no track, and a timer
-  // ticking against a track that does not exist would be work with nowhere to land.
+  // The carousel lives inside the panel; no panel, no track, so no timer.
   const built = scenario().rooms(3).config({ show: { panel: false }, auto_slide: true }).build();
   const card = env.createCard(built.config, built.hass);
   assert.equal(card.shadowRoot.querySelector(".rtc-track"), null);
@@ -241,8 +229,7 @@ test("a card with no panel arms no rotation timer", () => {
 });
 
 test("hiding a part changes what is drawn and nothing that is measured", () => {
-  // The same promise `show_rooms` has always kept: a hidden part is a layout decision, and
-  // every room still feeds the extrema, the comfort count and the spread.
+  // A hidden part is a layout decision; every room still feeds extrema, comfort count and spread.
   const built = scenario().rooms(3).build();
   const shown = env.createCard(built.config, built.hass);
   const full = shown._computeViewModel();
@@ -262,10 +249,7 @@ test("hiding a part changes what is drawn and nothing that is measured", () => {
 });
 
 test("no data and no panel still leaves the card able to explain itself", () => {
-  // The combination that could have gone wrong: the middle block is where the headline
-  // lives, and hiding it in the state where the card has nothing to show could have taken
-  // the explanation with it. It does not — the explanation is the subtitle — and the card
-  // is therefore not "everything hidden" either.
+  // Hiding the panel in the no-data state must not take the explanation (the subtitle) with it.
   const built = buildScenario({
     metric: "temperature",
     primary: { state: "unavailable" },

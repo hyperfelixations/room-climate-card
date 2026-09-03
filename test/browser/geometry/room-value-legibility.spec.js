@@ -1,14 +1,10 @@
 "use strict";
 
-// Room values must remain legible at common phone widths; ellipsis must not
-// truncate normal values such as "24,7 °C" to "2...°C". Related narrow-width
-// containment is covered by narrow-width-overflow.spec.js.
-//
-// Room numbers and units are non-truncatable in automatic layout. Automatic
-// rows allow at most 7 temperature/humidity chips or 5 CO2/PM2.5 chips before
-// distributing chips evenly across additional rows. Explicit two-uppercase-
-// letter short codes remain fully visible; longer labels retain ellipsis.
-// Average values are covered separately as a regression guard.
+// Room values stay legible at common phone widths: ellipsis must not truncate a normal
+// value like "24,7 °C". Room numbers and units are non-truncatable — automatic layout
+// allows at most 7 temperature/humidity or 5 CO2/PM2.5 chips per row before adding rows.
+// Two-letter short codes stay fully visible; longer labels keep ellipsis. Boundary:
+// narrow-width-overflow.spec.js covers the wider containment contracts.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
@@ -16,16 +12,12 @@ const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attribute
 
 // Common phone viewports plus the 460px container-query breakpoint.
 const WIDTHS = [360, 375, 390, 393, 412, 460];
-// German locale matches the reported regression (comma decimals, "."
-// thousands grouping, e.g. "24,7 °C" / "2.000 ppm") -- the exact values in
-// this file's acceptance criteria are only meaningful in this locale.
+// German locale: the acceptance values here (comma decimals, "." grouping, "2.000 ppm")
+// are only meaningful in this locale.
 const LANGUAGE = "de";
 
-// Registers a minimal ha-card stand-in so @container queries in the card's
-// styles actually match against the card's real rendered width (same
-// rationale/setup as narrow-width-overflow.spec.js -- ha-card is never a
-// registered custom element in the offline test harness, so it defaults to
-// display:inline, under which CSS Containment never applies).
+// A minimal display:block `ha-card` stand-in so the @container queries match — see interne
+// Doku §4 "`ha-card` im Offline-Harness".
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!customElements.get("ha-card")) {
@@ -38,9 +30,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-// CSS ellipsis never changes textContent -- every assertion here is
-// geometric or computed-style based, never a text-content/"contains no
-// dots" check (that would pass even with active ellipsis).
+// CSS ellipsis never changes textContent, so every assertion here is geometric or
+// computed-style based.
 async function assertFullyVisible(locator, width, label) {
   const info = await locator.evaluate((node) => ({
     fits: node.scrollWidth <= node.clientWidth + 0.5,

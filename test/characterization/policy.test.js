@@ -1,14 +1,9 @@
 "use strict";
 
-// Keeps POLICY.md and the baselines it describes from drifting apart.
-//
-// A policy document nothing checks is a document that describes last year's suite. The cost of
-// that is specific: the whole value of a characterization baseline is that somebody can decide
-// what a change to it MEANS, and they can only do that if the file is described. A group of
-// recordings nobody wrote down is a tripwire with no label on it.
-//
-// So this file asks two things of the pair, and only two — both about coverage, neither about
-// wording, because a test that policed prose would be argued with rather than trusted.
+// Keeps POLICY.md and the baselines it describes from drifting apart. A policy nothing
+// checks describes last year's suite; a characterization baseline is only useful if someone
+// can decide what a change to it means, which needs the file described. Two checks, both
+// about coverage, neither about wording — a test that policed prose would be argued with.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,9 +39,7 @@ test("POLICY.md describes no group that does not exist", () => {
 });
 
 test("the file counts in POLICY.md match what is on disk", () => {
-  // The counts are how a reader knows the table is current at a glance, so they have to be
-  // true. Checked per group rather than as a total: a total can stay right while two groups
-  // move in opposite directions.
+  // Checked per group, not as a total: a total can stay right while two groups move opposite ways.
   for (const group of groups) {
     const actual = fs.readdirSync(path.join(BASELINE_DIR, group)).length;
     const row = policy.match(new RegExp(`^\\| \`${group}/\` \\| (\\d+) \\|`, "m"));
@@ -65,16 +58,13 @@ test("every baseline group has a test that actually reads it", () => {
     .join("\n");
   const helper = fs.readFileSync(path.join(__dirname, "..", "helpers", "characterization.js"), "utf8");
   const all = `${readers}\n${helper}`;
-  // Delimited on both sides so that "dom" does not match "random": a group name is always
-  // written as a path segment, and a template literal is one of the ways it is written.
+  // Delimited on both sides so "dom" does not match "random".
   const unread = groups.filter((group) => !new RegExp("[`\"'/]" + group + "[`\"'/]").test(all));
   assert.deepEqual(unread, [], `nothing reads these baselines:\n  ${unread.join("\n  ")}`);
 });
 
 test("the policy states the one rule that makes a baseline worth having", () => {
-  // Not style policing: this single sentence is the difference between a baseline and a file
-  // that gets regenerated whenever it is inconvenient, and losing it would quietly turn the
-  // whole directory into the second thing.
+  // Not style policing: this sentence is what keeps the directory from being regenerated whenever inconvenient.
   assert.match(policy, /Re-record deliberately/i);
   assert.match(policy, /characterize:update/);
 });

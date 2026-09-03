@@ -1,12 +1,8 @@
 "use strict";
 
-// Direct unit tests for pure classification services beyond the profile data:
-// profile/policy resolution, entity metadata, numeric classification, validity,
-// display-unit projection, and profile-driven icons.
-//
-// These are the decisions that turn a number into a judgement — which profile
-// applies, what the number means in the unit the user sees, whether it is a
-// reading at all, and which icon describes it. All of it is pure, so it is tested
+// Direct unit tests for pure classification services beyond the profile data: profile/policy
+// resolution, entity metadata, numeric classification, validity, display-unit projection,
+// and profile-driven icons — the pure decisions that turn a number into a judgement, tested
 // without a card, a DOM or a hass object.
 
 const test = require("node:test");
@@ -82,8 +78,7 @@ test("a custom profile scoped to another metric kind is a configuration error", 
 });
 
 test("lenient resolution falls back to the default instead of throwing", () => {
-  // Needed while probing an entity's own metric kind, before kind-based filtering
-  // has decided whether the card-wide profile is even relevant.
+  // Needed while probing an entity's own metric kind, before kind-based filtering runs.
   const unknown = resolveModule.resolveClassificationProfile(
     temperatureRegistry(),
     { source: "profile", profile: "greenhouse", custom: null },
@@ -115,9 +110,8 @@ test("forced entity mode uses the entity's own metadata, even partial", () => {
     attributes: { value_level: "Server level", value_score: 7 },
     numericFallback: () => assert.fail("the numeric path must not run in entity mode"),
   });
-  // No colour is decided here. The integration supplied none, and the resolver turns
-  // that into the neutral colour later — what matters at this seam is that the entity's
-  // own value_score produced NO ramp position, so it can never be read as one.
+  // No colour is decided here; what matters is that the entity's own value_score produced no
+  // ramp position, so it can never be read as one.
   assert.deepEqual(result, {
     level: "Server level",
     levelKey: null,
@@ -220,8 +214,7 @@ test("value_score accepts finite numbers and rejects the sentinels Number() woul
     const result = entityAttributes.readEntityClassification({ value_score: input }, { allowPartial: true });
     assert.equal(result.score, expected, JSON.stringify(input));
   }
-  // "", null and undefined are checked explicitly BEFORE Number(), which would
-  // otherwise turn all three into a plausible-looking 0.
+  // "", null and undefined are checked before Number(), which would turn all three into 0.
   for (const input of ["", null, undefined, "abc", {}, Infinity, NaN]) {
     const result = entityAttributes.readEntityClassification({ value_score: input, value_zone: "comfort" }, { allowPartial: true });
     assert.equal(result.score, null, JSON.stringify(String(input)));
@@ -229,10 +222,8 @@ test("value_score accepts finite numbers and rejects the sentinels Number() woul
 });
 
 test("value_score: an empty array coerces to 0 — pinned as the current behaviour", () => {
-  // Number([]) === 0, so an empty array passes the finite check and is accepted
-  // as a score of 0. This is pre-existing behaviour that the source split
-  // deliberately preserves rather than quietly tightening; it is recorded here
-  // so a future decision to reject it is a visible, intentional change.
+  // Number([]) === 0, so an empty array passes the finite check as a score of 0. Pinned so a
+  // future decision to reject it is a visible change.
   const result = entityAttributes.readEntityClassification({ value_score: [] }, { allowPartial: true });
   assert.equal(result.score, 0);
 });
@@ -260,8 +251,7 @@ test("a prototype-polluting attribute set cannot smuggle values in", () => {
   const result = entityAttributes.readEntityClassification(hostile, { allowPartial: true });
   assert.equal(result.level, "inherited", "inherited properties are read as plain property access does");
   assert.equal(result.score, 1);
-  // The important part: nothing about the attribute object can reach a colour
-  // that failed validation.
+  // Nothing about the attribute object can reach a colour that failed validation.
   const spoofed = entityAttributes.readEntityClassification({ value_color: "#ggg", value_level: "L" }, { allowPartial: true });
   assert.equal(spoofed.color, null);
 });
@@ -275,8 +265,8 @@ test("classifyNumericValue() returns tokens, not translated text", () => {
   assert.equal(result.levelKey, "level.optimal");
   assert.equal(result.zone, "optimal");
   assert.equal(result.score, 0, "optimal is zero steps from optimal");
-  // No colour, and no colour to be had here: what comes out is the DISTANCE the palette
-  // is later asked about, plus how far this profile reaches.
+  // No colour: what comes out is the distance the palette is later asked about, plus how far
+  // this profile reaches.
   assert.equal(result.color, undefined);
   assert.equal(result.explicitColor, null);
   assert.equal(result.deviation, 0);
@@ -314,14 +304,10 @@ test("an invalid reading short-circuits to the invalid classification", () => {
 });
 
 test("a reading no tier covers is invalid too, rather than a crash", () => {
-  // selectTier() is PARTIAL: a `>` profile asks whether a reading is strictly above a
-  // threshold, its open-ended tier sits at -Infinity, and nothing is strictly above
-  // -Infinity. The classifier used to read `.color` off the undefined that came back, which
-  // threw out of setConfig() and painted the dashboard card red.
-  //
-  // The two roads into the invalid answer are separated here on purpose: this profile
-  // declares NO invalidWhen at all, so only the missing tier can produce it — and its
-  // neighbour below declares one that says no, so only the tier check can either.
+  // selectTier() is partial: a `>` profile's open-ended tier sits at -Infinity, and nothing
+  // is strictly above -Infinity, so no tier matches. The classifier must produce the invalid
+  // answer rather than read `.color` off undefined. This profile declares no invalidWhen, so
+  // only the missing tier can produce that answer.
   const exclusive = {
     comparison: ">",
     tiers: [
@@ -337,19 +323,18 @@ test("a reading no tier covers is invalid too, rather than a crash", () => {
   assert.equal(result.score, null);
   assert.equal(result.deviation, null, "there is no distance from optimal for a value off the ramp");
 
-  // The same profile with an invalidWhen that never fires still reaches the same answer, so
-  // the tier check is doing the work rather than riding on the validity check.
+  // With an invalidWhen that never fires the answer is the same, so the tier check does the
+  // work rather than riding on the validity check.
   const guarded = { ...exclusive, invalidWhen: () => false };
   assert.equal(classify.classifyNumericValue(guarded, -Infinity).invalid, true);
 
-  // And no FINITE reading is touched: every one of them is strictly above -Infinity.
+  // No finite reading is touched: every one is strictly above -Infinity.
   for (const value of [-1e308, -1, 0, 5, 5.0001, 1e308]) {
     assert.equal(classify.classifyNumericValue(exclusive, value).invalid, false, String(value));
   }
 });
 
 test("an inclusive profile has a tier for -Infinity and is classified by it", () => {
-  // The boundary that makes the case above about the comparison rather than about the value:
   // `>=` admits -Infinity into the open-ended tier, so the classifier finds one.
   const inclusive = {
     comparison: ">=",
@@ -379,8 +364,8 @@ test("a profile without an explicit invalid classification uses the neutral fall
   assert.equal(result.deviationSpan, null);
 });
 
-// The trap this guards: a profile may carry a score on its invalid classification, and
-// reading that score as a distance would paint an impossible reading in a ramp colour.
+// A profile may carry a score on its invalid classification; reading it as a distance would
+// paint an impossible reading in a ramp colour.
 test("an invalid reading takes no distance, whatever score it carries", () => {
   const profile = {
     comparison: ">=",
@@ -597,9 +582,8 @@ test("the same reading gets a different icon per temperature profile", () => {
   assert.equal(icons.profileIconForValue(12, fridge), "mdi:fire-alert");
 });
 
-// The icon list is read with the profile's own comparison operator, exactly like the
-// classification tiers — so a profile whose boundaries are exclusive has exclusive icon
-// boundaries too, and the two can never disagree about the value ON a threshold.
+// The icon list is read with the profile's own operator, like the classification tiers, so
+// the two never disagree about the value on a threshold.
 test("icon boundaries follow the profile's comparison operator", () => {
   const inclusive = temperatureRegistry().profiles.indoor;
   const exclusive = { ...inclusive, comparison: ">" };
@@ -615,8 +599,7 @@ test("non-temperature icons come from the descending icon tiers", () => {
   assert.equal(icons.profileIconForValue(20, humidity), "mdi:water-minus");
 });
 
-// The measurement is not an argument, so "no icon tiers" cannot mean one thing for
-// temperature and another for the rest: the function has no way to tell them apart.
+// The measurement is not an argument, so "no icon tiers" means the same for every metric.
 test("profileIconForValue() returns null when a profile declares no icon tiers", () => {
   assert.equal(icons.profileIconForValue.length, 2, "value and profile, nothing about the metric");
   for (const withoutTiers of [{ comparison: ">=", tiers: [] }, { comparison: ">=", tiers: [], iconTiers: null }]) {
@@ -625,9 +608,8 @@ test("profileIconForValue() returns null when a profile declares no icon tiers",
 });
 
 test("a built-in profile's icon threshold belongs to the icon it names", () => {
-  // The same rule the tiers follow, checked on the one profile whose icon boundaries used to
-  // read the other way: an icon and a tier must never disagree about the value ON a
-  // threshold, and they cannot, because both go through the profile's own operator.
+  // The same rule the tiers follow: an icon and a tier cannot disagree about the value on a
+  // threshold, because both go through the profile's own operator.
   const pm25 = registry.CLASSIFICATION_PROFILE_REGISTRY.pm25.profiles.indoor;
   assert.equal(pm25.comparison, ">=");
   assert.equal(icons.profileIconForValue(4.99, pm25), "mdi:molecule");

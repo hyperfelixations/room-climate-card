@@ -1,25 +1,12 @@
 "use strict";
 
-// THE ATTRIBUTE PAIRS THE SUITE KEEPS WRITING OUT, named once.
-//
-// `{ device_class: "temperature", unit_of_measurement: "°C" }` appeared 364 times across 65
-// files, and twelve other pairs made up the rest of 550. Written out, every one of them is a
-// place the suite can drift from the product: a metric whose canonical unit changed would
-// leave hundreds of fixtures quietly describing a sensor Home Assistant no longer produces,
-// and the tests would go on passing against a card nobody has.
-//
-// DERIVED FROM THE MANIFEST, NOT RESTATED. Every constant below is built from METRICS in
-// ../manifests/product-surface.js, which is the suite's single statement of what the card
-// supports. Restating "°C" here would only move the duplication one file further away.
-//
-// WHAT DELIBERATELY STAYS INLINE. A fixture whose whole purpose is to be WRONG — a
-// thermometer reporting hectopascals, a `pressure` sensor the card does not handle — is not
-// covered here and must not be. Naming it would hide the very thing the test is about, and
-// the reader of that test needs to see the mismatch on the line in front of them. Those
-// fixtures carry a comment saying why instead.
-//
-// The shape matches what the card reads off a Home Assistant state object, so these go
-// straight into mkStateObj(…) and into a `scenario()` description alike.
+// The attribute pairs the suite keeps writing out, named once. `{ device_class:
+// "temperature", unit_of_measurement: "°C" }` and a dozen siblings appeared hundreds of
+// times; each is a place the suite can drift from the product. Derived from METRICS in
+// ../manifests/product-surface.js, not restated. A fixture whose whole purpose is to be
+// wrong (a thermometer reporting hectopascals) stays inline with its own comment — naming
+// it would hide the mismatch the test is about. The shape is a Home Assistant state
+// object's attributes, so these go straight into mkStateObj(…) and a scenario() description.
 
 const { METRICS } = require("../manifests/product-surface.js");
 
@@ -31,23 +18,18 @@ function attributesFor(metric, unit) {
   });
 }
 
-// A sensor that states what it measures and says nothing about the unit. Common enough in
-// the wild to be worth a name: the card has to identify the metric from the device class
-// alone, and several tests exist to prove it does.
+// A sensor that declares its metric but no unit — the card identifies the metric from device_class alone.
 function classOnly(metric) {
   return Object.freeze({ device_class: METRICS[metric].deviceClass });
 }
 
-// The four metrics with their canonical units — the overwhelming majority of every fixture
-// in the suite.
+// The four metrics with their canonical units.
 const TEMPERATURE_C = attributesFor("temperature");
 const HUMIDITY = attributesFor("humidity");
 const CO2 = attributesFor("co2");
 const PM25 = attributesFor("pm25");
 
-// The other units the card converts between. Only temperature has any; the manifest says so
-// and this asserts it rather than assuming it, because a metric that gained a second unit
-// would otherwise leave this file silently incomplete.
+// The other units the card converts between; only temperature has any (asserted, not assumed).
 const TEMPERATURE_F = attributesFor("temperature", "°F");
 const TEMPERATURE_K = attributesFor("temperature", "K");
 

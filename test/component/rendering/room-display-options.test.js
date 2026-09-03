@@ -1,12 +1,9 @@
 "use strict";
 
-// room_sort, room_label and show_rooms are presentation options. room_sort is
-// purely a presentation decision -- it only reorders the rendered chips
-// (data.rooms.visible), never data.allRooms (extrema/comfort-count/spread stay
-// value-sorted regardless). room_label is a static 3-way choice between
-// room.short/room.name, unrelated to the long-/short-form width-driven
-// architecture. show_rooms:false hides only the chip grid -- rooms remain
-// full data sources.
+// room_sort, room_label and show_rooms are presentation options. room_sort only reorders
+// the rendered chips (data.rooms.visible), never data.allRooms (extrema/comfort/spread stay
+// value-sorted). room_label is a static 3-way choice between room.short/room.name.
+// show_rooms:false hides only the chip grid; rooms stay full data sources.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -28,11 +25,8 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// Four rooms with distinct values/names so every sort mode produces a
-// different, unambiguous order. Declaration order (config.rooms): r-c
-// (Kitchen), r-a (Attic), r-d (Den), r-b (Bath) -- deliberately not
-// alphabetical and not value-sorted, so "configured" is distinguishable
-// from both "name" and "value_asc".
+// Four rooms with distinct values/names so every sort mode gives an unambiguous order.
+// Declared order (Kitchen, Attic, Den, Bath) is neither alphabetical nor value-sorted.
 function fourRoomHass() {
   return mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
@@ -57,10 +51,8 @@ function fourRoomConfig(extra) {
 }
 
 function roomNames(viewModel) {
-  // [...visible] (not visible.map()): the array is created inside the card's own jsdom
-  // vm realm, whose Array.prototype differs from this test file's -- assert.deepStrictEqual
-  // then fails on realm identity even with byte-identical contents. Spreading into a fresh
-  // array literal here re-homes it in this realm before .map().
+  // [...visible] re-homes the array in this realm before .map(): it is created in the card's
+  // jsdom vm realm, so assert.deepStrictEqual otherwise fails on realm identity.
   return [...viewModel.rooms.visible].map((r) => r.name);
 }
 
@@ -176,15 +168,12 @@ test("room_label: does not affect any data computation (value, color classificat
   env.cleanup(elName);
 });
 
-// ==== shortGuaranteed (room-value-legibility regression fix) ====
-// A room's short code must never shrink/ellipsize when the actually
-// RENDERED label (room.displayLabel, after room_label resolution) is
-// exactly two Unicode uppercase letters -- a pure text match, independent
-// of whether `short` was explicitly configured or derived from `name`.
+// ==== shortGuaranteed ====
+// A room's short code must never shrink/ellipsize when the rendered label
+// (room.displayLabel) is exactly two Unicode uppercase letters -- a pure text match,
+// regardless of whether `short` was configured or derived from `name`.
 
-// Keep a fixed second room so these fixtures also cover the comparable-room
-// path; chip visibility itself is independent of comparability. Only sensor.r0
-// varies per test.
+// A fixed second room keeps the comparable-room path covered; only sensor.r0 varies per test.
 function oneRoomConfig(roomOverrides, extra) {
   return {
     entity: "sensor.avg",
@@ -224,9 +213,7 @@ test("shortGuaranteed: all seven documented example codes are guaranteed, includ
 });
 
 test("shortGuaranteed: a derived (not explicitly configured) two-letter label is guaranteed too -- the check is purely text-based", () => {
-  // No `short` configured: falls back to name/entity. A 2-uppercase-letter
-  // name is a contrived but valid case -- the guarantee must not care
-  // whether `short` was explicitly set.
+  // No `short` configured: falls back to name. A 2-uppercase-letter name is contrived but valid; the guarantee must not care.
   const el = env.createCard(oneRoomConfig({ name: "WZ", short: undefined }), oneRoomHass());
   const room = firstRoom(el);
   assert.equal(room.displayLabel, "WZ");
@@ -329,9 +316,8 @@ test("getCardSize(): show_rooms auto scales with a multi-room grid (regression)"
 });
 
 test("getCardSize(): the hint applies the same source rule the card does", () => {
-  // The room the card can never use is not a source of it, so the hint must not reserve a
-  // chip row for a grid that will hold nothing. Before any hass update there is nothing to
-  // ask, and the configuration alone decides — the stable answer for a layout hint.
+  // A room the card can never use is not a source, so the hint reserves no chip row for it.
+  // Before any hass update the config alone decides -- the stable answer for a layout hint.
   const config = {
     entity: "sensor.avg",
     rooms: [{ entity: "sensor.avg", name: "Living room" }, { entity: "sensor.humidity", name: "Bath" }],
@@ -346,8 +332,7 @@ test("getCardSize(): the hint applies the same source rule the card does", () =>
   });
   assert.equal(el.getCardSize(), 3, "the one remaining source IS the headline, so no chip is drawn");
 
-  // And with a distinct primary the foreign room leaves nothing to put in a grid, so the
-  // hint must not reserve a row for one — not even under an explicit `show.rooms: true`.
+  // A distinct primary plus a foreign room leaves nothing for the grid -- not even under show.rooms: true.
   const noRoomsLeft = env.document.createElement("room-climate-card");
   noRoomsLeft.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.humidity", name: "Bath" }], show_rooms: true });
   noRoomsLeft.hass = mkHass({

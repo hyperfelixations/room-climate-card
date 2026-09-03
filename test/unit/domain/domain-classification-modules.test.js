@@ -1,18 +1,12 @@
 "use strict";
 
-// Direct unit tests for src/domain/classification/*.
-//
-// The profile values are product decisions: which reading counts as optimal,
-// where "too humid" begins and what a fridge may drift to. These tests pin
-// each profile's data — thresholds,
-// ordering, zones, bands, validity rules and icon tiers — and sweep every tier
-// boundary from just below, exactly on, and just above.
-//
-// Tier selection is re-implemented here from the documented rule (first tier
-// whose `min` the value passes, using the profile's own comparison operator).
-// The production path is covered by the element-level suites; what needs its
-// own guard is that the profile data still satisfies that rule after being
-// moved.
+// Direct unit tests for src/domain/classification/*. The profile values are product
+// decisions (which reading is optimal, where "too humid" begins); these tests pin each
+// profile's data — thresholds, ordering, zones, bands, validity rules, icon tiers — and
+// sweep every tier boundary just below, on, and just above.
+// Tier selection is re-implemented here from the documented rule (first tier whose `min`
+// the value passes, under the profile's own operator); the production path is covered by
+// the element-level suites. See interne Doku §5 „Classification und Profile".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -85,8 +79,7 @@ test("profile ids are unique within a metric kind", () => {
 });
 
 test("no two profiles share an object identity", () => {
-  // A copy-paste that reused one object would make an edit to one profile
-  // silently change another.
+  // A reused object would make an edit to one profile silently change another.
   const seen = new Set();
   for (const { kind, id, profile } of allProfiles()) {
     assert.equal(seen.has(profile), false, `${kind}/${id} is the same object as another profile`);
@@ -117,9 +110,8 @@ test("every profile has a well-formed, strictly descending tier list", () => {
   }
 });
 
-// No colours. A built-in tier says HOW FAR IT IS FROM OPTIMAL and lets the palette say
-// what that looks like — so a hard-coded hex anywhere in here would be a colour that
-// silently ignores the configured palette.
+// No colours: a built-in tier says how far it is from optimal and lets the palette say what
+// that looks like, so a hard-coded hex would ignore the configured palette.
 test("every tier carries a distance from optimal, a level key and a known zone, and no colour", () => {
   for (const { kind, id, profile } of allProfiles()) {
     for (const [i, tier] of profile.tiers.entries()) {
@@ -130,8 +122,8 @@ test("every tier carries a distance from optimal, a level key and a known zone, 
       assert.equal(tier.color, undefined, `${label}: must name no colour of its own`);
       assert.ok(zones.CLASSIFICATION_ZONES.includes(tier.zone), `${label}: zone "${tier.zone}"`);
     }
-    // Every built-in has an optimal tier and reaches at most as far as the shipped
-    // palette's wings, so its colours come out one to one.
+    // Every built-in has an optimal tier and reaches at most as far as the shipped palette's
+    // wings, so colours come out one to one.
     const scores = profile.tiers.map((tier) => tier.score);
     assert.ok(scores.includes(0), `${kind}/${id}: has an optimal tier`);
     assert.ok(Math.max(...scores) <= 5, `${kind}/${id}: reaches at most 5 above optimal`);
@@ -150,12 +142,9 @@ test("tier scores descend together with the thresholds", () => {
   }
 });
 
-// `optimal ⊆ comfort` is semantic and holds for every profile: "optimal" is by
-// definition a narrowing of "comfortable". The reference range is a different kind of
-// statement — it is where the AXIS starts, not what the reading means — so it is
-// asserted only for the profiles that declare one, and its relation to the bands is a
-// property of the built-ins rather than a rule (a configured profile may declare a
-// narrower one, and the bar clips the bands into whatever axis it draws).
+// `optimal ⊆ comfort` holds for every profile by definition. The reference range is where
+// the axis starts, not what a reading means, so it is asserted only where declared, and its
+// relation to the bands is a property of the built-ins rather than a rule.
 test("optimal is contained in comfort, and every declared reference range is ordered", () => {
   for (const { kind, id, profile } of allProfiles()) {
     const label = `${kind}/${id}`;
@@ -174,8 +163,7 @@ test("optimal is contained in comfort, and every declared reference range is ord
   }
 });
 
-// The other direction of the same rule, and the one that would otherwise go unstated:
-// an anchored profile has to have something to anchor to.
+// The other direction: an anchored profile has to have something to anchor to.
 test("every anchored built-in profile declares a reference range", () => {
   for (const { kind, id, profile } of allProfiles()) {
     if (profile.anchorScale === false) continue;
@@ -199,10 +187,8 @@ test("exactly one tier per profile is the optimal zone, and it contains the opti
 // ----------------------------------------------------- boundary behaviour --
 
 test("every tier boundary behaves correctly just below, exactly on, and just above", () => {
-  // ONE RULE FOR ALL SIX: the threshold itself belongs to the tier that names it. The
-  // operator is asserted rather than branched on, because a profile that stopped reading its
-  // thresholds like its neighbours would then fail here by name instead of quietly taking a
-  // second path through this loop.
+  // For all six profiles: the threshold belongs to the tier that names it. The operator is
+  // asserted, not branched on, so a profile that stopped matching its neighbours fails by name.
   const EPS = 1e-9;
   for (const { kind, id, profile } of allProfiles()) {
     assert.equal(profile.comparison, ">=", `${kind}/${id}: every built-in profile is inclusive`);
@@ -238,9 +224,8 @@ test("a value above every threshold lands in the top tier", () => {
 test("non-finite values never crash tier selection", () => {
   for (const { kind, id, profile } of allProfiles()) {
     assert.equal(selectTier(profile, Infinity), profile.tiers[0], `${kind}/${id}: +Infinity`);
-    // Every built-in is inclusive, so -Infinity lands in the open-ended tier rather than
-    // matching nothing. A `>` profile is the case that does not, and only YAML can write
-    // one — see unit/domain/domain-services-modules.test.js.
+    // Every built-in is inclusive, so -Infinity lands in the open-ended tier. Only a YAML `>`
+    // profile does not — see domain-services-modules.test.js.
     assert.equal(selectTier(profile, -Infinity), profile.tiers[profile.tiers.length - 1], `${kind}/${id}: -Infinity`);
     assert.equal(selectTier(profile, NaN), undefined, `${kind}/${id}: NaN matches no tier`);
   }
@@ -249,9 +234,8 @@ test("non-finite values never crash tier selection", () => {
 // ---------------------------------------------------------- validity rules --
 
 test("every profile declares the limits of what its measurement can be", () => {
-  // ONE RULE across all four: the limit itself is a reading, and only what lies past it
-  // is impossible. A concentration of zero, 0 % and 100 % humidity and absolute zero are
-  // therefore all valid, which is why the invalid columns start one step beyond them.
+  // For all four: the limit itself is a reading, and only what lies past it is impossible.
+  // 0 ppm, 0 % and 100 % humidity and absolute zero are valid; the invalid cases start beyond.
   const cases = {
     temperature: { invalid: [-273.16, -274, -1e6], valid: [-273.15, -40, 0, 21, 1e6] },
     humidity: { invalid: [-0.1, 100.1, -5, 150], valid: [0, 50, 100] },
@@ -269,9 +253,9 @@ test("every profile declares the limits of what its measurement can be", () => {
 });
 
 test("a profile's limits travel as a range, so they can be re-expressed in another unit", () => {
-  // The predicate alone would be a Celsius comparison forever. `validRange` is the same
-  // statement as data, and it is what projectProfileToDisplayUnit() converts — the reason
-  // a Fahrenheit card rejects the same physical readings rather than the same numbers.
+  // The predicate alone is a Celsius comparison; `validRange` is the same statement as data,
+  // which projectProfileToDisplayUnit() converts so a Fahrenheit card rejects the same
+  // physical readings rather than the same numbers.
   for (const id of EXPECTED_PROFILE_IDS.temperature) {
     const profile = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles[id];
     assert.deepEqual(profile.validRange, { min: -273.15, max: null, minInclusive: true, maxInclusive: true }, id);
@@ -292,9 +276,8 @@ test("a profile's limits travel as a range, so they can be re-expressed in anoth
 });
 
 test("an impossible reading takes the neutral invalid classification, however the profile got there", () => {
-  // humidity, co2 and pm25 name it themselves; the temperature profiles rely on the
-  // fallback classify.js documents. Both roads have to arrive at the same place, so this
-  // asks what a reading is CLASSIFIED as rather than which field the profile carries.
+  // humidity, co2 and pm25 name it themselves; the temperature profiles use classify.js's
+  // fallback. Both arrive at the same place, so this asks what a reading is classified as.
   const impossible = { temperature: -300, humidity: 150, co2: -1, pm25: -1 };
   for (const [kind, value] of Object.entries(impossible)) {
     for (const id of EXPECTED_PROFILE_IDS[kind]) {
@@ -405,15 +388,10 @@ test("pm25/indoor reads its thresholds the way every other built-in profile does
 
 // ------------------------------------------------------------ icon tables --
 
-// The icon every built-in profile shows, for every threshold it has and for the two
-// readings on either side of it. The values were read out of the card as shipped, before
-// the profiles were rewritten, and are therefore evidence rather than a restatement of
-// the data below them: any profile whose icons move shows up here, and only here does a
-// wrong boundary have nowhere to hide.
-//
-// The three PM2.5 thresholds — 5, 25 and 50 — sit one row higher than the reading recorded
-// then, and that is the one deliberate move in this table: the profile used to read them
-// exclusively and now reads them like its five neighbours. Nothing else in it has changed.
+// The icon every built-in profile shows at every threshold and on either side of it. Read
+// out of the card as shipped, so this is evidence rather than a restatement of the data
+// below it: any profile whose icons move shows up here. The three PM2.5 thresholds sit one
+// row higher than then because the profile now reads them inclusively like its neighbours.
 const SHIPPED_ICONS = {
   "temperature/indoor": [
     [[-100, 0, 15, 15.99, 16, 16.01, 17, 17.99], "mdi:snowflake"],
@@ -489,8 +467,7 @@ test("every built-in profile shows the icons it has always shown", () => {
   assert.equal(probes, 248, "the whole recorded table was replayed");
 });
 
-// One shape for every measurement, so this holds for every profile rather than for
-// three of them under one rule and three under another.
+// One icon-tier shape for every measurement.
 test("every profile's icon tiers descend and end open-ended", () => {
   for (const { kind, id, profile } of allProfiles()) {
     const tiers = profile.iconTiers;

@@ -79,9 +79,7 @@ function chip(index, label, overrides = {}) {
   };
 }
 
-// A complete, hand-written CardViewModel. Only the fields the rendering layer reads —
-// which is exactly the point: if a renderer needed anything else, this fixture could
-// not exist.
+// A hand-written CardViewModel with only the fields the rendering layer reads.
 function viewModel(overrides = {}) {
   const chips = [chip(0, "KI"), chip(1, "BA")];
   return {

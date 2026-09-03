@@ -1,18 +1,10 @@
 "use strict";
 
-// WHICH OF THE FOUR SHAPES A CARD IS, and which configured ids it is shaped by.
-//
-// primary-with-rooms, primary-only, rooms-only, or a single room acting as the headline. That
-// answer decides what the big number means, whether tapping it does anything, and whether the
-// room chips would only repeat what the headline already says.
-//
-// Two questions, and this file covers both. resolveSourceTopology() turns a set of sources
-// into one of the four shapes and is pure over the normalized configuration.
-// resolveSourceEligibility() decides which configured ids are sources at all, which needs
-// `states` — and is the point worth protecting: it must answer from what a sensor DECLARES,
-// never from what it currently reads, or a card would reshape itself every time a sensor
-// blinked.
-//
+// Which of the four shapes a card is (primary-with-rooms, primary-only, rooms-only, single
+// room as headline) and which configured ids shape it. resolveSourceTopology() is pure over
+// the normalized configuration; resolveSourceEligibility() decides which ids are sources at
+// all and needs `states`. The point to protect: eligibility answers from what a sensor
+// declares, never from what it currently reads, or the card would reshape as sensors blink.
 // Pure: no card, no DOM. The assembled behaviour is in component/rendering/source-modes.
 
 const test = require("node:test");
@@ -86,18 +78,16 @@ test("chip redundancy is exactly the single-room topology", () => {
 
 // --------------------------------------------- sources Home Assistant knows --
 //
-// An id that is absent from hass.states is absent because it was mistyped, never
-// existed, or was deleted — Home Assistant keeps REGISTERED entities in the state
-// machine even while their integration is unloaded, publishing them as `unavailable`
-// with `attributes.restored === true` rather than removing them. So "unknown to Home
-// Assistant" is a property of the configuration, and an unknown source does not shape
+// An id absent from hass.states was mistyped, never existed, or was deleted — Home Assistant
+// keeps registered-but-unloaded entities in the state machine as `unavailable`. So "unknown
+// to Home Assistant" is a property of the configuration: an unknown source does not shape
 // the card; an unavailable one still does.
 
 const known = (...ids) => (entityId) => ids.includes(entityId);
 
 test("a configured room Home Assistant does not know does not shape the card", () => {
   const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
-  // Exactly the reported case: one real room, one typo. That is a one-room card.
+  // One real room, one typo: a one-room card.
   const result = resolveSourceTopology(config(null, ["sensor.real", "sensor.typo"]), known("sensor.real"));
   assert.deepEqual(result, {
     kind: SOURCE_TOPOLOGY.SINGLE_ROOM,
@@ -118,7 +108,7 @@ test("the surviving room keeps its CONFIGURED index, not its position after filt
 
 test("an unavailable room still shapes the card, because it exists", () => {
   const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
-  // Both known to Home Assistant; one of them merely has no usable value right now.
+  // Both known to Home Assistant; one merely has no usable value right now.
   const result = resolveSourceTopology(config(null, ["sensor.a", "sensor.b"]), known("sensor.a", "sensor.b"));
   assert.equal(result.kind, SOURCE_TOPOLOGY.ROOM_CONSENSUS);
 });
@@ -139,8 +129,7 @@ test("a primary Home Assistant does not know leaves the rooms to decide", () => 
 test("a card whose sources are ALL unknown keeps the identity its configuration gives it", () => {
   const { SOURCE_TOPOLOGY, resolveSourceTopology } = topology;
   const nothing = () => false;
-  // Otherwise a card would change shape during the moment at start-up before states
-  // are published — and a card with nothing to show still has a configured identity.
+  // Otherwise a card would change shape during the start-up moment before states publish.
   assert.deepEqual(resolveSourceTopology(config("sensor.primary"), nothing), {
     kind: SOURCE_TOPOLOGY.PRIMARY_ONLY,
     headlineEntity: "sensor.primary",
@@ -161,10 +150,9 @@ test("without the predicate every configured source counts, exactly as before", 
 
 // ------------------------------------------- which ids are sources at all --
 //
-// resolveSourceEligibility() is the production predicate, and it answers two questions in
-// one: does Home Assistant have this id, and does this source measure what the card is
-// about. Both are properties of the DECLARATION rather than of the current reading, which
-// is what keeps the shape still while a sensor comes and goes.
+// resolveSourceEligibility() answers two questions: does Home Assistant have this id, and
+// does this source measure what the card is about. Both are properties of the declaration,
+// not the current reading, which keeps the shape still while a sensor comes and goes.
 
 const state = (value, attributes) => ({ state: String(value), attributes });
 
@@ -173,9 +161,8 @@ const HUMIDITY_STATES = {
   "sensor.avg": state(44, HUMIDITY),
   "sensor.room": state(41, HUMIDITY),
   "sensor.foreign": state(21, TEMPERATURE_C),
-  // Present, numeric, and says nothing the card can use: no device_class, and a unit
-  // several measurements share. Deliberately written out rather than named — see the note
-  // at the top of test/fixtures/attributes.js.
+  // Present, numeric, says nothing the card can use: no device_class, a shared unit. Written
+  // out rather than named — see the note in test/fixtures/attributes.js.
   "sensor.unidentified": state(7, { unit_of_measurement: "ppb" }),
   // Declares the card's own measurement and has nothing to report right now.
   "sensor.offline": state("unavailable", HUMIDITY),
@@ -185,9 +172,8 @@ const HUMIDITY_STATES = {
 
 test("a room declaring another measurement is not a source of this card", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
-  // The reported case: one usable entity, listed as both the primary and the one room, plus
-  // a thermometer on a humidity card. The thermometer is data this card can never show, so
-  // it does not turn a single-room card into a whole-home one.
+  // One usable entity, listed as both the primary and the one room, plus a thermometer on a
+  // humidity card: the thermometer does not turn a single-room card into a whole-home one.
   const config = {
     entity: "sensor.avg",
     rooms: [{ entity: "sensor.avg" }, { entity: "sensor.foreign" }],
@@ -201,9 +187,8 @@ test("a room declaring another measurement is not a source of this card", () => 
 
 test("only the reading is unavailable, so the declaration still shapes the card", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
-  // Three rooms the card cannot use this minute, for three different reasons, and every one
-  // of them stays a source: an outage, an unreadable unit and a sensor that has not said
-  // what it measures are all availability, and availability never reshapes a card.
+  // Three rooms unusable this minute for three reasons, all staying sources: an outage, an
+  // unreadable unit and an undeclared sensor are all availability, which never reshapes a card.
   for (const roomEntity of ["sensor.offline", "sensor.badunit", "sensor.unidentified"]) {
     const config = { entity: "sensor.avg", rooms: [{ entity: roomEntity }] };
     assert.equal(
@@ -216,16 +201,14 @@ test("only the reading is unavailable, so the declaration still shapes the card"
 
 test("with no primary to settle the measurement, no room is filtered out", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
-  // Rooms that disagree about what they measure have no arbiter, and the card reports that
-  // as a mixed configuration. Filtering one of them against the other would turn the report
-  // into a single-room card that quietly picked a winner.
+  // Rooms that disagree about what they measure have no arbiter; the card reports a mixed
+  // configuration rather than filtering one against the other.
   const noPrimary = { entity: null, rooms: [{ entity: "sensor.room" }, { entity: "sensor.foreign" }] };
   assert.equal(
     resolveSourceTopology(noPrimary, resolveSourceEligibility(HUMIDITY_STATES, noPrimary)).kind,
     SOURCE_TOPOLOGY.ROOM_CONSENSUS
   );
-  // And the same when a primary is configured but Home Assistant has never heard of it: an
-  // id with no state object declares nothing.
+  // Same when the configured primary has no state object: an unknown id declares nothing.
   const typo = { entity: "sensor.typo", rooms: [{ entity: "sensor.room" }, { entity: "sensor.foreign" }] };
   assert.equal(
     resolveSourceTopology(typo, resolveSourceEligibility(HUMIDITY_STATES, typo)).kind,
@@ -252,9 +235,8 @@ test("the eligibility predicate answers the two halves separately", () => {
 
 test("a declaration made by the unit alone counts as one", () => {
   const { resolveSourceEligibility } = topology;
-  // The card reads device_class first and a unit only one measurement uses second. Both are
-  // declarations, so a °C sensor without a device_class is as foreign to a humidity card as
-  // one that spells it out.
+  // The card reads device_class first, then a single-measurement unit; both are
+  // declarations, so a bare °C sensor is as foreign to a humidity card as a declared one.
   const states = { "sensor.avg": state(44, HUMIDITY), "sensor.bare": state(21, { unit_of_measurement: "°C" }) };
   assert.equal(resolveSourceEligibility(states, { entity: "sensor.avg" })("sensor.bare"), false);
   // And the mirror image: a device class without a unit still says what it measures.
@@ -264,7 +246,7 @@ test("a declaration made by the unit alone counts as one", () => {
 
 test("a card whose rooms are all foreign refers to its primary alone", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
-  // Nothing left to stand among, so the headline needs no caption telling it apart.
+  // Nothing left to stand among, so the headline needs no caption.
   const config = { entity: "sensor.avg", rooms: [{ entity: "sensor.foreign" }] };
   assert.deepEqual(resolveSourceTopology(config, resolveSourceEligibility(HUMIDITY_STATES, config)), {
     kind: SOURCE_TOPOLOGY.PRIMARY_ONLY,
@@ -275,8 +257,8 @@ test("a card whose rooms are all foreign refers to its primary alone", () => {
 
 test("before any state is published the configuration alone decides", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
-  // The Home Assistant start-up moment: `states` is empty, so nothing is a source and the
-  // full-configuration fallback keeps the card the shape its YAML gives it.
+  // Start-up moment: `states` is empty, so the full-configuration fallback keeps the card
+  // the shape its YAML gives it.
   const config = { entity: "sensor.avg", rooms: [{ entity: "sensor.foreign" }] };
   assert.equal(
     resolveSourceTopology(config, resolveSourceEligibility({}, config)).kind,

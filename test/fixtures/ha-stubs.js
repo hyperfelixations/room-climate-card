@@ -1,25 +1,16 @@
 "use strict";
 
-// Shared HA custom-element stubs for the offline test harness. Real Home
-// Assistant registers both of these via its frontend bundle; this harness
-// loads no HA frontend at all, so without these stubs they stay undefined
-// custom elements -- with real, observable consequences (see harness.html's
-// comment for the full ha-card story: wrong default display, broken
-// overflow-clip containment, inert @container queries). Registered once
-// here, loaded before room-climate-card.js, so every test gets both.
-//
-// customElements.define() upgrades matching tags wherever they occur,
-// including inside any (open or closed) shadow root -- unlike a <style>
-// rule in this document, which cannot cross room-climate-card.js's shadow
-// boundary (attachShadow({mode:"open"})). That's why these are real
-// registered elements, not just CSS.
+// Shared HA custom-element stubs for the offline harness. Real Home Assistant registers
+// ha-card and ha-icon via its frontend bundle; this harness loads none, so without stubs
+// they stay undefined elements with observable consequences (wrong default display, broken
+// overflow-clip containment, inert @container queries — see harness.html). customElements
+// .define() upgrades matching tags inside any shadow root, which a <style> rule in this
+// document cannot cross — so these are real registered elements, not CSS. Loaded once,
+// before room-climate-card.js.
 (function () {
-  // --- ha-card -------------------------------------------------------
-  // The only thing missing versus a real ha-card is `display: block`
-  // (room-climate-card.js's own .rtc-card CSS already re-declares
-  // background/border/border-radius/box-shadow itself, see harness.html's
-  // comment). Setting it as an inline style always wins regardless of any
-  // stylesheet's specificity or scoping.
+  // --- ha-card ---
+  // Only `display: block` is missing versus a real ha-card (.rtc-card CSS re-declares the
+  // rest). Set inline so it wins regardless of specificity or scoping.
   class HaCardStub extends HTMLElement {
     connectedCallback() {
       this.style.display = "block";
@@ -29,14 +20,10 @@
     customElements.define("ha-card", HaCardStub);
   }
 
-  // --- ha-icon ---------------------------------------------------------
-  // Real Home Assistant loads the full MDI icon set; reproducing that
-  // pixel-for-pixel offline isn't practical (and isn't the point -- this
-  // is layout/appearance fidelity testing, not icon-content testing). This
-  // stub just needs to be visibly non-empty and recognizably differentiated
-  // by icon family, matching every mdi:* name the card actually sets
-  // (grepped from room-climate-card.js). Falls back to a plain dot for
-  // anything unmatched instead of staying blank.
+  // --- ha-icon ---
+  // The full MDI set is not reproduced offline (this is layout fidelity, not icon-content
+  // testing). The stub is visibly non-empty and differentiated by icon family, covering
+  // every mdi:* name the card sets; unmatched names fall back to a plain dot.
   const PATHS = {
     thermometer:
       '<path d="M15 13V5a3 3 0 0 0-6 0v8a5 5 0 1 0 6 0zm-3-9a1 1 0 0 1 1 1v8.17a3 3 0 1 1-2 0V5a1 1 0 0 1 1-1z"/>',

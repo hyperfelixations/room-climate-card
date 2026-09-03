@@ -1,15 +1,9 @@
 "use strict";
 
-// The trend indicator, measured rather than inspected.
-//
-// Whether a trend is rising, stable or falling is arithmetic and is tested in the domain
-// layer. What is checked here is everything that only exists once it is drawn: that the block
-// without a trend keeps exactly the height it had before, that both variants stay vertically
-// centred, and that switching rising to stable to falling to hidden does not move the focused
-// node out from under the user.
-//
-// The Fahrenheit case is here for the same reason: a converted RATE is a different number
-// from a converted reading, and it must appear in the scale footer and nowhere else.
+// The trend indicator, measured once drawn: the block without a trend keeps its prior
+// height, both variants stay vertically centred, and switching rising/stable/falling/hidden
+// does not move the focused node. The direction arithmetic is tested in the domain layer.
+// The Fahrenheit case: a converted rate must appear in the scale footer and nowhere else.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
@@ -227,9 +221,8 @@ test("trend average layout: no-trend block stays unchanged while both variants r
   expect(positions.with.childClasses).toEqual(positions.without.childClasses);
   expect(positions.with.hasTrendTextNode).toBe(false);
   expect(positions.with.hasReadingWrapper).toBe(false);
-  // Preserve the pre-trend optical baseline: Roboto's real glyph/baseline
-  // metrics leave a stable ~2.02px difference although the CSS box itself
-  // is centered. Existing no-trend goldens protect the exact pixels.
+  // Roboto's glyph/baseline metrics leave a stable ~2.02px difference though the CSS box is
+  // centred; the no-trend goldens protect the exact pixels.
   expect(Math.abs(positions.without.topGap - positions.without.bottomGap)).toBeLessThanOrEqual(2.1);
   expect(Math.abs(positions.with.topGap - positions.with.bottomGap)).toBeLessThanOrEqual(2.1);
   for (const key of ["label", "value", "buttonTop", "buttonBottom"]) {

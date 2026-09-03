@@ -1,19 +1,11 @@
 "use strict";
 
-// Real layout coverage complements jsdom tests, which can only test
-// the label-placement algorithm against mocked getBoundingClientRect()
-// widths; this exercises the actual browser text-measurement/CSS pipeline.
-// The matrix covers supported languages, all four modes and representative bar widths:
-// min=avg=max, close together, far apart, avg outside min/max, no overlap
-// or an explicitly-tested ellipsis fallback.
-//
-// Coverage uses every supported language and mode at representative widths for both
-// the main scale's optimal-label-vs-min/max case and
-// the rangeScale 3-label solver, plus one deliberately narrow two-line
-// fallback case. A finer-grained width sweep would mostly be
-// redundant with the deterministic solver already covered exactly in
-// test/unit/ — this layer's job is confirming REAL text metrics don't
-// break the algorithm's assumptions, not re-testing the algorithm itself.
+// Label placement against the real browser text-measurement/CSS pipeline, where the jsdom
+// unit tests can only use mocked widths. Matrix: every supported language and mode at
+// representative bar widths, for the main scale's optimal-label-vs-min/max case and the
+// rangeScale 3-label solver, plus one narrow two-line fallback. Boundary: this confirms
+// real text metrics do not break the solver's assumptions; the solver itself is covered in
+// test/unit/.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
@@ -33,12 +25,8 @@ const MODE_FIXTURES = {
 };
 
 function noOverlap(rects) {
-  // 1.5px tolerance: sub-pixel font-rendering/anti-aliasing variance
-  // between otherwise-identical runs was observed to occasionally push a
-  // boundingBox() reading a fraction of a pixel past its neighbor at the
-  // narrowest tested width (280px) — not a real, visually perceptible
-  // overlap, and not reproducible as a deterministic failure (it passed on
-  // an immediate retry with byte-identical inputs every time it was seen).
+  // 1.5px tolerance: sub-pixel font-rendering variance can push a boundingBox() reading a
+  // fraction of a pixel past its neighbour at 280px — not a perceptible overlap.
   const sorted = [...rects].sort((a, b) => a.left - b.left);
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i].left < sorted[i - 1].right - 1.5) return false;
@@ -78,9 +66,8 @@ async function expectUpperLabelPaintViewport(card, viewportSelector) {
     const viewportRect = viewport.getBoundingClientRect();
     const initialRect = label.getBoundingClientRect();
     const initialTop = Number.parseFloat(getComputedStyle(label).top);
-    // Simulate the few-pixel font-metric shift observed in the user's real
-    // Home Assistant screenshot: put the label box 4px above the viewport,
-    // still well inside the declared 10px upper paint allowance.
+    // A few-pixel font-metric shift: the label box 4px above the viewport, still inside the
+    // 10px upper paint allowance.
     label.style.top = `${initialTop - (initialRect.top - viewportRect.top) - 4}px`;
     const shiftedRect = label.getBoundingClientRect();
     const root = label.getRootNode();
@@ -155,20 +142,10 @@ test.describe("rangeScale: the 3-label solver never overlaps, across value confi
 });
 
 test.describe("label reading order follows displayed values, not raw anchor positions", () => {
-  // Reproduces the reported "Ø min max" bug: current sits at a raw pixel
-  // position left of min (current=20.001 < min=20.049), but both ROUND to
-  // the same displayed "20.0" at the default 1-decimal precision — sorting
-  // by raw anchor alone would place the "current" label before "min" even
-  // though a user reading two identical "20.0" numbers expects them
-  // left-to-right in role order (min before current). See
+  // When current and min round to the same displayed number (current=20.001, min=20.049,
+  // both "20.0"), the labels read in role order (min before current), not raw-anchor order.
+  // Only min/max may drift from their anchors to achieve it — never current. See
   // _resolveRangeScaleLabels() in room-climate-card.js.
-  //
-  // Fixed-pivot follow-up: this reading order must never be achieved by
-  // moving CURRENT — only min/max are allowed to drift from their own
-  // anchors. Both cases below already satisfy that (min/max are the ones
-  // whose raw anchor sits on the "wrong" side of current's rounded-tie
-  // comparison, not current's), so the marker-fidelity assertion is added
-  // here rather than weakening the reading-order assertions.
   const CASES = {
     "precision-collision: current < min but both display as the same rounded number": { min: 20.049, current: 20.001, max: 21.0 },
     "precision-collision: current and max both display the same rounded number": { min: 18.0, current: 20.049, max: 20.001 },
@@ -201,8 +178,8 @@ test.describe("label reading order follows displayed values, not raw anchor posi
 });
 
 test.describe("grouped and thousands-separated numbers sort correctly", () => {
-  // Side assignment must compare raw values: Number("1,200") is NaN, so parsing
-  // localized display text would misplace realistic four-digit CO2 readings.
+  // Side assignment compares raw values: Number("1,200") is NaN, so parsing localized
+  // display text would misplace four-digit CO2 readings.
   const CASES = {
     "min below 1000, current and max grouped (>=1000)": { min: 800, current: 1200, max: 1600 },
     "all three grouped and close together (realistic co2 spike)": { min: 1150, current: 1200, max: 1300 },
@@ -227,28 +204,12 @@ test.describe("grouped and thousands-separated numbers sort correctly", () => {
 });
 
 test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads \"min max jetzt\" / \"jetzt min max\", by design (not the historical UI-01 bug)", () => {
-  // Real-world trigger: range_entity (day min/max) updates less often than
-  // the live averaging entity (see "Auto-Slide und Bedienung" in the dev
-  // doc) -- on a near-flat day, the live average can tick a hair above the
-  // still-recorded day maximum (or below the day minimum) between range-
-  // entity refreshes. Reported via a user screenshot: Ø WOHNUNG 24,2°C,
-  // Min 24,1°C, "Tagesspanne 0,0°C" -- current numerically above a day-max
-  // that had not yet caught up. _resolveRangeScaleLabels() already handles
-  // this intentionally: min/max are assigned to whichever side of the
-  // fixed current pivot they numerically belong on, so BOTH land on the
-  // same side (packed in their own min-before-max order) instead of a
-  // naive always-"min current max" text order that would misrepresent
-  // which value is actually highest. This is a REGRESSION GUARD proving
-  // that behavior.
-  //
-  // Values deliberately keep >=0.1 separation at 1-decimal precision (the
-  // reported case's own 24,1/24,15 gap turned out to accidentally trigger
-  // the UNRELATED, already-covered precision-collision tie-break above
-  // instead: Intl-locale rounding of 24.15 displays as "24,2", identical
-  // to current's "24,2" -- see toLocaleString() vs toFixed() -- which
-  // routes through the min-rank-0/max-rank-2 semanticRank tie-break, not
-  // the plain numeric side assignment this describe block means to
-  // isolate).
+  // When range_entity (day min/max) lags the live average, current can be numerically above
+  // the day max (or below the day min). _resolveRangeScaleLabels() assigns min/max to
+  // whichever side of the fixed current pivot they numerically belong on, so both can land
+  // on the same side (in min-before-max order) rather than a misleading "min current max".
+  // Regression guard for that behaviour. Values keep >=0.1 separation at 1-decimal
+  // precision so this isolates the numeric side assignment, not the precision tie-break above.
   const CASES = {
     "current above both (reported scenario: flat day, current ticks past a stale day-max)": { min: 24.0, max: 24.1, current: 24.3, expect: "both-left" },
     "current below both (mirrored: stale day-min not yet caught up)": { min: 24.2, max: 24.3, current: 24.0, expect: "both-right" },
@@ -281,8 +242,7 @@ test.describe("rangeScale: current genuinely outside [rangeMin, rangeMax] reads 
         expect(minBox.x, `${caseName}: min must read left of max`).toBeLessThanOrEqual(maxBox.x);
       }
 
-      // Fixed-pivot invariant: this reading order must come from min/max
-      // drifting, never from current moving away from its own marker.
+      // Fixed-pivot invariant: the reading order comes from min/max drifting, never current.
       const currentMarkerBox = await card.locator(".rtc-marker-avg").first().boundingBox();
       const labelCenter = currentBox.x + currentBox.width / 2;
       const markerCenter = currentMarkerBox.x + currentMarkerBox.width / 2;
@@ -304,14 +264,8 @@ test("rangeScale: a narrow side interval lifts only the colliding historical lab
     "sensor.avg": mkStateObj("sensor.avg", 20, TEMPERATURE_C),
     "sensor.range": mkStateObj("sensor.range", 9, { unit_of_measurement: "°C", minimum: 12, maximum: 21 }),
   };
-  // German's "jetzt" remains one of the longest supported rangeScale
-  // current-label translations (rangeScale.currentLabel; see
-  // room-climate-card.js); combined
-  // with a forced 240px host width (bar ~72px — verified via direct
-  // measurement: the bar collapses to 0 below ~180px host width, which
-  // would test nothing meaningful, and by ~250px these particular values
-  // already fit without any fallback), this reliably exceeds the bar's
-  // natural capacity.
+  // German's "jetzt" is one of the longest rangeScale current-label translations; at a
+  // forced 240px host width (bar ~72px) it reliably exceeds the bar's capacity.
   const cardId = await createCard(page, { entity: "sensor.avg", range_entity: "sensor.range", auto_slide: false, views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }] }, states, "de");
   await setCardWidth(page, cardId, 240);
   const card = page.locator(`#${cardId}`);
@@ -447,8 +401,8 @@ test("rangeScale mirrored edge regression: current === min lifts min only withou
 });
 
 test.describe("rangeScale: current label stays anchored to its own marker (fixed-pivot invariant)", () => {
-  // Current is the fixed pivot: only min/max may move away from their anchors to
-  // resolve a collision, otherwise "now" would describe a different axis position.
+  // Current is the fixed pivot: only min/max move to resolve a collision, or "now" would
+  // describe a different axis position.
   const CASES = {
     "no collision (far apart)": { min: 12, avg: 20, max: 29 },
     // Current and min are close enough that only the historical label may move.
@@ -504,9 +458,8 @@ test.describe("rangeScale: current label stays anchored to its own marker (fixed
 
   test("current outside [min,max]: current stays at its own anchor, min/max are both packed on the correct single side in the correct relative order", async ({ page }) => {
     await gotoHarness(page);
-    // current (30) is above both min (18) and max (23) -> both min and max
-    // must be packed to the LEFT of the fixed current label, preserving
-    // min < max order between themselves.
+    // current (30) above both min (18) and max (23): both pack to the left of current, in
+    // min < max order.
     const states = {
       "sensor.avg": mkStateObj("sensor.avg", 30, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),

@@ -1,9 +1,9 @@
 "use strict";
 
-// CUSTOM CLASSIFICATION PROFILES: authoritative YAML profiles, their scale and
-// unit projection, validation, and interaction with resolved metric context.
-// This file drives those user-authored profiles through the assembled card; the neighbouring
-// classification-profiles.test.js owns shipped/profile-source precedence instead.
+// Custom classification profiles: user-authored YAML profiles, their scale and unit
+// projection, validation, and interaction with resolved metric context. Drives those
+// profiles through the assembled card; the neighbouring classification-profiles.test.js
+// owns shipped/profile-source precedence instead.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -79,14 +79,9 @@ test("custom profile is authoritative and drives classification plus scale as on
   env.cleanup(card);
 });
 
-// The card invites users to write their own profiles, so anything a built-in profile can
-// say must be sayable in YAML too. `anchor_scale` was the one exception: outdoor.js lets
-// the rendered axis follow the season's actual readings rather than a declared range,
-// and no configuration key reached that field.
-//
-// Asserted as a COMPARISON against the built-in profile rather than against copied
-// numbers: the claim is "a custom profile can now be outdoor", and a test that restates
-// outdoor's arithmetic would keep passing if the two ever drifted apart.
+// Anything a built-in profile can say must be sayable in YAML; anchor_scale (outdoor's
+// data-following axis) was the one field no key reached. Asserted as a comparison against
+// the built-in profile, not copied numbers, so drift between the two shows up.
 const outdoorAsCustomProfile = {
   source: "custom",
   unit: "°C",
@@ -95,8 +90,7 @@ const outdoorAsCustomProfile = {
     comfort: { min: 14, max: 26 },
     optimal: { min: 18, max: 22 },
   },
-  // No min/max: this is the whole point of anchor_scale, and declaring both would be a
-  // contradiction the normalizer refuses.
+  // No min/max: the point of anchor_scale; declaring both is a contradiction the normalizer refuses.
   scale: { step: 1, anchor_scale: false },
   tiers: [
     { min: 35, score: 11, level: "Very hot", color: "#B85F67", zone: "outside" },
@@ -154,11 +148,8 @@ test("declaring a range instead keeps the anchored axis a profile has by default
   env.cleanup(anchored);
 });
 
-// The bar is a window onto the value range and bands are clipped into it, so a comfort
-// band reaching past the declared axis is drawn as far as the axis goes — the same thing
-// that happens to any anchored profile before its axis has grown to meet a band. The
-// configuration used to be refused for it; this is the whole of what that removal means
-// in the rendered card.
+// The bar is a window onto the value range; bands are clipped into it, exactly as for an
+// anchored profile whose axis has not yet grown to meet a band. This used to be refused.
 test("a comfort band wider than the declared axis is clipped into it, not rejected", () => {
   const card = createTemperatureCard(
     {
@@ -254,9 +245,8 @@ test("custom profile validation fails fast with path-specific errors", () => {
   }
 });
 
-// The reference axis is a window, not an outer bound: it says which part of the range
-// the bar draws, and the bands are clipped into it. A window narrower than the comfort
-// band is therefore a legitimate choice, not a contradiction.
+// The reference axis is a window, not an outer bound: bands are clipped into it, so a
+// window narrower than the comfort band is a legitimate choice, not a contradiction.
 test("a reference axis narrower than the comfort band is accepted and clipped", () => {
   const card = createTemperatureCard({ ...customProfile, scale: { min: 12, max: 40, step: 2 } }, 25);
   const celsius = access.getUnitProfile("temperature", "celsius");
@@ -279,10 +269,8 @@ test("a built-in profile cannot be applied to the wrong metric kind", () => {
   );
 });
 
-// A profile scoped to the primary's kind must not be validated against a
-// configured room of another metric kind. The card-wide profile must
-// only ever be enforced against the resolved kind and its same-kind
-// participants -- a foreign-kind room is simply irrelevant to it.
+// A card-wide profile is enforced only against the resolved kind and its same-kind
+// participants; a foreign-kind room is irrelevant to it, not a validation error.
 test("a foreign-kind room does not break profile resolution for the primary's own kind (auto + profile shorthand)", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 25, TEMPERATURE_C),
@@ -325,15 +313,10 @@ test("a foreign-kind room does not break profile resolution for the primary's ow
   env.cleanup(card);
 });
 
-// _classificationProfileForDisplay() rounds
-// each projected boundary independently (Math.round for Fahrenheit) with
-// no check afterward that the rounded result still forms a coherent,
-// non-degenerate profile. A custom profile authored in Celsius with a
-// gap narrower than the ~0.56°C needed to survive integer Fahrenheit
-// rounding can have two distinct boundaries round to the SAME displayed
-// value -- silently collapsing a band to zero width or making a tier
-// unreachable, both of which then feed directly into the actual
-// classification decision (_classifyNumericValue()), not just an icon.
+// Projected boundaries are rounded independently (Math.round for °F) with no coherence
+// check afterward. A Celsius profile with a gap narrower than ~0.56 °C can round two
+// distinct boundaries to the same °F value — collapsing a band or making a tier
+// unreachable — and that feeds the classification decision itself, not just an icon.
 function fahrenheitHass(value = 68) {
   return mkHass({
     "sensor.avg": mkState("sensor.avg", value, TEMPERATURE_F),

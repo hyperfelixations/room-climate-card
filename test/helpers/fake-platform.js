@@ -1,16 +1,9 @@
 "use strict";
 
-// A platform whose clock, timers and animation frames a test drives by hand.
-//
-// This is the whole point of the platform contract: the carousel is a wall-clock
-// animation, so every question worth asking about it ("which view is accessible 4.2
-// seconds into the cycle", "does a resume land in the right hold window") becomes
-// deterministic with an injected clock. The answer is a
-// number, and the assertion is exact.
-//
-// It lives in the test suite rather than next to the browser adapter on purpose: the
-// shipped bundle must contain exactly one implementation of the contract, and a fake
-// that lives with its tests can be as inspectable as those tests need.
+// A platform implementation whose clock, timers and animation frames a test drives by
+// hand, making wall-clock carousel questions deterministic and exact. It lives in the test
+// suite because the shipped bundle must contain exactly one implementation of the contract
+// (interne Doku §4 "Platform-Adapter-Vertrag").
 
 function createFakePlatform(options = {}) {
   let now = options.now ?? 1750000000000;
@@ -67,9 +60,8 @@ function createFakePlatform(options = {}) {
       return () => colorSchemeListeners.delete(listener);
     },
 
-    // Records what was observed WITH ITS OPTIONS, because "it watches the root element" and
-    // "it watches the root element's attributes without its subtree" are different claims and
-    // only the second one is cheap.
+    // Records what was observed with its options: "watches the root element" and "watches
+    // its attributes without the subtree" are different claims.
     createMutationObserver(callback) {
       if (options.noMutationObserver) return null;
       const observer = {
@@ -115,10 +107,9 @@ function createFakePlatform(options = {}) {
 
     readTranslateXPx: (element) => options.translateXPx ?? element?.__translateXPx ?? null,
 
-    // Null by default, which is exactly what a realm without the Web Animations API
-    // reports and therefore keeps every existing test on the wall-clock fallback. A
-    // test that wants to reproduce the real browser's clock offset sets
-    // `animationPhase` (or `element.__animationPhase`) to {phaseMs, cycleMs}.
+    // Null by default (a realm without the Web Animations API), keeping tests on the
+    // wall-clock fallback. Set `animationPhase` / `element.__animationPhase` to
+    // {phaseMs, cycleMs} to reproduce the real browser's clock offset.
     readAnimationPhase: (element, _animationName) => options.animationPhase ?? element?.__animationPhase ?? null,
   };
 
@@ -173,10 +164,8 @@ function createFakePlatform(options = {}) {
 
     // ---- inspection ----------------------------------------------------------
     pendingTimerCount: () => timers.size,
-    // How long the soonest pending timer still has to wait. A test that cares WHEN a
-    // chain re-armed itself, not just that it did, needs the number rather than the
-    // count — "it armed one timer" and "it armed it for the right moment" are different
-    // claims, and only the second catches a chain that skipped a flip.
+    // How long the soonest pending timer still has to wait — for a test that checks when a
+    // chain re-armed, not just that it did.
     nextTimerDelay() {
       let soonest = null;
       for (const timer of timers.values()) {

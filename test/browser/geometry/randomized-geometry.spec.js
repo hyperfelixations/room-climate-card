@@ -1,13 +1,9 @@
 "use strict";
 
-// Deterministic randomized browser geometry test:
-// randomized widths/room counts/languages/modes/view configurations,
-// asserting real-layout geometry invariants (no overlapping labels beyond
-// the declared gap, no child wider than its container) — deliberately NOT
-// screenshot-based because fixed baselines are unsuitable for randomized
-// inputs; only hand-picked, deliberately chosen
-// cases belong in visual-golden.spec.js). Fixed seed for a reproducible CI
-// run, same 0xC1A6E default as the jsdom property test.
+// Deterministic randomized browser geometry: random widths / room counts / languages /
+// modes / view configs, asserting real-layout invariants (no overlapping labels beyond the
+// declared gap, no child wider than its container). Not screenshot-based — fixed baselines
+// do not suit randomized inputs. Fixed seed for a reproducible CI run.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
@@ -40,9 +36,8 @@ function genCase(rng) {
   return { mode, fx, width, roomCount, language, hasRange, rangeScale, disabledViews, viewOrder, darkMode, reducedMotion };
 }
 
-// views: is fully authoritative once present. The generator's independent
-// ordering, disabling and range-scale choices are therefore converted into
-// one explicit, fully listed views array per case.
+// views: is fully authoritative once present, so the generator's ordering, disabling and
+// range-scale choices are converted into one explicit views array per case.
 function buildViewsList(c) {
   const naturalOrder = ["range", "range_scale", "scale", "extremes"];
   const requestedOrder = c.viewOrder || [];
@@ -77,7 +72,7 @@ test.describe("randomized geometry invariants across width/roomCount/language/mo
       const config = { entity: "sensor.avg", rooms };
       if (c.hasRange) {
         // The range entity carries the metric's unit and its own min/max, but no device
-        // class — it describes a value rather than being one.
+        // class.
         states["sensor.range"] = mkStateObj("sensor.range", 3, {
           unit_of_measurement: c.fx.attributes.unit_of_measurement,
           minimum: c.fx.low,
@@ -98,21 +93,11 @@ test.describe("randomized geometry invariants across width/roomCount/language/mo
       const cardBox = await card.boundingBox();
       expect(cardBox, `case ${i}: card must render a bounding box`).toBeTruthy();
 
-      // No classed structural element wider than the card's own box (a
-      // generic overflow guard covering UI-02 and any other structural
-      // container the randomized width/room-count/language/mode
-      // combination happens to stress) — EXCEPT inside .rtc-track, which is
-      // deliberately views.length*100% wide and slid via transform, clipped
-      // horizontally by .rtc-rotator's directional clip-path (see "Rendering und
-      // Robustheit"/_viewWidthPct() in room-climate-card.js) —
-      // .rtc-rotator itself must still not overflow. Anonymous/classless
-      // nodes and the *-value-unit spans are skipped: an inline
-      // flex item's own bounding rect reflects its unclipped natural
-      // content width even when a classed ancestor visually clips it via
-      // overflow:hidden (.rtc-room-chip at narrow widths, see there) —
-      // checking those would flag normal clipping as a false positive, not
-      // an actual layout defect (the classed container that actually needs
-      // to stay in bounds is still checked).
+      // No classed structural element wider than the card's box — except inside .rtc-track,
+      // which is views.length*100% wide and slid via transform, clipped by .rtc-rotator
+      // (which must itself not overflow). Classless nodes and the *-value-unit spans are
+      // skipped: an inline flex item's bounding rect reflects its unclipped natural width
+      // even when a classed ancestor clips it via overflow:hidden.
       const overflowing = await page.evaluate((cardId) => {
         const el = document.getElementById(cardId);
         const cardRect = el.getBoundingClientRect();

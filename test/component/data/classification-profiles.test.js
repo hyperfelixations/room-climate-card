@@ -1,14 +1,10 @@
 "use strict";
 
-// BUILT-IN CLASSIFICATION AND PRECEDENCE: where the card's default idea of
-// "comfortable" comes from and which classification source wins.
-//
-// Four sources can supply it and they have a strict precedence - a classification written in
-// YAML, an entity that classifies itself through its own attributes, a built-in profile for
-// the metric, and the projection of any of those into the unit actually being displayed.
-//
-// Covered here: YAML policy selection, entity-attribute precedence, built-in
-// temperature profiles, profile-driven icons, and live profile replacement.
+// Built-in classification and precedence: where the card's default "comfortable" comes
+// from and which source wins. Four sources with strict precedence — YAML classification,
+// entity self-classification via attributes, a built-in metric profile, and projection of
+// any of those into the displayed unit. Covered: YAML policy selection, entity-attribute
+// precedence, built-in temperature profiles, profile icons, live profile replacement.
 // Custom-profile projection and palette integration have separate owners.
 
 const test = require("node:test");
@@ -346,9 +342,8 @@ test("a custom non-temperature profile can configure icons as a descending {min,
   env.cleanup(low);
 });
 
-// Omitting `icons` means one thing, and it means it for every measurement: the profile
-// declares none, so the card shows the icon that measurement always carries. Temperature
-// is in this list like the rest — it has no derivation of its own to fall back on.
+// No `icons` means the profile declares none and the card shows the measurement's static
+// icon — temperature included, it has no derivation of its own to fall back on.
 test("a custom profile without icons shows the metric's static icon, for every measurement", () => {
   const cases = [
     ["temperature", "°C", 22, { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } }, { min: 16, max: 28, step: 2 }, 24, "mdi:thermometer"],

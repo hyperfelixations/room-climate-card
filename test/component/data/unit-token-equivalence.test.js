@@ -1,17 +1,11 @@
 "use strict";
 
-// Generic regression net for the unit-spelling-normalization bug class that
-// made 2.21.1's PM2.5 hotfix necessary (see room-climate-card.js's
-// normalizeUnitToken() and pm25-unit-regression.test.js for the original,
-// PM2.5-specific incident). The underlying issue was never PM2.5-specific:
-// _resolveUnitProfileKey() compares an entity's raw unit_of_measurement
-// against METRIC_DEFINITIONS' registered `units` arrays, and any metric kind
-// can in principle have a real-world Home Assistant integration reporting a
-// technically-equivalent but differently-spelled unit (case, whitespace, or
-// an NFKC-compatible Unicode variant like "℃"/"℉"/full-width "％"). This
-// file exercises that same equivalence class across ALL FOUR registered
-// metric kinds, not just the one that happened to be reported in production,
-// so the next such incident is caught here instead of after a user report.
+// Generic regression net for the unit-spelling-normalization bug class (see
+// normalizeUnitToken() and pm25-unit-regression.test.js for the original PM2.5 incident).
+// The card compares an entity's raw unit_of_measurement against METRIC_DEFINITIONS' `units`
+// arrays, so any metric kind can meet a technically-equivalent, differently-spelled unit
+// (case, whitespace, NFKC variants like "℃"/"℉"/"％"). This exercises that equivalence
+// class across all four registered metric kinds.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -57,11 +51,8 @@ const CASES = {
   pm25: {
     deviceClass: "pm25",
     profiles: {
-      // Deliberately overlaps in spirit (not verbatim) with
-      // pm25-unit-regression.test.js's own matrix — that file locks in the
-      // exact reported production incident and a full dashboard fixture;
-      // this file's pm25 row exists only so PM2.5 isn't silently excluded
-      // from the generic per-metric-kind sweep below.
+      // Overlaps in spirit with pm25-unit-regression.test.js (which locks the exact
+      // reported incident); this row only keeps PM2.5 in the generic sweep below.
       microgram_per_m3: ["µg/m³", "μg/m³", "ug/m3", "µg/m3", "μg/m^3", " µg / m³ "],
     },
   },

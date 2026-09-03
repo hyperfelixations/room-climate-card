@@ -1,12 +1,9 @@
 "use strict";
 
-// With real layout, a long room name or short override
-// must ellipsis-clip inside its chip instead of overflowing the chip
-// boundary — jsdom can't measure real text width, so this needs Chromium.
-// title/aria-label (already escaped/rendered regardless of visual clipping,
-// see _renderRoomChip() in room-climate-card.js) must still carry the full
-// name, so the ellipsis stays accessibility-safe. Also covers
-// .rtc-extreme-name/.rtc-extreme-label, which got the same CSS treatment.
+// With real layout, a long room name or short override must ellipsis-clip inside its chip,
+// not overflow it (jsdom cannot measure real text width). title/aria-label must still carry
+// the full name so the ellipsis stays accessibility-safe. Also covers
+// .rtc-extreme-name/.rtc-extreme-label, which get the same CSS treatment.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
@@ -41,9 +38,8 @@ test("a very long room name/short does not overflow its chip, and title/aria-lab
   const markEl = chip.locator(".rtc-room-mark");
   const markBox = await markEl.boundingBox();
 
-  // Ellipsis must actually be engaging (overflow:hidden clips the box to
-  // the chip, not the un-clipped natural text width) — assert the short
-  // label's rendered box stays within the chip's own bounds.
+  // The ellipsis must actually engage: assert the short label's rendered box stays within
+  // the chip's bounds.
   expect(shortBox.x + shortBox.width, "the short label must not overflow the chip's right edge").toBeLessThanOrEqual(chipBox.x + chipBox.width + 0.5);
   expect(shortBox.x, "the short label must not overflow the chip's left edge").toBeGreaterThanOrEqual(chipBox.x - 0.5);
   // The mark (up/down/dot indicator) must stay visible at its full fixed size, never squeezed by the long short label.

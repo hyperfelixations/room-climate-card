@@ -1,14 +1,9 @@
 "use strict";
 
-// The generators, tested. A weighted generator whose realised distribution has drifted from
-// its declared weights is the exact failure mode this suite has already lived through: the
-// previous randomized test drew perfectly good random numbers and produced a population in
-// which nothing interesting could happen, and nothing measured that.
-//
-// So the weights are not just declared, they are checked — and so is the claim that each
-// axis actually reaches the values it says it reaches. A generator that has, say, quietly
-// stopped producing misspelled attribute keys is still green everywhere else; only this file
-// notices.
+// The generators, tested: the realised distribution is checked against the declared weights,
+// and every axis is checked to actually reach the values it claims. Its boundary: this file
+// measures the generated population; the invariants that population is thrown at live in
+// properties.js and metamorphic.js. A drifted weight or a silently unused axis fails only here.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -23,14 +18,9 @@ const path = require("node:path");
 
 const SAMPLE = 5000;
 
-// Every description a sample of seeds produces, generated once and shared: these tests all
-// ask different questions of the same population.
-//
-// Measured through describeScenario(), not on the raw generator output. A generator that
-// leaves a field out is saying "the default", and the default is what the card will see — so
-// counting raw output would measure the generator's shorthand rather than the population it
-// actually produces. (It also silently reports zero for anything defaulted, which is how this
-// file first failed.)
+// Every description a sample of seeds produces, generated once and shared. Measured through
+// describeScenario(), not raw generator output: a left-out field means "the default", which
+// is what the card sees, so raw output would measure the shorthand rather than the population.
 const population = (() => {
   const rng = new SeededRandom(0x9e3779b9);
   return Array.from({ length: SAMPLE }, () => describeScenario(generateDescription(rng.int(0, 0x7fffffff))));
@@ -93,10 +83,8 @@ test("every declared weight table is well formed", () => {
 });
 
 test("every declared weight table is actually drawn from", () => {
-  // An axis nobody draws is a table that documents an intention the generator does not have,
-  // and it looks exactly like a table that works. Static rather than statistical because a
-  // rare outcome and an unused one are indistinguishable in a sample: the question is whether
-  // the code asks, not how often the answer comes back.
+  // An axis nobody draws documents an intention the generator does not have. Static rather
+  // than statistical: a rare outcome and an unused one are indistinguishable in a sample.
   const source = fs.readFileSync(path.join(__dirname, "generators.js"), "utf8");
   for (const axis of Object.keys(WEIGHTS)) {
     assert.ok(source.includes(`WEIGHTS.${axis}`), `WEIGHTS.${axis} is declared and never drawn from`);
@@ -104,12 +92,10 @@ test("every declared weight table is actually drawn from", () => {
 });
 
 test("every optional configuration key really does appear sometimes", () => {
-  // OPTION_PRESENCE is read through a dynamic key, so the static check above cannot see it.
-  // The realised population can: an option nobody ever writes is a probability that documents
-  // an intention the generator does not have.
+  // OPTION_PRESENCE is read through a dynamic key, so the static check above cannot see it;
+  // the realised population can.
   for (const key of Object.keys(OPTION_PRESENCE)) {
-    // The one key that by construction never appears under its own name — it exists to
-    // produce a MISSPELLING of a real key, which is a different thing to prove.
+    // Never appears under its own name — it exists to produce a misspelling of a real key.
     if (key === "misspelledKey") continue;
     assert.ok(configShare(key) > 0, `${key} is declared in OPTION_PRESENCE and never generated`);
   }
@@ -214,9 +200,8 @@ test("cards with mixed units are generated, and so are cards without a primary e
 // ------------------------------------------------------- the configuration surface --
 
 test("every optional configuration key is generated, at roughly the rate declared", () => {
-  // The check that keeps the YAML surface covered. A key that stops being generated — because
-  // a refactor dropped it, or a weight went to zero — takes a whole configuration path out of
-  // the run without failing anything else.
+  // Keeps the YAML surface covered: a key that stops being generated takes a whole
+  // configuration path out of the run without failing anything else.
   for (const [key, expected] of Object.entries(OPTION_PRESENCE)) {
     if (key === "misspelledKey") continue; // measured separately below
     const actual = configShare(key);
@@ -258,9 +243,8 @@ test("every enumerated option is written correctly, misspelled, and as the wrong
 });
 
 test("subtitle is generated in every shape it accepts, including both reserved words wrong", () => {
-  // `subtitle: clip` sets the WRAPPING; `subtitle: Ground floor` sets the TEXT. Getting one
-  // of those two words slightly wrong therefore changes the meaning entirely, which is
-  // exactly the kind of mistake worth generating.
+  // `subtitle: clip` sets the wrapping mode; `subtitle: Ground floor` sets the text. A slight
+  // misspelling flips the meaning, which is worth generating.
   const values = valuesOf("subtitle");
   assert.ok(values.length > 40, `only ${values.length} subtitles`);
   assert.ok(values.some((value) => value === "clip" || value === "wrap"), "the reserved words are never used");
@@ -328,8 +312,7 @@ test("classification overrides are generated, including a ramp that breaks the s
 });
 
 test("the auxiliary entities exist in hass without becoming rooms", () => {
-  // A range_entity is read by the card and must not turn into a room chip. Getting that
-  // wrong in the generator would quietly change what every card in the run looks like.
+  // A range_entity is read by the card and must not turn into a room chip.
   const withRange = population.filter((description) => description.config.range_entity === "sensor.range");
   assert.ok(withRange.length > 20, `only ${withRange.length} cards point at a range entity`);
   for (const description of withRange) {
@@ -367,10 +350,9 @@ test("every generated description is plain JSON, so it can be printed and shrunk
 
 // ------------------------------------------- the axes about the environment ------
 
-// These four describe the world around the card rather than the card itself: what a sensor is
-// called, when it last moved, what else it carries, and what Home Assistant handed over. They
-// are asserted here for the same reason as everything above — an axis whose realised share has
-// drifted from its intent is a generator testing something other than what it says.
+// These four describe the world around the card: what a sensor is called, when it last moved,
+// what else it carries, and what Home Assistant handed over. Asserted for the same reason as
+// the rest — a drifted realised share is a generator testing something other than it claims.
 
 test("most sensors are named the way Home Assistant names them, and some are not", () => {
   const impossible = shareOf((entity) => V.IMPOSSIBLE_ENTITY_IDS.includes(entity.id));
@@ -420,8 +402,8 @@ test("hass is usually complete, and every gap in it is reachable", () => {
 });
 
 test("sometimes one sensor is both the average and a room", () => {
-  // Two roles for one entity is a thing people configure, and it is where a marker can be
-  // drawn twice or an average can count a room it has already counted.
+  // One entity in two roles: where a marker could be drawn twice or an average could count a
+  // room it already counted.
   const shared = population.filter(
     (description) =>
       description.primary && description.rooms.some((room) => room.id === description.primary.id)

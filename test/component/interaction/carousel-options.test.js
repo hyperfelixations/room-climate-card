@@ -1,11 +1,9 @@
 "use strict";
 
-// auto_slide and swipe are independent carousel options:
-// each other -- auto_slide only gates the automatic rotation timer
-// (_hasAutoSlide()), swipe only gates the manual horizontal drag gesture
-// (_handlePointerDown()'s this._interaction.pointer.rotator flag). Both default true
-// by default. Reduced Motion and 0/1-view behavior must
-// stay correct regardless of these options.
+// auto_slide and swipe are independent carousel options: auto_slide gates only the
+// automatic rotation timer (_hasAutoSlide()), swipe gates only the manual horizontal drag
+// gesture (_handlePointerDown()'s this._interaction.pointer.rotator flag). Both default
+// true. Reduced Motion and 0/1-view behaviour stay correct regardless of either option.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -38,8 +36,7 @@ function threeViewCard(extraConfig) {
   );
 }
 
-// Simulates a pointerdown whose composed path includes the rotator element
-// (or not), the way a real event targeting inside .rtc-rotator would.
+// A pointerdown whose composed path optionally includes .rtc-rotator / a chip.
 function pointerDownEvent(el, { insideRotator, insideEntity } = {}) {
   const path = [];
   if (insideEntity) {
@@ -185,10 +182,8 @@ test("swipe:false alone leaves auto-rotation fully functional", () => {
   env.cleanup(el);
 });
 
-// A live setConfig() that only toggles auto_slide must rebuild the carousel;
-// structuralConfigSignature therefore includes auto_slide rather than only a
-// structural rebuild (_renderAll()) ever starts/stops the timer/CSS
-// animation. Both toggle directions must now take effect immediately.
+// A live setConfig() toggling only auto_slide must rebuild the carousel, so
+// structuralConfigSignature includes auto_slide; both directions take effect immediately.
 test("setConfig(): live auto_slide true -> false stops the running animation", () => {
   const el = threeViewCard();
   let track = el.shadowRoot.querySelector(".rtc-track");
@@ -210,12 +205,8 @@ test("setConfig(): live auto_slide false -> true schedules the phase-aware resum
 
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], auto_slide: true });
   assert.equal(el._carousel.hasAutoSlide(), true);
-  // A structural rebuild that isn't the very first render freezes visually
-  // on the current view first, then schedules a phase-aware resume; it does not
-  // immediately flip the track back to
-  // synced animation. The resume timer being armed is what proves
-  // auto_slide:true actually took effect here, not an immediate class
-  // change on the track.
+  // A non-first structural rebuild freezes on the current view, then schedules a phase-aware
+  // resume — no immediate class flip. The armed resume timer is what proves auto_slide:true took effect.
   assert.notEqual(el._carousel.resumeTimerHandle, null, "a resume must now be scheduled");
   env.cleanup(el);
 });

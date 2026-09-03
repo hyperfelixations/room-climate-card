@@ -1,15 +1,10 @@
 "use strict";
 
-// resolveActiveViews()
-// layers config.views (string/object requests, enabled:true|false|"auto")
-// on top of VIEW_REGISTRY's condition()/defaultEnabled()-based availability,
-// is authoritative for view requests and availability. It is a plain module-scope function
-// (not a method — see room-climate-card.js), not exposed on window by design
-// (the card stays a dependency-free browser IIFE with no exports for HACS),
-// so it's exercised the same way a real user would ever observe it: through
-// the view model's views.keys (the resolved view list) and through the
-// console.warn diagnostics setConfig() emits once per config change via
-// _warnAboutViewConfigOnce().
+// resolveActiveViews() layers config.views (string/object requests, enabled:true|false|
+// "auto") on top of VIEW_REGISTRY's condition()/defaultEnabled() availability, and is
+// authoritative for view requests and availability. A module-scope function, not exported,
+// so it's exercised through the view model's views.keys and the console.warn diagnostics
+// setConfig() emits once per config change via _warnAboutViewConfigOnce().
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -182,9 +177,7 @@ test("setConfig() warns exactly once for a bad views: config, and does not repea
   const originalWarn = el.ownerDocument.defaultView.console.warn;
   el.ownerDocument.defaultView.console.warn = (...args) => warnings.push(args.join(" "));
 
-  // A plain hass update (no setConfig()) must not re-emit the diagnostics —
-  // _computeViewModel() itself never warns, only _warnAboutViewConfigOnce()
-  // inside setConfig() does (see room-climate-card.js).
+  // A plain hass update must not re-emit diagnostics: only _warnAboutViewConfigOnce() in setConfig() warns.
   el.hass = fourViewHass();
   assert.equal(warnings.length, 0, "a hass update alone must not emit view-config warnings");
 
@@ -236,12 +229,9 @@ test("start_view: a valid start_view is stored on config and used by _renderAll(
   env.cleanup(el);
 });
 
-// ==== View configuration validation: a
-// non-array views:, invalid list entries, and invalid enabled: values must
-// be diagnosed (not silently defaulted with no trace), and options must be
-// filtered through a registry whitelist rather than passed through
-// unchecked. See room-climate-card.js's _normalizeViewsConfig()/
-// _normalizeViewRequest()/_normalizeViewOptions(). ====
+// ==== View configuration validation: a non-array views:, invalid list entries and invalid
+// enabled: values must be diagnosed (not silently defaulted), and options filtered through
+// a registry whitelist. See _normalizeViewsConfig()/_normalizeViewRequest()/_normalizeViewOptions(). ====
 
 test("a non-array views value is diagnosed and falls back to registry defaults", () => {
   const el = env.createCard(
@@ -296,11 +286,8 @@ test("options are filtered through each view's optionsSchema", () => {
   env.cleanup(el);
 });
 
-// ==== _normalizeViewOptions() diagnoses unknown keys and non-object values
-// while preserving non-destructive fallback semantics for malformed views
-// field in this file. Both are now diagnosed through the same
-// _viewsDiagnostics pipeline, non-destructively (the entry itself, and its
-// filtered options, are kept exactly as before). ====
+// ==== _normalizeViewOptions() diagnoses unknown keys and non-object values through the
+// _viewsDiagnostics pipeline, non-destructively (the entry and its filtered options are kept). ====
 
 test("an unknown options key is diagnosed once and stripped", () => {
   const el = env.createCard(
@@ -338,15 +325,10 @@ test("an omitted options field is not diagnosed", () => {
   env.cleanup(el);
 });
 
-// ==== Generic 0/1/N-view rendering. The
-// view descriptor (VIEW_REGISTRY via resolveActiveViews()) is the sole
-// render-dispatch source — no hardcoded Scale-solo path — and each of the
-// four views must work standalone. Covers: solo-render DOM assertions per
-// view (previously only "extremes" had any views:-solo test, and it only
-// asserted data.views.keys, not the DOM), timer-freedom at 0/1 views, the
-// collapse-vs-hint null-view policy, and start_view on the very first
-// render. See the view model's views.collapsed (presentation/view-model/view-state.js)
-// and _renderContent(). ====
+// ==== Generic 0/1/N-view rendering. The view descriptor (VIEW_REGISTRY via
+// resolveActiveViews()) is the sole render-dispatch source — no hardcoded Scale-solo path —
+// and each view works standalone. Covers: per-view solo-render DOM, timer-freedom at 0/1
+// views, the collapse-vs-hint null-view policy, and start_view on the first render. ====
 
 function soloViewHass() {
   return mkHass({
@@ -445,10 +427,7 @@ test("a requested unavailable view shows a localized hint instead of collapsing"
 });
 
 test("setConfig from collapsed views to an unavailable request shows the hint", () => {
-  // Both states resolve data.views.keys to [] — before the fix, _render()'s
-  // viewsChanged check only compared data.views.keys against this._views (both
-  // [] in both cases), so this transition never triggered _renderAll() and
-  // the DOM stayed stuck on the collapsed (no markup) state.
+  // Both states resolve views.keys to []; the transition must still trigger _renderAll(), not stay stuck on the collapsed state.
   const el = env.createCard({ entity: "sensor.avg", views: [] }, soloViewHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-no-views"), null);
 

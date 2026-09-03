@@ -1,10 +1,9 @@
 "use strict";
 
-// Fahrenheit values canonicalize for domain calculations and project back to
-// a resolved displayUnitProfile. The view model
-// converts every displayed number into that unit before classification,
-// comfort/optimal/scale, and icon decisions are made — never a raw
-// Fahrenheit number compared against Celsius bounds again.
+// Fahrenheit values canonicalize for domain calculations and project back to the resolved
+// displayUnitProfile: the view model converts every displayed number into that unit before
+// classification, comfort/optimal/scale and icon decisions — a raw Fahrenheit number is
+// never compared against Celsius bounds.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -30,7 +29,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// ==== Pure single-unit cards (section 9.7: "reine C-, F- und K-Karte") ====
+// ==== Pure single-unit cards (°C, °F, K) ====
 
 test("pure Celsius card remains the identity-conversion control", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
@@ -82,7 +81,7 @@ test("pure Kelvin card: comfort/optimal bands are exact fromCanonical conversion
   env.cleanup(el);
 });
 
-// ==== Mixed units (section 9.7) ====
+// ==== Mixed units ====
 
 test("mixed °C/°F/K rooms, no usable primary: canonically averaged correctly, display falls back to canonical (no single source unit to prefer)", () => {
   const hass = mkHass({
@@ -128,7 +127,7 @@ test("Primary unavailable, rooms in a compatible unit (all °F): room-consensus 
   env.cleanup(el);
 });
 
-// ==== -40°C = -40°F, end to end (section 9.7) ====
+// ==== -40°C = -40°F, end to end ====
 
 test("-40°C = -40°F end to end: both cards resolve to the identical canonical value and round-trip display", () => {
   const hassC = mkHass({ "sensor.avg": mkState("sensor.avg", -40, TEMPERATURE_C) });
@@ -146,7 +145,7 @@ test("-40°C = -40°F end to end: both cards resolve to the identical canonical 
   env.cleanup(elF);
 });
 
-// ==== All 10 generated Fahrenheit classification boundaries: -eps/exact (section 9.7) ====
+// ==== All 10 generated Fahrenheit classification boundaries: -eps / exact ====
 
 function fahrenheitCard(primaryValue) {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", primaryValue, { unit_of_measurement: "°F" }) });
@@ -154,10 +153,8 @@ function fahrenheitCard(primaryValue) {
 }
 
 test("Fahrenheit classification: all 10 generated boundaries classify exactly at/just-below the documented integer threshold", () => {
-  const el = fahrenheitCard(70); // context only needs A usable °F primary to resolve the profile; the boundary values themselves are tested directly
-  // _fallbackTone() receives its resolved profile explicitly rather than
-  // unitProfile — the caller (here, the test itself, standing in for
-  // buildCardViewModel()) explicitly resolves it once and passes it through.
+  const el = fahrenheitCard(70); // only needs a usable °F primary to resolve the profile; boundary values are tested directly
+  // fallbackTone receives its resolved profile explicitly; the test resolves it once here.
   const profile = el._resolveMetricContext().displayUnitProfile;
   const label = (value) => internals.fallbackTone(el, value, "temperature", profile).label;
 
@@ -185,11 +182,8 @@ test("Fahrenheit classification: all 10 generated boundaries classify exactly at
 });
 
 test("Fahrenheit classification precision: the ROUNDED 70°F threshold governs, not the exact canonical 21°C boundary", () => {
-  // 69.8°F converts to EXACTLY 21°C (the exact canonical optimal-min) — a
-  // classifier that (incorrectly) tested the exact canonical value against
-  // the exact Celsius boundary would call this "Optimal". The product
-  // contract requires testing against the rounded
-  // Fahrenheit boundary (70°F) instead, so 69.8°F must NOT be optimal.
+  // 69.8°F converts to exactly 21°C (the canonical optimal-min). Classification tests
+  // against the rounded 70°F boundary, not the exact Celsius one, so 69.8°F is not optimal.
   const el = fahrenheitCard(70);
   const profile = el._resolveMetricContext().displayUnitProfile;
   assert.equal(internals.fallbackTone(el, 69.8, "temperature", profile).label, "Slightly cool");
@@ -197,7 +191,7 @@ test("Fahrenheit classification precision: the ROUNDED 70°F threshold governs, 
   env.cleanup(el);
 });
 
-// ==== Dynamic Fahrenheit steps: 2 / 5 / 10 °F (section 9.6) ====
+// ==== Dynamic Fahrenheit steps: 2 / 5 / 10 °F ====
 
 test("dynamic scale step: a narrow span (<=20°F) rounds to multiples of 2°F", () => {
   const hass = mkHass({
@@ -233,7 +227,7 @@ test("dynamic scale step: a wide span (>40°F) rounds to multiples of 10°F", ()
   env.cleanup(el);
 });
 
-// ==== Spread/trend without offset (section 9.7: "Temperaturdelta und Trend ohne Offset") ====
+// ==== Spread/trend without the absolute offset ====
 
 test("spread attribute (a delta) must round-trip without the Fahrenheit absolute offset", () => {
   const hass = mkHass({
@@ -247,15 +241,13 @@ test("spread attribute (a delta) must round-trip without the Fahrenheit absolute
   env.cleanup(el);
 });
 
-// ==== buildScaleModel(): identical geometry for identical input (section 9.6 invariant) ====
+// ==== scaleModel(): identical geometry for identical input ====
 
 test("_buildScaleModel(): identical input produces identical geometry for both the main scale and rangeScale call sites", () => {
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
-  // _buildScaleModel() takes an explicit options
-  // object (metricType/unitProfile instead of an implicit
-  // this._resolveMetricContext() call) and returns the FULL renderer-ready
-  // model — displayStep/markerPositions/boundaryLabels, not just geometry.
+  // scaleModel takes an explicit options object and returns the full renderer-ready model
+  // (displayStep/markerPositions/boundaryLabels), not just geometry.
   const celsius = access.getUnitProfile("temperature", "celsius");
   const options = {
     metricType: "temperature",
@@ -320,12 +312,9 @@ test("_buildScaleModel(): displayStep follows the Fahrenheit dynamic-step rule f
 });
 
 // ==== range_entity is typed and converted like every other measurement ====
-// A range_entity requires an explicit unit_of_measurement of its own; a missing unit is
-// unusable, never assumed canonical; see metric-fallback.test.js and
-// range-and-spread.test.js for the dedicated missing/unresolvable-unit
-// exclusion cases). With an explicit °C unit, 18/23 Celsius correctly become
-// 64.4/73.4 Fahrenheit once projected into the card's resolved °F display,
-// instead of the old raw 18/23 passthrough. ====
+// range_entity needs its own explicit unit_of_measurement (a missing one is unusable, never
+// assumed canonical — see metric-fallback.test.js / range-and-spread.test.js). With °C,
+// 18/23 project to 64.4/73.4 °F in a resolved °F card.
 
 test("range_entity min/max are converted to the resolved display unit", () => {
   const hass = mkHass({
@@ -341,10 +330,8 @@ test("range_entity min/max are converted to the resolved display unit", () => {
 });
 
 test("converted range_entity values produce a physically meaningful single-unit axis", () => {
-  // _buildScaleModel() is fed avg (display-unit, °F) alongside the NOW
-  // ALSO display-unit-converted rangeMin/rangeMax — both genuinely in the
-  // same physical unit, unlike the pre-fix mixed-unit axis this test used
-  // to document.
+  // scaleModel is fed avg and rangeMin/rangeMax all in the display unit (°F) — one physical
+  // unit, unlike the pre-fix mixed-unit axis.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 72, { unit_of_measurement: "°F" }),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
@@ -365,14 +352,9 @@ test("converted range_entity values produce a physically meaningful single-unit 
   env.cleanup(el);
 });
 
-// ==== METRIC_TYPE_BY_UNIT is derived atomically from
-// METRIC_DEFINITIONS.unitProfiles[*].units instead of a separately
-// hand-maintained table — the two tables had drifted: the word/bare-letter
-// aliases ("c", "celsius", "f", "fahrenheit") were registered in the
-// UnitProfiles (recognized once metricKind was already known some other
-// way, e.g. via _resolveUnitProfileKey()) but NOT in the old
-// METRIC_TYPE_BY_UNIT, so an entity with no device_class and one of these
-// unit strings alone could not even be recognized as temperature at all. ====
+// ==== METRIC_TYPE_BY_UNIT is derived from METRIC_DEFINITIONS.unitProfiles[*].units ====
+// The word/letter aliases ("c", "celsius", "f", "fahrenheit") live in the UnitProfiles, so
+// an entity with one of these units and no device_class now resolves as temperature.
 
 test("temperature word and letter aliases resolve through METRIC_TYPE_BY_UNIT without device_class", () => {
   for (const [unit, expectedProfileKey] of [["c", "celsius"], ["celsius", "celsius"], ["f", "fahrenheit"], ["fahrenheit", "fahrenheit"]]) {

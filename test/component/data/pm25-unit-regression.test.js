@@ -1,15 +1,10 @@
 "use strict";
 
-// PM2.5 unit spellings, which came back from a real dashboard rather than from a spec.
-//
-// Home Assistant integrations write the same unit several ways - the micro sign in one place,
-// plain ASCII in another - and a card that recognised only one of them showed no data for a
-// sensor that was working perfectly. The reported configuration is reproduced here in full,
-// primary, rooms, range and trend together, because the failure needed all four to appear.
-//
-// A regression test, and named as one: it records a specific thing that went wrong, so the
-// third assertion below is the important one - the normalization must NOT be so generous that
-// it accepts a unit measuring something else.
+// PM2.5 unit spellings: HA integrations write the same unit several ways (micro sign vs
+// plain ASCII), and a card recognising only one showed no data for a working sensor. The
+// reported dashboard config is reproduced in full (primary, rooms, range, trend) because
+// the failure needed all four. A regression test: the third case is the guard —
+// normalization must not be so generous that it accepts a unit measuring something else.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

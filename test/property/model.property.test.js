@@ -1,27 +1,12 @@
 "use strict";
 
-// THE PROPERTY RUN. Throw a randomly described dashboard at the card and check what it
-// does with it — the way a person tries things in the sandbox, except several hundred
-// times and with the results actually inspected.
-//
-// The shape is deliberately the same as manual testing: a YAML configuration and a set of
-// entities go in, a card comes out, and every statement that must be true of ANY card is
-// checked against it. What makes it worth running is combinations nobody would write by
-// hand: a primary entity that is unavailable while three rooms report °C, % and K; a
-// device_class whose ATTRIBUTE NAME is misspelled; a value of 1e308.
-//
-// THE ASSERTION THAT MATTERS MOST IS THE DISTRIBUTION.
-//
-// The previous version of this file ran five hundred iterations, passed every time, and
-// checked essentially nothing: its entities carried a device_class but no
-// unit_of_measurement, so the entity model rejected all of them and 100 % of the generated
-// cards landed in the no-data state — where every one of its real invariants sat behind an
-// `if (!data.empty)` that never ran. Measured, the figure was exactly 100 %.
-//
-// So this file asserts what its own inputs look like. If the share of no-data cards leaves
-// its band, the run fails even though nothing else is wrong — because at that point the
-// run is no longer testing what it claims to test. That is the check that would have
-// caught the old defect on the day it was introduced.
+// The single-card property run: throws randomly described dashboards at the built card and
+// checks every invariant that must hold for any card. Its boundary: the paired metamorphic
+// run (metamorphic.property.test.js) covers relations between two cards; the invariants
+// themselves live in properties.js and the generators in generators.js.
+// The load-bearing assertion is the outcome census — if the share of rendered / empty /
+// refused cases leaves its band the run fails, because it is then no longer testing what it
+// claims. Rationale: see interne Doku §4 „Die Property-Schicht".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -40,10 +25,8 @@ const DEFAULT_SEED = readSeed("ROOM_CLIMATE_CARD_FUZZ_SEED", 0xc1a6e);
 // and belongs in a scheduled job, not in everyone's pre-commit loop.
 const CASES = readCount("ROOM_CLIMATE_CARD_FUZZ_CASES", 400);
 
-// The card is talkative about bad configuration, and that talk is a FEATURE tested
-// elsewhere (characterization-diagnostics). Here it would bury the result, so it is
-// captured rather than printed — and counted, because "the card said nothing at all about
-// a broken configuration" would itself be worth knowing.
+// The card's diagnostics are a feature tested in characterization-diagnostics; here they
+// would bury the result, so they are captured rather than printed.
 function withQuietConsole(body) {
   const original = { warn: console.warn, error: console.error, log: console.log };
   const captured = [];
@@ -56,14 +39,8 @@ function withQuietConsole(body) {
   }
 }
 
-// Lets jsdom's queues drain.
-//
-// A card that has rendered stays reachable from the environment's internal queues until
-// the event loop turns — measured at about 850 KB apiece, which runs a 20 000-case run out
-// of a 4 GB heap. Nothing is wrong with the card: the same loop with one macrotask between
-// iterations releases every byte, and the card's listeners, timers and animation frames all
-// balance exactly (200 visibilitychange listeners added, 200 removed; 400 frames requested,
-// 400 cancelled). It is the price of driving a browser environment synchronously.
+// A rendered card stays reachable from jsdom's internal queues until the event loop turns;
+// one macrotask between batches releases it. Listeners, timers and frames balance exactly.
 const YIELD_EVERY = 100;
 const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -90,12 +67,9 @@ function runCase(description) {
   try {
     card = env.createCard(scenario.config, scenario.hass);
   } catch (error) {
-    // setConfig refused. That is correct behaviour for a broken palette or a malformed
-    // views list, and the message is the card's contract with the user.
-    // NOT `instanceof Error`. The card runs in its own V8 realm (see load-card.jsdom.js),
-    // so the Error it throws has that realm's Error.prototype and instanceof is false for
-    // a perfectly ordinary error. What matters to a user is that the refusal carries a
-    // readable message, and that is what this checks.
+    // setConfig refused — correct for a broken palette or malformed views list. Not
+    // `instanceof Error`: the card runs in its own V8 realm (load-card.jsdom.js), so
+    // instanceof is false for an ordinary error; what matters is a readable message.
     const message = error && typeof error.message === "string" ? error.message.trim() : "";
     const violations = [];
     if (!message) {
@@ -119,11 +93,9 @@ function runCase(description) {
   }
 }
 
-// Which invariants a result violated, without the specifics. Shrinking has to aim at THIS
-// rather than at "something is still wrong": a reduction that trades a NaN position for an
-// unrelated refusal is not a smaller version of the same bug, it is a different bug, and
-// following it produces a minimal case that does not demonstrate what was found. The first
-// large run did exactly that.
+// Which invariants a result violated, without the specifics. Shrinking aims at this
+// signature, not at "something is still wrong": a reduction that trades one violation for an
+// unrelated one is a different bug, and following it minimises the wrong case.
 function violationSignature(violations) {
   return JSON.stringify([...violations].sort());
 }
@@ -145,9 +117,8 @@ function describeFailure(seed, description, violations) {
       return violationSignature(unknownViolations(result)) === wanted;
     }));
   } catch (error) {
-    // Reporting must never replace the finding with a secondary infrastructure error. The
-    // unshrunk JSON is still a deterministic reproducer and the shrinker failure is evidence
-    // to fix, so preserve both in the assertion that the developer will actually see.
+    // A shrinker failure must not replace the finding: keep both the unshrunk reproducer and
+    // the shrinker error in the assertion.
     return [
       `seed 0x${seed.toString(16)} violated ${violations.length} invariant(s):`,
       ...violations.map((violation) => `  - ${violation}`),
@@ -173,9 +144,8 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
   const seedRng = new SeededRandom(DEFAULT_SEED);
   const outcomes = { rendered: 0, empty: 0, refused: 0, threw: 0, unbuildable: 0 };
   const failures = [];
-  // Cases that reproduce a defect already registered in test/known-issues.js. They are
-  // counted, not reported: the register holds a deterministic reproduction of each one, so
-  // repeating it here would only bury a genuinely new finding under a known one.
+  // Cases reproducing a defect already in test/known-issues.js: counted, not reported, so a
+  // genuinely new finding is not buried under a known one.
   const knownDefects = new Map();
 
   for (let start = 0; start < CASES; start += YIELD_EVERY) {
@@ -188,9 +158,8 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
         if (!result.violations.length) continue;
         const classified = classifyViolations(result.violations);
         for (const issueId of new Set(classified.known.map(({ issue }) => issue.id))) {
-          // Count generated CASES, not the several model locations that may expose one
-          // defect. Otherwise a copied room value makes the census look more frequent than
-          // the actual failing input population.
+          // Count generated cases, not the model locations that expose one defect, or the
+          // census overstates how often the failing input actually occurs.
           knownDefects.set(issueId, (knownDefects.get(issueId) || 0) + 1);
         }
         if (classified.unknown.length) failures.push({ seed, description, violations: classified.unknown });
@@ -199,8 +168,7 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
     await yieldToEventLoop();
   }
 
-  // Report the census whatever happens: it is the evidence that the run tested what it
-  // says it tested, and it is the first thing to look at when a number moves.
+  // Report the census whatever happens: it is the evidence the run tested what it claims.
   const census =
     Object.entries(outcomes)
       .map(([name, count]) => `${name} ${count} (${((100 * count) / CASES).toFixed(1)} %)`)
@@ -219,9 +187,8 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
   });
 
   if (failures.length) {
-    // One shrunk example PER DISTINCT KIND of failure, not just the first one found. A run
-    // that turns up three different bugs should report three, or the second and third stay
-    // hidden until the first is fixed.
+    // One shrunk example per distinct kind of failure, so a run that turns up three bugs
+    // reports three.
     const byKind = new Map();
     for (const failure of failures) {
       const signature = violationSignature(failure.violations);
@@ -242,23 +209,18 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
   assert.equal(outcomes.unbuildable, 0, `outcomes: ${census}`);
   const share = (name) => (100 * outcomes[name]) / CASES;
 
-  // THE BANDS, and why each one is where it is.
-  //
-  // rendered: the run's whole purpose. Most invariants live behind a card that actually
-  // has data, so if this falls the run quietly stops checking them. Its floor is the
-  // lesson of the previous version, which sat at zero.
+  // The outcome bands. rendered: most invariants live behind a card with data, so a floor
+  // keeps them reachable. empty: a real state that must keep appearing but not dominate.
+  // refused: broken palettes and view lists must keep reaching setConfig for the atomicity
+  // test below.
   assert.ok(
     share("rendered") >= 55,
     `only ${share("rendered").toFixed(1)} % of cases produced a card with data — the invariants are not being reached. ${census}`
   );
-  // empty: the no-data card is a real, reachable, valuable state and must keep appearing —
-  // but it is cheap to check, so it must not dominate.
   assert.ok(
     share("empty") >= 5 && share("empty") <= 40,
     `no-data cards are ${share("empty").toFixed(1)} % of the run, outside 5–40 %. ${census}`
   );
-  // refused: broken palettes and malformed view lists must keep reaching setConfig, or the
-  // atomicity path below stops being exercised.
   assert.ok(
     share("refused") >= 3 && share("refused") <= 30,
     `refused configurations are ${share("refused").toFixed(1)} % of the run, outside 3–30 %. ${census}`
@@ -268,9 +230,8 @@ test(`the card survives ${CASES} randomly described dashboards`, async (t) => {
 // ------------------------------------------------------------------- atomic setConfig --
 
 test("a refused configuration leaves the previous one untouched", () => {
-  // Generated rather than hand-picked: whatever the generator has learned to break, this
-  // sees. The property is the one that matters in a live dashboard — a card that has been
-  // working must not be left half-configured by an edit that fails.
+  // Generated rather than hand-picked. The live-dashboard property: a working card must not
+  // be left half-configured by an edit that fails.
   const seedRng = new SeededRandom(DEFAULT_SEED ^ 0x5eed);
   const good = buildScenario({ metric: "temperature", rooms: [{}, {}] });
   let checked = 0;

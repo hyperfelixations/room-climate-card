@@ -1,14 +1,9 @@
 "use strict";
 
-// The shrinker, tested against predicates whose answer is known in advance.
-//
-// A shrinker is easy to get subtly wrong and hard to notice: it reports a smaller case, the
-// smaller case fails, everything looks fine — and yet the reduction dropped the thing that
-// caused the failure and landed on a different bug. That is exactly what the previous
-// attempt did, and because nothing tested the shrinker, nothing said so.
-//
-// So the properties checked here are the two that make a shrunk case trustworthy: what
-// comes back still satisfies the predicate, and what comes back is genuinely smaller.
+// The shrinker, tested against predicates whose answer is known in advance. The two
+// properties that make a shrunk case trustworthy: what comes back still satisfies the
+// predicate, and what comes back is genuinely smaller. Boundary: shrink.js is the code under
+// test; the predicates here stand in for the property/metamorphic runners that use it.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

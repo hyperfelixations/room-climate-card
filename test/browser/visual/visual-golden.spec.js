@@ -1,33 +1,22 @@
 "use strict";
 
-// Visual golden tests cover desktop/mobile widths, light/dark, all four modes,
-// no-data state, 1-4 views, supported languages and RangeScale collisions.
-// Uses Playwright's built-in
-// toHaveScreenshot(), which on the FIRST run writes baseline PNGs into
-// test/browser/visual/visual-golden.spec.js-snapshots/ (committed alongside the
-// test as the reference) and on every subsequent run pixel-diffs against
-// them, failing if the rendered output drifts unexpectedly.
-//
-// Coverage note: a representative cross-section rather than the full
-// 4-mode x 5-language x N-width x light/dark combinatorial matrix (that
-// many baseline images would be impractical to review/maintain by hand) —
-// all 4 modes once each, no-data state, 1/2/3/4 views, one narrow+one wide
-// width, light+dark, and one non-English language as a sanity check that
-// longer translated strings don't visibly break layout.
+// Golden screenshots via Playwright's toHaveScreenshot(), diffed against committed PNGs in
+// visual-golden.spec.js-snapshots/. A representative cross-section, not the full
+// mode x language x width x theme matrix: all four modes once, no-data, 1-4 views, one
+// narrow and one wide width, light and dark, one non-English language. Each PNG is mapped
+// to the card function it exercises in interne Doku §4 "Golden-Inventar"; budget and the
+// guard test are in §4 "Baseline- und Golden-Vertrag".
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 async function shot(page, cardId, name, width = 400) {
-  // Waits on the layout mechanism rather than on a duration — see setCardWidth(). A
-  // screenshot taken a frame too early is not a visible failure, it is a baseline that
-  // quietly disagrees with itself from one run to the next, which is exactly the kind
-  // of noise that forces a tolerance wide enough to hide real regressions.
+  // Waits on the layout mechanism, not a duration (see setCardWidth) — a frame-early
+  // screenshot is non-deterministic noise, not a visible failure.
   await setCardWidth(page, cardId, width);
-  // #stage (not the bare card) so the card's box-shadow and the
-  // surrounding page-background gutter are captured too -- see the
-  // #stage comment in harness.html.
+  // #stage, not the bare card, so the box-shadow and page-background gutter are captured
+  // (see harness.html).
   await expect(page.locator("#stage")).toHaveScreenshot(name, { animations: "disabled" });
 }
 
@@ -195,12 +184,9 @@ test("visual golden: narrow width (320px)", async ({ page }) => {
   await shot(page, cardId, "narrow-320.png", 320);
 });
 
-// The card exactly as the README advertises it — screenshot.png and
-// screenshot-dark.png at the top of that file show this configuration and nothing
-// else. Those two images are the first thing anyone sees about this project, so the
-// state they promise is pinned here rather than left to drift: a primary value with
-// five rooms, all inside the comfort band, at the default sort and default views.
-// If this ever needs re-recording, the README images have to be retaken with it.
+// The card exactly as the README's screenshot.png / screenshot-dark.png advertise it:
+// primary value, five rooms all inside the comfort band, default sort and views. Re-record
+// only together with the README images.
 test.describe("visual golden: the card the README advertises", () => {
   const HERO_ROOMS = [
     { name: "Bedroom", short: "BE", entity: "sensor.bedroom", value: 20.6 },
@@ -228,15 +214,14 @@ test.describe("visual golden: the card the README advertises", () => {
     await gotoHarness(page);
     const cardId = await createHeroCard(page);
     const card = page.locator(`#${cardId}`);
-    // Assert the state the images actually promise, so a golden can never be
-    // re-recorded around a card that quietly stopped saying this.
+    // Assert the state the images promise, so a golden cannot be re-recorded around a card
+    // that stopped saying it.
     await expect(card.locator(".rtc-status-pill")).toHaveText("Optimal");
     await expect(card.locator(".rtc-avg-value-num")).toHaveText("22.4");
     await expect(card.locator(".rtc-room-chip")).toHaveCount(5);
     await expect(card.locator(".rtc-scale-footer").first()).toContainText("Comfort 5/5");
     await expect(card.locator(".rtc-scale-footer").first()).toContainText("Spread 3.4");
-    // 450px, the width the published images were taken at: narrower and the subtitle
-    // ellipsizes, which is not what those images show.
+    // 450px: the width the published images were taken at (narrower ellipsizes the subtitle).
     await shot(page, cardId, "readme-hero-light.png", 450);
   });
 
@@ -272,12 +257,9 @@ test("visual golden: German (longer strings than English)", async ({ page }) => 
 });
 
 test.describe("visual golden: long-/short-form label architecture", () => {
-  // Polish scale.optimalLabel and French rangeScale.currentLabel were
-  // permanently abbreviated to fix a real 320px overlap; both are now the
-  // full word by default, with the abbreviation only substituted at
-  // measure time when it genuinely doesn't fit (see _resolveLabelForm() in
-  // room-climate-card.js). These pin the actual rendered pixels at exactly
-  // a narrow width so the layout contract cannot silently regress.
+  // Polish scale.optimalLabel and French rangeScale.currentLabel are the full word by
+  // default, abbreviated only at measure time when they do not fit (_resolveLabelForm()).
+  // These pin the rendered pixels at a narrow width so that contract cannot regress.
   test("Polish scale.optimalLabel at 320px (co2, the mode with a left-anchored optimal band)", async ({ page }) => {
     await gotoHarness(page);
     const states = {
@@ -288,8 +270,8 @@ test.describe("visual golden: long-/short-form label architecture", () => {
     const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states, "pl");
     const card = page.locator(`#${cardId}`);
     await setCardWidth(page, cardId, 320);
-    // Functional assertion first: either the full "optymalny" or
-    // its "opt." fallback is legitimately on screen, never neither/garbled.
+    // Functional assertion first: the full "optymalny" or its "opt." fallback is on screen,
+    // never neither.
     const text = await card.locator(".rtc-card").innerText();
     expect(text).toMatch(/optymalny|opt\./);
     await expect(page.locator("#stage")).toHaveScreenshot("label-short-form-pl-320.png", { animations: "disabled" });
@@ -301,9 +283,8 @@ test.describe("visual golden: long-/short-form label architecture", () => {
       "sensor.avg": mkStateObj("sensor.avg", 20, TEMPERATURE_C),
       "sensor.range": mkStateObj("sensor.range", 9, { unit_of_measurement: "°C", minimum: 12, maximum: 21 }),
     };
-    // Solo view (range_scale only, no carousel) so the screenshot actually
-    // shows the current/min/max labels this test is about, instead of
-    // whichever view happens to be the carousel's first slide.
+    // Solo range_scale view (no carousel) so the screenshot shows the current/min/max
+    // labels this test is about.
     const cardId = await createCard(
       page,
       { entity: "sensor.avg", range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true }] },
@@ -329,8 +310,7 @@ test.describe("visual golden: native Fahrenheit at normal and narrow widths", ()
     return createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, states);
   }
 
-  // Functional assertions precede the snapshot so it validates real DOM
-  // semantics as well as pixel stability.
+  // Functional assertions precede the snapshot so it validates DOM semantics too.
   async function assertNativeFahrenheit(page, cardId) {
     const text = await page.locator(`#${cardId} .rtc-card`).innerText();
     expect(text).toContain("72");
@@ -449,9 +429,8 @@ test("visual golden: PM2.5 rangeScale keeps the lifted min label fully painted",
 });
 
 test.describe("visual golden: null-view policy (collapse vs. localized hint)", () => {
-  // Functional/DOM assertions precede the snapshot; resolve-active-views.test.js
-  // covers the same two cases at the DOM-assertion
-  // level; this only re-proves it visually.
+  // resolve-active-views.test.js covers these two cases at the DOM level; this re-proves
+  // them visually.
   test("deliberately empty views: collapses the view area — no hint markup, no empty space artifact", async ({ page }) => {
     await gotoHarness(page);
     const states = {
@@ -676,13 +655,8 @@ test.describe("visual golden: adaptive outdoor scale and per-room markers", () =
   });
 });
 
-// Two states the baseline set never depicted, and the gap is why both went unnoticed.
-//
-// A card whose headline is a CALCULATED consensus renders a different element than one
-// whose headline belongs to an entity, and no golden showed the former: the two shapes
-// were spaced differently for as long as the baselines existed, and each on its own
-// looked perfectly reasonable. And no golden showed a reading wide enough to leave its
-// column, so the unit painting across the view beside it was never in a picture either.
+// Two headline shapes: a calculated-consensus headline (a different element than an
+// entity-owned one, spaced differently) and a reading wide enough to leave its column.
 test.describe("visual golden: headline shapes and headline widths", () => {
   const CONSENSUS_ROOMS = [
     { name: "Living Room", short: "LR", entity: "sensor.r1" },
@@ -697,8 +671,7 @@ test.describe("visual golden: headline shapes and headline widths", () => {
     };
     const cardId = await createCard(page, { rooms: CONSENSUS_ROOMS }, states);
     const card = page.locator(`#${cardId}`);
-    // The state the picture is supposed to show, asserted rather than assumed: a headline
-    // that is not attributable to any entity, and therefore not a control.
+    // Asserted, not assumed: a headline attributable to no entity, therefore not a control.
     expect(await card.locator(".rtc-avg-button").evaluate((node) => node.tagName)).toBe("DIV");
     await expect(card.locator(".rtc-avg-button")).not.toHaveAttribute("data-entity", /.*/);
     await expect(card.locator(".rtc-avg-label")).toHaveText("Home avg.");
@@ -725,8 +698,8 @@ test.describe("visual golden: headline shapes and headline widths", () => {
           states
         );
         await setCardWidth(page, cardId, width);
-        // The claim the picture has to keep honest: the whole value is on screen, inside
-        // its own box. A baseline alone would not notice it creeping back out.
+        // The whole value stays on screen inside its own box — a baseline alone would not
+        // catch it creeping back out.
         const fits = await page
           .locator(`#${cardId}`)
           .locator(".rtc-avg-value")
@@ -738,23 +711,13 @@ test.describe("visual golden: headline shapes and headline widths", () => {
   }
 });
 
-// A palette changes every classification colour on the card at once — the headline, the
-// scale bands, the room chips and the extremes. One picture per palette is what proves
-// that, in a way no per-colour assertion can: it also catches a colour that reached
-// somewhere the palette was never threaded through.
-//
-// The eight cover every road into the palette layer: the default, a second shipped design,
-// the one built for colour vision deficiency, the short one whose wings do not reach as
-// far as the profile does, one DERIVED from a colour name — which has no file to inspect,
-// so a picture is the only way to see what it produces — one written out in YAML with
-// nothing but a middle, which is a card in a single colour, and the two INTERPOLATED
-// spellings.
-//
-// The last two matter for the same reason as `blue`, only more so: a gradient ramp exists
-// nowhere as a file, and both the hue path and the spacing of its steps are things only a
-// picture shows. `blue-red` is the two-colour case and travels the short way round through
-// violet; `blue-green-red` is the three-colour case, where the middle is the named green and
-// each wing is interpolated to its own end.
+// One picture per palette: a palette recolours the headline, scale bands, chips and
+// extremes at once, and a picture also catches a colour reaching somewhere the palette was
+// never threaded through. The eight cover every road into the palette layer — default, a
+// second shipped design, the colour-vision one, the short one whose wings fall short of the
+// profile, one derived from a colour name (no file to inspect), a YAML palette with only a
+// middle (a single-colour card), and the two interpolated spellings (`blue-red` short way
+// through violet; `blue-green-red` with a named middle and interpolated wings).
 test.describe("visual golden: the shipped palettes", () => {
   for (const palette of ["pastel", "vivid", "color-vision", "signal", "blue", "blue-red", "blue-green-red", { optimal: "1DB85D" }]) {
     const name = typeof palette === "string" ? palette : "single-color";
@@ -785,13 +748,9 @@ test.describe("visual golden: the shipped palettes", () => {
   }
 });
 
-// The line under the title, when it is longer than the card is wide.
-//
-// Two pictures, because the whole promise is a comparison: `clip` is what the card has
-// always done and must still do to the pixel, and `wrap` lets the line run on and pushes
-// everything below it down. A screenshot is the only honest proof of the second — that
-// the header grew, that the panel moved rather than being overlapped, and that a long
-// unbroken entity id wrapped instead of running out of the card.
+// The subtitle when it is longer than the card is wide. Two pictures, because the promise
+// is a comparison: `clip` ellipsizes on one line, `wrap` lets the line run on and pushes
+// the panel down (not overlapped), with a long unbroken entity id wrapping inside the card.
 test.describe("visual golden: the subtitle", () => {
   for (const overflow of ["clip", "wrap"]) {
     test(overflow, async ({ page }) => {
@@ -815,12 +774,9 @@ test.describe("visual golden: the subtitle", () => {
   }
 });
 
-// One palette, in the other colour scheme, and only one — because this is the case that
-// went wrong. A ramp derived from a colour name is the only palette on the card that
-// nobody can inspect as a file, and `palette: blue` producing a washed-out lilac was
-// noticed on a dark dashboard. The light picture above proves the ramp; this one proves
-// it in the place the report came from. The hand-written palettes need no dark twin: they
-// are five hex values anyone can read.
+// One derived palette (`palette: blue`) in dark mode — the ramp derived from a colour name
+// is the only one with no file to inspect, and a washed-out result shows up in dark. The
+// hand-written palettes are readable hex and need no dark twin.
 test("visual golden: a derived palette in dark mode", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoHarness(page);
@@ -844,17 +800,11 @@ test("visual golden: a derived palette in dark mode", async ({ page }) => {
   await shot(page, cardId, "palette-blue-dark.png", 400);
 });
 
-// The hardest thing the card is asked to paint: a colour that is almost the same as the tint
-// of itself it sits on. Pure yellow on a light dashboard is the extreme of it — a 20% tint of
-// #FFFF00 over a white card is #FFFFEC, and a word written in #FFFF00 on that is not a word.
-//
-// The picture is here because the numbers alone were not enough. A measurement of the pill's
-// separation lives in paint-role-calibration.spec.js and is the guard that fails first; what
-// it cannot say is whether the answer LOOKS like the card. The adjustment deliberately moves
-// the colour as little as it can, so the question "is this still a yellow card, and can the
-// pill be read on it" is one only a person can settle — and this is the picture they settle
-// it on. Everything else in the shot is at full strength: the accent line, the scale, the
-// markers and the chips are all the yellow that was asked for.
+// Pure yellow on a light card: a colour almost identical to the tint of itself it sits on
+// (a 20% tint of #FFFF00 on white is #FFFFEC). paint-role-calibration.spec.js measures the
+// pill separation and fails first; this picture is the human check that the adjusted
+// result still looks like a yellow card. Everything else in the shot — accent line, scale,
+// markers, chips — is full-strength yellow.
 test("visual golden: a colour that has to be adjusted to be read on itself", async ({ page }) => {
   await gotoHarness(page);
   const attributes = TEMPERATURE_C;
@@ -877,11 +827,9 @@ test("visual golden: a colour that has to be adjusted to be read on itself", asy
   await shot(page, cardId, "palette-yellow.png", 400);
 });
 
-// The card without the bar across its top edge. Only the "off" case gets a picture: the
-// default is already in every other golden in this file, and it is pinned byte for byte by
-// the DOM characterization baselines besides. What this one has to show is that removing the
-// line leaves nothing behind — no gap where it was, no substitute border, the same top corner
-// radius the bottom corners have.
+// The card with `show.accent_line: false`: removing the line leaves nothing behind — no
+// gap, no substitute border, the top corner radius matching the bottom. Only the "off" case
+// needs a picture; the default is in every other golden here.
 test("visual golden: the card without its accent line", async ({ page }) => {
   await gotoHarness(page);
   const attributes = TEMPERATURE_C;
@@ -903,17 +851,10 @@ test("visual golden: the card without its accent line", async ({ page }) => {
   await shot(page, cardId, "accent-line-off.png", 400);
 });
 
-// WHAT THE CARD LOOKS LIKE WITH A PART TAKEN OUT.
-//
-// Six pictures, and the point of every one of them is a shape rather than a colour: whether
-// the row above still reads as a row, whether what is left sits where it should, and whether
-// the space the missing part occupied went with it. None of that is a thing an assertion can
-// settle — a column that keeps its 11px gap is correct by every measurement and wrong on the
-// screen — which is why these are pictures and not a table of computed styles.
-//
-// The DEFAULT is deliberately not among them. It is in every other golden in this file, and
-// the DOM characterization baselines pin it to the byte besides; a seventh picture of it here
-// would only be a seventh thing to re-record.
+// The card with a part taken out. Six pictures, each about shape not colour: whether the
+// row still reads as a row, whether what is left sits where it should, and whether the
+// missing part's space went with it — none of which an assertion settles. The default is
+// not among them (it is in every other golden here).
 test.describe("visual golden: the parts a card can leave out", () => {
   const SHOW_CASES = [
     ["no-icon", { icon: false }],

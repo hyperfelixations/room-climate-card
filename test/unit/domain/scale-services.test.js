@@ -1,9 +1,9 @@
 "use strict";
 
-// Direct unit tests for scale configuration, dynamic axes, and marker/band geometry.
-// These modules form the cohesive src/domain/scale service family and evolve together.
-// Classification projection, palette choice, and icons remain in domain-services-modules,
-// so a failure here identifies axis or geometry ownership rather than generic domain work.
+// Direct unit tests for scale configuration, dynamic axes, and marker/band geometry — the
+// src/domain/scale family, which evolves together.
+// Boundary: classification projection, palette choice and icons are
+// domain-services-modules.test.js. See interne Doku §5 „Scale- und Geometry-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -70,11 +70,9 @@ test("an unanchored axis follows the data only", () => {
   );
 });
 
-// The reference range is the only thing an unanchored profile does not have, and both
-// remaining readers of it — the anchoring clamp and the non-finite fallback — have to
-// cope. Every call site feeds finite values (see buildScaleAxis()), so this covers the
-// defensive path rather than a reachable one: it must still produce an axis that can be
-// divided by, because every marker position does exactly that.
+// Every call site feeds finite values (see buildScaleAxis()), so this is the defensive
+// path: an unanchored axis with no reference range must still be finite and divisible,
+// because every marker position divides by it.
 test("an unanchored axis stays finite and ordered even without usable readings", () => {
   const unanchored = { ...INDOOR_C, scale: null, anchorScale: false };
   for (const bad of [NaN, Infinity, -Infinity, null, undefined, "x"]) {
@@ -138,8 +136,7 @@ test("resolveDynamicStep() measures the anchored span, not just the data span", 
 
 test("rangePosition() returns a left edge and a width in percent", () => {
   const band = geometry.rangePosition(20, 24, 19, 25);
-  // Asserted with a tolerance: the width is computed as right-minus-left, which
-  // is not bit-identical to (4/6)*100.
+  // Tolerance: the width is right-minus-left, not bit-identical to (4/6)*100.
   assert.ok(Math.abs(band.left - (1 / 6) * 100) < 1e-9, `left ${band.left}`);
   assert.ok(Math.abs(band.width - (4 / 6) * 100) < 1e-9, `width ${band.width}`);
   assert.deepEqual(geometry.rangePosition(19, 25, 19, 25), { left: 0, width: 100 });

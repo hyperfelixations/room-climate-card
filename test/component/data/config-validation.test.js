@@ -1,11 +1,10 @@
 "use strict";
 
-// Number(true) === 1, so a naive Number(value)
-// parser would silently accept booleans as valid numeric config (e.g.
-// `decimals: true` -> 1). _parseConfigNumber() must reject anything that
-// isn't a real number or a numeric-looking string, and rotation_seconds/
-// slide_seconds must have practical upper bounds so an extreme value can't
-// overflow the animation/timer millisecond math.
+// Config primitives and their wiring into setConfig(): _parseConfigNumber,
+// _normalizeDecimalsOverride, _normalizePositiveInteger, _normalizePositiveSeconds, plus
+// end-to-end checks that setConfig() actually calls them. Number(true) === 1, so a naive
+// parser would accept `decimals: true` as 1; rotation_seconds/slide_seconds need upper
+// bounds so an extreme value cannot overflow the timer millisecond math.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -159,10 +158,8 @@ test("integration: valid overrides are honored end to end", () => {
 });
 
 // ---- Duplicate rooms[].entity is rejected ----
-// _updateRoomGrid() keys its DOM patching by room.entity; a
-// duplicate would silently make the Map overwrite one chip. Without any
-// uniqueness enforcement here, that invalid state was reachable from plain
-// YAML.
+// _updateRoomGrid() keys DOM patching by room.entity, so a duplicate would silently
+// overwrite a chip. Plain YAML could reach that state.
 
 test("integration: duplicate rooms[].entity throws with the offending entity named", () => {
   assert.throws(
@@ -208,16 +205,14 @@ test("integration: an existing valid card is not left in an inconsistent state b
       rooms: [{ entity: "sensor.r3", name: "Room 3" }, { entity: "sensor.r3", name: "Room 3 duplicate" }],
     })
   );
-  // The previous, still-valid config must remain in effect (setConfig()
-  // throwing must not have partially overwritten this._config).
+  // setConfig() throwing must not have partially overwritten this._config.
   assert.equal(card._config.rooms.length, 2);
   assert.equal(card._config.rooms[0].entity, "sensor.r1");
   env.cleanup(card);
 });
 
-// getStubConfig(): the Home Assistant card-picker/editor placeholder. Must
-// stay generic (no maintainer-specific household entities/room names) and
-// must itself be a config setConfig() actually accepts.
+// getStubConfig() is the card-picker placeholder: stays generic (no household-specific
+// entities/names) and is itself a config setConfig() accepts.
 test("getStubConfig() is generic (no household-specific entities/rooms) and is a valid config", () => {
   const stub = el.constructor.getStubConfig();
   const serialized = JSON.stringify(stub);

@@ -1,27 +1,12 @@
 "use strict";
 
-// If the primary average entity is missing or unknown
-// (no device_class, no unit_of_measurement), _metricType() must fall back to
-// a configured room that DOES carry a recognizable device_class/unit instead
-// of defaulting straight to temperature — otherwise mode/unit/comfort bounds
-// would silently be wrong even though a valid room-fallback average is
-// computed.
-//
-// metricType and unit must always come from the
-// SAME entity (_resolveMetricContext(), see room-climate-card.js) — a
-// same accepted measurement context, preventing combinations such as a
-// humidity average labeled with hPa.
-//
-// _resolveMetricContext() uses EntityModel/MeasurementContext. A genuine
-// disagreement between rooms' own metric kinds
-// (with no usable primary to arbitrate) now produces a "mixed_metric_kinds"
-// diagnostic and an empty/error state, never a "winning" type chosen by
-// count. Physical validity
-// (_isPhysicallyValid()) and numeric availability (validNumeric) are now
-// checked BEFORE a primary or room may participate in metric-kind
-// resolution or averaging at all — an unavailable room or a physically
-// implausible primary (e.g. 0 ppm CO2) can no longer "win" a decision it
-// has no valid data for.
+// Metric-kind fallback when the primary average entity says nothing (missing, or no
+// device_class and no unit): resolution falls back to a configured room that carries a
+// recognizable device_class/unit rather than defaulting to temperature. Kind, value and
+// unit always come from the same entity, so a humidity average is never labelled hPa.
+// Rooms that genuinely disagree with no usable primary produce a "mixed_metric_kinds"
+// diagnostic and an empty state, never a winner chosen by count; physical validity and
+// numeric availability are checked before any entity may participate.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -113,12 +98,9 @@ test("Fahrenheit without device_class resolves to temperature, canonicalizes to 
     Math.abs(context.averageSource.canonicalValue - 200 / 9) < 1e-9,
     "72°F must canonicalize to (72-32)*5/9 ≈ 22.22°C internally, not pass through raw"
   );
-  // Native Fahrenheit display (see test/component/data/native-fahrenheit.test.js
-  // for the full suite): the view model projects the canonical value back
-  // into the resolved display unit — °F here, since the usable primary
-  // itself reports °F — so data.average.value reads 72 again, not the canonical
-  // 22.22, and comfort bounds are the generated integer Fahrenheit ones
-  // (68-75), not Celsius (20-24), so comparison happens entirely in °F.
+  // Native °F display (full suite: native-fahrenheit.test.js): the view model projects the
+  // canonical value back into the resolved unit, so data.average.value reads 72 and comfort
+  // bounds are the generated °F integers (68-75), not Celsius.
   const data = el._computeViewModel();
   assert.equal(data.metric.kind, "temperature");
   assert.equal(el._unit(), "°F");
@@ -157,10 +139,8 @@ test("mixed room device_classes (one kind outnumbers the other): still no majori
     "sensor.t2": mkState("sensor.t2", 22, TEMPERATURE_C),
     "sensor.t3": mkState("sensor.t3", 23, TEMPERATURE_C),
   });
-  // Three temperature rooms outnumbering one humidity room must not decide
-  // a winner by count — averaging temperature and humidity together (or
-  // silently dropping the humidity room without saying so) is exactly the
-  // DATA-03 bug this policy removes.
+  // Three temperature rooms outnumbering one humidity room must not pick a winner by count
+  // — blending them, or silently dropping the humidity room, is the DATA-03 bug this removes.
   const el = env.createCard(
     { entity: "sensor.avg", rooms: [{ entity: "sensor.hum1" }, { entity: "sensor.t1" }, { entity: "sensor.t2" }, { entity: "sensor.t3" }] },
     hass
@@ -192,8 +172,7 @@ test("consistent room device_classes: consistent:true, no disagreement flagged",
 
 test("metricType and unit resolve together when the primary carries a stray unit", () => {
   const hass = mkHass({
-    // Primary entity has no device_class and a stray/irrelevant unit
-    // (simulating a misconfigured or leftover entity) but no numeric value.
+    // No device_class, a stray hPa unit, and no numeric value.
     "sensor.avg": mkState("sensor.avg", "unavailable", { unit_of_measurement: "hPa" }),
     "sensor.hum1": mkState("sensor.hum1", 55, HUMIDITY),
     "sensor.hum2": mkState("sensor.hum2", 60, HUMIDITY),
@@ -209,13 +188,11 @@ test("metricType and unit resolve together when the primary carries a stray unit
 });
 
 // ==== Measurement-context consistency cases ====
-// These cases share one invariant: metric kind, value and unit resolve
-// atomically and never produce combinations such as "55 ppm" or "1013 °C".
+// Shared invariant: metric kind, value and unit resolve atomically — never "55 ppm" or "1013 °C".
 
 test("an unusable CO2 primary keeps the card a CO2 card, and humidity rooms stay foreign", () => {
-  // Two separate facts, and the card keeps them apart: the READING is unusable, so it
-  // supplies no value; the DECLARATION still says this is a CO2 card, so a humidity room
-  // is as foreign as it would be if the reading were fine.
+  // Reading unusable (supplies no value), but the declaration still says CO2 card, so a
+  // humidity room stays as foreign as it would be with a fine reading.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", -20, CO2), // a negative concentration is impossible
     "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
@@ -232,8 +209,7 @@ test("an unusable CO2 primary keeps the card a CO2 card, and humidity rooms stay
 });
 
 test("an unusable primary that declares nothing lets valid rooms take over", () => {
-  // The other half of the same rule: without a device_class and without a unit the primary
-  // says nothing at all, so the rooms decide what the card is about.
+  // The other half: with no device_class and no unit the primary says nothing, so rooms decide.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.hum1": mkState("sensor.hum1", 50, HUMIDITY),
@@ -303,10 +279,8 @@ test("an unrecognized-unit primary falls back without displaying hPa as temperat
 });
 
 // ==== device_class does not exempt an entity from unit validation ====
-// An entity whose device_class resolves a
-// metric kind but whose unit does NOT match any of that kind's registered
-// UnitProfiles is now `validUnit: false` and excluded from
-// primaryUsable/room-consensus, exactly like a physically invalid reading.
+// A resolved metric kind whose unit matches no registered UnitProfile is validUnit: false
+// and excluded from primaryUsable/room-consensus, like a physically invalid reading.
 
 test("device_class temperature with an unresolvable hPa unit is unusable", () => {
   const hass = mkHass({
@@ -460,9 +434,8 @@ test("room consensus canonicalizes mixed units of the same metric before aggrega
 });
 
 test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () => {
-  // Starts with a benign config (no rooms yet, so no mixed diagnosis is
-  // possible at construction time) so the warn spy can be installed BEFORE
-  // the mixed-kind state is ever resolved for the first time.
+  // Benign start (no rooms, so no mixed diagnosis yet) lets the warn spy install before the
+  // mixed-kind state is first resolved.
   const initialHass = mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", {}) });
   const el = env.createCard({ entity: "sensor.avg" }, initialHass);
   const warnings = [];
@@ -478,8 +451,7 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.hum1" }] });
   assert.equal(warnings.length, 1, "the first resolution of a mixed-kind state must warn once");
 
-  // A new hass object (HA reassigns one on every real update) with the SAME
-  // underlying misconfiguration must not re-warn.
+  // A new hass object (HA makes one per update) with the same misconfiguration must not re-warn.
   const hassB = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.co2a": mkState("sensor.co2a", 705, CO2),
@@ -488,8 +460,7 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
   el.hass = hassB;
   assert.equal(warnings.length, 1, "an unchanged mixed_metric_kinds diagnosis must not spam the console on every hass update");
 
-  // A config/hass change where the diagnosis genuinely changes (different
-  // pair of disagreeing kinds) must warn again.
+  // A genuinely changed diagnosis (different disagreeing pair) must warn again.
   const hassC = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.co2a": mkState("sensor.co2a", "unavailable", CO2),

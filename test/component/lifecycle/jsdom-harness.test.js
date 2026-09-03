@@ -1,17 +1,9 @@
 "use strict";
 
-// The jsdom harness itself, tested. It is the thing every other jsdom test stands on, and
-// a harness that leaks cards produces failures that look like product bugs: the leaked
-// card's resume timer keeps firing and the NEXT test in the file inherits it.
-//
-// The leak path is not hypothetical, and it is worst exactly when it matters. The common
-// shape
-//
-//     const el = env.createCard(config, hass);
-//     assert.equal(...);          // <- throws
-//     env.cleanup(el);            // <- never reached
-//
-// leaks on every failing assertion. withCard() closes that.
+// The jsdom harness itself, tested. Every other jsdom test stands on it, and a harness that
+// leaks cards produces failures that look like product bugs — the leaked card's resume
+// timer keeps firing into the next test. The common `createCard(); assert(); cleanup();`
+// shape leaks on every failing assertion; withCard() closes that.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

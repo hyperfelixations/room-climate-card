@@ -1,15 +1,10 @@
 "use strict";
 
-// THE ONE PLACE the hand-written product surface is compared with the code.
-//
-// Every other generic matrix in the suite imports test/manifests/product-surface.js and
-// trusts it. That trust is only worth something because this file exists: it is the single
-// seam where an independent statement of what the card supports meets what the card
-// actually registers, and a mismatch here means one of the two is wrong.
-//
-// A failure is therefore never "update the expectation until it passes". It is a question:
-// did the product gain something that was never written down, or lose something that still
-// is? Both have happened.
+// The one place the hand-written product surface is compared with the code. Every other
+// generic matrix imports test/manifests/product-surface.js and trusts it; that trust is
+// only worth something because this file exists. A failure is a question, not "update the
+// expectation": did the product gain something never written down, or lose something still
+// claimed? Both have happened.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -146,11 +141,9 @@ test("every view's option keys match the public surface", () => {
 // -------------------------------------------------------- the top-level keys --
 
 test("the top-level keys the manifest claims are the ones the normalizer reads", () => {
-  // Asked of the SOURCE rather than of a normalized result, because a normalized result
-  // cannot answer it: a key the normalizer never looks at leaves no trace in the object it
-  // returns, so a configuration written with it would be silently ignored while the manifest
-  // went on promising it. `userConfig.<key>` is the one way the normalizer reaches the raw
-  // configuration, which makes scanning for that the same question stated exactly.
+  // Asked of the source, not a normalized result: a key the normalizer never reads leaves
+  // no trace, so it would be silently ignored while the manifest keeps promising it.
+  // `userConfig.<key>` is the one way the normalizer reaches the raw config.
   const source = fs.readFileSync(path.join(__dirname, "..", "..", "src", "config", "normalize-config.js"), "utf8");
   const read = new Set([...source.matchAll(/\buserConfig\.([a-z_]+)/g)].map((match) => match[1]));
   assert.ok(read.size > 10, "the scan found almost nothing, so it is not scanning");
@@ -163,10 +156,8 @@ test("the top-level keys the manifest claims are the ones the normalizer reads",
 });
 
 test("the keys the card accepts are the ones the manifest claims", () => {
-  // The other end of the same rope. The scan above proves the normalizer READS what the
-  // manifest promises; this proves it ACCEPTS exactly that and nothing else — the list a
-  // configuration is measured against when it carries a key nobody recognises. Without both,
-  // an option could be read and still warned about, or accepted and never read.
+  // The other end: the scan above proves the normalizer reads what the manifest promises;
+  // this proves it accepts exactly that — otherwise an option could be read and still warned about.
   assert.deepEqual([...topLevelKeys.TOP_LEVEL_KEYS].sort(), [...surface.TOP_LEVEL_CONFIG_KEYS].sort());
   // And the two lists stay apart: a key Home Assistant writes is not one the card owns.
   const owned = [...topLevelKeys.FRAMEWORK_KEYS].filter((key) => topLevelKeys.TOP_LEVEL_KEYS.has(key));

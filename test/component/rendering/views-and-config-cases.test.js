@@ -1,19 +1,10 @@
 "use strict";
 
-// Whole configurations, rendered - minimal, rooms-only, with a range entity, and everything
-// at once.
-//
-// What these exercise is not any one option but the comparison in _render() between
-// data.views.keys and the views the element currently has on screen. That comparison decides
-// whether the card patches what is there or rebuilds it, and it is only reachable through a
-// configuration that actually changes the view list.
-//
-// Representative rather than exhaustive on purpose: the option grid itself is generated in
-// test/property/, which is the layer that can afford combinations. These four are the shapes
-// a person actually writes.
-
-// Representative minimal, rooms, range and full configurations exercise the
-// generic data.views.keys versus this._views comparison in _render().
+// Whole configurations, rendered — minimal, rooms-only, with a range entity, and all at
+// once. What these exercise is the comparison in _render() between data.views.keys and the
+// views currently on screen, which decides whether the card patches or rebuilds and is only
+// reachable through a config that changes the view list. Representative, not exhaustive:
+// the option grid is generated in test/property/; these four are what a person writes.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -116,10 +107,8 @@ test("roomsComparable requires >= 2 valid room values, not just >= 2 configured 
   env.cleanup(el);
 });
 
-// _render() compares the complete views array, so it
-// must catch length changes AND pure reordering at equal length. The
-// comparison itself lives inline in _render(), so this helper mirrors the source
-// expression to test the algorithm in isolation.
+// _render() compares the complete views array (length changes and reorder at equal length).
+// The comparison is inline in _render(); this helper mirrors it to test the algorithm alone.
 function viewsChanged(currentViews, dataViews, dataEmpty) {
   return dataEmpty ? false : currentViews.length !== dataViews.length || dataViews.some((key, i) => key !== currentViews[i]);
 }
@@ -142,10 +131,8 @@ test("viewsChanged: no-data models always report false regardless of arrays", ()
   assert.equal(viewsChanged([], ["range", "scale"], true), false);
 });
 
-// A structural rebuild (_renderAll()) must fire on real config changes that
-// affect the DOM/carousel — verified end to end via _render()'s public
-// entry point rather than the inline expression above, by checking the
-// carousel structure actually changes across two setConfig() calls.
+// A structural rebuild must fire on real config changes that affect the DOM/carousel,
+// verified end to end by checking the structure changes across two setConfig() calls.
 test("integration: a config change from Case A to Case B triggers a real structural rebuild (extremes view appears)", () => {
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   assert.deepEqual(normalize(el._views), ["scale"]);

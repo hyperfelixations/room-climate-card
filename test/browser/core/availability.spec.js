@@ -1,15 +1,10 @@
 "use strict";
 
-// Availability in a real browser, where the parts jsdom cannot answer live.
-//
-// The same rules are checked in component/data/availability.test.js against the model. What
-// needs a browser is what happens AROUND them: that an unavailable room chip is still a real
-// element a user can click, that the no-data shell tears down its carousel timers instead of
-// leaving them running, and that recovering from an outage restores the views rather than
-// leaving an empty frame behind.
-//
-// Timers and clickability are the reason this file exists: both are invisible to a model
-// test, and both are how an outage used to leave a card quietly broken.
+// Availability in a real browser, where component/data/availability.test.js checks the
+// model. What needs a browser is what happens around it: an unavailable room chip is still
+// a clickable element, the no-data shell tears down its carousel timers, and recovering
+// from an outage restores the views rather than an empty frame. Timers and clickability are
+// invisible to a model test.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");
@@ -183,18 +178,15 @@ test("room consensus survives partial and total outages, restores focus and fits
   await expect(card.locator(".rtc-avg-value-num")).toHaveText("20.0");
   await expect(card.locator(".rtc-room-unavailable")).toHaveCount(1);
 
-  // sensor.beta now stops EXISTING, which is a different thing from being unavailable:
-  // Home Assistant keeps registered entities in the state machine, so an id that is
-  // gone is an id it no longer knows. The card is a one-room card from here on — its
-  // chip goes, and its one remaining source becomes the interactive headline.
+  // sensor.beta stops existing (not just unavailable), so the card is a one-room card from
+  // here: its chip goes and its one remaining source becomes the interactive headline.
   await card.locator('[data-entity="sensor.beta"]').focus();
   await updateHass(page, cardId, { "sensor.alpha": mkStateObj("sensor.alpha", 20, TEMP) });
   await expect(card.locator('[data-entity="sensor.beta"]')).toHaveCount(0);
   await expect(card.locator(".rtc-avg-label")).toHaveText("Alpha");
   await expect(card.locator("button.rtc-avg-button")).toHaveAttribute("data-entity", "sensor.alpha");
-  // Focus follows to that headline rather than to .rtc-root: focusFallbackTarget()
-  // prefers a real control whenever one exists. What the assertion protects either way
-  // is that focus never leaves the card.
+  // Focus follows to that headline, not .rtc-root: focusFallbackTarget() prefers a real
+  // control. Either way the assertion protects that focus never leaves the card.
   expect(
     await page.evaluate((id) => document.getElementById(id).shadowRoot.activeElement?.className, cardId)
   ).toContain("rtc-avg-button");

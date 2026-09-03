@@ -133,7 +133,7 @@ test("the source scanner sees through template substitutions", () => {
 });
 
 test("the global check distinguishes a global from a realm-correct property access", () => {
-  // Guards the guard again: without the lookbehind, the one CORRECT way to reach
+  // Guards the guard again: without the lookbehind, the one correct way to reach
   // getComputedStyle would be the only thing the check could see.
   assert.equal(referencesGlobal("const s = getComputedStyle(el);", "getComputedStyle"), true);
   assert.equal(referencesGlobal("const s = el.ownerDocument.defaultView.getComputedStyle(el);", "getComputedStyle"), false);

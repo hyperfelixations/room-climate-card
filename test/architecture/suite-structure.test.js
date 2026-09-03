@@ -1,30 +1,19 @@
 "use strict";
 
-// THE ARCHITECTURE OF THE TEST SUITE ITSELF, enforced rather than described.
+// Enforces the structure of the test suite: which directories may hold tests and
+// what a file in each may touch. Each directory is a claim, and that claim is
+// what makes a failure locatable.
 //
-// architecture-imports.test.js does this for src/: it holds the layering by checking it, on
-// the reasoning that a design rule nothing verifies is a design rule that erodes. The suite
-// has exactly the same problem and had none of the same protection — which is how it came to
-// hold seventy files in one flat directory, six independent copies of the language list, and
-// a property test whose invariants had not run for five hundred iterations.
+//   unit/           imports src modules directly, never the bundle; failure names a function
+//   component/      loads the built bundle in jsdom, drives the assembled card
+//   contract/       the card's outward promises: custom element, registration, artifact, safety
+//   architecture/   the rules the sources and this suite obey
+//   characterization/ frozen recordings of what the card produced, with a policy
+//   property/       generated populations and the invariants over them
+//   browser/        a real browser, because the question needs one
+//   manifests/ fixtures/ helpers/  shared material, never tests
 //
-// WHAT A DIRECTORY MEANS HERE. The taxonomy is not filing; each directory is a claim about
-// what its files may touch, and that claim is what makes a failure locatable.
-//
-//   unit/           imports src modules DIRECTLY and never loads the bundle. A failure names
-//                   a function. Subdivided by the src layer it belongs to.
-//   component/      loads the built bundle in jsdom and exercises the assembled card. A
-//                   failure names a behaviour.
-//   contract/       what the card promises the outside world: its custom element, its
-//                   registration, its distribution artifact, its safety.
-//   architecture/   the rules the sources and this suite obey.
-//   characterization/ frozen recordings of what the card produced, with a policy.
-//   property/       generated populations and the invariants that must hold over them.
-//   browser/        a real browser, because the question needs one.
-//   manifests/ fixtures/ helpers/  shared material, and never tests themselves.
-//
-// The rules below are the ones that can actually be checked. They are deliberately few: a
-// structure test that encodes taste rather than consequences is one people route around.
+// Boundary: this checks the test tree. src/ layering is architecture-imports.test.js.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -35,13 +24,9 @@ const TEST_DIR = path.join(__dirname, "..");
 const ROOT = path.join(TEST_DIR, "..");
 
 // Every directory that may hold test files, and what a file there is allowed to be. A
-// directory not listed here fails the first test, so adding one is a decision somebody makes
-// on purpose rather than a folder that appears.
-//
-// manifests/, fixtures/ and helpers/ are deliberately absent as TEST directories: they hold
-// shared material, and a test file appearing in one of them is itself the failure. fixtures/
-// is the one exception, and it is listed, because two fixtures are large enough to be worth
-// testing on their own terms.
+// directory not listed here fails the first test. manifests/ and helpers/ are absent on
+// purpose — shared material, a test file there is itself the failure. fixtures/ is listed
+// because two fixtures are large enough to test on their own terms.
 const TEST_DIRECTORIES = {
   "unit/core": { bundle: false, needsSrc: true },
   "unit/config": { bundle: false, needsSrc: true },
@@ -60,13 +45,13 @@ const TEST_DIRECTORIES = {
   characterization: { bundle: null, needsSrc: false },
   property: { bundle: null, needsSrc: false },
   fixtures: { bundle: null, needsSrc: false },
-  // The known-defect register lives at the top of test/, next to nothing else, because it is
-  // about the PRODUCT rather than about any one layer and a reader should trip over it.
+  // The known-defect register lives at the root of test/: it is about the product, not any
+  // one layer, and a reader should trip over it.
   "": { bundle: null, needsSrc: false },
 };
 
-// The only file the root of test/ may hold. Named rather than counted, so that the next file
-// dropped there has to be argued for in this list instead of arriving quietly.
+// The only file the root of test/ may hold, named rather than counted so the next file
+// dropped there has to be argued for in this list.
 const ROOT_TESTS = ["known-issues.test.js"];
 
 const BROWSER_DIRECTORIES = ["core", "interaction", "geometry", "accessibility", "visual"];
@@ -96,15 +81,10 @@ const browserSpecs = walk(path.join(TEST_DIR, "browser"), (name) => name.endsWit
 
 const scripts = JSON.parse(read(path.join(ROOT, "package.json"))).scripts || {};
 
-// Every local file this one pulls in, transitively.
-//
-// The point is the word TRANSITIVELY. A rule that reads one file is satisfied by moving the
-// forbidden require one step away into a helper, and then the rule is decoration: it passes
-// while the thing it forbids happens on every run. Resolving the graph is the difference
-// between a rule about spelling and a rule about behaviour.
-//
-// Only relative specifiers are followed. A package name is not this suite's file and cannot
-// reach the bundle unless one of these files asks it to.
+// Every local file this one pulls in, transitively — a rule that reads only the file itself
+// is satisfied by moving the forbidden require one step into a helper. Only relative
+// specifiers are followed; a package name cannot reach the bundle unless a followed file
+// asks it to.
 function localDependencies(entry, seen = new Set()) {
   const resolved = fs.existsSync(entry) && fs.statSync(entry).isFile() ? entry : `${entry}.js`;
   if (!fs.existsSync(resolved) || seen.has(resolved)) return seen;
@@ -132,9 +112,8 @@ test("every test file sits in a directory the suite knows about", () => {
 });
 
 test("the known-issue reproduction is the only root-level test", () => {
-  // The root is registered as a directory so that ONE file may live there, and that opening
-  // is exactly wide enough to be abused. A second root-level test would be a file that
-  // belongs to some layer and skipped the decision about which.
+  // The root is registered so exactly one file may live there. A second root-level test
+  // is a file that belongs to some layer and skipped the decision about which.
   const atRoot = nodeTests.map(relative).filter((rel) => !rel.includes("/")).sort();
   assert.deepEqual(atRoot, [...ROOT_TESTS].sort(), `the root of test/ holds: ${atRoot.join(", ")}`);
 });
@@ -147,10 +126,9 @@ test("every browser spec sits in one of the browser directories", () => {
 });
 
 test("every browser ownership directory has a focused public and pipeline command", () => {
-  // A directory nobody can run on its own is a directory nobody runs. Each one carries two
-  // scripts on purpose: the public name builds first, and the `:run` name does not, so a
-  // pipeline that has already built can call the second without paying for a second build —
-  // while a person who has not built cannot accidentally test yesterday's bundle.
+  // Each directory carries two scripts: the public name builds first, the `:run` name does
+  // not, so a pipeline that already built skips the second build and a person who has not
+  // built cannot test yesterday's bundle.
   const missing = [];
   for (const directory of BROWSER_DIRECTORIES) {
     for (const suffix of ["", ":run"]) {
@@ -170,10 +148,9 @@ test("every browser ownership directory has a focused public and pipeline comman
 });
 
 test("the cross-engine core has an explicit command and installer ownership", () => {
-  // Firefox and WebKit run a named CORE rather than the whole suite, and that decision only
-  // survives if three pieces stay together: the projects that define the core, the command
-  // that runs it, and the installer that fetches the engines it needs. Any one of them going
-  // missing turns the cross-engine promise into a run that quietly does nothing.
+  // Firefox and WebKit run a named core, which needs three pieces together: the projects
+  // that define it, the command that runs it, the installer that fetches the engines. Any
+  // one missing turns the cross-engine run into a silent no-op.
   const config = read(path.join(ROOT, "playwright.config.js"));
   for (const project of ["firefox-core", "webkit-core"]) {
     assert.match(config, new RegExp(`name:\\s*["']${project}["']`), `playwright.config.js defines no ${project} project`);
@@ -189,10 +166,9 @@ test("the cross-engine core has an explicit command and installer ownership", ()
 });
 
 test("every browser spec uses the coverage-aware Playwright fixture", () => {
-  // The fixture is the ONE seam through which a browser run reports what it executed. A spec
-  // that imports @playwright/test directly still passes and still proves what it claims, and
-  // is invisible to coverage — which makes the coverage number quietly wrong rather than
-  // obviously wrong. So the import is the rule.
+  // The fixture is the one seam through which a browser run reports coverage. A spec that
+  // imports @playwright/test directly still passes but is invisible to coverage, making the
+  // number quietly wrong. So the import is the rule.
   const offenders = browserSpecs
     .filter((file) => /require\(\s*["']@playwright\/test["']\s*\)/.test(read(file)))
     .map(relative);
@@ -200,8 +176,7 @@ test("every browser spec uses the coverage-aware Playwright fixture", () => {
 });
 
 test("no registered directory is empty", () => {
-  // An empty directory is a claim nothing supports, and the next file to land there inherits
-  // a category nobody chose for it.
+  // An empty registered directory is a claim nothing supports.
   for (const directory of Object.keys(TEST_DIRECTORIES)) {
     if (directory === "") continue;
     const full = path.join(TEST_DIR, ...directory.split("/"));
@@ -216,13 +191,9 @@ test("no registered directory is empty", () => {
 // ------------------------------------------------------------- what a layer may touch --
 
 test("a unit test reaches src directly and never reaches the bundle, even through a helper", () => {
-  // This is the rule that gives `unit/` its meaning. A test that loads the bundle is testing
-  // the assembled card however carefully it is written, and its failure will name a
-  // behaviour rather than a function — which is a component test, and belongs next door.
-  //
-  // Asked of the whole require graph rather than of the file's own text: a require moved one
-  // step into a helper loads the bundle just as thoroughly, and a rule that misses that is a
-  // rule which can be satisfied by looking away.
+  // Gives `unit/` its meaning: a test that loads the bundle is a component test and belongs
+  // next door. Asked of the whole require graph, since a require moved one step into a
+  // helper loads the bundle just as thoroughly.
   const offenders = [];
   for (const file of nodeTests) {
     const rel = relative(file);
@@ -253,8 +224,8 @@ test("a component test really does exercise the assembled card", () => {
 });
 
 test("helpers and fixtures are material, not tests", () => {
-  // A `test()` hiding in a helper runs wherever the helper is required, which is everywhere,
-  // and reports under whichever file happened to pull it in.
+  // A `test()` in a helper runs wherever the helper is required and reports under whichever
+  // file pulled it in.
   const offenders = [];
   for (const directory of ["helpers", "fixtures", "manifests", "property"]) {
     const dir = path.join(TEST_DIR, directory);
@@ -273,12 +244,9 @@ test("every test file contains at least one test", () => {
 });
 
 test("nothing is focused, and nothing is skipped without saying why", () => {
-  // `.only` silently reduces a run to one file and passes. A skip is sometimes right — but a
-  // skip with no reason beside it is indistinguishable from a test somebody gave up on.
-  //
-  // The reason has to sit on the line immediately above and to start with SKIP:. "Any comment
-  // within the four lines above" was the earlier form of this rule, and it was satisfied by
-  // the tail of whatever prose happened to precede the skip.
+  // `.only` reduces a run to one file and passes. A skip needs a reason on the line
+  // immediately above, starting with `SKIP:` — a comment merely somewhere above is
+  // satisfied by the tail of unrelated prose.
   const offenders = [];
   for (const file of [...nodeTests, ...browserSpecs]) {
     const code = read(file);
@@ -296,13 +264,8 @@ test("nothing is focused, and nothing is skipped without saying why", () => {
 });
 
 test("every test file explains itself before its first test", () => {
-  // A header comment is the difference between a suite somebody can change and a suite
-  // somebody is afraid of, and it matters most exactly where it is easiest to skip: a file
-  // split out of a larger one inherits none of the reason it exists apart from its
-  // neighbour, and the next reader cannot recover that reason from the code.
-  //
-  // A floor, not a style: four lines is enough to say what the file covers and where its
-  // boundary runs. Nothing here judges what the lines say — that is what review is for.
+  // A floor, not a style: at least four comment lines before the first test, enough to say
+  // what the file covers and where its boundary runs. Nothing here judges what they say.
   const thin = [];
   for (const file of [...nodeTests, ...browserSpecs]) {
     const head = read(file).split(/^\s*(?:test|const test)\b/m)[0];
@@ -314,12 +277,9 @@ test("every test file explains itself before its first test", () => {
 
 // -------------------------------------------------------------- the shared material --
 
-// One statement of the product surface, and one place it may be written out in full. A test
-// that copies a complete list has made a second statement, and the two will part company —
-// which is not a prediction: it happened to the language list six times over.
-//
-// The manifest's own test is the exception, because comparing the manifest against the card
-// is exactly what it is for.
+// One place the product surface may be written out in full. A test that copies a complete
+// list has made a second statement that will drift. The manifest's own test is the
+// exception, since comparing the manifest against the card is its job.
 function completeCopiesOf(values) {
   const offenders = [];
   for (const file of [...nodeTests, ...browserSpecs]) {
@@ -333,9 +293,7 @@ function completeCopiesOf(values) {
 }
 
 test("the product surface manifest is the only complete language list in the suite", () => {
-  // Six copies of this list used to exist, and the git history shows what that cost: Ukrainian
-  // had to be chased through several commits, and one list was still at eleven languages
-  // afterwards. A curated SUBSET is fine and stays local; a full copy is the thing that rots.
+  // A curated subset is fine and stays local; a full copy is what drifts from the manifest.
   const { LANGUAGES } = require("../manifests/product-surface.js");
   const offenders = completeCopiesOf(LANGUAGES);
   assert.deepEqual(
@@ -346,8 +304,8 @@ test("the product surface manifest is the only complete language list in the sui
 });
 
 test("the product surface manifest is the only complete top-level configuration list", () => {
-  // The same failure mode one layer up, and the more expensive one: a stale copy of the
-  // configuration keys does not turn red when a key is added — it silently stops covering it.
+  // The costlier variant: a stale key copy does not turn red when a key is added, it
+  // silently stops covering it.
   const { TOP_LEVEL_CONFIG_KEYS } = require("../manifests/product-surface.js");
   const offenders = completeCopiesOf(TOP_LEVEL_CONFIG_KEYS);
   assert.deepEqual(

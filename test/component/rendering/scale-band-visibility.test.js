@@ -1,13 +1,10 @@
 "use strict";
 
-// The generic view-options mechanism allows the
-// comfort-band/optimal-band background coloring inside the scale bar can
-// be toggled independently, per view (scale, range_scale), via
-// views:[i].options.show_comfort_band / show_optimal_band. Strictly
-// visual: these options are read ONLY where the two band <div>s and their
-// descriptive labels are assembled, never inside any classification/
-// geometry/footer computation — several tests below verify that
-// non-interaction directly.
+// The comfort-band/optimal-band background colouring inside the scale bar can be toggled
+// independently, per view (scale, range_scale), via views:[i].options.show_comfort_band /
+// show_optimal_band. Strictly visual: these options are read only where the two band <div>s
+// and their labels are assembled, never in any classification/geometry/footer computation —
+// several tests below verify that directly.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -45,10 +42,8 @@ function baseConfig(extra) {
 // ==== optionsSchema whitelist + validation (regression + new) ====
 
 test("optionsSchema: show_comfort_band/show_optimal_band pass the whitelist for scale and range_scale, unrelated keys are still stripped and diagnosed", () => {
-  // _warnAboutViewConfigOnce() deduplicates identical repeated configs, so
-  // the warn spy must be attached before the config
-  // carrying "bogus" is first applied, or the (correct) dedup would
-  // silently suppress the very warning this test is checking for.
+  // _warnAboutViewConfigOnce() dedups identical configs, so attach the warn spy before the
+  // "bogus" config is first applied.
   const el = env.createCard(baseConfig(), twoRoomStates());
   const warnings = [];
   const originalWarn = el.ownerDocument.defaultView.console.warn;
@@ -84,10 +79,8 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
 
 // ==== data.views.options resolution ====
 
-// The assertions below include footer and marker defaults (show_footer:true and
-// footer:true/markers:"extremes" for scale, footer:"detailed" for range_scale) alongside the
-// band flags this file itself is about, since data.views.options.<view> is a
-// single fully-resolved object returned by resolveViewOptions().
+// data.views.options.<view> is one fully-resolved object, so assertions include the
+// footer/marker defaults alongside the band flags.
 
 test("data.views.options: defaults to {show_comfort_band:true, show_optimal_band:true} for both scale and range_scale with no views: configured", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());

@@ -1,17 +1,12 @@
 "use strict";
 
-// Offscreen carousel views must not be
-// tabbable or visible to assistive tech. All .rtc-view elements stay
-// permanently mounted (only the CSS transform moves them);
+// Offscreen carousel views must not be tabbable or visible to assistive tech. All
+// .rtc-view elements stay mounted (only the CSS transform moves them);
 // _updateViewAccessibility() keeps aria-hidden/inert in sync with
-// _currentVisualViewIndex() — this._activeView only while the track is
-// manually frozen (a completed swipe/pointer-cancel, or auto-slide
-// disabled), and the wall-clock CSS-phase-derived index while synced
-// auto-slide is actually driving the track (see
-// _accessibleViewIndexAt()/_currentVisualViewIndex()). The phase-following
-// behavior itself is covered deterministically (constructed timing
-// objects, no wall clock) in accessibility-carousel-timing.test.js; this
-// file focuses on the manual-mode/discrete-transition paths.
+// _currentVisualViewIndex() — this._activeView while the track is manually frozen, the
+// CSS-phase-derived index while synced auto-slide drives it. Phase-following is covered
+// deterministically in accessibility-carousel-timing.test.js; this file covers the
+// manual-mode/discrete-transition paths.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -39,12 +34,8 @@ function twoViewCard() {
 }
 
 test("initial render: the view _currentVisualViewIndex() reports has neither aria-hidden nor inert; the other has both", () => {
-  // Not asserted against el._activeView directly: with auto-slide enabled
-  // (the default for a 2-view card), the view actually shown right after
-  // render depends on wall-clock phase (_accessibleViewIndexAt()),
-  // not the JS-only _activeView — asserting against the same
-  // _currentVisualViewIndex() source _updateViewAccessibility() itself
-  // uses is what stays deterministic regardless of when the test runs.
+  // Asserted against the same _currentVisualViewIndex() that _updateViewAccessibility()
+  // uses, not el._activeView: with auto-slide on, the shown view depends on wall-clock phase.
   const el = twoViewCard();
   const views = Array.from(el.shadowRoot.querySelectorAll(".rtc-view"));
   assert.equal(views.length, 2);
@@ -60,9 +51,8 @@ test("initial render: the view _currentVisualViewIndex() reports has neither ari
 
 test("_updateViewAccessibility() follows this._activeView while the track is manually frozen", () => {
   const el = twoViewCard();
-  // Freezes the track into manual mode (adds "rtc-manual") — the only
-  // state in which _currentVisualViewIndex() is defined to fall back to
-  // this._activeView instead of the wall-clock auto-slide phase.
+  // Manual mode ("rtc-manual") is the only state where _currentVisualViewIndex() falls
+  // back to this._activeView instead of the auto-slide phase.
   el._updateTrackTransform(true);
   el._activeView = 1;
   el._carousel.updateViewAccessibility();

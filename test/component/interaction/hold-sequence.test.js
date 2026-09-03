@@ -1,9 +1,9 @@
 "use strict";
 
-// _holdSequence() must be a
-// pure linear ping-pong over the view count — 0,1,...,N-1,N-2,...,1 — with
-// every transition (including the cycle wrap back to 0) moving exactly one
-// position, including the cycle wrap back to 0.
+// _holdSequence() must be a pure linear ping-pong over the view count — 0,1,...,N-1,N-2,
+// ...,1 — with every transition, including the cycle wrap back to 0, moving exactly one
+// position. Pure function of this._views.length; the flip timing that consumes this
+// sequence lives in accessibility-carousel-timing.test.js.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -14,8 +14,7 @@ let el;
 
 test.before(() => {
   env = createTestEnvironment();
-  // _holdSequence() only reads this._views (no config/hass/DOM needed), so a
-  // bare, never-connected element is enough — nothing to clean up per test.
+  // _holdSequence() only reads this._views, so a bare element is enough.
   el = env.document.createElement("room-climate-card");
 });
 

@@ -1,14 +1,10 @@
 "use strict";
 
-// _handlePointerCancel() must derive _activeView from
-// the frozen drag position (pointer.startTranslate), not from a stale
-// this._activeView that was never updated during the drag itself — matching
-// _handlePointerUp()'s already-correct threshold-swipe path.
-//
-// Every gesture below is produced by the element's own pointer handlers rather than
-// assembled by hand, so the state each test starts from is state the card can actually
-// reach. Gesture RECOGNITION at the pixel level belongs to the Playwright layer; what
-// is asserted here is which view the card lands on afterwards.
+// _handlePointerCancel() must derive _activeView from the frozen drag position
+// (pointer.startTranslate), not a stale this._activeView never updated during the drag —
+// matching _handlePointerUp()'s threshold-swipe path. Gestures are produced by the
+// element's own pointer handlers; pixel-level recognition belongs to the Playwright layer,
+// so what is asserted here is which view the card lands on.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,9 +40,7 @@ test("pointercancel derives the active view from the frozen drag position", () =
   assert.equal(el._views.length, 3, "range, scale, extremes");
   const viewWidthPct = el._viewWidthPct();
 
-  // The visible swipe froze at index 2 ("extremes"); _activeView is then pushed back to
-  // 0 to model a stale index that was
-  // never updated during the drag itself.
+  // The swipe froze at index 2; _activeView is pushed back to 0 to model a stale index.
   beginConfirmedDrag(el, 2);
   el._activeView = 0;
 

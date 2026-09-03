@@ -1,19 +1,12 @@
 "use strict";
 
-// WHERE A PALETTE COLOUR IS ACTUALLY PAINTED, and what that costs it.
-//
-// The measurement itself lives next door in palette-fit.test.js. This file is about the MAP
-// that measurement uses: which elements paint with a palette colour, what each of them puts
-// behind it, and how much separation each needs at its real size.
-//
-// THE CASE THAT MADE THIS NECESSARY is the lime group below. `palette: lime` on a light
-// dashboard is legible as a ramp and unreadable as a status label, because the label paints
-// the colour on a 20% tint of ITSELF. A check that only ever asked about the card background
-// could not express that difference, and the wrong repair — moving lime's middle colour,
-// which is fine where it is painted on the card — is exactly what it would have invited.
-//
-// THE NUMBERS WERE LOOKED AT. Each factor is bracketed by cards rendered at real size, and
-// the cases are named in the comment beside it in src/domain/classification/paint-roles.js.
+// The map the palette-fit measurement uses: which elements paint with a palette colour,
+// what each puts behind it, and how much separation each needs at its real size. The lime
+// group below is the shape it exists for — `palette: lime` on a light dashboard is legible
+// as a ramp and unreadable as a status label, because the label paints the colour on a 20%
+// tint of itself.
+// Boundary: the measurement itself is in palette-fit.test.js. See interne Doku §5 „Worauf
+// die Karte gemalt ist" and „Die Darstellungsmechanik".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -45,15 +38,11 @@ const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
 
 // ============================================ the map matches the stylesheet =====
 
-// Every palette-derived custom property the stylesheet paints with, the role that answers for
-// it, and THE RULES THAT READ IT. A property with no entry here is a place a palette colour
-// lands that nothing is measuring; a property read by a rule not listed here is a place the
-// measurement does not know about. Both are the failure this guard exists to prevent.
-//
-// The consumers are written out because a property and its consumer are two halves of one
-// decision, and only the first half is visible from the module that sets it. A card once
-// shipped a correct `--tone-ink` beside a status pill that painted `--tone-color`: every
-// producer-side check passed, and what reached the screen was the unadjusted colour.
+// Every palette-derived custom property the stylesheet paints with, the role that answers
+// for it, and the rules that read it. A property with no entry is an unmeasured place a
+// palette colour lands; a property read by an unlisted rule is a place the measurement does
+// not know about. The consumers are written out because only the producer half is visible
+// from the module that sets the property.
 const PROPERTY_OWNERS = {
   "--tone-color": {
     role: "accent",
@@ -62,9 +51,8 @@ const PROPERTY_OWNERS = {
       ".rtc-avg-button:focus-visible, .rtc-room-chip:focus-visible, .rtc-extreme-card:focus-visible",
     ],
   },
-  // The same colour as --tone-color wherever nothing had to be adjusted, and a hue-locked
-  // variant of it where the colour could not be read on its own tint — see tone-legibility.js.
-  // The two roles answer for it either way: what they measure is what is painted here.
+  // --tone-color where nothing had to be adjusted, a hue-locked variant where the colour
+  // could not be read on its own tint — see tone-legibility.js.
   "--tone-ink": { role: "toneLabel and toneIcon", readBy: [".rtc-status-pill", ".rtc-icon-badge ha-icon"] },
   "--tone-soft": { role: "the background of toneLabel and toneIcon", readBy: [".rtc-status-pill", ".rtc-icon-badge"] },
   "--tone-band": { role: "toneBand", readBy: [".rtc-optimal-band"] },
@@ -72,18 +60,16 @@ const PROPERTY_OWNERS = {
   "--room-color": { role: "chipMark", readBy: [".rtc-room-mark"] },
   "--room-mark-bg": { role: "the background of chipMark", readBy: [".rtc-room-mark"] },
   "--room-bg": { role: "the chip chipMark is painted over", readBy: [".rtc-room-chip"] },
-  // Deliberately unmeasured, each with its reason. A border is decorative: it outlines a
-  // shape that is already there, carries no reading, and is painted at a HIGHER alpha than
-  // the fill it surrounds, so it is the more visible half of its own element.
+  // Deliberately unmeasured: a border is decorative, carries no reading, and is painted at a
+  // higher alpha than the fill it surrounds.
   "--tone-border": { role: null, readBy: [".rtc-status-pill", ".rtc-icon-badge"] },
   "--room-border": { role: null, readBy: [".rtc-room-chip"] },
-  // The marker's halo, a tint of the marker's own colour lying between the bar and the
-  // track — see the note on the marker role.
+  // The marker's halo, a tint of the marker's own colour between bar and track.
   "--marker-shadow": { role: null, readBy: [".rtc-marker"] },
 };
 
-// The shipped stylesheet, cut into rules. Read from buildStyles() rather than from the pinned
-// copy in test/baseline/, so what is examined is what the card would serve today.
+// The shipped stylesheet, cut into rules. Read from buildStyles(), not the pinned baseline
+// copy, so this examines what the card would serve today.
 function shippedRules() {
   const css = styles
     .buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100 })
@@ -98,8 +84,7 @@ function shippedRules() {
       continue;
     }
     if (character === "}") {
-      // An at-rule keeps no declarations of its own here; the rules nested inside it were
-      // closed and recorded before this point.
+      // An at-rule keeps no declarations of its own here.
       const selector = open.pop();
       if (selector && !selector.startsWith("@")) rules.push({ selector, declarations: buffer.trim() });
       buffer = "";
@@ -131,10 +116,8 @@ test("every palette colour the stylesheet paints with is either measured or excu
 });
 
 test("every palette property is read by exactly the rules that answer for it", () => {
-  // The other half of the guard above. That one asks whether every property has an owner;
-  // this one asks whether the owner and the stylesheet agree on WHERE it is read. A property
-  // that grows a second consumer has grown a second place a palette colour is painted, and a
-  // consumer that disappears leaves a measurement judging something nothing draws.
+  // The other half of the guard above: whether the owner and the stylesheet agree on where a
+  // property is read. A new consumer is a new place a palette colour is painted.
   const found = new Map();
   for (const rule of shippedRules()) {
     for (const match of rule.declarations.matchAll(/var\(--((?:tone|room|marker)-[a-z-]+)\)/g)) {
@@ -154,17 +137,15 @@ test("every palette property is read by exactly the rules that answer for it", (
   }
 });
 
-// The ink of each place that paints TEXT in a palette colour on a tint of itself. Both halves
-// come from one recipe — see tone-legibility.js — and neither place may reach past it to the
-// palette colour, which is what the tint underneath it already is.
+// The ink of each place that paints text in a palette colour on a tint of itself. Both
+// halves come from one recipe (tone-legibility.js); neither may reach past it to the
+// palette colour.
 const INK_PROPERTIES = { ".rtc-status-pill": "--tone-ink", ".rtc-icon-badge ha-icon": "--tone-ink", ".rtc-room-mark": "--room-color" };
 
 test("a colour painted on a tint of itself is painted in its ink, never in the palette colour", () => {
-  // THE CLASS OF DEFECT THIS FORBIDS, not the one instance of it. Every property in the table
-  // above can be produced correctly and measured correctly while the rule that draws the text
-  // reads the neighbouring property — and the measurement would never see it, because the
-  // measurement asks the producer. So the question is asked of the stylesheet instead: what
-  // does this rule paint its text in?
+  // Forbids the class of defect, not one instance: a property can be produced and measured
+  // correctly while the rule that draws the text reads the neighbouring property. The
+  // measurement asks the producer, so this asks the stylesheet what the rule paints text in.
   const colourOf = (declarations) => {
     const match = declarations.match(/(?:^|\n)\s*color:\s*([^;]+);/);
     return match ? match[1].trim() : null;
@@ -177,10 +158,8 @@ test("a colour painted on a tint of itself is painted in its ink, never in the p
     assert.equal(colourOf(rule.declarations), `var(${ink})`, `${selector} has to paint its text in ${ink}`);
   }
 
-  // And nowhere else in the stylesheet is a palette property used as a text colour. The two
-  // inks are the only ones that carry an adjusted colour; every other one carries the palette
-  // colour itself or a tint of it, and text painted in any of them is text painted in the
-  // colour it is sitting on.
+  // Nowhere else is a palette property used as a text colour: the two inks are the only ones
+  // that carry an adjusted colour, and text in any other is text painted in what it sits on.
   const inks = new Set(Object.values(INK_PROPERTIES));
   for (const rule of rules) {
     const painted = colourOf(rule.declarations);
@@ -191,9 +170,8 @@ test("a colour painted on a tint of itself is painted in its ink, never in the p
 });
 
 test("the tint weights are the ones the card really applies", () => {
-  // The roles composite these by hand, so a change at the source that did not reach here
-  // would leave the measurement judging a background nothing paints. Read from the modules
-  // that own them rather than restated.
+  // The roles composite these by hand; read from the modules that own them, not restated, so
+  // a source change that did not reach here fails.
   const alphaIn = (file, name) => {
     const match = read(file).match(new RegExp(`${name}\\s*=\\s*([0-9.]+)`));
     assert.ok(match, `${name} not found in ${file}`);
@@ -220,12 +198,10 @@ test("a role is either painted on something it cannot influence, or on a tint of
     ["accent", "marker"]
   );
 
-  // The distinction is not a label. For a palette role NEITHER side of the comparison is
-  // derived from the colour, so moving the colour moves the separation at full leverage; for
-  // a self-tinted role one of the two follows the colour, and some of that leverage is lost.
-  //
-  // Which side it is differs: the pill tints its BACKGROUND, the optimal band tints its
-  // FOREGROUND and sits on the track. Both count, so both are checked.
+  // For a palette role neither side of the comparison is derived from the colour, so moving
+  // the colour moves the separation at full leverage; for a self-tinted role one side
+  // follows the colour. Which side differs — the pill tints its background, the band its
+  // foreground — so both are checked.
   const point = roles.pointOf("#FFFFFF", "#212121");
   for (const role of PAINT_ROLES) {
     const derived = (colour) => [roles.foregroundFor(role, colour, point), ...roles.backgroundsFor(role, colour, point)];
@@ -238,15 +214,10 @@ test("a role is either painted on something it cannot influence, or on a tint of
 });
 
 test("the header icon is the status pill measured once, not twice", () => {
-  // MEASURED, not assumed: over 14 palettes on 9 backgrounds — 1206 step/role pairs — the two
-  // judgements were identical in every single one. Both paint the colour at full strength on
-  // the same 20% tint of itself over the card, and both ask for the same separation; nothing
-  // about a 22px glyph and a 12px word separated them when the factors were bracketed on
-  // rendered cards.
-  //
-  // So the icon DECLARES that it is the pill rather than arriving at the same answer by
-  // running the same arithmetic a second time. The report keeps both names, because a
-  // stylesheet change could still part them — and this test is what would notice.
+  // The icon and the pill both paint the colour at full strength on the same 20% tint of
+  // itself and ask for the same separation, so the icon declares that it mirrors the pill
+  // rather than re-running the arithmetic. Both names are kept because a stylesheet change
+  // could part them.
   const icon = byId("toneIcon");
   assert.equal(icon.mirrors, "toneLabel", "the icon says whose measurement it shares");
   assert.equal(icon.background, undefined, "and therefore brings no background of its own");
@@ -273,15 +244,14 @@ test("every role states what it is and needs a defensible amount of separation",
     assert.match(role.id, /^[a-zA-Z]+$/);
     assert.ok(role.what.length > 20, `${role.id}: say what it is`);
     assert.ok(role.factor > 0 && role.factor <= 2, `${role.id}: factor ${role.factor}`);
-    // Either it brings its own recipe, or it names the role whose recipe it shares. A role
-    // with neither would measure against undefined.
+    // Either its own recipe or the name of the role it shares one with — neither would
+    // measure against undefined.
     const hasOwnRecipe = typeof role.background === "function" || typeof role.backgrounds === "function";
     assert.equal(hasOwnRecipe || typeof role.mirrors === "string", true, role.id);
     assert.equal(hasOwnRecipe && typeof role.mirrors === "string", false, role.id + ": a mirror does not also bring its own");
   }
-  // The ordering the rendered cards actually support, and no more. A large area fill is the
-  // easiest thing on the card to see; small text on a tint of itself is the hardest. Nothing
-  // that was looked at separates the pill from the chip mark, so nothing here claims to.
+  // The ordering the rendered cards support: a large area fill is the easiest thing to see,
+  // small text on a tint of itself the hardest. The pill and the chip mark are not separated.
   const factorOf = (id) => byId(id).factor;
   assert.ok(factorOf("toneBand") < factorOf("accent"), "a large band needs less than a mark on the card");
   for (const id of ["toneLabel", "toneIcon", "chipMark", "metricCard"]) {
@@ -291,8 +261,8 @@ test("every role states what it is and needs a defensible amount of separation",
 });
 
 test("the chip mark is judged against both chips a room can sit in", () => {
-  // A room outside the comfort band gets a 10% tint of its own colour; one inside gets the
-  // neutral chip. The mark has to be readable in both, so the role reports the worse.
+  // A room outside the comfort band gets a 10% tint of its own colour, one inside the neutral
+  // chip; the mark must be readable in both, so the role reports the worse.
   const point = roles.pointOf("#FFFFFF", "#212121");
   const backgrounds = roles.backgroundsFor(byId("chipMark"), "#67A7AE", point);
   assert.equal(backgrounds.length, 2, "two chips, two backgrounds");
@@ -314,9 +284,8 @@ test("with no text colour the tinted backgrounds fall back to the card, never to
 // ============================================ the lime case ======================
 
 test("lime on a light dashboard is a legible ramp and an unreadable label", () => {
-  // The supervisor's screenshot, stated as a test. The scale markers can be read; the
-  // "Optimal" pill in the top right and the icon in the top left cannot, because both paint
-  // the colour on a 20% tint of itself.
+  // The scale markers can be read; the "Optimal" pill and the header icon cannot, because
+  // both paint the colour on a 20% tint of itself.
   const lime = palettes.completePalette(palettes.paletteForColor("lime"));
   const report = fit.evaluatePaletteFit(lime, LIGHT());
 
@@ -326,7 +295,7 @@ test("lime on a light dashboard is a legible ramp and an unreadable label", () =
   assert.equal(optimal.roles.toneLabel.fits, false, "and unreadable as the status pill");
   assert.equal(optimal.roles.toneIcon.fits, false, "and unreadable as the header icon");
 
-  // Which is the whole point: the palette itself is not what needs changing here.
+  // The point: the palette itself is not what needs changing here.
   assert.equal(optimal.fits, true, "so the PALETTE verdict on lime's middle is `keep`");
   assert.equal(optimal.selfTintFits, false, "and the conflict is reported on its own axis");
   assert.ok(
@@ -336,8 +305,8 @@ test("lime on a light dashboard is a legible ramp and an unreadable label", () =
 });
 
 test("the two verdicts are reported apart and never added together", () => {
-  // If they were one number, a palette that is fine as a palette would be rewritten because
-  // of a recipe it does not control — the over-steering this separation exists to prevent.
+  // One number would rewrite a palette that is fine as a palette over a recipe it does not
+  // control — the over-steering this separation prevents.
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), LIGHT());
   assert.equal(report.fits, true, "pastel on white is a shipped, designed palette and stays as written");
   assert.equal(report.selfTintFits, false, "and its palest wing still cannot be read as a chip mark");
@@ -355,8 +324,7 @@ test("the two verdicts are reported apart and never added together", () => {
 });
 
 test("a colour on a card it cannot be seen on fails in every role at once", () => {
-  // The control for the case above: when the palette really is the problem, both verdicts
-  // agree, and nothing about the separation makes the card any more forgiving.
+  // The control: when the palette really is the problem, both verdicts agree.
   const white = palettes.completePalette(palettes.paletteForColor("white"));
   const report = fit.evaluatePaletteFit(white, LIGHT());
   assert.equal(report.fits, false);
@@ -368,15 +336,9 @@ test("a colour on a card it cannot be seen on fails in every role at once", () =
 });
 
 test("each verdict summarises its own roles, and never the other side's", () => {
-  // THE DEFECT THIS PINS DOWN. `fits` has always meant the palette question, and `deficit`
-  // and `margin` sat beside it while being computed over all seven roles. Because a
-  // self-tinted role fails almost everywhere, that made `margin` zero on steps that were
-  // comfortably fine — measured, every step of pastel on #808080 reported margin 0, and a
-  // transformation asking "how far may I move this before I break something that works"
-  // could not get an answer out of the report at all.
-  //
-  // Now each axis summarises itself. The two are never added, and neither is silently read
-  // for the other.
+  // Each axis summarises only its own roles. If `margin` were computed over all roles, a
+  // self-tinted role failing almost everywhere would zero it on steps that are comfortably
+  // fine, and "how far may I move this" would have no answer.
   const lime = fit.evaluatePaletteFit(palettes.paletteForColor("lime"), LIGHT());
   for (const step of lime.steps) {
     assert.ok(
@@ -403,10 +365,9 @@ test("each verdict summarises its own roles, and never the other side's", () => 
 });
 
 test("a passing step reports the room it still has, even while its own pill fails", () => {
-  // The measured case: on white every pastel step passes the palette question while some of
-  // them fail the recipe. The palette-axis margin still has to be a real number there,
-  // because that is what says how far the ramp may travel before it breaks something that
-  // works today.
+  // On white every pastel step passes the palette question while some fail the recipe. The
+  // palette-axis margin still has to be a real number, since it says how far the ramp may
+  // travel before it breaks something that works today.
   const onWhite = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), LIGHT());
   assert.equal(onWhite.fits, true);
   assert.equal(onWhite.selfTintFits, false, "some of its steps really are unreadable as a chip mark");
@@ -430,10 +391,9 @@ test("a role reports the worst point of a gradient, not the first", () => {
 // ============================================ against the live card ==============
 
 test("the backgrounds the roles compute are the ones a live card composites", () => {
-  // Measured from a card rendered at 400px on a white theme: the track is 8% of the text
-  // colour over the card, the band and the pill are 20% tints of the tone colour, and a room
-  // chip's mark is an 18% tint over the chip's own 10% tint. Restated here so that a change
-  // to any of those compositions fails in a file that says what it was checked against.
+  // The compositions a live card produces: the track is 8% of the text colour over the card,
+  // the band and the pill 20% tints of the tone colour, a chip's mark an 18% tint over the
+  // chip's own 10% tint. Restated here so a change to any of them fails.
   const point = roles.pointOf("#FFFFFF", "#212121");
   const tone = "#79A86C";
   const track = color.compositeOver("#212121", 0.08, "#FFFFFF");
@@ -458,10 +418,8 @@ test("the backgrounds the roles compute are the ones a live card composites", ()
 });
 
 test("the bracketed calibration cases still fall on the sides they were seen to fall on", () => {
-  // Each row was looked at on a card rendered at 400px, light theme — see the comments beside
-  // the factors. They are stated as distances rather than as colours so that the record is
-  // about what was SEEN, and so a change to the instrument shows up here rather than in a
-  // verdict somewhere downstream.
+  // Each row was looked at on a card rendered at 400px, light theme. Stated as distances
+  // rather than colours, so a change to the instrument shows up here.
   const CASES = [
     ["toneBand", 0.012, false, "palette: white paints no band at all"],
     ["toneBand", 0.021, false, "#AADDCC is barely a tint, and a band you have to hunt for is not a band"],
@@ -479,9 +437,8 @@ test("the bracketed calibration cases still fall on the sides they were seen to 
 });
 
 test("the instrument is the same one the baseline threshold was calibrated with", () => {
-  // A role only ever scales the threshold; it never brings its own measure. If that stopped
-  // being true, the calibration table in palette-fit-calibration.js would no longer say
-  // anything about what the roles decide.
+  // A role only scales the threshold; it never brings its own measure. Otherwise the
+  // calibration table in palette-fit-calibration.js would say nothing about the roles.
   assert.equal(byId("accent").factor, 1, "the accent role IS the baseline");
   const swatch = palettes.completePalette({ id: "s", origin: "builtin", optimal: "#575757" });
   const report = fit.evaluatePaletteFit(swatch, ["#1C1C1C"]);

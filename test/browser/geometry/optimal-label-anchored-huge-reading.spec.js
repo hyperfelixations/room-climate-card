@@ -1,21 +1,11 @@
 "use strict";
 
-// Regression test for BUG-14 (fixed): the optimal-band label used to detach from
-// its band and jump to the bar centre — collapsed to zero width — when the
-// axis-maximum edge label grew very wide.
-//
-// resolveOptimalLabelPosition() (src/render/layout/optimal-label.js) centres the
-// label on its band, then clamps it between the min and max edge labels. For a
-// reading many orders of magnitude past the scale the axis maximum is a wide
-// grouped number ("2,000,000,001 °C"), and on a narrower card no non-overlapping
-// slot is left at the label's natural width. The fallback now caps the label to
-// the free span between the two edge labels and fills that span, gap-clear of
-// both — truncating in place next to the min label — instead of jumping to
-// barWidth / 2 with a width cap that evaluated to zero.
-//
-// The deterministic unit reproduction lives in test/known-issues.test.js; this is
-// the end-to-end half, with real Chromium text metrics and the exact sandbox
-// configuration BUG-14 was reported from.
+// BUG-14 regression, end-to-end with real Chromium text metrics. When a huge reading makes
+// the axis-maximum edge label very wide and no non-overlapping slot is left,
+// resolveOptimalLabelPosition() (src/render/layout/optimal-label.js) caps the optimal label
+// to the free span between the edge labels and fills it gap-clear, truncating in place next
+// to the min label — it must not detach at bar centre or collapse to width 0. The
+// deterministic unit reproduction is in test/known-issues.test.js.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
@@ -41,9 +31,8 @@ const CLASSIFICATION = {
   ],
 };
 
-// The narrow end of the supported range, near where the sandbox's side-by-side
-// preview frames sit. At this width "200,000,001 °C" and "2,000,000,001 °C" both
-// leave no natural slot for the optimal label.
+// The narrow end of the supported range, where "200,000,001 °C" and "2,000,000,001 °C"
+// both leave no natural slot for the optimal label.
 const CARD_WIDTH = 420;
 
 test.describe("main scale: the optimal label fills the free span for a huge reading", () => {

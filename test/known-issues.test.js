@@ -1,12 +1,10 @@
 "use strict";
 
-// One reproduction per entry in the known-defect register, plus the checks that keep the
-// register itself honest.
-//
-// Read this file to find out what is currently broken in the card and deliberately not yet
-// fixed. Each reproduction asserts the behaviour the card SHOULD have, so the day the
-// defect is fixed the assertion starts passing — and expectedFailure() turns that into a
-// failing run that says so.
+// One reproduction per open entry in the known-defect register (test/known-issues.js), plus
+// the checks that keep the register honest. Each reproduction asserts the behaviour the card
+// should have, so a fix flips it to passing and expectedFailure() turns that into a failing
+// run demanding the entry be retired. Fixed BUG-07..BUG-14 stay here as ordinary regression
+// tests; their history is in the RCC Changelog.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -47,9 +45,8 @@ test("no id is registered twice", () => {
 });
 
 test("known-issue classification never hides an unrelated violation", () => {
-  // The whole point of partitioning violation by violation rather than case by case: a case
-  // that reproduces a registered defect and ALSO does something new must report the new
-  // thing. One matching violation must never absorb the ones beside it.
+  // Partitioning is per violation, not per case: a matching violation must not absorb an
+  // unrelated one from the same generated case.
   const known = "everyNumberIsFinite: scale.markerPositions.average is NaN";
   const unrelated = ["active view is unavailable", "rooms lost when only the primary went unavailable: sensor.room0"];
   const classified = classifyViolations([known, ...unrelated]);
@@ -58,11 +55,9 @@ test("known-issue classification never hides an unrelated violation", () => {
 });
 
 test("a defect that was fixed no longer absorbs its old signature", () => {
-  // These are the exact violation strings BUG-07, BUG-11 and BUG-12 were recognised by while
-  // they were open. Each is now a finding nobody has an explanation for, and the run has to
-  // say so rather than file it under a defect that no longer exists — which is the failure
-  // mode a register like this has: an entry outliving its defect and quietly swallowing the
-  // next regression that looks like it.
+  // The exact violation strings BUG-07, BUG-11 and BUG-12 were recognised by while open.
+  // With those entries gone, each must now come through as unknown, not be filed under a
+  // defect that no longer exists.
   const retired = [
     "everyNumberIsFinite: average.value is -Infinity (source room; a finite Fahrenheit entity state overflowed during conversion)",
     "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)",
@@ -76,9 +71,8 @@ test("a defect that was fixed no longer absorbs its old signature", () => {
 });
 
 test("every violation is judged on its own, not on the company it keeps", () => {
-  // Both of BUG-06's two symptoms, and a third string that merely resembles them. Ordering
-  // and count are asserted, so a matcher that started swallowing everything would show up
-  // here rather than as a quietly green sweep.
+  // Both of BUG-06's symptoms plus a third string that only resembles them; order and count
+  // are asserted so an over-broad matcher shows up here.
   const span = "everyNumberIsFinite: spread is Infinity";
   const position = "everyNumberIsFinite: roomMarkers[0].position is NaN";
   const other = "everyNumberIsFinite: range.min is Infinity";
@@ -100,8 +94,8 @@ test("expected reproductions accept only their identifying assertion", () => {
 });
 
 test("every registered issue has a reproduction in this file", () => {
-  // Without this, an entry could be added to the register and quietly never reproduced —
-  // a note in a comment wearing a test's clothes.
+  // A registered entry with no expectedFailure() here would be a note wearing a test's
+  // clothes.
   const source = require("node:fs").readFileSync(__filename, "utf8");
   for (const issue of KNOWN_ISSUES) {
     assert.ok(
@@ -113,19 +107,11 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
-// BUG-06 — found by the property run, seed 0x99accdd.
-//
-// An axis whose ends are 1e308 apart in each direction spans 2e308, which is not a double.
-// The subtraction overflows to Infinity, a position derived from it divides Infinity by
-// Infinity into NaN, and the NaN is written straight into a CSS calc(). In a browser the
-// declaration is simply dropped and the marker lands in the wrong place; under jsdom the
-// CSS parser rejects `calc(NaN% + 0px)` outright and the render throws.
-//
-// WHAT REACHES IT is a custom profile whose declared scale spans both extremes. Two entity
-// READINGS no longer can: every measurement has a physical floor, so no two valid readings
-// are far enough apart for their span to overflow. The arithmetic that overflows is
-// untouched, and the card's answer should still be the no-data state it already has for an
-// unusable reading — not a card drawn at NaN per cent.
+// BUG-06 (open). A custom profile whose declared scale spans both extremes (±1e308) gives a
+// span that overflows to Infinity; a derived position becomes NaN and reaches the DOM as
+// `calc(NaN% + 0px)` (dropped in a browser, a hard throw under jsdom). Expected: an
+// unusable computed span reaches the no-data state, like any unusable reading. Full analysis
+// in RCC Backlog BUG-06.
 const BUG_06_PROFILE = {
   source: "custom",
   unit: "°C",
@@ -156,8 +142,7 @@ expectedFailure("BUG-06", (error) =>
   });
 });
 
-// The neighbouring case that DOES work, so the boundary is recorded and a future fix can be
-// checked against something. This is an ordinary test: it passes today and must keep doing so.
+// The neighbouring span that fits in a double: records the boundary, must keep passing.
 test("BUG-06's neighbourhood: a span that fits in a double is handled correctly", () => {
   const built = buildScenario({
     metric: "temperature",
@@ -172,9 +157,8 @@ test("BUG-06's neighbourhood: a span that fits in a double is handled correctly"
 });
 
 test("BUG-06's neighbourhood: two readings can no longer be far enough apart to overflow", () => {
-  // The route the defect was found on, closed by the physical floors rather than by any
-  // change to the arithmetic. Recorded so that a measurement added without a floor is
-  // known to reopen it.
+  // The route the defect was found on, closed by the metric physical floors. Recorded so a
+  // metric added without a floor is known to reopen it.
   const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e308 }, { state: -273.15 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -183,17 +167,10 @@ test("BUG-06's neighbourhood: two readings can no longer be far enough apart to 
   });
 });
 
-// What BUG-07 was, kept as an ordinary test now that it holds. One room reporting 1e308 °F:
-// the conversion to Celsius is (F - 32) × 5/9, the multiplication by five overflows, and the
-// card used to display what came out — the headline read "∞ °F".
-//
-// A conversion result that is not a number is not a reading, so the card refuses it the way
-// it refuses 800 % humidity, and the whole card lands in the no-data state because that room
-// was its only source.
-//
-// The overflow is specific to the SCALING path, which is what the neighbouring test holds:
-// °C and K at the same magnitude come through as ordinary (if absurd) numbers, because their
-// conversion never multiplies.
+// BUG-07 regression: a °F reading whose conversion to Celsius overflows is not a reading;
+// the card refuses it and, with no other source, lands in no-data. The overflow is specific
+// to the scaling path — the next test holds that °C and K at the same magnitude come
+// through as ordinary numbers.
 test("a reading that overflows on the way into the canonical unit is not a reading", () => {
   for (const value of [1e308, -1e308]) {
     const built = buildScenario({
@@ -223,11 +200,8 @@ test("the same magnitude in a unit that does not scale is still a reading", () =
   }
 });
 
-// What BUG-11 was, kept as an ordinary test now that it holds. Every entity value is a
-// finite JavaScript number and the true mean is 1e308, also finite — but the room-consensus
-// path added first, 1e308 + 1e308 became Infinity, and dividing that intermediate result by
-// two left Infinity as the headline. Not BUG-07's unit conversion and not BUG-06's min/max
-// span: both inputs and their span are finite, and only the aggregate's own sum overflowed.
+// BUG-11 regression: finite room readings whose intermediate sum overflows still average to
+// their true finite mean (the aggregate divides before it would overflow).
 test("a room consensus is the mean of its rooms even when their sum is not a number", () => {
   const built = buildScenario({ metric: "temperature", primary: null, rooms: [{ state: 1e308 }, { state: 1e308 }] });
   env.withCard(built.config, built.hass, (card) => {
@@ -242,8 +216,8 @@ test("a room consensus is the mean of its rooms even when their sum is not a num
 });
 
 test("and the two ends of the number line still average to nothing in particular", () => {
-  // The case the scaled path exists for: summing first gives Infinity - Infinity, which is
-  // NaN, while dividing by the larger magnitude first gives the 0 a person would write down.
+  // The case the scaled mean exists for: summing first gives Infinity - Infinity = NaN,
+  // dividing by the larger magnitude first gives the expected 0.
   const built = buildScenario({ metric: "temperature", primary: null, rooms: [{ state: 1e308 }, { state: -273.15 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
@@ -262,9 +236,8 @@ test("a smaller same-sign consensus is unchanged, to the last digit", () => {
   });
 });
 
-// What BUG-08 was, kept as an ordinary test now that it holds: -274 °C is colder than
-// anything can be, and the card refuses it the way it refuses every other impossible
-// reading. The three values straddle the limit from just past it to absurdly past it.
+// BUG-08 regression: a temperature below absolute zero is refused like any impossible
+// reading. The three values straddle the limit from just past it to absurdly past.
 test("a temperature below absolute zero is refused rather than drawn", () => {
   for (const value of [-273.16, -274, -1000]) {
     const built = buildScenario({ metric: "temperature", primary: { state: value }, rooms: [] });
@@ -274,15 +247,9 @@ test("a temperature below absolute zero is refused rather than drawn", () => {
   }
 });
 
-// What BUG-09 was, kept as an ordinary test now that it holds. A key nobody meant to type
-// used to produce no complaint of any kind — no error, no warning, no diagnostic — while the
-// same mistake one level down was refused by name, because every nested object goes through
-// assertAllowedKeys(). The top level, which is the level a person actually edits, was the
-// one place that let a typo through in silence.
-//
-// It warns rather than refusing: an option that does not apply is cosmetic, while a card
-// that stops loading after an update is not. The nested behaviour is unchanged and is
-// asserted below.
+// BUG-09 regression: a misspelled top-level config key is named in a console warning (not
+// refused — an inapplicable option is cosmetic, a card that stops loading is not). The
+// stricter nested behaviour is asserted below.
 function warningsFor(config, hass) {
   const messages = [];
   const original = { warn: console.warn, error: console.error };
@@ -315,9 +282,8 @@ test("a key that resembles nothing is still named, without inventing a suggestio
 });
 
 test("what Home Assistant writes onto every card configuration is not a typo", () => {
-  // The frontend attaches its own bookkeeping to every card it lays out, and card-mod adds
-  // one more. None of it is the card's, and complaining about it would be a false alarm on
-  // an ordinary dashboard.
+  // Home Assistant and card-mod attach their own bookkeeping to every card; warning about
+  // it would be a false alarm on an ordinary dashboard.
   const built = buildScenario({ rooms: [{}] });
   const framework = {
     type: "custom:room-climate-card",
@@ -351,13 +317,9 @@ test("the same mistake one level down is still REFUSED by name, not warned about
   );
 });
 
-// What BUG-10 was, kept as an ordinary test now that it holds. The metamorphic relations
-// found it: every single-card invariant passed on both sides, because the blank card was
-// perfectly self-consistent — it was simply blank for no good reason.
-//
-// The trigger needed BOTH halves: rooms that disagree about what they measure, AND a primary
-// entity whose state cannot be read. The primary's device_class outlives the outage and says
-// which kind is the card's, so the rooms of that kind carry it.
+// BUG-10 regression. Trigger needs both halves: rooms that disagree about what they measure,
+// and a primary whose state cannot be read. The primary's device_class outlives the outage
+// and says which kind is the card's, so the rooms of that kind carry it.
 test("an unreadable primary still says what the card is about", () => {
   const humidity = { state: 50, deviceClass: { value: "humidity" }, unit: { value: "%" } };
   const rooms = [{ state: 21 }, { state: 23 }, humidity];
@@ -442,16 +404,10 @@ test("every metric refuses what it cannot be, and accepts the limit itself", () 
   }
 });
 
-// What BUG-12 was, kept as an ordinary test now that it holds. The metamorphic relation "a
-// room the card cannot use changes nothing else" found it: nothing about the NUMBER moved —
-// the value and its position on the scale were identical on both sides — but who the card
-// said the number belonged to did, and the caption and tap target moved with it.
-//
-// The two rooms below are deliberately different kinds of "not a source". `sensor.room1` does
-// not exist at all, which the topology has always ignored — that is what keeps a card stable
-// while Home Assistant is still publishing states. `sensor.foreign` exists and reports a
-// temperature on a humidity card, so it can never contribute, and the topology used to count
-// it all the same.
+// BUG-12 regression: a room the card can never use must not change the headline's source,
+// caption or tap target. The two extra rooms are different kinds of "not a source":
+// `sensor.room1` does not exist at all; `sensor.foreign` exists but reports temperature on a
+// humidity card.
 test("a room the card can never use does not change what the headline is", () => {
   const description = {
     metric: "humidity",
@@ -484,15 +440,14 @@ test("a room the card can never use does not change what the headline is", () =>
     "a room the card can never use must not turn a single-room card into a whole-home card, " +
       `but the caption moved from "${before.label}" to "${after.label}"`
   );
-  // The caption and the number too, because the caption is what the defect actually moved
-  // and the number is what stayed put while it did.
+  // Caption and number too: the caption is what moved, the number is what stayed put.
   assert.equal(after.label, before.label);
   assert.equal(after.value, before.value);
 });
 
 test("the other half of that: a room that does not exist at all is ignored too", () => {
-  // The half that always behaved correctly, and the one the fix had to leave alone: a
-  // configured room Home Assistant has never heard of leaves the card's identity alone.
+  // The half that always behaved correctly: a configured room Home Assistant has never heard
+  // of leaves the card's identity alone.
   const alone = buildScenario({
     metric: "humidity",
     primary: { state: 44, deviceClass: { value: "humidity" }, unit: { value: "%" } },
@@ -517,18 +472,10 @@ test("the other half of that: a room that does not exist at all is ignored too",
   assert.equal(sourceOf(withMissing), "room", "an entity that does not exist does not change what the card is about");
 });
 
-// What BUG-13 was, kept as an ordinary test now that it holds. `comparison: ">"` asks
-// whether a reading is strictly ABOVE a tier's threshold, and the final tier's threshold is
-// -Infinity. Nothing is strictly above -Infinity, so a reading that had reached -Infinity
-// matched no tier at all, the classifier read `.color` off the undefined it got back,
-// setConfig() threw, and Home Assistant painted the card red.
-//
-// TWO ANSWERS NOW STAND BETWEEN THAT AND THE SCREEN, and this case only ever reaches the
-// first. The reading got there through the Fahrenheit conversion of BUG-07, which is now
-// refused before anything classifies it — so the card is empty rather than red. The second
-// is in classifyNumericValue() itself, which no longer needs a tier to exist; that half is
-// asserted directly in unit/domain/domain-services-modules.test.js, because nothing
-// reachable through a configuration gets to it any more.
+// BUG-13 regression: a reading that matches no tier empties the card instead of throwing.
+// This case reaches the first of two guards — the reading is refused at the BUG-07
+// Fahrenheit conversion before it classifies. The second guard (the classifier no longer
+// needing a tier to exist) is asserted in unit/domain/domain-services-modules.test.js.
 test("a reading no tier covers empties the card rather than throwing", () => {
   const built = buildScenario({
     metric: "temperature",
@@ -554,10 +501,8 @@ test("a reading no tier covers empties the card rather than throwing", () => {
 });
 
 test("the same profile with >= reaches the same answer by the other road", () => {
-  // The boundary, and the reason the defect was about the comparison rather than about the
-  // value: `>=` admits -Infinity into the open-ended tier, so the classifier always had one
-  // here. The reading is refused earlier either way now, so both profiles agree — which is
-  // the point, since they always described the same card.
+  // The boundary: `>=` admits -Infinity into the open-ended tier, `>` does not. The reading
+  // is refused earlier either way now, so both profiles agree.
   const built = buildScenario({
     metric: "temperature",
     primary: null,
@@ -581,19 +526,12 @@ test("the same profile with >= reaches the same answer by the other road", () =>
   });
 });
 
-// ---------------------------------------------------------------- BUG-14 --
-//
-// What BUG-14 was, kept as ordinary tests now that it holds. resolveOptimalLabelPosition()
-// centres the optimal-band label on its band, then clamps it between the min and max edge
-// labels. For a reading many orders of magnitude past the scale the axis-maximum label
-// ("200,000,001 °C") is wide, and on a narrow bar no non-overlapping slot is left at the
-// label's natural width. The fallback used to drop the label onto barWidth / 2 with a width
-// cap that evaluated to 0, so a label whose band sits at ~0 % of the axis was detached in
-// the middle of the bar and collapsed to nothing. It now caps the label to the free span
-// between the two edge labels and fills that span, gap-clear of both, truncating in place.
-//
-// The widths are measured values from Chromium at card width 420, same custom profile,
-// 2e9 °C — see test/browser/geometry/optimal-label-anchored-huge-reading.spec.js.
+// BUG-14 regression. resolveOptimalLabelPosition() centres the optimal-band label on its
+// band, clamped between the min/max edge labels. When a huge reading makes the max edge
+// label wide and no non-overlapping slot is left, the fallback caps the label to the free
+// span between the edge labels and fills it gap-clear, truncating in place — it must not
+// detach at bar centre or collapse to width 0. Widths below are measured from Chromium; the
+// browser-side check is test/browser/geometry/optimal-label-anchored-huge-reading.spec.js.
 
 // long === short so resolveLabelForm() measures exactly once; center ≈ 0 is the
 // optimal band (20–24) on an axis of [10, reading + 1], checked against buildScaleAxis().
@@ -652,10 +590,9 @@ test("a huge reading keeps the optimal label in the free span, not detached at t
 });
 
 test("with room for the label it still centres on its band, pinned to the near edge", async () => {
-  // The 2e7 reading, same profile, a wider card (width 520): "20,000,001 °C" is
-  // narrow enough that a non-overlapping slot exists, so the fits branch clamps
-  // the band-at-0% label to lowLimit — pinned left, full width, no cap. This is
-  // the standard-appearance path and must be untouched by the fallback change.
+  // Wider card: a non-overlapping slot exists, so the fits branch clamps the band-at-0%
+  // label to lowLimit — pinned left, full width, no cap. The standard path, untouched by
+  // the fallback change.
   const { resolveOptimalLabelPosition } = await import("../src/render/layout/optimal-label.js");
   const minWidth = 22;
   const centerWidth = 76;

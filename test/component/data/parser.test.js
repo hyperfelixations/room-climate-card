@@ -1,15 +1,10 @@
 "use strict";
 
-// _parseNum() uses strict numeric parsing so junk such as "25 °C" or "12abc"
-// cannot be accepted through a numeric prefix. The matrix covers
-// unknown/unavailable/none/null/empty, "12abc", "25 °C",
-// "1,5", ".5", "1e3", "1.", whitespace.
-//
-// _parseNum() is only reachable indirectly (through _getNum()/_getAttrNum(),
-// which need a hass/entity), so these tests drive it through a minimal
-// average-entity config rather than calling a private method directly —
-// this also exercises the exact code path a real Home Assistant state
-// update goes through.
+// Strict numeric parsing of entity state: junk such as "25 °C" or "12abc" is not accepted
+// through a numeric prefix. The matrix covers unknown/unavailable/none/null/empty, "12abc",
+// "25 °C", "1,5", ".5", "1e3", "1.", whitespace. Driven through a minimal average-entity
+// config (the parser is only reachable via _getNum()/_getAttrNum()), which also exercises
+// the real Home Assistant state-update path.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -89,9 +84,8 @@ test("multiple decimal points are rejected (1.2.3)", () => {
 });
 
 test("a number that is actually delivered as a JS number (not string) still works", () => {
-  // Home Assistant sometimes delivers already-numeric attribute values;
-  // states themselves are always strings, but this guards the underlying
-  // _parseNum() contract that _getAttrNum() also relies on.
+  // HA sometimes delivers already-numeric attribute values (states are always strings);
+  // this guards the shared parser contract _getAttrNum() relies on.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 24 }),

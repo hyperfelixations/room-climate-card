@@ -1,18 +1,12 @@
 "use strict";
 
-// Direct unit tests for the registered view renderers and their patch paths.
-//
-// Markup and DOM patching are pure functions of a view model, and these tests take that
-// literally: no custom element anywhere in this file, no hass object, no configuration, and —
-// for most of it — no global document either. A view model is written by hand, a renderer is
-// called, and the resulting string or DOM is asserted.
-//
-// This file owns what happens INSIDE a view: the scale, the daily-range scale, the range
-// cards and the extremes cards — their markup, the patch that updates them without a rebuild,
-// and the geometry that is deliberately not computed for a view nobody asked for.
-//
-// The boundary to render-shell.test.js next door: the markup AROUND the views, the structure
-// signatures and the stylesheet are that file's subject.
+// Direct unit tests for the registered view renderers and their patch paths. Markup and DOM
+// patching are pure functions of a view model: no custom element, no hass, no configuration,
+// mostly no global document. This file owns what happens inside a view — the scale, the
+// daily-range scale, the range cards, the extremes cards: their markup and their in-place
+// patch.
+// Boundary: the markup around the views, the structure signatures and the stylesheet are
+// render-shell.test.js.
 
 process.env.TZ = "UTC";
 
@@ -39,8 +33,8 @@ test.before(async () => {
 
 // ------------------------------------------------------------------ fixtures --
 
-// A fresh jsdom window per call. Used both as "the" document and, deliberately, as a
-// SECOND, foreign realm — no render module may care which one it is handed.
+// A fresh jsdom window per call, used both as "the" document and as a second foreign realm —
+// no render module may care which one it is handed.
 function makeRealm() {
   const jsdom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>");
   const ownerDocument = jsdom.window.document;
@@ -60,9 +54,8 @@ test("each view renders its own container and patches it without touching the ot
   realm.root.innerHTML = scaleView.scaleView.render(realm.context, scaleModel);
   assert.match(realm.root.innerHTML, /rtc-scale-view/);
   assert.match(realm.root.innerHTML, /rtc-marker-avg/);
-  // The comfort label's initial text comes from the content model's LONG form. Asserted
-  // because the alternative is silent: a fixture that still carried the pre-pair shape
-  // rendered the string "undefined" here and nothing in this file noticed.
+  // The comfort label's initial text is the content model's long form; asserted because a
+  // stale fixture shape renders the string "undefined" here silently.
   assert.equal(
     realm.root.querySelector(".rtc-scale-comfort-label").textContent,
     "Comfort 20–24 °C",

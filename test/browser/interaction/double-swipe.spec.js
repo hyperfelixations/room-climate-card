@@ -1,30 +1,18 @@
 "use strict";
 
-// The real double swipe: swipe once, then swipe again before the first swipe's
-// phase-aware resume has fired.
-//
-// The jsdom layer (carousel-ownership.test.js) proves the ownership contract by calling
-// the handlers directly. This file proves the same thing through actual Chromium
-// pointer events, with the real 10px direction threshold, the real 18% swipe threshold
-// and the real 420ms settle — and, crucially, it listens for `pageerror`. The defect
-// this file exists for threw a TypeError inside a pointermove listener, where nothing
-// visible happens: the card simply stops responding, and no test that only checks the
-// final index would have noticed.
+// A double swipe: swipe, then swipe again before the first swipe's phase-aware resume has
+// fired, through real Chromium pointer events (jsdom's carousel-ownership.test.js calls the
+// handlers directly). It listens for `pageerror`: the defect it exists for threw a
+// TypeError inside a pointermove listener, where the card just stops responding and a
+// final-index check would not notice.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
-// TIMING-SENSITIVE, AND RETRIED FOR THAT REASON ALONE.
-//
-// The gestures below are driven by real mouse.move() sequences whose settling depends on how
-// promptly the browser gets a frame. Under CPU contention that occasionally slips, and the
-// failure is the machine rather than the card: the same case passes on the retry and on the
-// next run.
-//
-// The rest of the suite runs with retries: 0 (see playwright.config.js), so this is a local
-// exception a reader can see, not a blanket policy that also quietly retries the golden
-// screenshots. If a case here fails on the retry as well, it is real.
+// Timing-sensitive: real mouse.move() sequences whose settling depends on getting a frame
+// promptly, so this file requests local retries (see playwright.config.js, retries: 0
+// elsewhere). A failure on the retry as well is real.
 test.describe.configure({ retries: 2 });
 
 
@@ -37,9 +25,8 @@ function threeViewStates() {
   };
 }
 
-// Mirrors pointer-interaction.spec.js: several intermediate moves with a brief yield
-// each, so the direction threshold and the running translate both see realistic deltas
-// even under parallel-worker CPU load.
+// Several intermediate moves with a brief yield each, so the direction threshold and the
+// running translate see realistic deltas under parallel-worker CPU load.
 async function swipe(page, box, dxPx) {
   const startX = box.x + box.width / 2;
   const startY = box.y + box.height / 2;
@@ -73,9 +60,8 @@ async function setUpCard(page) {
   }, cardId);
   await page.waitForTimeout(100);
   const card = page.locator(`#${cardId}`);
-  // Freeze on a known index before the first gesture, exactly as the existing pointer
-  // tests do — otherwise the wall-clock auto-slide can tick during the interaction
-  // window and make the relative assertion ambiguous.
+  // Freeze on a known index before the first gesture, or the wall-clock auto-slide can tick
+  // during the interaction window and make the relative assertion ambiguous.
   await card.evaluate((el) => {
     el._activeView = 0;
     el._updateTrackTransform(false);
@@ -91,8 +77,7 @@ test("a second swipe while the first swipe's resume is still pending advances on
   await swipe(page, box, -box.width * 0.3);
   await page.waitForTimeout(500);
   expect(await card.evaluate((el) => el._activeView)).toBe(1);
-  // The first swipe must genuinely have left a resume pending — otherwise this test
-  // would pass without ever entering the branch it exists for.
+  // The first swipe must have left a resume pending, or this test never enters its branch.
   expect(await card.evaluate((el) => el._carousel.resumeTimerHandle !== null)).toBe(true);
 
   await swipe(page, box, -box.width * 0.3);
@@ -129,8 +114,8 @@ test("three swipes in a row keep moving exactly one view each, with no error and
 });
 
 test("the track keeps following the finger during the second swipe", async ({ page }) => {
-  // Not just "no error": the drag has to actually work. A thrown listener would leave
-  // the track frozen at the position the first swipe settled on.
+  // Not just "no error": the drag must work. A thrown listener would freeze the track where
+  // the first swipe settled.
   const { card, errors } = await setUpCard(page);
   const rotator = card.locator(".rtc-rotator");
   const box = await rotator.boundingBox();

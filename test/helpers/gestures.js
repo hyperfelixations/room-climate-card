@@ -1,16 +1,9 @@
 "use strict";
 
-// Drives real gestures through the element's own pointer handlers.
-//
-// These helpers drive handlers instead of assigning the interaction runtime's private
-// state. The runtime owns the gesture, and the
-// only way in is the same one a browser uses. The helpers below are that way in.
-//
-// The upside is not only encapsulation. A hand-built pointer could describe a gesture
-// the card can never actually produce — a confirmed drag with no recorded width, a
-// frozen position the track was never at — and a test built on one of those proves
-// nothing about the real card. Everything here goes through handlePointerDown/Move, so
-// whatever state results is state the card can genuinely be in.
+// Drives gestures through the element's own pointer handlers (handlePointerDown/Move/Up),
+// never by assigning the interaction runtime's private state. A hand-built pointer state
+// could describe a gesture the card can never produce; going through the handlers keeps
+// every resulting state one the real card can be in.
 
 const ROTATOR_WIDTH_PX = 300;
 
@@ -40,12 +33,9 @@ function beginTouch(el, { pointerId = 1, widthPx = ROTATOR_WIDTH_PX } = {}) {
   el._handlePointerDown(downEvent(rotatorOf(el, widthPx), { pointerId }));
 }
 
-// A confirmed horizontal drag whose frozen start position is the given view index.
-//
-// The index is set BEFORE the pointerdown on purpose: the runtime asks the carousel to
-// freeze the track and records whatever position it reports, exactly as it would after
-// a synchronized slide had carried the track there. Setting it afterwards is what makes
-// the value "stale", which several of these tests then do deliberately.
+// A confirmed horizontal drag whose frozen start position is the given view index. The
+// index is set before the pointerdown so the runtime records it as the frozen track
+// position; setting it afterwards is the "stale" case several tests exercise on purpose.
 function beginConfirmedDrag(el, frozenViewIndex = 0, { pointerId = 1, widthPx = ROTATOR_WIDTH_PX } = {}) {
   el._activeView = frozenViewIndex;
   const rotator = rotatorOf(el, widthPx);

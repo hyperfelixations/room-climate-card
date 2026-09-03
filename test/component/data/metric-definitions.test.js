@@ -1,23 +1,11 @@
 "use strict";
 
-// The generic MetricDefinition/UnitProfile/QuantityKind registry supports
-// native Fahrenheit/Kelvin support and future metric kinds (e.g. absolute
-// humidity).
-//
-// METRIC_DEFINITIONS, its unit profiles and its derived thresholds are what the
-// measurement context, the domain model and both scale views run on. These tests
-// therefore import domain/metrics/access.js, domain/units/conversion.js and
-// core/numbers.js directly and pass explicit fixtures — no element, no
-// configuration, no rendering. The card only appears where a rule genuinely needs a
-// live classification policy, and then through test/helpers/card-internals.js.
-//
-// Celsius stays the single manually-maintained source of truth: this file
-// also asserts that the temperature MetricDefinition's classification tiers
-// are wired directly to the indoor temperature profile's tiers (not a second,
-// separately-maintained Celsius copy that could drift), and that the
-// generated Fahrenheit thresholds are integers deterministically derived
-// from that single source: 16/18/19/20/21/23/24/25/26/28 °C ->
-// 61/64/66/68/70/73/75/77/79/82 °F exactly.
+// The generic MetricDefinition/UnitProfile/QuantityKind registry: native Fahrenheit and
+// Kelvin, and room for future metric kinds. Tests import domain/metrics/access.js,
+// domain/units/conversion.js and core/numbers.js directly with explicit fixtures — no
+// element, no rendering. Celsius is the single maintained source: temperature tiers are
+// wired to the indoor profile's tiers, not a second copy, and Fahrenheit thresholds are
+// integers derived from it (16/18/19/20/21/23/24/25/26/28 °C -> 61/64/66/68/70/73/75/77/79/82 °F).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -109,7 +97,7 @@ test("delta: Kelvin delta equals Celsius delta exactly (pure offset relationship
   assert.equal(access.convertMetricValue(-2.5, { metricKind: "temperature", quantityKind: "delta", fromProfileKey: "kelvin", toProfileKey: "celsius" }), -2.5);
 });
 
-// ---- Deterministic, integer Fahrenheit classification thresholds (the User's explicit acceptance list) ----
+// ---- Deterministic, integer Fahrenheit classification thresholds ----
 
 test("Fahrenheit classification thresholds are the exact required integers, derived from the single Celsius source", () => {
   const celsiusTiers = access.deriveThresholdsForProfile("temperature", "celsius");
@@ -208,10 +196,8 @@ test("_deriveBandForProfile throws a descriptive error for an unknown band name"
 // ---- Extension-point proof: the underlying pure functions are generic, not hardcoded to temperature ----
 
 test("extension point: convertUnitValue/deriveThresholdsForProfile/deriveBandForProfile work against a purely test-local synthetic profile, never registered in METRIC_DEFINITIONS", () => {
-  // Simulates a hypothetical future metric kind (e.g. absolute humidity,
-  // g/m3 <-> mg/m3, a simple x1000 scale factor with no offset) entirely
-  // outside the real registry, proving the generic functions don't assume
-  // "temperature" or Fahrenheit-specific behavior anywhere.
+  // A synthetic metric kind (g/m3 <-> mg/m3, x1000, no offset) outside the real registry,
+  // proving the generic functions assume neither "temperature" nor Fahrenheit behaviour.
   const gramProfile = {
     key: "gram_per_m3",
     toCanonical: (v) => v,
@@ -225,7 +211,7 @@ test("extension point: convertUnitValue/deriveThresholdsForProfile/deriveBandFor
     fromCanonical: (v) => v * 1000,
     deltaToCanonical: (v) => v / 1000,
     deltaFromCanonical: (v) => v * 1000,
-    thresholdRounding: (v) => Math.round(v * 100) / 100, // 2 decimal places, a different rounding rule than Fahrenheit's integer rule
+    thresholdRounding: (v) => Math.round(v * 100) / 100, // 2 decimals — a different rule from Fahrenheit's integers
   };
 
   assert.equal(conversion.convertUnitValue(5, "absolute", gramProfile, milligramProfile), 5000);

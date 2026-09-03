@@ -1,11 +1,9 @@
 "use strict";
 
-// A range or spread is physically maximum minus
-// Minimum and can never be negative; a negative range_entity state must not
-// activate the daily-range view, and a negative spread attribute must fall
-// back to the locally-computed value instead of being displayed. Also
-// covers rangeScale axis edge cases (average outside min/max, min=max, all
-// three equal).
+// A range or spread is max minus min and can never be negative: a negative range_entity
+// state must not activate the daily-range view, and a negative spread attribute falls back
+// to the locally-computed value. Also covers rangeScale axis edge cases (average outside
+// min/max, min=max, all three equal) and unit conversion of range_entity/trend_entity.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -62,16 +60,14 @@ test("DATA-02: a zero range_entity state is valid (min === max, a physically pos
   env.cleanup(el);
 });
 
-// ---- rangeState is exposed in the
-// ViewModel, as the authoritative daily span — never recomputed from
-// rangeMax - rangeMin, and 0 is a valid value, not treated as missing.
+// ---- rangeState is the authoritative daily span in the ViewModel, never recomputed from
+// rangeMax - rangeMin; 0 is a valid value, not missing. ----
 
 test("data.range.state equals the converted range_entity state", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
-    // State (5) deliberately differs from maximum-minimum (23-18=5 here
-    // would coincide; use a state that would NOT match max-min to prove
-    // the state itself is authoritative, not derived from the attributes.
+    // State (3) deliberately differs from maximum - minimum (5), proving the state itself
+    // is authoritative, not derived from the attributes.
     "sensor.range": mkState("sensor.range", 3, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -200,9 +196,8 @@ test("rangeScale: missing minimum_zeitpunkt/maximum_zeitpunkt attributes leave t
   env.cleanup(el);
 });
 
-// ---- RangeScale's localized daily footer
-// must show span/min/max, never the room-comfort footer text, and must
-// work without any rooms configured at all.
+// ---- RangeScale's localized daily footer shows span/min/max, never the room-comfort text,
+// and works with no rooms configured. ----
 
 function rangeScaleFooterFixture(config, states, lang) {
   const hass = mkHass(states);
@@ -238,9 +233,7 @@ test("RangeScale footer without rooms shows span/min/max", () => {
   env.cleanup(el);
 });
 
-// A range entity is complete with just its minimum and maximum; the timestamps are extra.
-// Where they are absent the sentence simply does not mention a time — an empty bracket or
-// a dash reads as a fault, and there is none.
+// Timestamps are optional; where absent, the sentence omits the time (no empty bracket or dash).
 test("a missing timestamp leaves no bracket behind in the RangeScale footer", () => {
   const el = rangeScaleFooterFixture(
     {},
@@ -257,8 +250,7 @@ test("a missing timestamp leaves no bracket behind in the RangeScale footer", ()
   env.cleanup(el);
 });
 
-// Both spellings of the attribute are accepted, English first — the German one is what
-// the card was first built against and stays supported.
+// Both attribute spellings are accepted, English first; the German one stays supported.
 test("the timestamp attributes are read in either spelling, English first", () => {
   const footerOf = (attributes) => {
     const el = rangeScaleFooterFixture(
@@ -282,8 +274,7 @@ test("the timestamp attributes are read in either spelling, English first", () =
   assert.match(both, /\(06:00\)/, "English wins when both are present");
 });
 
-// Only one of the two is a perfectly ordinary state, and it must produce exactly one
-// bracket rather than one bracket and one apology.
+// One timestamp present must produce exactly one bracket.
 test("one timestamp present gives one bracket", () => {
   const el = rangeScaleFooterFixture(
     {},
@@ -338,9 +329,7 @@ test("I18N-02: RangeScale footer renders without throwing in every supported lan
     "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
   };
-  // The language list comes from the manifest. It used to be written out here, and it
-  // stopped at eleven: Ukrainian, Norwegian, Swedish and Latvian shipped without this
-  // test ever rendering a footer in them, while the test name still said "all".
+  // The language list comes from the manifest, not written out here.
   for (const lang of LANGUAGES) {
     const el = rangeScaleFooterFixture({}, states, lang);
     const footerEl = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer");
@@ -349,9 +338,7 @@ test("I18N-02: RangeScale footer renders without throwing in every supported lan
   }
 });
 
-// ---- The main scale must include the average. A weighted or independent
-// average source falling outside [coolest, warmest] must not clamp the avg
-// marker to the scale edge. ----
+// ---- The main scale must include the average: an avg outside [coolest, warmest] must not clamp its marker to the edge. ----
 
 test("DATA-03: main scale expands to include avg when avg is above both coolest and warmest", () => {
   const hass = mkHass({
@@ -391,14 +378,10 @@ test("DATA-03: main scale unaffected when avg already sits inside [coolest, warm
   env.cleanup(el);
 });
 
-// ---- range_entity and trend_entity are
-// typed and unit-converted, not read raw. range_entity's own state is a
-// DELTA (today's spread), min/max attributes are ABSOLUTE readings,
-// trend_entity's state is a rate with the same conversion factor as delta.
-// Each is projected through the range/trend entity's own
-// unit_of_measurement into the card's canonical unit, then into the
-// resolved display unit (_resolveAuxiliaryUnitProfile()), exactly like the
-// pre-existing spread-attribute conversion a few tests above. ----
+// ---- range_entity and trend_entity are typed and unit-converted, not read raw:
+// range_entity's state is a delta (today's spread), its min/max attributes are absolute,
+// trend_entity's state is a rate. Each is projected through its own unit into the canonical
+// unit, then the resolved display unit. ----
 
 test("range_entity in a different unit is converted to the display unit", () => {
   const hass = mkHass({
@@ -418,11 +401,8 @@ test("range_entity in a different unit is converted to the display unit", () => 
 test("range_entity state converts as a delta and a negative result disables hasRange", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
-    // -18°F as a DELTA converts to -10°C (deltaToCanonical has no +32/-32
-    // offset); if the code wrongly treated this as an ABSOLUTE value
-    // instead, toCanonical() would apply the offset and yield a very
-    // different (still negative) number — either way hasRange must be
-    // false, but only the delta path yields exactly -10.
+    // -18°F as a delta is -10°C (no offset); an absolute reading would apply the +32/-32
+    // offset. Either way hasRange must be false, but only the delta path yields exactly -10.
     "sensor.range": mkState("sensor.range", -18, { unit_of_measurement: "°F", minimum: 60, maximum: 70 }),
   });
   const el = env.createCard({ entity: "sensor.avg", range_entity: "sensor.range" }, hass);
@@ -445,10 +425,7 @@ test("range_entity with an unresolvable unit is diagnosed as unusable", () => {
 });
 
 test("range_entity without unit_of_measurement is unusable and hasRange stays false", () => {
-  // A missing unit on range_entity is treated exactly like an unresolvable one (see
-  // _resolveAuxiliaryUnitProfile()'s missing-unit branch, and the identical
-  // Primary/Räume contract at _buildEntityModel()) — never silently assumed
-  // canonical.
+  // A missing range_entity unit is treated like an unresolvable one, never assumed canonical.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.range": mkState("sensor.range", 5, { minimum: 18, maximum: 23 }), // no unit_of_measurement

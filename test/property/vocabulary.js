@@ -1,29 +1,14 @@
 "use strict";
 
-// THE VOCABULARY the generator draws from: every unit, spelling, mistake and malformed
-// value a real Home Assistant dashboard can put in front of this card.
-//
-// Split out from generators.js because it is a reference list rather than logic, it is long,
-// and it is the part most worth reading on its own — someone adding a case should be able to
-// find where it goes without reading a generator.
-//
-// TWO KINDS OF WRONGNESS, and both matter:
-//
-//   CURATED    mistakes a person actually makes. `device_clas`, `humidty`, a decimal comma,
-//              a sensor that appends its own unit to its state. These are worth listing by
-//              hand because they are the ones that happen.
-//   MECHANICAL mistakes a keyboard makes. typo() below drops, doubles, swaps and re-cases
-//              characters, so ANY valid token in the product surface can be handed to the
-//              card slightly wrong without anyone having to think of that particular slip
-//              first. This is what covers `clipp`, `wrp`, `value_dsc`, `Extremes` and the
-//              hundreds of others nobody would enumerate.
+// The reference vocabulary the generator draws from: every unit, spelling, mistake and
+// malformed value a real dashboard can put in front of the card. Two kinds of wrongness:
+// curated (mistakes a person makes, worth listing by hand) and mechanical (typo() below
+// damages any valid token, so misspellings get tried without a curated list per token).
 
 // ------------------------------------------------------------------------- units --
 
-// Every unit Home Assistant's sensor device classes list, grouped the way the docs group
-// them. The card understands four of these groups and must survive the rest — a template
-// sensor with `device_class: temperature` and `unit_of_measurement: W/m²` is a real thing a
-// real person ships, and what the card does with it is worth knowing.
+// Every unit Home Assistant's sensor device classes list, grouped as the docs group them.
+// The card understands four groups and must survive the rest.
 const HA_UNITS = {
   temperature: ["°C", "°F", "K"],
   humidity: ["%"],
@@ -88,16 +73,13 @@ const FOREIGN_DEVICE_CLASSES = [
 
 // --------------------------------------------------------------- misspellings --
 
-// Mechanical damage to a valid token. Deterministic given the random source, and applicable
-// to ANY string — which is the point: the generator can misspell a view name, an enum value,
-// a configuration key or an attribute name without a curated list for each.
+// Mechanical damage to a valid token: deterministic given the random source, applicable to
+// any string.
 function typo(rng, text) {
   const source = String(text);
   if (source.length < 2) return `${source}x`;
-  // Some damage is a no-op on some words: swapping the two `s` of `class` restores it, and
-  // capitalising a word that is already capitalised changes nothing. Retry rather than
-  // return the original, because "a misspelling that is spelled correctly" would make the
-  // whole axis silently useless. Bounded, and the fallback always differs.
+  // Some damage is a no-op on some words (swapping the two `s` of `class`); retry rather than
+  // return the original, so the axis is not silently useless. Bounded; the fallback differs.
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const damaged = damage(rng, source);
     if (damaged !== source) return damaged;
@@ -132,8 +114,8 @@ function damage(rng, source) {
   }
 }
 
-// The attribute NAMES a template sensor gets wrong. Curated, because these are the specific
-// slips that happen — an underscore forgotten, a hyphen instead, the wrong case.
+// The attribute names a template sensor gets wrong — curated slips: a missing underscore, a
+// hyphen instead, the wrong case.
 const MISSPELLED_DEVICE_CLASS_KEYS = ["device_clas", "deviceclass", "Device_Class", "device-class", "device class"];
 const MISSPELLED_UNIT_KEYS = ["unit_of_measure", "unit_of_measurment", "Unit_of_measurement", "unit", "unit_of_measurements"];
 
@@ -145,10 +127,8 @@ const MISSPELLED_DEVICE_CLASS_VALUES = {
   pm25: ["pm2_5", "pm2.5", "PM25", "particulate_matter_25", "pm_25"],
 };
 
-// Top-level configuration keys somebody meant to write. The card names each of them and
-// offers the option it was probably meant to be, so these carry two jobs: they keep a
-// generated card exercising the diagnostic path, and they are the population
-// unit/config/top-level-keys.test.js measures the suggestion against.
+// Misspelled top-level configuration keys: they exercise the diagnostic path in a generated
+// card, and are the population unit/config/top-level-keys.test.js measures the suggestion against.
 const MISSPELLED_CONFIG_KEYS = [
   "entiy",
   "entitiy",
@@ -173,9 +153,9 @@ const MISSPELLED_CONFIG_KEYS = [
 // Numbers that are numbers only in the sense that `typeof` agrees.
 const ABSURD_NUMBERS = [1000, -1000, 1e9, -1e9, 1e308, -1e308, 5e-324, "-0", 0.1 + 0.2, 2 ** 53 + 1, Math.PI];
 
-// States that are not numbers at all. Every one of these has been seen in a real
-// `hass.states`: an unrendered template gives "", a decimal comma gives "1,5", a sensor that
-// appends its own unit gives "21 °C", a Jinja `none` gives "None".
+// States that are not numbers, all seen in a real `hass.states`: an unrendered template
+// gives "", a decimal comma gives "1,5", a self-appending unit gives "21 °C", Jinja `none`
+// gives "None".
 const MALFORMED_STATES = [
   "",
   " ",
@@ -230,12 +210,9 @@ const AWKWARD_TEXT = [
 // Everything `tap_action`/`hold_action` may be, and a good deal it may not.
 const VALID_ACTIONS = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
 
-// ENTITY IDS HOME ASSISTANT WOULD NEVER ISSUE.
-//
-// Home Assistant guarantees `domain.object_id`, lower case, ASCII, no spaces. None of these
-// satisfies that, and every one of them reaches the card the same way a real id does: through
-// a YAML file a person edited by hand. What the card must not do is crash, and what it must
-// not do more quietly is write one of them into the DOM unescaped.
+// Entity ids Home Assistant would never issue (it guarantees lower-case ASCII
+// `domain.object_id`), each reaching the card through a hand-edited YAML file. The card must
+// not crash and must not write one into the DOM unescaped.
 const IMPOSSIBLE_ENTITY_IDS = Object.freeze([
   "no_domain_at_all",
   "sensor.",
@@ -251,9 +228,8 @@ const IMPOSSIBLE_ENTITY_IDS = Object.freeze([
   "  sensor.padded  ",
 ]);
 
-// Extra attributes the card reads, written the ways they go wrong. The range view takes its
-// numbers from `minimum`/`maximum`, and a value colour from the entity overrides the palette
-// — so each of these lands somewhere the card has to make a decision.
+// Extra attributes the card reads, written the ways they go wrong: the range view takes its
+// numbers from `minimum`/`maximum`, and a value colour from the entity overrides the palette.
 const AWKWARD_EXTRA_ATTRIBUTES = Object.freeze([
   // Reversed: the floor is above the ceiling.
   { minimum: 40, maximum: -10 },
@@ -276,9 +252,8 @@ const AWKWARD_EXTRA_ATTRIBUTES = Object.freeze([
 // Which timestamps a sensor reports. The names are the shapes test/fixtures/scenario.js knows.
 const TIMESTAMP_SHAPES = Object.freeze(["normal", "identical", "missing", "future", "malformed"]);
 
-// Fields a `hass` object can arrive without. Every one of them happens: `hass` is handed to a
-// card before the locale resolves, a custom setup carries no themes, and a dashboard being
-// restored can pass an empty `states`.
+// Fields a `hass` object can arrive without: handed to a card before the locale resolves, a
+// setup with no themes, a restoring dashboard passing an empty `states`.
 const HASS_GAPS = Object.freeze(["locale", "language", "themes", "callService", "states"]);
 
 module.exports = {

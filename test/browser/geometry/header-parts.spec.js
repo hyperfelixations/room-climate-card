@@ -1,17 +1,10 @@
 "use strict";
 
-// WHERE THE HEADER'S PARTS ACTUALLY LAND when one of them is not drawn.
-//
-// The header is a three-column grid, `auto 1fr auto` with an 11px gap. A column that holds
-// nothing is still a column: it contributes its gap, so simply omitting the icon would leave
-// the title 11px from the left edge instead of at it — a shift nobody asked for and nobody
-// would think to look for.
-//
-// The stylesheet carries one override per surviving subset. A jsdom test can read the rule;
-// only a real browser can say what the cascade resolved to and where the boxes ended up, and
-// the second is what this file measures. The default case is measured too, first and on
-// purpose: the promise the whole block has to keep is that a card asking for nothing is
-// pixel-for-pixel the card it always was.
+// Where the header's parts land when one is not drawn. The header is a three-column grid
+// (`auto 1fr auto`, 11px gap); an empty column still contributes its gap, so omitting the
+// icon would push the title 11px from the left edge. The stylesheet carries one override
+// per surviving subset; only a real browser says where the boxes ended up. The default case
+// is measured too — a card asking for nothing must stay pixel-for-pixel unchanged.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers.js");

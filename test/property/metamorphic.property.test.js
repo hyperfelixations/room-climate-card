@@ -1,25 +1,12 @@
 "use strict";
 
-// THE METAMORPHIC RUN. Take a randomly described dashboard, derive a second one from it by a
-// change whose effect is known, and check that the difference between the two cards is the
-// difference that was asked for.
-//
-// It is the same generator and the same scenario builder as model.property.test.js next
-// door; what differs is the question. That file asks "is this card self-consistent" and can
-// only ever find a card that is wrong. This one asks "is this card consistent with its
-// neighbour" and finds a card that is merely worse than it should be — which is the shape of
-// the defect that started this file (BUG-10: a card that quietly discards every usable room
-// when one unusable one is present and the primary entity is unavailable).
-//
-// THE RELATIONS THEMSELVES, with their preconditions and the reasoning behind each, are in
-// ./metamorphic.js. This file runs them.
-//
-// WHY THE COVERAGE IS ASSERTED. Most relations do not apply to most descriptions — a
-// unit-equivalence relation has nothing to say about a CO2 card — so a bug in a precondition
-// shows up as a relation that silently never runs, and the run stays green while testing
-// nothing. That is exactly how the previous property test managed to check nothing at all
-// for months. So every relation has to have been exercised, and the run fails if one was
-// not.
+// The metamorphic property run: derives a second dashboard from a random one by a change of
+// known effect, and checks that the difference between the two cards is the one asked for.
+// Its boundary: model.property.test.js next door asks whether one card is self-consistent;
+// this asks whether a card is consistent with its neighbour. The relations, with their
+// preconditions and reasoning, are in ./metamorphic.js; this file runs them.
+// The coverage assertion — every relation must apply to a real share of the population — is
+// load-bearing. Rationale: see interne Doku §4 „Die metamorphe Schicht: zwei Karten statt einer".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -60,12 +47,9 @@ test.after(() => {
   if (env) env.cleanupAll();
 });
 
-// Applies a sequence of built scenarios to ONE card and observes the last of them.
-//
-// `refused` means the card never got far enough to be compared: setConfig refused, or
-// something threw. That is not a violation. A relation says what must be true of two cards
-// that BOTH exist, and a configuration the card refuses is a separate contract, tested
-// elsewhere.
+// Applies a sequence of built scenarios to one card and observes the last. `refused` means
+// the card never got far enough to compare (setConfig refused, or something threw); a
+// relation is about two cards that both exist, and a refused configuration is tested elsewhere.
 function runSequence(scenarios) {
   let card = null;
   try {
@@ -99,32 +83,28 @@ function runBase(description) {
 function checkRelation(relation, description) {
   const base = runBase(description);
   if (base.refused || !base.observation) return { applied: false, violations: [] };
-  // A relation about what a card PRESERVES has nothing to say about a card that was showing
-  // nothing — see the note on preconditions in metamorphic.js.
+  // A preservation relation has nothing to say about a card that showed nothing.
   if (relation.needsRenderedBase && base.observation.empty) return { applied: false, violations: [] };
 
   let sequence;
   try {
     sequence = relation.derive(description, base.observation);
   } catch {
-    // The scenario builder refused a description it produced. That is a finding for
-    // model.property.test.js next door, which owns the builder contract, and not a relation
-    // between two cards.
+    // The scenario builder refused its own description — a finding for model.property.test.js,
+    // not a relation between two cards.
     return { applied: false, violations: [] };
   }
   if (!sequence) return { applied: false, violations: [] };
 
   const derived = runSequence(sequence);
   if (derived.refused) {
-    // A derivation that turns an acceptable configuration into a refused one is a finding in
-    // its own right for the relations that only ever add a room or change a reading — none of
-    // them touches anything setConfig validates.
+    // These relations only add a room or change a reading, so a derived configuration that
+    // setConfig refuses is itself a finding.
     return { applied: true, violations: [`the derived configuration was refused while the original was not`] };
   }
   if (!derived.observation) return { applied: false, violations: [] };
-  // `null` from compare() means the relation could not tell from the description alone that
-  // it did not apply, and found out only once both cards existed — see the note on
-  // preconditions in metamorphic.js. It is not a vacuous pass and is not counted as one.
+  // `null` from compare() means the relation found out only once both cards existed that it
+  // does not apply. Not a vacuous pass, and not counted as one.
   const violations = relation.compare(base.observation, derived.observation);
   if (violations === null) return { applied: false, violations: [] };
   return { applied: true, violations };
@@ -155,10 +135,8 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
   const seedRng = new SeededRandom(DEFAULT_SEED);
   const applied = new Map(RELATIONS.map((relation) => [relation.name, 0]));
   const failures = [];
-  // Violations that reproduce a defect already registered in test/known-issues.js. Counted
-  // rather than reported: the register holds a deterministic reproduction of each, so
-  // repeating it here would only bury a genuinely new finding under a known one. Same
-  // discipline as model.property.test.js next door.
+  // Violations reproducing a defect already in test/known-issues.js: counted, not reported,
+  // as in model.property.test.js.
   const knownDefects = new Map();
 
   for (let start = 0; start < CASES; start += YIELD_EVERY) {
@@ -203,8 +181,8 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
     assert.fail(`${failures.length} of ${RELATIONS.length} relations were violated.\n\n${text.join("\n\n")}`);
   }
 
-  // The coverage assertion. A relation nobody exercised proves nothing, and a precondition
-  // that accidentally excludes everything looks exactly like a passing run.
+  // The coverage assertion: a relation nobody exercised proves nothing, and a precondition
+  // that excludes everything looks exactly like a passing run.
   const never = [...applied].filter(([, count]) => count === 0).map(([name]) => name);
   assert.deepEqual(never, [], `these relations never applied to any generated case, so they tested nothing: ${never.join("; ")}`);
   const minimumApplications = Math.max(2, Math.floor(CASES * 0.005));
@@ -215,18 +193,14 @@ test(`every metamorphic relation holds across ${CASES} randomly described dashbo
     `relations below the minimum population of ${minimumApplications}: ${starved.map(([name, count]) => `${name}=${count}`).join("; ")}`
   );
 
-  // NO REGISTERED DEFECT IS ASSERTED HERE ANY MORE, and the reason is worth writing down.
-  // BUG-10 — the defect this file was built to reach — is fixed, so the assertion that it
-  // must still reproduce was removed with it. What replaced it as the guard against a
-  // precondition quietly drifting is the coverage assertion above: every relation has to
-  // apply to a real share of the population, which is the same protection without tying it
-  // to one defect that will not always be there.
+  // BUG-10, which this file was built to reach, is fixed; the coverage assertion above
+  // replaced the reproduce-the-defect guard.
 });
 
 // ------------------------------------------------------------ the relations themselves --
 
-// A relation that cannot fail is not a test. Each one is shown here refusing a card that is
-// genuinely different, so the run above proves something when it passes.
+// A relation that cannot fail is not a test: each is shown here noticing a card that really
+// differs, so the run above means something when it passes.
 test("each relation notices a difference that is real", () => {
   const base = {
     metric: "temperature",
@@ -253,9 +227,8 @@ test("each relation notices a difference that is real", () => {
 });
 
 test("a relation that does not apply says so rather than asserting anyway", () => {
-  // The unit-equivalence relation has nothing to say about a CO2 card, and must not pretend
-  // otherwise — a relation that applied everywhere would be asserting things it was never
-  // given grounds for.
+  // The unit-equivalence relation has nothing to say about a CO2 card and must not pretend
+  // otherwise.
   const rendered = (description) => withQuietConsole(() => runBase(description)).observation;
   const units = RELATIONS.find((relation) => relation.name.includes("another unit"));
   const co2 = { metric: "co2", primary: { state: 700 }, rooms: [{ state: 650 }] };
@@ -263,8 +236,8 @@ test("a relation that does not apply says so rather than asserting anyway", () =
   assert.equal(units.derive(co2, rendered(co2)), null);
   assert.ok(units.derive(warm, rendered(warm)));
 
-  // And the unusable-room relation needs an arbiter, because without one the added room
-  // legitimately changes what the card is about.
+  // The unusable-room relation needs an arbiter; without one the added room legitimately
+  // changes what the card is about.
   const unusable = RELATIONS.find((relation) => relation.name.includes("cannot use"));
   const noPrimary = { metric: "temperature", primary: null, rooms: [{ state: 19 }] };
   const noRooms = { metric: "temperature", primary: { state: 22 }, rooms: [] };

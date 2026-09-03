@@ -1,13 +1,9 @@
 "use strict";
 
-// Manipulated unit_of_measurement, trend unit, value_level,
-// title, entity_label, room name/short, and entity id must never produce
-// extra DOM nodes or event handlers. Also covers
-// action-type allowlisting (_normalizeAction()).
-//
-// Because these tests run in a real jsdom DOM (not a string diff), an
-// escaping regression here would actually create a real <img>/<script>
-// element in the tree — exactly the failure mode a browser user would hit.
+// Manipulated unit_of_measurement, trend unit, value_level, title, entity_label, room
+// name/short and entity id must never produce extra DOM nodes or event handlers. Also
+// covers action-type allowlisting. These run in a real jsdom DOM, so an escaping regression
+// would create an actual <img>/<script> element — the failure a browser user would hit.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -125,7 +121,7 @@ test("XSS payload in an icon config value produces no extra DOM nodes (icon is s
   env.cleanup(el);
 });
 
-// ---- Action allowlist (_normalizeAction()) ----
+// ---- Action allowlist ----
 
 test("_normalizeAction: all 7 allowlisted action types are accepted verbatim", () => {
   const el = env.document.createElement("room-climate-card");

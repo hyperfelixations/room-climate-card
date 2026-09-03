@@ -1,19 +1,11 @@
 "use strict";
 
-// HOW THE CARD READS THE SURFACE IT IS PAINTED ON.
-//
-// Split from the measurement it feeds (test/unit/domain/palette-fit.test.js): what a colour
-// looks like on a background is a pure calculation, and where the card gets that background
-// from is a question about the assembled element, its platform adapter and the ladder between
-// them. Different subjects, different layers, different files.
-//
-// A SURFACE IS TWO READINGS, not one. The colours the card sits on, and the theme's text
-// colour — because the scale track and a room chip's background are tints of the latter, so a
-// palette step painted on either is not painted on the card. See paint-roles.js.
-//
-// jsdom paints nothing, so what these can reach is the LAST rung of the ladder and the
-// plumbing around it. The live reading — a card-mod colour applied after the first paint, a
-// gradient, a translucent card composited onto its parent — needs a real CSSOM and lives in
+// How the card reads the surface it is painted on. Split from the measurement it feeds
+// (test/unit/domain/palette-fit.test.js): the colour-on-background maths is pure, but where
+// the card gets that background is a question about the assembled element and its platform
+// adapter. A surface is two readings: the colours the card sits on, and the theme's text
+// colour (the scale track and chip backgrounds are tints of the latter — see paint-roles.js).
+// jsdom paints nothing, so these reach only the last rung of the ladder; the live reading is
 // test/browser/visual/palette-fit-calibration.spec.js.
 
 const test = require("node:test");
@@ -50,9 +42,7 @@ test("the surface is read once and reused until it changes", () => {
 });
 
 test("with no theme and nothing painted, the answer is Home Assistant's own default", () => {
-  // jsdom paints nothing, so this exercises the last rung of the ladder rather than the
-  // first. The live reading — including a card-mod override applied after the first paint —
-  // needs a real CSSOM and lives in test/browser/visual/palette-fit-calibration.spec.js.
+  // jsdom paints nothing, so this is the last rung of the ladder; live reading: palette-fit-calibration.spec.js.
   const built = scenario().rooms(1).build();
   const card = env.createCard(built.config, built.hass);
   // normalize() because the card runs in its own V8 realm and assert/strict compares
@@ -80,9 +70,7 @@ test("the surface is part of what brings the card back for a repaint", async () 
     entityDataSignature({ ...args, surface: surfaceOf(["#FFFFFF", "#000000"]) }),
     "a gradient is not the same background as its first stop"
   );
-  // The text colour is the second half of the surface, and a theme can change it without
-  // changing the card background at all — a light theme with near-black text and one with
-  // grey text put the scale track in two different places.
+  // The text colour is the surface's second half; a theme can change it without touching the card background.
   assert.notEqual(
     entityDataSignature({ ...args, surface: surfaceOf(["#FFFFFF"], "#212121") }),
     entityDataSignature({ ...args, surface: surfaceOf(["#FFFFFF"], "#727272") }),

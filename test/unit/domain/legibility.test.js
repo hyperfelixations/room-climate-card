@@ -1,15 +1,9 @@
 "use strict";
 
-// MOVING A COLOUR JUST FAR ENOUGH TO BE SEEN, without changing what colour it is.
-//
-// The one primitive underneath every repair the card makes: a palette step that collides with
-// the card it is painted on, and a status pill that its own tint has swallowed. Both want the
-// same thing — the NEAREST colour that clears a stated separation, with the hue left exactly
-// where it was.
-//
-// Two properties carry the whole design, and both are tested here rather than assumed.
-// NEARNESS, because a repair that overshoots is the over-steering the card exists to avoid.
-// HUE PRESERVATION, because a `palette: yellow` that comes back green is not a repair.
+// Moving a colour just far enough to be seen without changing what colour it is: the
+// primitive under every repair the card makes. Two properties carry the design and are
+// tested here — nearness (a repair that overshoots is over-steering) and hue preservation
+// (a `palette: yellow` that comes back green is not a repair).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -27,15 +21,9 @@ const REQUIRED = 0.232;
 const clears = (hex, backgrounds, required = REQUIRED) =>
   backgrounds.every((background) => oklch.screenDistance(hex, background) >= required);
 
-// BELOW THIS CHROMA A HUE ANGLE IS NOT WORTH ASSERTING ON, and the reason is quantisation
-// rather than taste. A hex colour carries its a and b to about 0.004; at chroma 0.012 — where
-// the warm grey pastel paints an invalid reading sits — that is a third of the radius, so the
-// ANGLE can swing tens of degrees while the colour stays the same grey to any eye. The
-// gradient generator draws its own line at 0.01 for the neighbouring question of which hue to
-// believe; this one is stricter because it is asserting on the answer rather than choosing it.
-//
-// A near-neutral colour gets the assertion that actually means something instead: it stays
-// near-neutral, which is what "the same colour" means when there is no hue to keep.
+// Below this chroma a hue angle is quantisation noise (a hex carries a and b to ~0.004), so
+// a near-neutral colour gets the assertion that means something instead: it stays
+// near-neutral.
 const HAS_HUE = 0.04;
 const hueGap = (a, b) => {
   const difference = Math.abs(oklch.hexToOklch(a).hue - oklch.hexToOklch(b).hue) % 360;
@@ -45,9 +33,8 @@ const hueGap = (a, b) => {
 // ================================================ the colour comes back as itself =====
 
 test("a colour that is already clear comes back untouched, by identity", () => {
-  // The cheapest possible proof that nothing was rebuilt: a repair that returns an equal but
-  // freshly computed colour has done work it had no business doing, and a one-bit rounding
-  // drift would turn up somewhere downstream.
+  // Proof that nothing was rebuilt: a freshly computed equal colour would drift by a bit
+  // somewhere downstream.
   for (const [hex, background] of [["#000000", "#FFFFFF"], ["#FFFFFF", "#1C1C1C"], ["#17A93F", "#FFFFFF"]]) {
     assert.equal(legibility.legibleVariant(hex, [background], REQUIRED), hex, hex + " on " + background);
   }
@@ -81,9 +68,8 @@ test("a colour that is not clear comes back clear, and still the same colour", (
 });
 
 test("the answer is the nearest one, so nothing moves further than it has to", () => {
-  // The property that makes this minimally invasive. Anything strictly between where the
-  // colour was and where it landed must still fail — otherwise a closer answer existed and
-  // the repair overshot.
+  // Minimally invasive: anything strictly between the colour and where it landed must still
+  // fail, or a closer answer existed.
   const CASES = [
     ["#FFFF00", ["#FFFFFF"]],
     ["#000080", ["#1C1C1C"]],
@@ -96,8 +82,7 @@ test("the answer is the nearest one, so nothing moves further than it has to", (
     const to = oklch.hexToOklch(moved);
     const span = to.lightness - from.lightness;
     assert.notEqual(span, 0, hex + ": it had to move");
-    // Integer shares: adding 0.1 nine times lands on 0.9999999999999999, which is the answer
-    // itself and clears by construction.
+    // Integer shares: nine tenths avoids landing on the answer itself.
     for (let tenth = 1; tenth <= 9; tenth += 1) {
       const between = oklch.oklchToHex({ lightness: from.lightness + (span * tenth) / 10, chroma: from.chroma, hue: from.hue });
       assert.equal(
@@ -125,17 +110,16 @@ test("it goes the shorter way: a step near the dark end is lightened, one near w
 // ================================================ one direction at a time =============
 
 test("a direction that runs out says so instead of returning the end of the range", () => {
-  // Black cannot get any darker, and a colour asked to escape downwards from there has no
-  // answer. Saying null is what lets a caller try the other way rather than paint #000000 and
-  // call it a repair.
+  // Black cannot get darker; null is what lets a caller try the other way rather than paint
+  // #000000 and call it a repair.
   assert.equal(legibility.lightnessThatClears("#000000", ["#1C1C1C"], REQUIRED, -1), null);
   assert.equal(legibility.lightnessThatClears("#FFFFFF", ["#FEFEFE"], REQUIRED, 1), null);
   assert.ok(legibility.lightnessThatClears("#000000", ["#1C1C1C"], REQUIRED, 1) > 0);
 });
 
 test("with backgrounds at both ends there may be no answer at all", () => {
-  // A card on a gradient from white to black contains every lightness. No colour of a fixed
-  // hue and chroma clears a large bar against all of it, and the honest answer is nothing.
+  // A white-to-black gradient contains every lightness; no fixed-hue colour clears a large
+  // bar against all of it.
   const everyLightness = Array.from({ length: 11 }, (_, index) => {
     const channel = Math.round((index / 10) * 255).toString(16).padStart(2, "0").toUpperCase();
     return "#" + channel + channel + channel;
@@ -153,10 +137,9 @@ test("every background counts, not merely the first", () => {
 // ================================================ the instrument it relies on =========
 
 test("separation grows as a colour moves away from a background, which is what the search assumes", () => {
-  // The search walks outwards and stops at the first lightness that clears. That is only the
-  // NEAREST answer if the separation does not dip back below the bar further out. Checked
-  // over a grid rather than argued, because hue, chroma and the gamut mapping all move as
-  // lightness does: at most two crossings means one contiguous failing neighbourhood.
+  // The search walks outwards and stops at the first lightness that clears — the nearest
+  // answer only if separation does not dip back below the bar further out. At most two
+  // crossings means one contiguous failing neighbourhood.
   for (const background of ["#FFFFFF", "#1C1C1C", "#808080", "#0A2A4F"]) {
     for (const hue of [0, 60, 140, 200, 264, 320]) {
       for (const chroma of [0, 0.06, 0.14]) {

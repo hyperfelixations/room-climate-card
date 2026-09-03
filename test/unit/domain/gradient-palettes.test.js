@@ -1,22 +1,11 @@
 "use strict";
 
-// The gradient palette generator: two or three colours in, a whole ramp out.
-//
-// Its sibling next door (palette-generation.test.js) covers the ONE-colour generator, and
-// the two answer for different things. A monochrome ramp has one hue and has to carry
-// direction with paleness and depth; a gradient ramp has two hues and has to travel between
-// them convincingly. So what is checked here is mostly about the journey — that it goes the
-// short way round the hue circle, that it does not pass through a colour nobody named, and
-// that its steps are spaced by what a reader sees.
-//
-// THE PROMISE IT SHARES with every generated palette: the colours you name are the colours
-// you get, to the digit, at the ends and — with three — in the middle.
-//
-// THE ONE IT NEARLY BROKE. sRGB is not a box in Oklch, and a colour like `blue` sits on a
-// corner of it. Stepping away by equal parameter costs almost all the chroma in the first
-// step, and `blue-green-red` jumped from blue straight to teal and then crawled. Measured
-// across 1100 name pairs the worst step was 4.6 times the smallest; every outlier had a
-// gamut corner at one end. The spacing test below is what keeps that fixed.
+// The gradient palette generator: two or three colours in, a whole ramp out. Boundary: the
+// one-colour generator is palette-generation.test.js next door. A gradient ramp has two
+// hues and has to travel between them, so most of this is about the journey — the short way
+// round the hue circle, no colour nobody named, steps spaced by what a reader sees. The
+// shared promise: the named colours are the ends (and, with three, the middle), to the
+// digit. See interne Doku §5 „Mehrfarbpaletten: zwei oder drei genannte Farben".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,8 +33,8 @@ test.before(async () => {
   ({ hexToOklch, oklabDistance } = await import("../../../src/core/oklch.js"));
 });
 
-// The palette a spelling implies, straight from the generator — so these tests are about the
-// calculation and not about the lookup that finds it.
+// The palette a spelling implies, straight from the generator, so these tests are about the
+// calculation and not the lookup.
 const from = (spec) => gradientPalette(spec.split("-").map((token) => parseColorToken(token)), spec);
 const rampOf = (palette) => [...[...palette.below].reverse(), palette.optimal, ...palette.above];
 
@@ -62,17 +51,15 @@ test("the colours you name are the ends of the ramp, to the digit", () => {
 });
 
 test("with three colours the middle is the one that was named, whatever the profile looks like", () => {
-  // Stated for a metric with no `below` at all, because that is the case where somebody
-  // might expect the middle to be reinterpreted. It is not: a palette is a set of colours
-  // and a classification is a set of thresholds, and they meet at the profile.
+  // Stated for a metric with no `below`, where the middle might be expected to be
+  // reinterpreted. It is not: colours and thresholds meet at the profile.
   for (const spec of ["blue-green-red", "white-teal-black", "red-yellow-red"]) {
     assert.equal(from(spec).optimal, parseColorToken(spec.split("-")[1]), spec);
   }
 });
 
 test("with two colours the middle is on the ramp rather than beside it", () => {
-  // The halfway point of the same polar interpolation every other step uses, so a reader
-  // travelling the ramp passes through it without a kink.
+  // The halfway point of the same polar interpolation every step uses, so no kink.
   const palette = from("blue-red");
   const ramp = rampOf(palette);
   const middle = ramp.indexOf(palette.optimal);
@@ -88,7 +75,7 @@ test("with two colours the middle is on the ramp rather than beside it", () => {
 // ============================================ the journey =======================
 
 test("blue-red travels through violet, which is the short way round", () => {
-  // The long way round would pass through green, and nobody writing `blue-red` means that.
+  // The long way round passes through green, which nobody writing `blue-red` means.
   const hues = rampOf(from("blue-red")).map((hex) => hexToOklch(hex).hue);
   const green = hues.some((hue) => hue > 120 && hue < 200);
   assert.equal(green, false, `the ramp passed through green: ${hues.map(Math.round).join(", ")}`);
@@ -97,8 +84,8 @@ test("blue-red travels through violet, which is the short way round", () => {
 });
 
 test("an achromatic end borrows the hue of the other, rather than travelling to noise", () => {
-  // #000000 has no hue; whatever angle it quantises to is rounding noise. Interpolating
-  // TOWARDS that noise would send the ramp through a colour nobody named.
+  // #000000 has no hue; the angle it quantises to is noise, and interpolating towards it
+  // would send the ramp through a colour nobody named.
   const blackRed = rampOf(from("black-red"));
   for (const hex of blackRed) {
     const { chroma, hue } = hexToOklch(hex);
@@ -113,10 +100,8 @@ test("an achromatic end borrows the hue of the other, rather than travelling to 
 });
 
 test("every spelling gives eleven steps, whatever colours were named", () => {
-  // A derived palette answers the card's own classification profiles, which run from -5 to +5,
-  // so the two map one to one — see WING_STEPS in palettes/geometry.js. The length never
-  // depends on the colours: it is the same eleven for two ends a reader can barely separate as
-  // for two at opposite corners of the space.
+  // A derived palette answers the card's -5..+5 profiles one to one (WING_STEPS in
+  // palettes/geometry.js); the length never depends on the colours.
   for (const spec of ["blue-red", "red-orange", "teal-teal", "black-white", "gold-khaki", "blue-green-red", "red-white-green"]) {
     const palette = from(spec);
     assert.equal(palette.below.length, 5, spec + ": below");
@@ -125,20 +110,10 @@ test("every spelling gives eleven steps, whatever colours were named", () => {
 });
 
 test("the steps are spaced by what a reader sees, not by the interpolation parameter", () => {
-  // The regression guard for the gamut-corner defect. sRGB holds far more chroma at some hues
-  // and lightnesses than at others, and a colour like `blue` sits on a corner of it: stepping
-  // away by equal parameter costs almost all of its chroma in the first step and very little
-  // afterwards. Measured over every ordered pair and green-centred triple of a representative
-  // set, the worst ramp had a step 4.6 times its smallest before the fix.
-  //
-  // A WING WHOSE TWO ENDS ARE THE SAME COLOUR IS SKIPPED, because there is no spacing to be
-  // even about — `red-green-green` has nowhere to go on one side, and five steps that all
-  // stand on the named colour is the honest answer rather than a defect.
-  //
-  // MEASURED WITH CIEDE2000, which is neither of the two instruments the card itself uses. The
-  // generator spaces by screenDistance — the plain Oklab distance overstates the dark end, and
-  // spacing by it put a step of `black-gray` 28 times its smallest. Asserting in either of the
-  // card's own instruments would only prove the implementation agrees with itself.
+  // Regression guard for the gamut-corner defect: a colour like `blue` sits on a corner of
+  // sRGB, so equal-parameter steps cost most of its chroma in the first step. A wing whose
+  // two ends are the same colour is skipped (no spacing to be even about). Measured with
+  // CIEDE2000, neither instrument the card uses, so it does not just agree with itself.
   const NAMES = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "gray", "teal", "navy", "gold", "orange", "purple", "lime", "pink", "brown", "olive", "maroon", "salmon", "indigo", "turquoise", "crimson", "khaki"];
   let worst = { ratio: 0, spec: null };
   let measured = 0;
@@ -159,20 +134,14 @@ test("the steps are spaced by what a reader sees, not by the interpolation param
     }
   }
   assert.ok(measured > 1000, "only " + measured + " wings measured");
-  // Measured at 5.3 (`magenta-black`, whose path crosses the region where a lit room flattens
-  // everything). Spacing by the plain Oklab distance instead reads 28.2 on the same table.
+  // Measured at 5.3 (`magenta-black`).
   assert.ok(worst.ratio <= 5.5, worst.spec + " has a step " + worst.ratio.toFixed(1) + " times its smallest");
 });
 
 test("two colours a reader can separate give eleven steps a reader can separate", () => {
-  // WHAT THE GENERATOR CAN AND CANNOT PROMISE, and the line moved. It used to shorten a wing
-  // rather than emit a step nobody can see; now the length is fixed, so the same two ends are
-  // reached in five steps however close together that puts them. What is still true is that
-  // ends far enough apart carry eleven steps a reader can separate.
-  //
-  // The bar is the tightest pair the card already ships — `palette: black` puts #0C0C0C beside
-  // #000000 at 1.9 — with room to spare. `blue-red` is the binding case at 2.6, because
-  // CIEDE2000 compresses hard in the blues.
+  // The length is fixed, so two ends are always reached in five steps. Where the ends are
+  // far enough apart, the eleven steps stay separable; the bar is 2.5 ΔE00, and `blue-red`
+  // is the binding case at 2.6 because CIEDE2000 compresses hard in the blues.
   for (const spec of ["blue-red", "gold-navy", "teal-crimson", "blue-green-red", "black-white"]) {
     const ramp = rampOf(from(spec));
     for (let index = 1; index < ramp.length; index += 1) {
@@ -183,8 +152,8 @@ test("two colours a reader can separate give eleven steps a reader can separate"
     }
   }
 
-  // And two ends a reader can barely separate give eleven steps they cannot. The ramp is not
-  // lying about that — it is what was asked for, spread over the tiers it has to fill.
+  // Two ends a reader can barely separate give eleven steps they cannot — what was asked for,
+  // spread over the tiers it has to fill.
   const close = rampOf(from("red-orangered"));
   assert.equal(close.length, 11);
   assert.ok(
@@ -194,9 +163,8 @@ test("two colours a reader can separate give eleven steps a reader can separate"
 });
 
 test("two colours that render alike give a ramp that stands on the colour that was named", () => {
-  // The degenerate input. `optimal` is exactly what was named and every step is that colour,
-  // because there is nowhere to go from it — which paints the same card the empty wings used
-  // to, since an empty wing mapped every reading to the middle.
+  // Degenerate input: `optimal` is what was named and every step is that colour, because
+  // there is nowhere to go from it.
   const palette = from("teal-teal");
   assert.equal(palette.optimal, "#008080");
   assert.deepEqual(palette.below, ["#008080", "#008080", "#008080", "#008080", "#008080"]);
@@ -206,8 +174,8 @@ test("two colours that render alike give a ramp that stands on the colour that w
 // ============================================ every combination =================
 
 test("every pair and every triple of the 148 CSS names produces a usable palette", () => {
-  // Not all 148 x 148 — that is 21904 ramps and the point is coverage of the SHAPES, not of
-  // the arithmetic. Every name appears at least once at each of the three positions.
+  // Not all 148 x 148: the point is coverage of the shapes. Every name appears at least once
+  // at each of the three positions.
   const names = Object.keys(CSS_COLOR_NAMES);
   assert.equal(names.length, 148);
   let built = 0;
@@ -242,8 +210,8 @@ test("a gradient palette is the card's own work, and says so", () => {
 });
 
 test("a registered name and a single colour both win over the split", () => {
-  // The order is the whole safeguard. Two shipped palettes are spelled with a hyphen, and
-  // five CSS colours can be written either way; every one of them keeps the meaning it had.
+  // The order is the safeguard: two shipped palettes and five CSS colours can be written
+  // with a hyphen, and every one keeps its meaning.
   for (const name of ["color-vision", "protan-deutan"]) {
     assert.ok(paletteForName(name), `${name} is a registered palette`);
     assert.equal(paletteForName(name).origin, "builtin");
@@ -252,8 +220,8 @@ test("a registered name and a single colour both win over the split", () => {
     assert.ok(paletteForColor(joined), `${joined} is one colour`);
     assert.equal(paletteForColor(joined).below.length + paletteForColor(joined).above.length > 0, true);
   }
-  // And the hyphenated spellings of those same five are gradients, because a single-colour
-  // lookup cannot resolve them.
+  // The hyphenated spellings of those five are gradients, since a single-colour lookup
+  // cannot resolve them.
   for (const split of ["orange-red", "blue-violet", "green-yellow", "lime-green", "yellow-green"]) {
     assert.equal(paletteForColor(split), null, `${split} is not one colour`);
     assert.ok(paletteForGradient(split), `${split} is a gradient`);
@@ -266,15 +234,12 @@ test("the lookup takes hexes as readily as names", () => {
     assert.ok(palette, spec);
     assert.equal(palette.source.colors[0], "#1DB85D", spec);
   }
-  // Alpha is dropped from every anchor, for the reason paletteForColor gives: a ramp is a
-  // statement about lightness, colourfulness and hue, and transparency does not interpolate
-  // into one.
+  // Alpha is dropped from every anchor: transparency does not interpolate into a ramp.
   assert.deepEqual(paletteForGradient("1DB85D80-FD9808").source.colors, ["#1DB85D", "#FD9808"]);
 });
 
 test("the lookup declines everything that is not two or three colours", () => {
-  // Declining rather than throwing: the configuration layer owns the message, because it is
-  // the only layer that knows what the user typed and where.
+  // Declining rather than throwing: the configuration layer owns the message.
   for (const value of ["blue", "blue-", "-red", "blue--red", "blue-nonsense", "a-b-c-d", "", 42, null, undefined]) {
     assert.equal(paletteForGradient(value), null, JSON.stringify(value));
   }

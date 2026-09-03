@@ -1,11 +1,9 @@
 "use strict";
 
-// Direct unit tests for auxiliary range/trend models and room aggregates.
-//
-// This is where the card decides what a number MEANS: which entity is allowed to
-// determine the metric kind, which rooms may be averaged, whether a reading is a
-// measurement at all, and what the resulting sentence should say. Tests exercise
-// those decisions at their pure-function owners.
+// Direct unit tests for auxiliary range/trend models and room aggregates: the range delta
+// and its absolute min/max, the trend rate and its deadband, room aggregation, comfort
+// counts, the spread, and every subtitle branch. All at their pure-function owners, with no
+// card and no DOM.
 
 process.env.TZ = "UTC";
 
@@ -27,8 +25,7 @@ function st(state, attributes) {
   return { state: String(state), attributes: attributes || {} };
 }
 
-// A normalized-config stand-in: only the fields the pipeline reads, so a test does
-// not have to run the whole normalizer to exercise one decision.
+// A normalized-config stand-in: only the fields the pipeline reads.
 function cfg(overrides = {}) {
   return {
     entity: "sensor.avg",
@@ -394,8 +391,8 @@ test("the out-of-comfort room furthest from the average is the one named", () =>
     aggregates.buildSubtitleModel({ ...base, coolest: { name: "Cool", value: 5 }, warmest: { name: "Warm", value: 25 } }).name,
     "Cool"
   );
-  // An endpoint exactly on the comfort boundary is not an issue. These asymmetric
-  // distances distinguish the one genuinely outlying endpoint from a boundary value.
+  // An endpoint exactly on the comfort boundary is not an issue; the asymmetric distances
+  // distinguish it from a genuine outlier.
   assert.equal(
     aggregates.buildSubtitleModel({
       ...base,

@@ -1,21 +1,10 @@
 "use strict";
 
-// The subtitle line, and the one judgement it makes.
-//
-// "Which room stands out most" compares distance to the AVERAGE - the absolute difference
-// from it - and not distance to the edge of the comfort band. The two agree often enough that
-// the wrong one looks right for a long time, and then a card with every room inside the band
-// picks the wrong room to name.
-//
-// Also here: the text/overflow contract. A subtitle of "clip" sets the wrapping, a subtitle of
-// "Ground floor" sets the text, and those two words are therefore reserved - which is a
-// decision worth having a test for rather than a comment.
-//
-// Exact ties are covered separately, by the tie-break rules in the domain layer.
-
-// The subtitle's "which room stands out most" logic
-// must compare |value-avg| (distance to the average), not distance to the
-// comfort-band edge. Exact ties are covered separately.
+// The subtitle line, and the one judgement it makes: "which room stands out most" compares
+// |value - avg| (distance to the average), not distance to the comfort-band edge. The two
+// agree often, so the wrong rule looks right until every room is inside the band. Also here:
+// the text/overflow contract -- "clip"/"wrap" alone set the mode, so those words are
+// reserved. Exact ties are covered by the domain-layer tie-break rules.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -126,10 +115,9 @@ test("all rooms within comfort: subtitle reports the all-good case, no room name
 
 // ------------------------------------------------- the subtitle: option ----
 
-// `title:` sets a NAME and takes a string. The subtitle is different in kind — it is the
-// card describing its own state — so its option answers two questions at once: what it
-// reads, and what happens when it does not fit. Both spellings of that are tested here,
-// including the shorthand where the value IS the overflow mode.
+// Unlike `title:` (a name, string only), the subtitle option answers two questions: what it
+// reads, and what happens when it does not fit -- including the shorthand where the value is
+// the overflow mode.
 
 const OK_HASS = () =>
   mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
@@ -160,8 +148,7 @@ test("a subtitle can be written as text, as an overflow mode, as both, or not at
   assert.deepEqual(headerOf({ overflow: "wrap" }), { text: automatic, overflow: "wrap" });
 });
 
-// "" means "show no line", which is not the same as "not configured" — and no line means
-// no NODE, because an empty div keeps its margin and its line box.
+// "" means "show no line" (not "not configured"), and no line means no node.
 test("an empty subtitle removes the line rather than leaving an empty one", () => {
   assert.equal(headerOf("").text, null);
   assert.equal(headerOf({ text: "" }).text, null);
@@ -177,9 +164,7 @@ test("a nonsense subtitle falls back instead of breaking the card", () => {
   }
 });
 
-// THE ORDER, and it is not the order `title` uses. When there is nothing to show, the
-// reason is the only thing worth saying: a card showing `--` under a cheerful custom line
-// would be withholding the one fact its reader needs.
+// When there is nothing to show, the reason outranks a custom line -- a card showing `--` under a cheerful subtitle withholds the fact its reader needs.
 test("a no-data explanation outranks a custom subtitle, and gives way again when data returns", () => {
   const el = env.createCard(
     { entity: "sensor.avg", subtitle: { text: "Ground floor", overflow: "wrap" } },
@@ -208,9 +193,7 @@ test("a removed subtitle still reappears to explain a card with no data", () => 
   env.cleanup(el);
 });
 
-// A subtitle change arrives through setConfig() with the entity states untouched, so the
-// data signature has not moved. setConfig() invalidates it deliberately — without that, a
-// purely cosmetic edit would be skipped and the dashboard editor would look broken.
+// A subtitle-only setConfig() does not move the data signature; setConfig() invalidates it deliberately so a cosmetic edit is not skipped.
 test("editing only the subtitle updates a card that is already on screen", () => {
   const el = env.createCard({ entity: "sensor.avg", subtitle: "First" }, OK_HASS());
   assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "First");

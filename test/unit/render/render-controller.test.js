@@ -1,12 +1,9 @@
 "use strict";
 
-// The render decision, tested without a card.
-//
-// The controller's whole value is that it can be: seven ports in, one decision out, no
-// DOM and no clock. Everything below drives it with counters and plain objects, which
-// is what makes the awkward cases — a render that throws, a gesture that swallows an
-// update, a config change that invalidates the memory — cheap enough to state directly
-// instead of reconstructing them through a live element.
+// The render decision, tested without a card: seven ports in, one decision out, no DOM and
+// no clock. Driven with counters and plain objects, so the awkward cases — a render that
+// throws, a gesture that swallows an update, a config change that invalidates the memory —
+// can be stated directly.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -16,10 +13,8 @@ let RENDER_PATH;
 let entityDataSignature;
 let structuralConfigSignature;
 
-// The surface the card is painted on. A constant here: this file is about which ENTITY
-// changes move the signature; the surface has its own tests in background-reading.test.js
-// and what it means for a palette in palette-fit.test.js. Built with the real constructor so
-// that a change to the surface shape reaches this file rather than passing it by.
+// The surface, a constant here: this file is about which entity changes move the signature.
+// Built with the real constructor so a change to the surface shape reaches this file.
 let SURFACE;
 
 test.before(async () => {
@@ -29,17 +24,14 @@ test.before(async () => {
   SURFACE = surfaceOf(["#FFFFFF"], "#212121");
 });
 
-// A view model shaped only as far as cardStructureSignature() reads it. The real shell
-// composition is tested in the rendering-layer tests; here it only has to be a faithful
-// enough input that the structure signature is a genuine function of the view model.
+// A view model shaped only as far as cardStructureSignature() reads it; the real shell
+// composition is tested in the rendering-layer tests.
 function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavailable", headlineEntity = "" } = {}) {
   return {
     empty,
-    // hasLabel is part of the structure signature: the caption is a node that either
-    // exists or does not, so the fixture has to carry it like the renderer does.
+    // hasLabel and hasSubtitle are part of the structure signature: a caption or subtitle is
+    // a node that either exists or does not, so the fixture carries it like the renderer does.
     average: { hasLabel: true, entity: headlineEntity },
-    // Same story for the subtitle: `subtitle: ""` removes the node, so its presence is
-    // structural too.
     header: { hasSubtitle: true },
     rooms: { showChips: true },
     noData: { hintKind },
@@ -49,8 +41,8 @@ function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavai
   };
 }
 
-// The registry the controller hands to cardStructureSignature(): an ordered list of
-// view renderers, each declaring the optional nodes it does NOT reconcile.
+// The registry the controller hands to cardStructureSignature(): view renderers, each
+// declaring the optional nodes it does not reconcile.
 const RENDERERS = [{ key: "scale", structureSignature: (content) => content.marker }];
 
 function harness({ viewModel = viewModelOf(), dragging = false, currentlyEmpty = false } = {}) {
@@ -238,9 +230,8 @@ test("a skip settles the debt too, because the card already shows what was defer
 });
 
 test("a render that throws leaves the debt standing, so the update cannot be lost", () => {
-  // This is the whole reason the debt is cleared inside commit() and not at the call
-  // site: a failure that also forgot the update would strand the card on stale data
-  // with nothing left to retry from.
+  // Why the debt is cleared inside commit() and not at the call site: a failure that also
+  // forgot the update would strand the card on stale data with nothing to retry from.
   const { controller, render, state } = harness();
   render();
   state.dragging = true;
@@ -264,9 +255,9 @@ test("invalidateDataSignature makes the next identical push render again", () =>
   render();
   assert.equal(render(), RENDER_PATH.SKIPPED);
 
-  // A new configuration can change the output without any entity changing — a language
-  // override, a decimals setting — so the remembered signature stops being evidence of
-  // anything and must not be allowed to skip the render that applies it.
+  // A new configuration can change the output without any entity changing (a language
+  // override, a decimals setting), so the remembered signature must not skip the render
+  // that applies it.
   controller.invalidateDataSignature();
   assert.equal(render(), RENDER_PATH.CONTENT);
 });
@@ -316,8 +307,8 @@ test("entityDataSignature covers every entity the card reads, including attribut
   };
   const base = entityDataSignature({ config, states, language: "en", activeViewIndex: 0, surface: SURFACE });
 
-  // An attribute-only change leaves the state string alone but moves last_updated,
-  // which is exactly why last_updated is used rather than last_changed.
+  // An attribute-only change leaves the state string alone but moves last_updated — why
+  // last_updated is used rather than last_changed.
   const attributeOnly = { ...states, "sensor.r2": { state: "23", last_updated: "T1" } };
   assert.notEqual(entityDataSignature({ config, states: attributeOnly, language: "en", activeViewIndex: 0, surface: SURFACE }), base);
 

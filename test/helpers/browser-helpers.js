@@ -1,10 +1,9 @@
 "use strict";
 
-// Shared helpers for the Playwright (test/browser/) layer — real Chromium,
-// real layout/ResizeObserver/pointer events, unlike the jsdom unit layer.
-// page.evaluate() can only cross the Node<->page boundary with serializable
-// data (no functions), so `hass.callService` is created fresh inside the
-// page-side callback rather than passed in.
+// Shared helpers for the Playwright (test/browser/) layer — real Chromium, real
+// layout/ResizeObserver/pointer events. page.evaluate() only crosses the
+// Node<->page boundary with serializable data, so `hass.callService` is built
+// inside the page-side callback rather than passed in.
 
 const { expect } = require("@playwright/test");
 
@@ -22,16 +21,11 @@ async function gotoHarness(page) {
   await page.goto("/test/fixtures/harness.html");
 }
 
-// Creates a <room-climate-card>, appends it to #stage, sets hass+config,
-// and returns its id so the caller can locate it. `statesObj` maps
-// entity_id -> {state, attributes} (plain data, see mkStateObj above).
-// Awaits document.fonts.ready before resolving -- the harness now loads a
-// real (self-hosted) Roboto webfont (see harness.html/fonts/roboto.css) so
-// that text-metric-dependent assertions match production Home Assistant
-// instead of whatever generic sans-serif Chromium substitutes; a freshly
-// requested subset needs a network round-trip, so callers that measure
-// text immediately after createCard() (scrollWidth/clientWidth/
-// boundingBox) would otherwise risk measuring pre-webfont-swap layout.
+// Creates a <room-climate-card>, appends it to #stage, sets hass+config, returns
+// its id. `statesObj` maps entity_id -> {state, attributes} (see mkStateObj).
+// Awaits document.fonts.ready first: the harness self-hosts Roboto so text
+// metrics match production, and the subset swap is a network round-trip a caller
+// measuring text right after createCard() would otherwise race.
 async function createCard(page, config, statesObj, language) {
   return page.evaluate(
     async ({ config, statesObj, language }) => {
@@ -56,10 +50,8 @@ async function createCard(page, config, statesObj, language) {
 }
 
 async function updateHass(page, cardId, statesObj, language) {
-  // The card exposes `hass` as a setter only (no matching getter — see
-  // `set hass(hass)` in room-climate-card.js), so `el.hass` reads back as
-  // undefined; the caller must pass the language explicitly if it wants to
-  // keep it, rather than reading it back off the element.
+  // `hass` is a setter only, so `el.hass` reads back undefined; a caller that
+  // wants to keep the language must pass it in again.
   await page.evaluate(
     ({ cardId, statesObj, language }) => {
       const el = document.getElementById(cardId);
@@ -75,30 +67,19 @@ async function updateHass(page, cardId, statesObj, language) {
   );
 }
 
-// Waits until the card has finished laying itself out, by asking the mechanism rather
-// than by guessing a duration.
+// Waits for the card to finish laying out by observing the mechanism, never a duration.
+// Four observable conditions:
 //
-// WHY NOT A TIMEOUT. Every measuring test used to sleep 120-200 ms here. That is not a
-// contract, it is a bet on how busy the machine is, and the bet was lost often enough
-// to matter: a full-suite run under two workers failed a label-overlap assertion that
-// passed 6/6 in isolation, because the measurement was taken against the layout that was
-// about to be replaced. A sleep can only ever be too short or wasteful.
+//   1. the card is at the width the caller asked for;
+//   2. the resize runtime has no animation frame outstanding (its ResizeObserver callback
+//      coalesces notifications onto one frame, so a pending frame means a re-measure is
+//      queued — see resize-runtime.js);
+//   3. document.fonts.ready has settled;
+//   4. the subtree's box sizes match across two consecutive animation frames.
 //
-// Four conditions, all observable, none of them a duration:
-//
-//   1. the card is actually at the width the caller asked for, so nothing is measured
-//      against a layout that is already superseded;
-//   2. the resize runtime has no animation frame outstanding — its ResizeObserver
-//      callback coalesces every notification onto exactly one frame, so a pending frame
-//      means a re-measurement is still queued (see resize-runtime.js);
-//   3. document.fonts.ready has settled, the other thing that moves text after the fact;
-//   4. the subtree's box SIZES are identical across two consecutive animation frames.
-//
-// Sizes, deliberately, and not positions: the auto-slide carousel translates the track
-// on every frame, so a position-based signature would never settle for a multi-view
-// card. Nothing that this waits for — a container query flipping, a web font swapping,
-// a chip grid reflowing — can change a layout without changing some box's width or
-// height.
+// Sizes, not positions: the auto-slide carousel translates the track every frame, so a
+// position signature would never settle. Nothing this waits for can change a layout
+// without changing some box's width or height.
 async function waitForStableLayout(page, cardId, widthPx = null) {
   await expect
     .poll(

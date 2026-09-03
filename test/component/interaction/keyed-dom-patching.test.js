@@ -1,12 +1,10 @@
 "use strict";
 
-// Keyed DOM patching for Average, Rooms, Range and Extrema preserves node
-// identity across hass updates, avoiding focus loss when only a value changes.
-// Scale and RangeScale patch attributes through _updateScaleBarCommon() without
-// replacing their markup. Every test below asserts DOM node identity (`===`
-// reference equality), not just visible text, since that is the actual
-// claim under test -- a node that merely "looks the same" after being
-// destroyed and recreated would still have lost focus.
+// Keyed DOM patching for Average, Rooms, Range and Extrema preserves node identity across
+// hass updates, so focus survives a value-only change. Scale and RangeScale patch
+// attributes via _updateScaleBarCommon() without replacing markup. Tests assert DOM node
+// identity (=== reference equality), not visible text — a recreated node that looks the
+// same has still lost focus.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -23,9 +21,8 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// entity + range_entity + 3 rooms -> all four affected areas (Average,
-// Rooms, Range, Extrema) are present simultaneously with default views:
-// (range, scale, extremes all auto-enabled; range_scale stays off by default).
+// entity + range_entity + 3 rooms: all four affected areas present at once (range, scale,
+// extremes auto-enabled; range_scale off by default).
 function fourAreaStates(overrides) {
   return mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
@@ -188,9 +185,8 @@ test("Rooms: making the FOCUSED room unavailable falls back focus to the average
 });
 
 test("Rooms: focus fallback lands on .rtc-root when no interactive average button exists", () => {
-  // This configuration includes a primary, but its unavailable state makes
-  // avgSource fall back to "calculated" (from rooms) -> avgEntity "" -> the
-  // disabled (non-interactive) average shape, the same real-world case.
+  // The primary is present but unavailable, so avgSource falls back to "calculated" -> the
+  // disabled (non-interactive) average shape.
   const el = env.createCard(
     fourAreaConfig(),
     fourAreaStates({ "sensor.avg": mkState("sensor.avg", "unavailable", {}) })
@@ -199,11 +195,8 @@ test("Rooms: focus fallback lands on .rtc-root when no interactive average butto
   const r1Chip = el.shadowRoot.querySelector('.rtc-room-chip[data-entity="sensor.r1"]');
   r1Chip.focus();
 
-  // fourAreaStates() rebuilds every entity from its defaults each call, so
-  // BOTH overrides (avg still unavailable, r1 newly unavailable) must be
-  // passed together -- otherwise this second call would silently reset
-  // sensor.avg back to a valid value and defeat the "no average button"
-  // precondition this test is specifically about.
+  // fourAreaStates() rebuilds every entity from defaults each call, so both overrides must
+  // be passed together or sensor.avg resets to a valid value.
   el.hass = fourAreaStates({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
     "sensor.r1": mkState("sensor.r1", "unavailable", {}),
@@ -241,7 +234,7 @@ test("Average: gaining an entity (shape change from disabled to button) renders 
   env.cleanup(el);
 });
 
-// ==== 6: view disappearing via availability change leaves no focus in a removed subtree (already-correct behavior, regression only) ====
+// ==== 6: view disappearing via availability change leaves no focus in a removed subtree ====
 
 test("Extrema view disappearing via availability change leaves no focus in the removed subtree", () => {
   const el = createFourAreaCard();

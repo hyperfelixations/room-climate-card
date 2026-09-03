@@ -1,21 +1,11 @@
 "use strict";
 
-// Characterization of error and warning behaviour, verbatim.
-//
-// The card has two deliberately different failure modes, and the boundary
-// between them is a product decision, not an implementation detail:
-//
-//   throw      structurally invalid configuration (bad entity, malformed
-//              classification profile) — Home Assistant's setConfig() contract
-//              requires the error to propagate so the dashboard shows it.
-//   console    recoverable/ignorable misconfiguration (unknown view type,
-//              stray option key, incompatible sensor set) — the card degrades
-//              instead of breaking, and says so exactly once.
-//
-// Changes must move neither the boundary nor the wording: the messages
-// are the only diagnostic channel users have, they are quoted in the public
-// README's troubleshooting section, and the once-per-change deduplication is
-// what keeps a permanently misconfigured dashboard from flooding the console.
+// Characterization of error and warning behaviour, verbatim. The card has two failure
+// modes, and the boundary is a product decision: structurally invalid config throws (HA's
+// setConfig() contract requires it to propagate), recoverable misconfiguration degrades and
+// warns exactly once. Changes must move neither the boundary nor the wording — the messages
+// are the only diagnostic channel, are quoted in the README, and the once-per-change dedup
+// keeps a misconfigured dashboard from flooding the console.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -377,9 +367,8 @@ test("a tolerated misconfiguration still renders a working card (degrade, never 
 });
 
 test("incompatible room metric kinds warn once and are exposed as a defined configuration state", () => {
-  // The primary reports neither a device_class nor a unit, so nothing can settle the
-  // disagreement between the rooms — which is what makes this the mixed state. A primary
-  // that declares a kind arbitrates instead, and warns about the excluded room by name.
+  // The primary declares neither a device_class nor a unit, so nothing settles the room
+  // disagreement — the mixed state. A primary that declares a kind arbitrates instead.
   const hass = hassWith({
     "sensor.avg": st("sensor.avg", "unavailable", {}),
     "sensor.r1": st("sensor.r1", 21.5, C),
@@ -390,9 +379,7 @@ test("incompatible room metric kinds warn once and are exposed as a defined conf
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] });
   const afterFirst = recorder.warnings.length;
 
-  // A second hass push with the same diagnosis must stay silent — the card
-  // re-resolves the measurement context on every update, so without the dedup
-  // this would warn on every single state change.
+  // A second push with the same diagnosis must stay silent; the context is re-resolved every update.
   el.hass = hassWith(hass.states);
   recorder.restore();
 

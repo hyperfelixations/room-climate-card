@@ -1,15 +1,10 @@
 "use strict";
 
-// Synthetic Home Assistant `hass` object / entity state builders shared by
-// the unit (jsdom) and browser (Playwright) test layers. Written as a UMD-ish
-// script (module.exports when available, otherwise a global) so the exact
-// same file can be `require()`d from Node and loaded via a plain <script> tag
-// in test/fixtures/harness.html without a bundler.
-//
-// THAT IS WHY THIS FILE IMPORTS NOTHING, and why its attribute literals are written out
-// rather than taken from test/fixtures/attributes.js like everywhere else. A `require()`
-// here is fine in Node and a `ReferenceError` in the page — the harness loads this file
-// with a bare <script> tag, and there is no bundler to resolve it.
+// Synthetic `hass` and entity-state builders shared by the unit (jsdom) and browser
+// (Playwright) layers. UMD-ish (module.exports when available, otherwise a global) so the
+// same file works via `require()` in Node and a bare <script> tag in harness.html. It
+// therefore imports nothing and writes its attribute literals out rather than taking them
+// from test/fixtures/attributes.js: a `require()` here is a ReferenceError in the page.
 
 function mkState(entityId, state, attributes) {
   return {

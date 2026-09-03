@@ -1,15 +1,8 @@
 "use strict";
 
-// Direct unit tests for src/core/* — the layer with no project-internal
-// dependencies.
-//
-// These primitives are tested through their owning modules rather than the custom
-// element (numbers.parseNumericState(), color.rgba(), ...), which meant every assertion about
-// them also dragged in jsdom, a shadow root and a full config/hass pair. They
-// are pure functions and are tested as such here: no DOM, no card instance,
-// no build artifact.
-//
-// The suite is CommonJS while src/ is ESM (see src/package.json), so the
+// Direct unit tests for src/core/* — the layer with no project-internal dependencies.
+// These are pure functions tested through their owning modules: no DOM, no card instance,
+// no build artifact. The suite is CommonJS while src/ is ESM (src/package.json), so the
 // modules are pulled in with dynamic import() in a before hook.
 
 const test = require("node:test");
@@ -49,8 +42,7 @@ test("parseNumericState() rejects every non-measurement, including numeric-looki
   for (const invalid of ["", "unknown", "unavailable", "none", "null", "undefined", "UNAVAILABLE"]) {
     assert.equal(parseNumericState(invalid), null, `state "${invalid}"`);
   }
-  // parseFloat() would return 25 and 12 here — the whole reason for the strict
-  // format check.
+  // parseFloat() would return 25 and 12 here — the reason for the strict format check.
   assert.equal(parseNumericState("25 °C"), null, "a unit suffix must not be silently dropped");
   assert.equal(parseNumericState("12abc"), null);
   assert.equal(parseNumericState("1.2.3"), null);
@@ -148,8 +140,7 @@ test("isTwoUpperLetterLabel() accepts exactly two Unicode uppercase letters", ()
 });
 
 test("isTwoUpperLetterLabel() is stateless across repeated calls", () => {
-  // Regression guard: a shared regex with a /g flag would alternate between
-  // true and false here because of lastIndex.
+  // A shared regex with a /g flag would alternate true/false here via lastIndex.
   const { isTwoUpperLetterLabel } = text;
   for (let i = 0; i < 5; i++) assert.equal(isTwoUpperLetterLabel("WZ"), true, `call ${i + 1}`);
 });
@@ -168,13 +159,9 @@ test("isHexColor() accepts all four CSS hex lengths and nothing else", () => {
 
 // --------------------------------------------------- parseColorToken() ----
 
-// EVERY SPELLING A USER CAN PRODUCE, in one table, because the last gap here was found by
-// a person and not by this suite: `080808` was refused while `808080` worked, and nothing
-// in the tests had ever passed a value with a leading zero.
-//
-// The rows are grouped by the road they take, and the numeric rows carry the value YAML
-// would actually hand over — that is the whole difficulty, and writing the string instead
-// would test something the card never sees.
+// Every spelling a user can produce, in one table. Rows are grouped by the road they take,
+// and the numeric rows carry the value YAML actually hands over — writing the string
+// instead would test something the card never sees.
 test("parseColorToken() reads every spelling a dashboard editor can produce", () => {
   const { parseColorToken } = color;
   const accepted = [
@@ -237,9 +224,8 @@ test("parseColorToken() reads every spelling a dashboard editor can produce", ()
   }
 });
 
-// The one input this cannot see through, pinned so it is a known limit rather than a
-// surprise: YAML strips the leading zero from `0808080` before the card is handed
-// anything, so it arrives as the same 808080 that `808080` does.
+// The one input this cannot see through: YAML strips the leading zero from `0808080`, so it
+// arrives as the same 808080 that `808080` does.
 test("parseColorToken() cannot distinguish a leading-zero seven-digit value from six", () => {
   const { parseColorToken } = color;
   assert.equal(parseColorToken(808080), "#808080");
@@ -249,8 +235,8 @@ test("parseColorToken() cannot distinguish a leading-zero seven-digit value from
   assert.equal(parseColorToken(1808080), null);
 });
 
-// Whatever comes out has to be something the strict check would also accept — the lenient
-// road may widen what a user may WRITE, never what may reach a stylesheet.
+// Whatever comes out also passes the strict check: the lenient road widens what a user may
+// write, never what reaches a stylesheet.
 test("everything parseColorToken() accepts also passes the strict check", () => {
   const { parseColorToken, isHexColor, CSS_COLOR_NAMES } = color;
   for (let value = 0; value <= 0xfff; value += 1) {
@@ -334,9 +320,8 @@ test("timeFractionForEasedProgress() inverts the curve monotonically", () => {
 });
 
 test("the spatial midpoint is far earlier than the temporal midpoint", () => {
-  // The whole point of inverting the curve: at 50% of the visual motion only
-  // ~35.4% of the slide's time has passed. Using 0.5 here was the original
-  // accessibility bug.
+  // Why the curve is inverted: at 50% of the visual motion only ~35.4% of the slide's time
+  // has passed.
   const { A11Y_FLIP_TIME_FRACTION } = easing;
   assert.ok(Math.abs(A11Y_FLIP_TIME_FRACTION - 0.35375) < 0.001, `got ${A11Y_FLIP_TIME_FRACTION}`);
   assert.ok(A11Y_FLIP_TIME_FRACTION < 0.5);

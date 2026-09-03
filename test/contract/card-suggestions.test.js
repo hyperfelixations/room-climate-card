@@ -1,11 +1,9 @@
 "use strict";
 
-// The card picker's two entry points, tested as the pure functions they are.
-//
-// Both run inside Home Assistant's own picker, outside this card's lifecycle and
-// against whatever the frontend passes. A throw there does not degrade this card — it
-// degrades the picker the user is standing in. So the hostile-input list below is not
-// defensive decoration; it is the actual contract.
+// The card picker's two entry points, tested as the pure functions they are. Both run
+// inside Home Assistant's picker, outside this card's lifecycle, against whatever the
+// frontend passes — a throw there degrades the picker, not just this card. The
+// hostile-input list below is the actual contract, not defensive decoration.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -42,8 +40,7 @@ test("every measurement the card can read is offered, addressed as a custom card
   }
 });
 
-// The suggestion path uses the same resolver the card uses at runtime, so an entity
-// that only declares a unit is offered for exactly the reason the card can read it.
+// The suggestion path uses the same resolver as runtime: a unit-only entity is offered because the card can read it.
 test("a recognized unit alone is enough, and an unrecognized one is not", () => {
   const states = statesWith([
     ["sensor.unit_only", { unit_of_measurement: "°F" }],
@@ -65,9 +62,7 @@ test("entities this card cannot read are not offered", () => {
   }
 });
 
-// A restarting integration publishes its entities as `unavailable`. The card renders
-// that state deliberately, so excluding it would make this card vanish from the picker
-// during every restart window.
+// A restarting integration publishes `unavailable`; the card renders that state, so excluding it would drop the card from the picker every restart.
 test("an entity that is currently unavailable is still offered", () => {
   const states = {
     "sensor.t": { entity_id: "sensor.t", state: "unavailable", attributes: TEMPERATURE_C },
@@ -89,8 +84,7 @@ test("the stub prefers what the view already uses, then the fallback list, then 
   ]);
   assert.equal(suggestions.stubConfigFor(states, ["sensor.in_view"], ["sensor.in_fallback"]).entity, "sensor.in_view");
   assert.equal(suggestions.stubConfigFor(states, [], ["sensor.in_fallback"]).entity, "sensor.in_fallback");
-  // With neither list to go on, any readable entity beats an invented one — which one
-  // is not a promise this makes, so the case is asserted where only one can win.
+  // With no lists, any readable entity beats an invented one; asserted where only one can win.
   const onlyOne = {
     ...statesWith([["sensor.somewhere", TEMPERATURE]]),
     "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: {} },
@@ -110,9 +104,7 @@ test("candidates this card cannot read are skipped rather than offered", () => {
   );
 });
 
-// The template is what a user with no matching sensor still gets, and it has to stay
-// exactly what it was: the registration baseline pins it, and its whole value is that
-// the SHAPE teaches what the card is for.
+// The template is what a user with no matching sensor gets; the registration baseline pins it, its shape teaches what the card is for.
 test("with nothing to find, the documented template comes back unchanged", () => {
   const template = {
     entity: "sensor.house_temperature",
@@ -129,10 +121,7 @@ test("with nothing to find, the documented template comes back unchanged", () =>
 
 // ------------------------------------------------- what the browse path prefers --
 
-// The claim the browse path makes is a WORKING preview, and a sensor that is merely
-// recognized can still be unavailable. Preferring the first recognized one produced
-// exactly the empty card the preview exists to avoid, whenever an unavailable sensor
-// happened to sort first.
+// The browse path promises a working preview; preferring the first merely-recognized sensor produced the empty card the preview exists to avoid.
 const UNAVAILABLE = { entity_id: "sensor.down", state: "unavailable", attributes: TEMPERATURE };
 
 test("a usable sensor is preferred over one that is merely recognized", () => {
@@ -151,9 +140,7 @@ test("a recognized but unusable sensor is still better than an invented id", () 
   assert.deepEqual(suggestions.stubConfigFor(states, ["sensor.down"], []), { entity: "sensor.down" });
 });
 
-// Every other kind of unusable, not just `unavailable`: the point is that the browse
-// path asks the same EntityModel the runtime does rather than inventing its own idea of
-// usable.
+// Every kind of unusable, not just `unavailable`: the browse path asks the same EntityModel as runtime.
 test("every kind of unusable sensor loses to a usable one", () => {
   const cases = {
     unavailable: { state: "unavailable", attributes: TEMPERATURE },
@@ -167,9 +154,7 @@ test("every kind of unusable sensor loses to a usable one", () => {
   }
 });
 
-// The entity path is the opposite case and must NOT change: the user picked that entity
-// deliberately, and a card that vanished from the picker during every restart window
-// would be worse than one that renders its own unavailable state.
+// The entity path is the opposite: the user picked deliberately, so an unavailable entity is still offered.
 test("a deliberately picked unavailable entity is still offered", () => {
   const states = { "sensor.down": UNAVAILABLE };
   assert.deepEqual(suggestions.suggestionsForEntity(states, "sensor.down"), {
@@ -228,9 +213,7 @@ test("one lonely sensor comes back on its own, with no invented rooms", () => {
   assert.deepEqual(suggestions.stubConfigFor(states, ["sensor.only"], []), { entity: "sensor.only" });
 });
 
-// The switch is a code-level product decision, so its VALUE is not pinned here — only
-// that it is one of the three the module knows how to act on. Pinning the value would
-// make flipping it a test change rather than a one-line change.
+// The switch is a code-level decision; only that its value is one of the three is pinned, not which.
 test("the browse-discovery switch is one of the three documented settings", () => {
   assert.ok(["entity-and-rooms", "entity", "template"].includes(suggestions.BROWSE_DISCOVERY));
 });
@@ -275,10 +258,7 @@ test("neither function throws, whatever the picker hands it", () => {
 
 // ------------------------------------------------ what the browse path avoids --
 
-// Home Assistant's own cards search the sensor domain when they look for something to
-// start with, and so does this one. A `number.*` with a temperature device class reads
-// perfectly well, but it is a control rather than a measurement, and offering one unasked
-// as somebody's home average is a poor first impression.
+// Like HA's own cards, the browse path searches the sensor domain only: a `number.*` with a temperature device_class reads fine but is a control, not a measurement.
 test("the browse path offers only sensors, while the entity path offers whatever was picked", () => {
   const states = {
     ...statesWith([named("sensor.hall", "Hall")]),
@@ -292,9 +272,7 @@ test("the browse path offers only sensors, while the entity path offers whatever
   });
 });
 
-// `Object.keys` follows insertion order, and Home Assistant fills that object from
-// whatever arrived first — so without sorting, the same system could open the picker on a
-// different sensor each time and look like a card with a mind of its own.
+// Object.keys follows insertion order, so without sorting the same system could open the picker on a different sensor each time.
 test("the same system always produces the same stub", () => {
   const entries = [named("sensor.c", "C"), named("sensor.a", "A"), named("sensor.b", "B")];
   const forwards = suggestions.stubConfigFor(statesWith(entries), [], []);
@@ -303,8 +281,7 @@ test("the same system always produces the same stub", () => {
   assert.equal(forwards.entity, "sensor.a", "and it is the first by id, not by arrival");
 });
 
-// The mixed-measurement case the supervisor asked about: a system with temperature,
-// humidity and CO2 sensors must not produce a card that averages them together.
+// A system with temperature, humidity and CO2 sensors must not produce a card that averages them.
 test("a mixed system produces a card of one measurement only", () => {
   const states = statesWith([
     named("sensor.a_temp", "Hall"),

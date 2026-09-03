@@ -1,14 +1,10 @@
 "use strict";
 
-// The four source topologies as a user meets them, in a real browser.
-//
-// The topology itself is resolved from configuration and tested purely elsewhere. What only a
-// browser can show is the consequence: whether the headline is actually clickable, whether
-// removing its label also removes the space the label occupied, and whether the room chips
-// appear at all under each show_rooms policy.
-//
-// The last test is the one that earns the file - a mistyped room entity must not turn a
-// one-room card into a two-room card, which is a layout question and looks fine in a model.
+// The four source topologies as a user meets them in a real browser. The topology is
+// resolved from config and tested elsewhere; what only a browser shows is the consequence —
+// whether the headline is clickable, whether removing its label removes its space, and
+// whether room chips appear under each show_rooms policy. The last test earns the file: a
+// mistyped room entity must not turn a one-room card into a two-room card.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth, updateHass, waitForStableLayout } = require("../../helpers/browser-helpers");
@@ -132,12 +128,9 @@ test("removing the headline label also removes its vertical spacing", async ({ p
   expect(metrics.withLabel.valueOffset).toBeGreaterThan(metrics.noLabel.valueOffset + 4);
 });
 
-// Reported against 2.38.0 from a live Home Assistant: a card configured with one real
-// room and one mistyped one drew a room chip and captioned itself "Home avg." — it had
-// counted the id Home Assistant does not know as a second source. Home Assistant keeps
-// REGISTERED entities in the state machine even while their integration is unloaded,
-// publishing them as `unavailable`; an id that is absent from hass.states is absent
-// because it is wrong. So this is a one-room card, and it has to look like one.
+// A card with one real room and one mistyped one is a one-room card and must look like one.
+// An id absent from hass.states is absent because it is wrong (Home Assistant keeps
+// registered but unloaded entities as `unavailable`, so those are not "absent").
 test("a mistyped room does not turn a one-room card into a two-room card", async ({ page }) => {
   await gotoHarness(page);
   const cardId = await createCard(
@@ -152,9 +145,8 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
   );
   const card = page.locator(`#${cardId}`);
 
-  // The single-room contract, in full: no chip repeating the headline, the room's own
-  // name as the caption, and the room's entity on the big value so its tap and hold
-  // actions apply.
+  // The single-room contract: no chip repeating the headline, the room's name as caption,
+  // the room's entity on the big value so its tap/hold actions apply.
   await expect(card.locator(".rtc-room-chip")).toHaveCount(0);
   await expect(card.locator(".rtc-room-grid")).toHaveCount(0);
   await expect(card.locator(".rtc-avg-label")).toHaveText("Arbeitszimmer");
@@ -187,17 +179,10 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
   await expect(both.locator('[data-entity="sensor.ba_temperatur"] .rtc-room-value-num')).toHaveText("--");
 });
 
-// The headline has two element types on purpose — a <button> when the value belongs to
-// one identifiable entity, a <div> when it is a consensus nothing can be attributed to
-// (see the two tests above). What they must NOT differ in is where they put the number.
-//
-// Until this was pinned, they did: the button reset in styles/average.js overrode
-// appearance, font, colour, border, margin and text-align but not padding, so Chrome's
-// UA `padding: 1px 6px` reached the button shape and nothing reached the div shape. The
-// number sat 6px further right and the shell 2px taller in exactly the cards that have a
-// main entity — and the card jumped between the two whenever that entity dropped out.
-//
-// Measured against the SHARED class, not the tag: that is the whole point of the fix.
+// The headline is a <button> when the value belongs to one entity, a <div> for a consensus.
+// They must not differ in where they put the number: the button reset in styles/average.js
+// must neutralise the UA `padding: 1px 6px` so the two shapes align, and the card does not
+// jump when the main entity drops out. Measured against the shared class, not the tag.
 test.describe("both headline shapes occupy the same box", () => {
   const CONSENSUS_ROOMS = [
     { entity: "sensor.a", name: "A" },
@@ -224,8 +209,7 @@ test.describe("both headline shapes occupy the same box", () => {
       return {
         tag: shell.tagName,
         padding: `${computed.paddingTop} ${computed.paddingRight} ${computed.paddingBottom} ${computed.paddingLeft}`,
-        // Relative to the panel: two cards sit at different page offsets, one card
-        // measured before and after a state change does not.
+        // Relative to the panel: two cards sit at different page offsets.
         numLeft: Math.round((num.getBoundingClientRect().left - panelRect.left) * 100) / 100,
         shellHeight: Math.round(shellRect.height * 100) / 100,
       };
@@ -273,17 +257,16 @@ test.describe("both headline shapes occupy the same box", () => {
     expect(after.shellHeight).toBeCloseTo(before.shellHeight, 1);
   });
 
-  // The indentation has to come from the project's own stylesheet. As long as it came
-  // from the browser, the card looked different in browsers whose UA button padding
-  // differs from Chrome's — and the div shape had none at all.
+  // The indentation must come from the project's own stylesheet, not the UA button padding
+  // (which varies by browser, and the div shape has none).
   test("the indentation is owned by .rtc-avg-button, not by the browser's button default", async ({ page }) => {
     await gotoHarness(page);
     const cardId = await createCard(page, { entity: "sensor.primary" }, { "sensor.primary": mkStateObj("sensor.primary", 22.2, TEMP) });
     const measured = await page.evaluate((id) => {
       const root = document.getElementById(id).shadowRoot;
       const probe = document.createElement("button");
-      // A button carrying none of the card's classes: whatever padding it reports is
-      // what the reset rule leaves behind for any future button in this shadow root.
+      // A button with none of the card's classes: its padding is what the reset rule leaves
+      // for any future button in this shadow root.
       root.querySelector(".rtc-root").appendChild(probe);
       const reset = getComputedStyle(probe).paddingLeft;
       probe.remove();

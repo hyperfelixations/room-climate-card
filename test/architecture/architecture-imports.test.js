@@ -1,54 +1,19 @@
 "use strict";
 
-// Enforces the layering contract of the source split.
+// Enforces the source layering contract: every file lands in exactly one layer,
+// imports are relative and resolvable inside src/, the graph is acyclic, and
+// imports only ever point downwards (sideways only within one group). Full
+// contract: interne Doku §4 "Import- und Layervertrag". Layer prefixes and the
+// forbidden-global lists are data in source-architecture.js, which this drives.
 //
-// The architecture depends on imports pointing one way. A
-// single "just this once" upward import — a domain module reaching into the
-// renderer, a model module reading `document` through a view helper — is
-// invisible in a passing test suite and cheap to add, but it is what turns a
-// layered design back into the monolith it replaced. Rollup only rejects
-// cycles and unresolved specifiers; direction is a design rule that nothing
-// but a test can hold.
+//   0 core/   1 config|i18n|domain   2 application/model   3 presentation/view-model
+//   4 render/{primitives,layout}|styles   5 views|render/composition
+//   6 controllers/{runtime,render}   7 element   8 index.js
 //
-// The binding directory layout (paths are normative, not illustrative):
-//
-//   0  src/core/                      no project-internal dependencies at all
-//   1  src/config/                    } may import core, but not each other
-//      src/i18n/                      }
-//      src/domain/                    }
-//   2  src/application/model/         no DOM, window, document, custom elements
-//   3  src/presentation/view-model/   may join model and i18n
-//   4  src/render/primitives/         } markup and DOM patching, no view knowledge
-//      src/render/layout/             } measure-and-position, no view knowledge
-//      src/styles/                    } the stylesheet, no view knowledge
-//   5  src/views/                     } one module per view; may use layer 4
-//      src/render/composition/        } the card shell; gets the registry injected
-//   6  src/controllers/runtime/       } timers, gestures, the platform
-//      src/controllers/render/        } what to render and how much of it
-//   7  src/element/                   no domain computation
-//   8  src/index.js                   composition root
-//
-// Anything under src/ that is not covered by one of those prefixes fails the
-// test, so adding a directory forces an explicit decision here rather than a
-// silent new layer.
-//
-// Layer 4 and layer 5 are deliberately split, and the split does real work:
-//
-//   - a render primitive can never import a view, so "the average button" cannot
-//     acquire an opinion about the carousel;
-//   - a view CAN import primitives, which is the whole point — the four views
-//     share one scale bar, one metric card and one marker shape;
-//   - the card shell cannot import the view registry, because the shell and the
-//     registry are separate groups of the same layer. The composition root hands
-//     the registry to the shell, so a shell that hardcoded a view key would have
-//     nowhere to get it from.
-//
-// Layer 6 is split the same way and for the same reason: the render controller
-// decides WHETHER and HOW MUCH to render, the runtime controllers decide WHEN
-// things move. Neither may import the other, so a render decision can never come
-// to depend on a timer, and a timer can never trigger a render behind the
-// element's back. The element wires them together and is the only thing that
-// knows both exist.
+// A file under src/ matching no prefix fails, so a new directory forces a
+// decision here. Boundary: src/ import direction only — suite-structure checks
+// the test tree, environment-boundaries and element-ownership the global and
+// accessor rules.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -141,9 +106,8 @@ test("core has no project-internal dependencies", () => {
 });
 
 test("the card shell cannot reach the view registry, and no view reaches a controller", () => {
-  // Both follow from the layer table, but they are the two rules the split exists
-  // for, so they are asserted by name rather than left implicit in a generic
-  // direction check that would still pass if someone merged the groups.
+  // The two rules the layer split exists for, asserted by name so a generic
+  // direction check that still passed after merging the groups cannot hide them.
   const shell = files.filter((file) => classify(file).name === "render/composition");
   assert.ok(shell.length > 0, "the card shell must exist");
   for (const file of shell) {

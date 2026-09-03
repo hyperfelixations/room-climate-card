@@ -1,20 +1,10 @@
 "use strict";
 
-// STRUCTURAL SHRINKING.
-//
-// The previous attempt at this re-ran the generator with a smaller room count and hoped
-// the result would be the same case. It never was: changing the room count changes how
-// much of the random stream the rooms consume, so every draw after it comes out different.
-// What came back was not a minimised counterexample but an unrelated card that happened to
-// also fail — or, more often, one that did not, and the shrinker reported no reduction.
-//
-// This one never touches the generator. It takes the DESCRIPTION of a failing case and
-// reduces the description: drop rooms, drop configuration, pull an entity back to an
-// ordinary one, and after each edit ask whether it still fails. That is deterministic by
-// construction, and the answer is a description — which is JSON, which is a fixture.
-//
-// Greedy and one-directional: a candidate is kept only if it still fails, so the result is
-// always a real counterexample, never a guess.
+// Structural shrinking: never touches the generator. It reduces the description of a failing
+// case (drop rooms, drop configuration, pull an entity back to an ordinary one) and after
+// each edit asks whether it still fails. Deterministic by construction, and the result is a
+// description — JSON, a fixture. Greedy and one-directional: a candidate is kept only if it
+// still fails. See interne Doku §4 „Die metamorphe Schicht" (Shrinking).
 
 const { describeScenario } = require("../fixtures/scenario.js");
 const { isDeepStrictEqual } = require("node:util");

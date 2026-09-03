@@ -1,23 +1,13 @@
 "use strict";
 
-// ONE COLOUR PER SCORE, AND ONE ADJUSTMENT FOR THE THREE PLACES THAT NEED ONE.
-//
-// The card paints a classification colour in several places: the scale marker, the accent line
-// across the top, the status pill, the header icon, a room chip's direction mark, and the
-// chip's own fill and border. Two repairs act on that, and this file is about the line between
-// them.
-//
-// The PALETTE repair (domain/classification/palettes/legible.js) may move the colour, and when
-// it does it moves everywhere at once, because there is only one of it. The TINT repair
-// (domain/classification/tone-legibility.js) acts only where a colour is painted on a tint of
-// ITSELF, which is three places — and it produces ONE adjustment that all three apply
-// unchanged. Not three answers, and not a compromise between three: one computation, one
-// result, applied identically.
-//
-// This is the assembled card rather than the view-model modules, because the property being
-// checked is that the pieces meet correctly across four layers — the surface is read in the
-// element, the palette is repaired and the adjustment worked out in the domain model, and the
-// presentation layer only looks the answer up.
+// One colour per score, and one adjustment for the three places that paint a colour on a
+// tint of itself. The card paints a classification colour in several places (scale marker,
+// accent line, status pill, header icon, chip direction mark, chip fill/border). The palette
+// repair (palettes/legible.js) may move the colour everywhere at once; the tint repair
+// (tone-legibility.js) acts only on the three self-tinted places and produces one adjustment
+// all three apply unchanged. Tested on the assembled card because the property is that four
+// layers meet correctly: the surface is read in the element, palette + adjustment in the
+// domain model, and presentation only looks the answer up.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -44,8 +34,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// Three rooms spread across the band, so the chips carry a cold step, an optimal one and a warm
-// one — which is what makes the chip marks worth looking at.
+// Three rooms across the band: a cold, an optimal and a warm chip step.
 const STATES = () =>
   mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
@@ -69,15 +58,11 @@ function cardWith(palette) {
 }
 
 test("the pill, the icon and the chip mark all carry the same ink", () => {
-  // The whole point of one computation: `--tone-ink` is read by the pill's text and the icon
-  // glyph, `--room-color` by the chip mark, and the two must be the same value for the same
-  // score. A card where the pill said one shade and the chip mark another would be the two
-  // colours per score this design exists to prevent.
+  // --tone-ink (pill text, icon glyph) and --room-color (chip mark) must be the same for the same score.
   const card = cardWith("yellow");
   const ink = propertyOf(toneStyleOf(card), "--tone-ink").trim();
 
-  // The average sits at 22 °C, which is the optimal tier — the same tier the middle room is
-  // in, so that chip's mark carries the same classification colour as the header.
+  // Average 22 °C is the optimal tier, same as the middle room, so its chip mark matches the header.
   const chips = [...card.shadowRoot.querySelectorAll(".rtc-room-chip")];
   const middle = chips.find((chip) => chip.getAttribute("data-entity") === "sensor.r2");
   assert.equal(propertyOf(middle.getAttribute("style"), "--room-color").trim(), ink);
@@ -85,9 +70,7 @@ test("the pill, the icon and the chip mark all carry the same ink", () => {
 });
 
 test("the tint of all three moves by the same factor, from their own weights", () => {
-  // Applied mechanically: the pill keeps its 0.20 and the chip mark its 0.18, and the ONE
-  // factor multiplies each. An absolute alpha would have had to merge the two constants and
-  // would have changed the chip mark of every card that never had a problem.
+  // The pill keeps its 0.20 and the chip mark its 0.18; the one factor multiplies each. An absolute alpha would merge the constants.
   const card = cardWith("yellow");
   const soft = alphaOf(propertyOf(toneStyleOf(card), "--tone-soft"));
   const middle = [...card.shadowRoot.querySelectorAll(".rtc-room-chip")].find(
@@ -105,9 +88,7 @@ test("the tint of all three moves by the same factor, from their own weights", (
 });
 
 test("the marker keeps the palette's own colour, and so does the chip's fill", () => {
-  // `--tone-color` paints the accent line and the average's focus ring, and the chip's fill and
-  // border are the palette colour too. None of them is painted on a tint of itself, so none of
-  // them may follow the ink — the ramp on screen has to stay the ramp the palette produced.
+  // --tone-color (accent line, focus ring) and the chip fill/border are the palette colour; none is self-tinted, so none follows the ink.
   const card = cardWith("yellow");
   const style = toneStyleOf(card);
   const paletteColour = propertyOf(style, "--tone-color").trim();
@@ -128,8 +109,7 @@ test("the marker keeps the palette's own colour, and so does the chip's fill", (
 });
 
 test("palette: yellow on a light card becomes readable in all three places", () => {
-  // The reported case. The scale markers were fine and the pill was not, because pure yellow
-  // on a 20% tint of pure yellow over a white card is nearly the same colour twice.
+  // The reported case: pure yellow on a 20% tint of itself over white is nearly the same colour twice.
   const card = cardWith("yellow");
   const style = toneStyleOf(card);
   const paletteColour = propertyOf(style, "--tone-color").trim();
@@ -160,8 +140,7 @@ test("palette: yellow on a light card becomes readable in all three places", () 
 });
 
 test("the ink is the same hue as the colour it stands for", () => {
-  // The constraint that makes "one colour per score" survive the adjustment: whatever the pill
-  // shows has to be recognisably the colour of the marker beside it.
+  // Whatever the pill shows must be recognisably the colour of the marker beside it.
   for (const palette of ["yellow", "gold", "navy", "deeppink"]) {
     const card = cardWith(palette);
     const style = toneStyleOf(card);
@@ -175,8 +154,7 @@ test("the ink is the same hue as the colour it stands for", () => {
 });
 
 test("a written-out palette keeps its ramp exactly, and still gets a readable pill", () => {
-  // The mechanic repairs the RECIPE, never the palette — so a palette typed out in YAML is on
-  // screen exactly as typed, and the pill's text is the only thing that may differ from it.
+  // The repair touches the recipe, never the palette: a YAML palette is on screen as typed; only the pill's ink may differ.
   const card = cardWith({ optimal: "FFFF00", above: "DFDF00, A3A300", below: "FFFFAA, FFFFDD" });
   const style = toneStyleOf(card);
   assert.equal(propertyOf(style, "--tone-color").trim(), "#FFFF00", "the colour the user typed, untouched");
@@ -194,8 +172,7 @@ test("a written-out palette keeps its ramp exactly, and still gets a readable pi
 });
 
 test("a palette that needs nothing is left completely alone", () => {
-  // The property the whole design is built around: a card whose colours are comfortable must be
-  // bit for bit what it was, ink included.
+  // A card whose colours are comfortable must be bit-for-bit unchanged, ink included.
   const card = cardWith("vivid");
   const style = toneStyleOf(card);
   assert.equal(propertyOf(style, "--tone-ink").trim(), propertyOf(style, "--tone-color").trim());
@@ -208,8 +185,7 @@ test("a palette that needs nothing is left completely alone", () => {
 });
 
 test("the no-data card carries its neutral colour at both names", () => {
-  // Nothing to classify means nothing to adjust, and the neutral grey was picked so it can be
-  // read on either theme. It must still arrive as a complete tone rather than an undefined ink.
+  // Nothing to classify, nothing to adjust; the neutral grey must still arrive as a complete tone.
   const card = env.createCard({ entity: "sensor.avg", rooms: ROOMS }, mkHass({}));
   const style = toneStyleOf(card);
   assert.equal(card.shadowRoot.querySelector(".rtc-root").getAttribute("data-state"), "no-data");
@@ -219,9 +195,7 @@ test("the no-data card carries its neutral colour at both names", () => {
 });
 
 test("the adjustment is prepared for every score, not for the one on screen", () => {
-  // A reading crossing a tier boundary changes which colour the pill shows. That must be a
-  // lookup: the table is built for the whole ramp when the palette and the surface are known,
-  // so a value moving from 22.9 to 23.1 costs nothing.
+  // A boundary crossing changes the pill colour, but that is a lookup: the table covers the whole ramp, so 22.9 -> 23.1 costs nothing.
   const surface = env.createCard({ entity: "sensor.avg", rooms: ROOMS, palette: "yellow" }, STATES())._surface();
   const registry = require("../../../src/domain/classification/palettes/registry.js");
   return import("../../../src/domain/classification/palettes/adaptation.js").then((adaptation) => {

@@ -1,12 +1,9 @@
 "use strict";
 
-// Direct unit tests for src/presentation/view-model/*.
-//
-// This layer is where a reading stops being data and becomes something a person
-// reads: a translated title, a formatted number with a unit, a chip label, a CSS
-// colour. The tests below check the projection rules themselves — which label a
-// chip gets, how the grid splits, which sentence a subtitle branch produces — with
-// a stubbed translator, so a failure names the rule rather than a locale.
+// Direct unit tests for src/presentation/view-model/* — where a reading becomes a translated
+// title, a formatted number, a chip label, a CSS colour. The projection rules themselves
+// (which label a chip gets, how the grid splits, which subtitle branch produces which
+// sentence) are checked with a stubbed translator, so a failure names the rule not a locale.
 
 process.env.TZ = "UTC";
 
@@ -214,8 +211,7 @@ test("two markers closer than the overlap threshold are nudged apart, not reposi
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(50, 51.4), { first: -4, second: 4 }, "1.4 pct apart still merges visually");
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(50, 51.6), { first: 0, second: 0 }, "exactly at the threshold is far enough");
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(80, 20), { first: 0, second: 0 });
-  // Symmetric: the order of the two arguments only decides which gets the negative
-  // offset.
+  // Symmetric: argument order only decides which gets the negative offset.
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(51.4, 50), { first: -4, second: 4 });
 });
 
@@ -344,10 +340,8 @@ test("the metric-specific adjective is used, not a generic one", () => {
   assert.match(humidity.subtitle, /adjective\.humid/);
 });
 
-// A domain model with two comparable rooms. comparable, byValue, roomColors and
-// extremes are set together on purpose: the real domain model guarantees they agree,
-// and a fixture that separates them would exercise a state the pipeline cannot
-// produce.
+// A domain model with two comparable rooms. comparable, byValue, roomColors and extremes
+// are set together because the real domain model guarantees they agree.
 function withTwoRooms(overrides = {}) {
   const cool = roomModel(0, "A", "AA", 21);
   const warm = roomModel(1, "B", "BB", 23);
@@ -394,8 +388,7 @@ test("a chip carries every string and custom property its renderer needs", () =>
   assert.equal(cool.unitText, "°C");
   assert.equal(cool.title, "A: unit:21:auto:space");
   assert.equal(cool.ariaLabel, 'room.ariaOpen({"name":"A"})');
-  // 21 is below the comfort band's 20? No — inside it, so the chip keeps the theme
-  // surface and gets the neutral mark.
+  // 21 is inside the 20–24 band, so the chip keeps the theme surface and the neutral mark.
   assert.equal(cool.mark, "•");
   assert.equal(cool.out, false);
   assert.equal(cool.background, "var(--rtc-chip-bg)");

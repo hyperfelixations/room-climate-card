@@ -1,21 +1,12 @@
 "use strict";
 
-// Direct tests for carousel timing and carousel runtime, with the clock in the test's hand.
-//
-// The carousel is driven by a CSS animation synchronized to wall-clock time. Until the
-// platform contract existed, every question about it — which view is accessible 4.2
-// seconds into a cycle, whether a resume lands inside the right hold window, whether a
-// timer is left behind on disconnect — could only be approached by waiting in a real
-// browser and hoping the machine was not busy. That is where the known
-// accessibility-carousel-live flake comes from.
-//
-// None of the tests below wait for anything. They set a millisecond and assert an
-// exact answer. The real browser test remains the integration proof; this is the
-// proof of the logic.
-//
-// The boundary to runtime-platform.test.js next door: the environment the carousel runs in —
-// capability degradation, realm-bound handles, ResizeObserver, fonts-ready — is that file's
-// subject. Here the platform is a fake with a clock the test sets by hand.
+// Direct tests for carousel timing and carousel runtime, with the clock in the test's hand:
+// which view is accessible at a given phase, whether a resume lands in the right hold
+// window, whether a timer is left behind on disconnect. Nothing waits — a millisecond is set
+// and an exact answer asserted; the real browser test is the integration proof.
+// Boundary: the environment the carousel runs in (capability degradation, realm-bound
+// handles, ResizeObserver, fonts-ready) is runtime-platform.test.js. See interne Doku §5
+// „Carousel, Swipe und Accessibility".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -45,9 +36,8 @@ function makeTrack(jsdomWindow) {
   return document.querySelector(".rtc-track");
 }
 
-// A controller wired to a fake platform and a real (jsdom) track. `viewCount` decides
-// how many .rtc-view nodes exist; the timing values are the ones a card would resolve
-// from its configuration.
+// A controller wired to a fake platform and a real (jsdom) track. `viewCount` decides how
+// many .rtc-view nodes exist; the timing values are what a card resolves from its config.
 function makeController({
   viewCount = 3,
   rotationSeconds = 12,
@@ -141,8 +131,8 @@ test("the accessibility flip happens at the eased midpoint, not the temporal one
   const flipOffset = at.holdMs + at.slideMs * easing.A11Y_FLIP_TIME_FRACTION;
   assert.equal(timing.accessibleViewIndexAt(flipOffset - 1, at), at.positions[0]);
   assert.equal(timing.accessibleViewIndexAt(flipOffset + 1, at), at.positions[1]);
-  // And the temporal midpoint is genuinely on the OTHER side of that boundary, which is
-  // the bug this fraction exists to prevent.
+  // The temporal midpoint is on the other side of that boundary — the bug this fraction
+  // exists to prevent.
   assert.ok(easing.A11Y_FLIP_TIME_FRACTION < 0.5);
   assert.equal(timing.accessibleViewIndexAt(at.holdMs + at.slideMs * 0.5, at), at.positions[1]);
 });
@@ -242,25 +232,16 @@ test("the accessibility timer re-arms itself once per flip, and only once", () =
   controller.applyAutoSlideStyles();
   assert.equal(platform.pendingTimerCount(), 1);
 
-  // A full cycle: four segments of four seconds each. Every flip must re-arm exactly
-  // one timer, never two.
+  // A full cycle of four four-second segments: every flip re-arms exactly one timer.
   platform.advance(16000);
   assert.equal(platform.pendingTimerCount(), 1, "still exactly one pending timer after a whole cycle");
 });
 
-// The timer is armed to fire AT its own flip, so the moment it runs, the flip is at most
-// a hair away in either direction — and scheduleAccessibilitySync() answers two
-// questions from the phase in that moment: which view is accessible NOW, and how long
-// until that answer changes. If those two questions are asked from two separate reads
-// and the boundary falls between them, the pass writes the OUTGOING view and then arms
-// as though the flip had already been handled. Nothing reconsiders until the next
-// segment, so the card announces the wrong view for a full hold.
-//
-// Measured in Chromium as a ~2% failure of the live carousel spec: in 16 of 16 captured
-// failures the last attribute write landed 0.7–2.3 ms BEFORE its own flip and no write
-// followed for the rest of the segment. The phase is extrapolated to "now" on every
-// read, so the few hundred microseconds the attribute writes themselves take are enough
-// for the second read to land on the other side.
+// The timer fires at its own flip, so scheduleAccessibilitySync() runs at most a hair from
+// the boundary. It answers two questions from the phase — which view is accessible now, and
+// how long until that changes — and the phase is extrapolated to "now" on every read, so if
+// the boundary falls between the two reads the pass writes the outgoing view and re-arms a
+// whole segment late.
 test("a sync that runs a hair before its own flip re-arms for that flip, not past it", () => {
   const platform = createFakePlatform({ now: 0 });
   const { controller, track, jsdom } = makeController({ platform, viewCount: 3, rotationSeconds: 3, slideSeconds: 1 });
@@ -271,9 +252,8 @@ test("a sync that runs a hair before its own flip re-arms for that flip, not pas
   const incoming = timing.accessibleViewIndexAt(flipMs + 0.4, at);
   assert.notEqual(outgoing, incoming, "the two phases must straddle a real flip, otherwise this test proves nothing");
 
-  // The phase is extrapolated to "now" on every read, so time passing between two reads
-  // moves it. Here it crosses the boundary exactly once, between the first read and
-  // every one after it — which is what a pass that fired a hair early sees.
+  // The phase moves between reads; here it crosses the boundary once, between the first read
+  // and every one after — what a pass that fired a hair early sees.
   let reads = 0;
   Object.defineProperty(track, "__animationPhase", {
     configurable: true,
@@ -284,8 +264,7 @@ test("a sync that runs a hair before its own flip re-arms for that flip, not pas
   const inertRow = () => [...jsdom.window.document.querySelectorAll(".rtc-view")].map((view) => (view.hasAttribute("inert") ? 0 : 1)).indexOf(1);
   assert.equal(inertRow(), outgoing, "the pass decided on the phase it read first");
 
-  // And that decision has to be reconsidered at the flip it was made just before — not
-  // a whole segment later, which is what leaves the wrong view announced.
+  // That decision is reconsidered at the flip it was made just before, not a segment later.
   assert.ok(
     platform.nextTimerDelay() <= at.slideMs,
     `re-armed for ${platform.nextTimerDelay()}ms, which skips the flip it just wrote across`
@@ -393,7 +372,7 @@ test("the visual index follows the phase while synchronized, and the JS index on
   controller.applyAutoSlideStyles();
   const at = controller.timing();
 
-  // Walk one whole cycle and compare against the pure function at every step.
+  // Walk one whole cycle, comparing against the pure function at every step.
   for (let phase = 0; phase < at.cycleMs; phase += 250) {
     platform.setNow(phase);
     assert.equal(
@@ -408,12 +387,9 @@ test("the visual index follows the phase while synchronized, and the JS index on
   assert.equal(controller.currentVisualIndex(), 2, "manual control makes the JS index authoritative");
 });
 
-// The regression guard for the 2.38.1 correction. See visiblePhaseMs() in
-// carousel-runtime.js for the full reasoning; in short, the wall clock is AHEAD of the
-// track by however long the frame that started the animation took, and on a slow
-// machine that exceeded the 53 ms of slack between the end of a hold and the
-// accessibility flip — announcing the next view while the current one was still parked
-// and fully on screen. It was a reproducible CI failure, not a theoretical one.
+// The wall clock is ahead of the track by however long the frame that started the animation
+// took, which on a slow machine exceeds the slack between a hold ending and the
+// accessibility flip. See visiblePhaseMs() in carousel-runtime.js.
 test("the visible index comes from the animation's own clock, not the wall clock that started it", () => {
   const platform = createFakePlatform({ now: 0 });
   const { controller, track, jsdom } = makeController({ platform, rotationSeconds: 3, slideSeconds: 1 });
@@ -421,8 +397,8 @@ test("the visible index comes from the animation's own clock, not the wall clock
   const at = controller.timing();
   const flipMs = at.holdMs + at.slideMs * 0.354;
 
-  // A wall clock that has already passed the flip, and an animation that has not: the
-  // exact situation a slow first frame produces.
+  // A wall clock that has passed the flip and an animation that has not: what a slow first
+  // frame produces.
   const wallPhase = Math.ceil(flipMs) + 5;
   const animationPhase = Math.floor(flipMs) - 5;
   platform.setNow(wallPhase);
@@ -446,7 +422,7 @@ test("the visible index comes from the animation's own clock, not the wall clock
   });
 
   // A cycle length the running animation does not share means its phase belongs to a
-  // schedule that no longer applies — the wall clock is the honest answer again.
+  // schedule that no longer applies — the wall clock is the answer again.
   track.__animationPhase = { phaseMs: animationPhase, cycleMs: at.cycleMs + 1000 };
   assert.equal(
     controller.currentVisualIndex(),
@@ -454,8 +430,7 @@ test("the visible index comes from the animation's own clock, not the wall clock
     "a stale cycle length falls back rather than reading a new schedule at an old phase"
   );
 
-  // No Web Animations API at all is the same fallback, which is what every version
-  // before this correction did unconditionally.
+  // No Web Animations API is the same fallback.
   delete track.__animationPhase;
   assert.equal(controller.currentVisualIndex(), timing.accessibleViewIndexAt(wallPhase, at));
 });
@@ -466,8 +441,7 @@ test("the accessibility attributes follow the visible index at every transition 
   const at = controller.timing();
   const views = () => [...jsdom.window.document.querySelectorAll(".rtc-view")];
 
-  // Every phase at which the pure function changes its answer, plus one millisecond on
-  // each side of it.
+  // Every phase where the pure function changes its answer, plus one ms on each side.
   const boundaries = [];
   let previous = timing.accessibleViewIndexAt(0, at);
   for (let phase = 1; phase < at.cycleMs; phase++) {
@@ -503,7 +477,7 @@ test("a resume fires only once the phase actually holds the parked view", () => 
   const platform = createFakePlatform({ now: 0 });
   const { controller, track } = makeController({ platform, rotationSeconds: 12, slideSeconds: 1 });
 
-  // The user swiped to view 2 and the track is frozen there.
+  // Swiped to view 2, track frozen there.
   controller.activeIndex = 2;
   controller.updateTrackTransform(false);
   assert.ok(track.classList.contains("rtc-manual"));
@@ -532,7 +506,7 @@ test("a resume that arrives outside its window re-aims instead of handing over w
   controller.updateTrackTransform(false);
   controller.resumeWhenAligned(1, 1000);
 
-  // Simulate a stalled tab: the clock jumps far past the moment the timer was aimed at.
+  // A stalled tab: the clock jumps far past the moment the timer was aimed at.
   platform.setNow(platform.now() + 7000);
   platform.advance(1000);
   assert.ok(
@@ -557,7 +531,7 @@ test("a structural change during a pending resume cancels it cleanly", () => {
   controller.resumeWhenAligned(2, 10000);
   assert.notEqual(controller.resumeTimerHandle, null);
 
-  // The view list collapses to one — exactly what a room becoming unavailable does.
+  // The view list collapses to one, as a room becoming unavailable does.
   controller.setViews(["only"]);
   controller.stop();
   assert.equal(controller.resumeTimerHandle, null);

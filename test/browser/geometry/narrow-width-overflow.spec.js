@@ -1,34 +1,23 @@
 "use strict";
 
-// Narrow-width coverage spans three distinct containment contracts: all carousel
-// views share the responsive height, extreme labels retain their ellipsis policy,
-// and realistic room values remain fully legible. Room values are non-truncatable
-// information, so metric-specific auto-max-columns must create additional rows when
-// horizontal space is insufficient.
+// Narrow-width containment, three contracts: all carousel views share the responsive
+// height, extreme labels keep their ellipsis policy, and realistic room values stay fully
+// legible. Room values cannot be truncated, so metric-specific auto-max-columns must add
+// rows when horizontal space runs short. Boundary: this file's three contracts only;
+// randomized-geometry.spec.js is the generic overflow sweep.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
-// DELIBERATELY CURATED, not the manifest's fifteen. These five are the typographic
-// extremes among the supported languages — the longest German compounds, Polish and
-// Russian case endings, Latvian's long unit words — and they are what makes a 280 px
-// card overflow. Running all fifteen would triple a slow browser spec to re-prove the
-// same five. A new language belongs here only if it is harder than these.
+// A curated subset (`test/architecture/suite-structure.test.js` allows one), not the
+// manifest's fifteen: the typographic extremes — longest German compounds, Polish and
+// Russian case endings, Latvian unit words — that make a 280 px card overflow.
 const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 
-// ha-card is never registered as a custom element in the shared offline
-// harness (no real Home Assistant frontend loaded), so it defaults to
-// display:inline -- CSS Containment has no effect on inline boxes, so every
-// @container rtc-card (...) rule in room-climate-card.js's styles (which
-// this file specifically exercises at 360px and the 460px
-// breakpoint fixes) would silently never match, regardless of the card's
-// actual rendered width. Registering a minimal stand-in (mirroring just
-// real HA's ha-card display:block) makes those breakpoints testable.
-// Scoped to this file via addInitScript rather than editing the shared
-// harness.html, since that would also change every OTHER spec's layout and
-// invalidate their golden screenshots.
+// A minimal display:block `ha-card` stand-in so the @container breakpoints are testable —
+// see interne Doku §4 "`ha-card` im Offline-Harness".
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!customElements.get("ha-card")) {
@@ -41,15 +30,9 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-// Checks only the three classes whose containment contracts this file covers:
-// deliberately narrower than randomized-geometry.spec.js's generic sweep so
-// this file's intent (and any future failure) stays unambiguous. Excludes
-// .rtc-track-nested nodes, same as randomized-geometry.spec.js: non-active
-// carousel slides are legitimately positioned outside the visible card via
-// the track's transform, clipped horizontally by .rtc-rotator's directional
-// clip-path --
-// that's normal carousel behavior, not a bug. The dedicated tests above
-// already cover range_scale/extremes as the ACTIVE slide in a carousel.
+// Only the three classes this file's contracts cover. Excludes .rtc-track-nested nodes
+// (like randomized-geometry.spec.js): non-active carousel slides sit outside the visible
+// card via the track transform, clipped by .rtc-rotator — normal, not a bug.
 async function overflowingTargetElements(page, cardId) {
   return page.evaluate((cardId) => {
     const el = document.getElementById(cardId);
@@ -120,19 +103,9 @@ test.describe(".rtc-range-scale-view follows shared narrow-width height rules", 
     expect(rangeScaleBox.height, "range_scale and scale must render at the identical height inside the same carousel").toBeCloseTo(scaleBox.height, 0);
   });
 
-  // The @supports not (container-type: inline-size) @media(380px) fallback
-  // block (see room-climate-card.js) exists for browsers WITHOUT container
-  // query support. Playwright's bundled Chromium always supports container
-  // queries, so @supports not (container-type: inline-size) is permanently
-  // false there -- that fallback block is provably inert in every browser
-  // this test suite can run in, and no test here can genuinely exercise it
-  // (forcing the viewport narrow
-  // only re-triggers the SAME @container rule and would pass even if the
-  // fallback block's own .rtc-range-scale-view line were missing -- a false
-  // sense of coverage). Its CSS is a straight, mechanical mirror of the
-  // @container block above (same properties, same selectors) and was fixed
-  // in the same edit; correctness here rests on that mirroring, not on a
-  // dedicated browser test.
+  // The `@supports not (container-type: inline-size)` fallback block is inert in every
+  // browser this suite runs (Chromium always supports container queries), so no test here
+  // can exercise it; its CSS mirrors the @container block above property for property.
 });
 
 test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
@@ -169,12 +142,9 @@ test.describe(".rtc-extreme-label keeps ellipsis at narrow widths", () => {
   });
 });
 
-// Reported against 2.38.0: a single-room card with a long room name painted its
-// headline caption straight across the scale beside it. The caption column is capped at
-// 106px, and .rtc-avg-label carried white-space: nowrap without the overflow/ellipsis
-// pair every other single-line label on the card has. It was unreachable before
-// 2.37.0, when the text here was always a short translated constant; a single-room card
-// now captions itself with the room's own name, which the user writes.
+// A single-room card captions itself with the room's own name, which the user writes, so
+// .rtc-avg-label must clip and ellipsize like every other single-line label rather than
+// painting across the scale beside it.
 test.describe(".rtc-avg-label stays inside its column whatever the room is called", () => {
   const LONG_NAME = "DASISTEINETESTKONFIGURATION";
   const singleRoomStates = () => ({
@@ -201,8 +171,7 @@ test.describe(".rtc-avg-label stays inside its column whatever the room is calle
         };
       });
 
-      // overflow:hidden is what actually stops the paint; the ellipsis is what makes the
-      // truncation legible rather than a word cut in half.
+      // overflow:hidden stops the paint; the ellipsis makes the truncation legible.
       expect(measured.overflow, "the caption must clip its own overflow").toBe("hidden");
       expect(measured.textOverflow, "a clipped caption must end in an ellipsis").toBe("ellipsis");
       expect(measured.clipped, "this name must genuinely be too long, or the test proves nothing").toBe(true);
@@ -223,12 +192,9 @@ test.describe(".rtc-avg-label stays inside its column whatever the room is calle
 });
 
 test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes realistic CO2/PM2.5 values", () => {
-  // Realistic values only (see room-value-legibility.spec.js for the full
-  // matrix) -- the old synthetic 7-digit stress values (1234567 ppm,
-  // 999999.9 µg/m³) are no longer relevant: the design no longer relies on
-  // ellipsis as a safety net for extreme/malformed readings, it relies on
-  // Part B's conservative metric-specific auto-max-columns (max 5/row for
-  // CO2/PM2.5) to guarantee enough natural width in the first place.
+  // Realistic values only (room-value-legibility.spec.js has the full matrix): natural
+  // width is guaranteed by metric-specific auto-max-columns (5/row for CO2/PM2.5), not by
+  // ellipsis as a safety net.
   function coHass() {
     return {
       "sensor.avg": mkStateObj("sensor.avg", 1200, CO2),
@@ -247,14 +213,13 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
       "sensor.r4": mkStateObj("sensor.r4", 15.9, PM25),
     };
   }
-  // 4 rooms stays within CO2/PM2.5's autoMaxColumns=5 (single row, the
-  // tightest realistic per-chip width in automatic mode).
+  // 4 rooms stays within CO2/PM2.5's autoMaxColumns=5 (single row, tightest realistic
+  // per-chip width in automatic mode).
   const roomsFor4 = [
     { entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }, { entity: "sensor.r4" },
   ];
 
-  // CSS ellipsis leaves textContent untouched, so assertions must be
-  // geometric/computed-style based, never a text-content check.
+  // CSS ellipsis leaves textContent untouched, so assertions are geometric/computed-style.
   async function assertNoEllipsis(chip, width, language) {
     const chipBox = await chip.boundingBox();
     const numLoc = chip.locator(".rtc-room-value-num");
@@ -329,19 +294,13 @@ test.describe("every view avoids unintended overflow across widths", () => {
   }
 });
 
-// The headline value is the one piece of text on the card that must never be painted
-// over its neighbour: `2252 ppm` and `118.4 µg/m³` used to reach 19-37px past a column
-// hard-capped at 106px and land straight across the scale's axis labels. Negative
-// two-digit temperatures did the same, more quietly, at 3-9px.
-//
-// The column now sizes itself to its content, starting from the old cap as its FLOOR and
-// growing only as far as leaving the view 40% of the panel allows, so the view yields
-// width exactly when the value needs it and never otherwise. These tests hold both halves
-// of that: no overflow anywhere, and no change at all for the values that already fit.
+// The headline value must never paint over its neighbour. The column sizes itself to its
+// content, from the old 106px cap as a floor, growing only as far as leaving the view 40%
+// of the panel allows. These tests hold both halves: no overflow anywhere, and no change
+// for values that already fit.
 test.describe(".rtc-avg-value stays inside its column", () => {
-  // Realistic readings, chosen per metric to span the digit counts each one actually
-  // produces in the field. `-12.5 °C` is here because it overflowed too, which the
-  // CO2/PM2.5 framing of this bug missed.
+  // Realistic readings per metric spanning the digit counts each produces. `-12.5 °C` is
+  // here because it overflowed too.
   const HEADLINE_CASES = [
     ["temperature", "°C", [22.2, -12.5, -19.9]],
     ["humidity", "%", [55.4, 100]],
@@ -359,9 +318,8 @@ test.describe(".rtc-avg-value stays inside its column", () => {
     return states;
   }
 
-  // The panel's own content box, and how the two tracks divide it. Read from the live
-  // grid rather than recomputed from the breakpoint table, so the assertion still means
-  // something if the padding or the gap ever changes.
+  // The panel content box and how the two grid tracks divide it, read from the live grid
+  // so the assertion survives a padding or gap change.
   async function panelColumns(page, cardId) {
     return page.evaluate((cardId) => {
       const root = document.getElementById(cardId).shadowRoot;
@@ -380,9 +338,8 @@ test.describe(".rtc-avg-value stays inside its column", () => {
 
   for (const [deviceClass, unit, values] of HEADLINE_CASES) {
     for (const value of values) {
-      // Both headline shapes: the button branch has 12px less usable width than the div
-      // branch did before the shared padding landed, so it is the harder of the two and
-      // the consensus branch must be checked as well, not assumed.
+      // Both headline shapes: the button branch is the harder one, so the consensus branch
+      // is checked too, not assumed.
       for (const withPrimary of [true, false]) {
         test(`${value} ${unit} never overflows its column (${withPrimary ? "main entity" : "calculated"})`, async ({ page }) => {
           await gotoHarness(page);
@@ -403,9 +360,8 @@ test.describe(".rtc-avg-value stays inside its column", () => {
     }
   }
 
-  // The other half of the contract, and the one that is easy to lose: a value that fits
-  // today must produce the very same column it produces today. `22.2 °C` is the card's
-  // canonical reading and sits inside the floor at every breakpoint.
+  // The other half: a value that fits must produce the same column at every breakpoint.
+  // `22.2 °C` is the canonical reading and sits inside the floor.
   test("a value that already fits leaves the column at its documented width", async ({ page }) => {
     await gotoHarness(page);
     const expected = { 320: 90, 400: 96, 520: 106 };
@@ -418,10 +374,8 @@ test.describe(".rtc-avg-value stays inside its column", () => {
     }
   });
 
-  // A content-sized column without an upper bound is a column a broken sensor can use to
-  // evict the view entirely. Measured before the floor existed: 53px of view left at
-  // 320px. The value gets clipped instead, which is the honest trade — a nine-digit CO2
-  // reading is not a reading.
+  // Without an upper bound a broken sensor could evict the view; instead the value clips —
+  // a nine-digit CO2 reading is not a reading.
   test("a runaway reading cannot push the view below 40% of the panel", async ({ page }) => {
     await gotoHarness(page);
     for (const width of WIDTHS) {
@@ -436,10 +390,8 @@ test.describe(".rtc-avg-value stays inside its column", () => {
     }
   });
 
-  // The caption has its own, older contract: it ellipsizes (see the describe above) and
-  // must therefore NOT be allowed to widen the column the value sizes. Without inline-size
-  // containment on .rtc-avg-label a long room name would drag the column open to its full
-  // length and quietly undo that fix.
+  // The caption ellipsizes (describe above) and must not widen the column the value sizes:
+  // without inline-size containment on .rtc-avg-label a long room name would drag it open.
   test("an overlong caption does not widen the column the value sizes", async ({ page }) => {
     await gotoHarness(page);
     const expected = { 320: 90, 400: 96, 520: 106 };

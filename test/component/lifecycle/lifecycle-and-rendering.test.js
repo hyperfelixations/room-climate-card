@@ -1,11 +1,10 @@
 "use strict";
 
-// _render()'s signature must be committed only
-// AFTER a render actually succeeds, so a thrown exception doesn't leave a
-// "successful-looking" signature that suppresses a correct retry. LIFE-01:
-// setConfig() must cancel any in-progress pointer gesture atomically before
-// applying the new config. The suite also covers no-data icon updates
-// and retrying an identical update after a render error.
+// _render()'s signature is committed only after a render succeeds, so a thrown exception
+// does not leave a "successful-looking" signature that suppresses a correct retry.
+// LIFE-01: setConfig() cancels any in-progress pointer gesture atomically before applying
+// the new config. Also covers no-data icon updates and retrying an identical update after
+// a render error.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -14,8 +13,7 @@ const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { HUMIDITY_CLASS_ONLY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
-// The render paths, imported from the source module so the test names the same
-// constants production does rather than re-spelling their string values.
+// RENDER_PATH imported from source so tests name the same constants production does.
 let RENDER_PATH;
 
 test.before(async () => {
@@ -29,15 +27,13 @@ test.after(() => {
 test("ROB-01: a thrown _computeViewModel() does not commit the render signature, so an identical retry actually re-renders", () => {
   const hassA = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hassA);
-  // A repeat of the identical hass push is skipped, which is what proves the first
-  // render committed. Asserted through the render path rather than by reading the
-  // signature string: the path is the property that actually matters.
+  // An identical repeat is skipped, proving the first render committed. Asserted via the
+  // render path, not the signature string.
   assert.equal(el._render(), RENDER_PATH.SKIPPED, "an unchanged repeat must be skipped, so the first render committed");
 
   const hassB = mkHass({ "sensor.avg": mkState("sensor.avg", 23, TEMPERATURE_C) });
-  // The real production compute entry point, not the legacy-DTO adapter: _render()
-  // calls _computeViewModel(), and a test that failed the adapter instead would stop
-  // proving anything the moment the adapter is removed.
+  // _render() calls _computeViewModel() directly; failing the legacy-DTO adapter instead
+  // would stop proving anything once the adapter is removed.
   const original = el._computeViewModel;
   let threw = false;
   el._computeViewModel = function () {
@@ -53,9 +49,8 @@ test("ROB-01: a thrown _computeViewModel() does not commit the render signature,
   assert.ok(threw, "the induced failure must actually have been reached");
   assert.equal(loggedErrors.length, 1, "set hass()'s try/catch must log exactly once, not crash");
   el._computeViewModel = original;
-  // The retry carries the exact data that just failed. Committing the signature before
-  // the render succeeded would make this identical push compare equal and be skipped,
-  // freezing the card on stale content.
+  // The retry carries the data that just failed; a prematurely committed signature would
+  // compare equal and skip it, freezing the card on stale content.
   assert.equal(el._render(), RENDER_PATH.CONTENT, "the retry must actually re-render, not be skipped as 'unchanged'");
   env.cleanup(el);
 });
@@ -66,10 +61,8 @@ test("DOM-01: the no-data icon updates on a pure partial update (metric mode cha
   let iconEl = el.shadowRoot.querySelector(".rtc-icon-badge ha-icon");
   assert.equal(iconEl?.getAttribute("icon"), "mdi:thermometer-off");
 
-  // Same entity, still unavailable, device_class flips to humidity — a real
-  // HA attribute-only update always bumps last_updated, so this is forced
-  // explicitly (two mkState() calls made within the same millisecond would
-  // otherwise collide and be treated as a no-op update).
+  // device_class flips to humidity; last_updated is bumped explicitly because two mkState()
+  // calls in the same millisecond would otherwise collide as a no-op update.
   const states2 = { "sensor.avg": mkState("sensor.avg", "unavailable", HUMIDITY_CLASS_ONLY) };
   states2["sensor.avg"].last_updated = new Date(Date.now() + 1000).toISOString();
   el.hass = mkHass(states2);
@@ -90,8 +83,7 @@ test("LIFE-01: setConfig() clears an in-progress pointer gesture and the render 
     })
   );
 
-  // A real gesture, driven through the handlers, so this keeps its meaning without any
-  // writable test window into the interaction runtime.
+  // A real gesture through the handlers — no writable test window into the interaction runtime.
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
   rotator.getBoundingClientRect = () => ({ width: 300 });
   el._handlePointerDown({ pointerId: 1, button: 0, isPrimary: true, clientX: 0, clientY: 0, composedPath: () => [rotator] });
@@ -111,11 +103,8 @@ test("LIFE-01: setConfig() clears an in-progress pointer gesture and the render 
 });
 
 test("setConfig() preserves the active view across a structural rebuild when its key still exists, else falls back to start_view/the first active view", () => {
-  // _renderAll() preserves whichever view key the user was actually looking
-  // at via _currentVisualViewIndex() if that
-  // key still exists in the new view list, only falling back to
-  // config.start_view then the first active view once it
-  // doesn't.
+  // _renderAll() keeps whichever view key _currentVisualViewIndex() reports if it still
+  // exists in the new list, falling back to config.start_view then the first active view.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
@@ -127,14 +116,10 @@ test("setConfig() preserves the active view across a structural rebuild when its
     hass
   ); // views = [range, scale, extremes]
   el._activeView = el._views.indexOf("extremes");
-  // Freezes the track into manual mode so _currentVisualViewIndex() (which
-  // _renderAll() reads to capture the previously active key) is defined to
-  // fall back to this._activeView instead of the wall-clock auto-slide
-  // phase — see accessibility-logic.test.js for the same pattern.
+  // Manual mode so _currentVisualViewIndex() falls back to this._activeView (see accessibility-logic.test.js).
   el._updateTrackTransform(true);
 
-  // Same structure, cosmetic-only change (entity_label) -> goes through
-  // _updateContent(), not _renderAll() at all -> _activeView untouched.
+  // Cosmetic-only change (entity_label) goes through _updateContent(), not _renderAll(); _activeView untouched.
   el.setConfig({
     entity: "sensor.avg",
     range_entity: "sensor.range",
@@ -143,9 +128,8 @@ test("setConfig() preserves the active view across a structural rebuild when its
   });
   assert.equal(el._activeView, el._views.indexOf("extremes"), "a non-structural config change must not reset the manually-swiped position");
 
-  // A structural change (rotation_seconds affects structuralConfigSignature,
-  // see _render()) that does NOT remove "extremes" from the view list ->
-  // the active view survives the rebuild instead of snapping to "scale".
+  // A structural change (rotation_seconds) that keeps "extremes" in the list: the active
+  // view survives the rebuild instead of snapping to "scale".
   el._updateTrackTransform(true);
   el.setConfig({
     entity: "sensor.avg",
@@ -155,9 +139,8 @@ test("setConfig() preserves the active view across a structural rebuild when its
   });
   assert.equal(el._views[el._activeView], "extremes", "the previously active view key must be preserved across a structural rebuild when it still exists");
 
-  // A structural change that DOES remove "extremes" (rooms cleared) with no
-  // start_view configured -> falls back to the first active view (index 0
-  // of the new views = [range, scale] — "range", not a hardcoded "scale").
+  // Structural change removing "extremes" (rooms cleared), no start_view: falls back to the
+  // first active view (index 0 of [range, scale] = "range", not a hardcoded "scale").
   el._updateTrackTransform(true);
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range" });
   assert.equal(el._activeView, 0, "falls back to the first active view once the previously active view key no longer exists and no start_view is set");
@@ -179,16 +162,15 @@ test("setConfig() falls back to config.start_view (not the first active view) wh
   el._activeView = el._views.indexOf("extremes");
   el._updateTrackTransform(true);
 
-  // Rooms removed -> "extremes" no longer exists -> start_view: "scale" wins over the first-active-view (index 0 = "range") fallback.
+  // Rooms removed: "extremes" gone, start_view: "scale" wins over the index-0 "range" fallback.
   el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", start_view: "scale" });
   assert.equal(el._activeView, el._views.indexOf("scale"), "start_view must be preferred over the plain index-0 fallback");
   env.cleanup(el);
 });
 
 test("a font-ready promise rejection does not produce an unhandled rejection (the .catch(() => {}) safety net)", async () => {
-  // document.fonts.ready is stubbed to resolve immediately by the jsdom
-  // loader; this test only asserts that a normal render with the stub in
-  // place completes without throwing, exercising that code path at all.
+  // document.fonts.ready is stubbed to resolve immediately; this only asserts a normal
+  // render completes without throwing.
   const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   await Promise.resolve(); // let the document.fonts.ready.then()/.catch() chain settle
@@ -215,8 +197,7 @@ test("a full render and a partial update each compute exactly one view model", (
     viewModelCalls += 1;
     return realViewModel();
   };
-  // There is nothing else to count any more: the flat DTO has no producer in the
-  // card at all, which an architecture test now proves for the whole of src/.
+  // The flat DTO has no producer in the card at all (an architecture test proves it for src/).
   assert.equal(el._computeData, undefined, "the pre-2H flat-DTO entry point is gone from the element");
 
   // A partial update (the common per-second path).

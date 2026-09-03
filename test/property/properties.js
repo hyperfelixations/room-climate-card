@@ -1,26 +1,18 @@
 "use strict";
 
-// THE INVARIANTS. Statements that must hold for every card the generator can describe,
-// whatever it describes.
-//
-// Each one returns a list of violations rather than throwing, so a single failing case
-// reports everything wrong with it at once instead of the first thing the runner happened
-// to look at. A violation is a string a person can read without opening this file.
-//
-// WHAT IS DELIBERATELY NOT ASSERTED. Nothing here says a particular configuration must
-// produce a particular card. That is what the hand-written tests are for, and they say it
-// far more precisely. These are the statements that are true of ALL of them — which is why
-// they are worth checking against inputs nobody thought of.
+// The invariants: statements that must hold for every card the generator can describe. Each
+// returns a list of violation strings rather than throwing, so a failing case reports
+// everything wrong with it at once. Nothing here asserts that a configuration produces a
+// particular card — that is the hand-written tests' job. See interne Doku §4 „Die
+// Property-Schicht".
 
 const { VIEWS } = require("../manifests/product-surface.js");
 
 const EPSILON = 1e-9;
 
-// Walks every value in the model, tagging each with the path it was found at. The old
-// property test looked only at the model's own top-level keys and searched them for names
-// ending in "Pos" — of which there were none, so it checked nothing at all. Positions live
-// under average.position, scale.markerPositions, extremes and roomMarkers[].position, and
-// only a recursive walk can see them.
+// Walks every value in the model, tagging each with the path it was found at. Positions live
+// under average.position, scale.markerPositions, extremes and roomMarkers[].position — only
+// a recursive walk sees them.
 function* walk(value, path = "", parentKey = "", ancestors = new WeakSet()) {
   yield { path, value, parentKey };
   if (value === null || typeof value !== "object") return;
@@ -45,15 +37,9 @@ function inRange(number, low, high) {
 
 // ------------------------------------------------------------------- the invariants --
 
-// Nothing COMPUTED may be NaN or Infinity. Either one reaches the DOM as the literal text
-// "NaN" or "Infinity" in a value, a width, or a transform.
-//
-// Exactly one non-finite number is legitimate, and it is not a computed one: the last tier
-// of a unit profile's dynamic step table carries `maxSpan: Infinity`, meaning "and
-// everything above". It is a static definition (see METRIC_DEFINITIONS) that rides along in
-// the model because the whole profile does, and it is only ever read as `span <= maxSpan`.
-// The allowance is written as one exact path rather than "skip the unit profile", so a
-// non-finite number appearing anywhere else in that profile still fails.
+// Nothing computed may be NaN or Infinity — either reaches the DOM as literal text. The one
+// legitimate non-finite value is the static `maxSpan: Infinity` on the last dynamic-step
+// tier (METRIC_DEFINITIONS), permitted by one exact path so anything else still fails.
 const PERMITTED_NON_FINITE = /^metric\.displayUnitProfile\.dynamicDisplaySteps\[\d+\]\.maxSpan$/;
 const ROOM_VALUE_PATH = /^(?:rooms\.visible\[\d+\]\.value|rooms\.chips\[\d+\]\.room\.value|rooms\.chipRows\[\d+\]\.chips\[\d+\]\.room\.value|extremes\.(?:coolest|warmest)\.value|roomMarkers\[\d+\]\.value)$/;
 const FAHRENHEIT_UNITS = new Set(["°f", "f", "fahrenheit"]);
@@ -170,11 +156,8 @@ function scalesIncrease(model) {
   return violations;
 }
 
-// The view list is the card's own answer to "what is on screen". It must name only views
-// that exist, name each at most once, and agree with its own entries.
-//
-// It must NOT be forced to contain `scale`: an authoritative `views:` configuration is
-// entitled to leave it out, and the previous property test asserted the opposite.
+// The view list must name only views that exist, name each at most once, and agree with its
+// own entries. It is not forced to contain `scale`: an authoritative `views:` may leave it out.
 function activeViewsAreCoherent(model) {
   const violations = [];
   const views = model.views;
@@ -250,18 +233,10 @@ function comfortCountsAddUp(model) {
 
 // -------------------------------------------------------------------- rendered markup --
 
-// Two things must never reach the DOM: an arithmetic accident spelled out as text, and
-// anything executable that came from a configuration value.
-//
-// THE SAFETY HALF IS ASKED OF THE PARSED DOM, NOT OF THE MARKUP TEXT, and that distinction
-// is the whole point. A room named `"><img src=x onerror=alert(1)>` is rendered by the card
-// as `&quot;&gt;&lt;img src=x onerror=alert(1)&gt;` — correctly escaped, no element created,
-// nothing executable. A regular expression over innerHTML sees the characters `onerror=`
-// and calls it an injection; a browser sees text. The first version of this invariant did
-// exactly that and reported twenty-seven false alarms, every one of them a case where the
-// card had behaved perfectly.
-//
-// So the question is asked the way a browser answers it: are there dangerous NODES?
+// Two things must never reach the DOM: an arithmetic accident spelled as text, and anything
+// executable from a configuration value. The safety half is asked of the parsed DOM, not a
+// regex over innerHTML: correctly escaped text still contains the characters `onerror=`, so
+// the question is whether there are dangerous nodes.
 const DANGEROUS_ELEMENTS = "script, iframe, object, embed, form, base, link, meta";
 const URL_ATTRIBUTES = ["href", "src", "xlink:href", "action", "formaction"];
 
@@ -286,10 +261,8 @@ function domIsSafe(root) {
   return violations;
 }
 
-// The numeric half stays textual, and can: the card never echoes a raw entity state — a
-// sensor reporting the literal string "NaN" renders as no data, not as the word — so those
-// characters anywhere in the markup, in text or in a width or in a transform, always came
-// from arithmetic rather than from something a user typed.
+// The numeric half stays textual: the card never echoes a raw entity state, so "NaN" or
+// "Infinity" anywhere in the markup came from arithmetic, not from what a user typed.
 function markupIsNumeric(html) {
   const violations = [];
   if (/\bNaN\b/.test(html)) violations.push("rendered markup contains the text NaN");

@@ -1,36 +1,13 @@
 "use strict";
 
-// THE CALIBRATION TABLE for "can this colour be seen on this background".
-//
-// The card decides whether to leave a palette alone or transform it, and that decision
-// rests on one threshold. A threshold picked by taste is not defensible and cannot be
-// argued with later, so this file states the judgements the threshold has to reproduce —
-// each one a colour, a background, a verdict, and the reason.
-//
-// HOW TO USE IT. palette-fit.test.js runs every pair through the card's own instrument and
-// requires the verdicts to come out right. If a future change to the instrument breaks a
-// row, the question is which of the two is wrong — and the row says what a person actually
-// sees, so usually it is the instrument.
-//
-// HOW IT WAS CHECKED. Every borderline pair below is rendered as a swatch by
-// test/browser/visual/palette-fit-calibration.spec.js and was looked at. A visibility claim nobody
-// has looked at is not a claim.
-//
-// REVIEWED, AND THE VERDICTS HOLD. Every row below was looked at in the rendered swatches.
-// The tightest visible pair is legible, the widest invisible pair is not, and nothing in
-// between is misfiled.
-//
-// One note for whoever looks next, so a correct table is not doubted: `#000000` on `#1C1C1C`
-// reads slightly better in a PNG than on a real screen, because an image has perfect black
-// levels and a panel in a lit room does not — light from the room lifts both towards each
-// other. That is the effect screenDistance() models with its flare term and the one WCAG
-// models with the +0.05 in its contrast ratio, which puts this pair at 1.15 : 1. Even in the
-// image it is the dimmest text on the page and plainly worse than the row above it, so the
-// verdict is right either way. Judge it on a screen rather than on the file.
-//
-// HOW TO CHANGE A VERDICT. Change the row, with its reason. That is the point of the file:
-// the product decision lives here, in one readable place, and the algorithm does not have
-// to be touched to overrule it.
+// The calibration table for "can this colour be seen on this background". The card leaves a
+// palette alone or transforms it based on one threshold; this file states the judgements it
+// must reproduce — colour, background, verdict, reason. palette-fit.test.js runs every pair
+// through the card's instrument; if a change breaks a row, the row usually wins because it
+// says what a person sees. Every borderline pair is rendered by
+// test/browser/visual/palette-fit-calibration.spec.js and was looked at. Note: `#000000` on
+// `#1C1C1C` reads better in a PNG than on a screen (room light lifts both); judge that pair
+// on a screen. To change a verdict, change the row and its reason.
 
 // Pairs a person can see apart. The palette step stays as written.
 const VISIBLE = [
@@ -51,8 +28,7 @@ const VISIBLE = [
   ["#4A5CE0", "#FFFFFF", "the colour-vision ramp's coldest step on white"],
 ];
 
-// Pairs that collide. The palette has to be transformed, because a value painted in this
-// colour would be a value nobody can read.
+// Pairs that collide: the palette must be transformed or the value is unreadable.
 const INVISIBLE = [
   ["#FFFFFF", "#FFFFFF", "white on white"],
   ["#FFFFFF", "#FAFAFA", "white on off-white"],
@@ -69,8 +45,7 @@ const INVISIBLE = [
   ["#A2B1D0", "#ADD8E6", "the palest step of a navy ramp on a light blue card"],
 ];
 
-// The pairs whose verdict is closest to the line, and therefore the ones worth looking at.
-// Rendered side by side by the browser spec.
+// The pairs closest to the line, rendered side by side by the browser spec.
 const BORDERLINE = [
   ["#575757", "#1C1C1C", "visible", "the tightest visible pair in the table"],
   ["#000080", "#1C1C1C", "invisible", "the widest invisible pair in the table"],

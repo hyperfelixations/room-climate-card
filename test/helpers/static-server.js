@@ -1,12 +1,8 @@
 "use strict";
 
-// Minimal zero-dependency static file server for the Playwright test layer
-// — serves the whole package root, so test/fixtures/harness.html can load
-// the built artifact (../../dist/room-climate-card.js) and
-// ../helpers/hass-fixtures.js via plain relative <script src>, exactly the
-// way Home Assistant loads the card as a dashboard resource. Not used in
-// production; only by `npm run test:browser` (see playwright.config.js's
-// webServer option).
+// Zero-dependency static file server for the Playwright layer: serves the package root so
+// harness.html can load the built artifact and hass-fixtures.js via relative <script src>,
+// the way Home Assistant loads the card. Used only by the playwright.config.js webServer.
 
 const http = require("http");
 const fs = require("fs");

@@ -1,22 +1,12 @@
 "use strict";
 
-// Characterization of wall-clock carousel timing, verbatim.
-//
-// The auto-slide is driven by a CSS keyframe animation whose phase is derived
-// from Date.now(), so that several card instances on one dashboard stay in
-// lockstep. Everything downstream of that — which view counts as visible for
-// aria-hidden/inert, when the accessibility state flips, when a manually
-// swiped card may rejoin the shared phase — is pure arithmetic over the same
-// timing object.
-//
-// Off-by-one segments, a lost modulo, or confusion between eased spatial and
-// temporal midpoints can silently desynchronize these consumers. The focused
-// accessibility tests assert the intended rules; these baselines additionally
-// pin the actual numbers, and
-// the invariant tests below cross-check the two independent implementations
-// of "when does the accessible view change" against each other.
-//
-// All captures run against the frozen clock from characterization.js.
+// Characterization of wall-clock carousel timing, verbatim. Auto-slide is a CSS keyframe
+// animation whose phase comes from Date.now(), so several card instances on one dashboard
+// stay in lockstep. Everything downstream — which view is visible for aria-hidden/inert,
+// when the accessibility state flips, when a swiped card may rejoin the phase — is pure
+// arithmetic over the timing object, where an off-by-one segment or lost modulo can silently
+// desync. These baselines pin the numbers; the invariant tests cross-check the two
+// implementations of "when does the accessible view change". Captures use the frozen clock.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -71,9 +61,7 @@ function configure(viewCount, rotationSeconds, slideSeconds) {
   el._activeView = 0;
 }
 
-// Every phase at which _accessibleViewIndexAt() changes its answer, scanned at
-// 1 ms resolution over exactly one cycle. Compact and exact: this is the full
-// behaviour of the function, not a sample of it.
+// Every phase where _accessibleViewIndexAt() changes, scanned at 1 ms over one cycle — the full behaviour, not a sample.
 function flipPoints(timing) {
   const points = [];
   let previous = carouselTiming.accessibleViewIndexAt(0, timing);

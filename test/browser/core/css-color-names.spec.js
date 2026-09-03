@@ -1,16 +1,9 @@
 "use strict";
 
-// The 148 CSS colour names, checked against the only authority there is.
-//
-// The table in src/core/color.js claims to be the CSS Color Module Level 4 definitions,
-// and nothing in a Node test can do better than agree with whatever was typed into it —
-// a transposed digit in `mediumspringgreen` would sail through every unit test in the
-// suite and quietly give somebody the wrong ramp.
-//
-// Chromium has its own implementation of that specification. So it is asked directly: set
-// the name as a colour, read back what it computed, compare. That is a real second source
-// rather than a restatement of the first, which is the only kind of check worth having
-// over a table of constants.
+// The 148 CSS colour names in src/core/color.js, checked against Chromium's own CSS Color
+// Module Level 4 implementation: set the name as a colour, read back the computed value,
+// compare. A Node test can only agree with whatever was typed into the table; this is a
+// real second source.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness } = require("../../helpers/browser-helpers.js");

@@ -1,25 +1,12 @@
 "use strict";
 
-// Direct unit tests for config primitives, actions, rooms, and views.
-//
-// These messages are a user-facing contract: Home Assistant shows whatever
-// setConfig() throws straight in the dashboard, and the troubleshooting section
-// of the public README quotes them. They are therefore asserted literally, and
-// so is the ORDER in which validation happens — a config with two problems must
-// keep reporting the same one first, or a user fixing errors top-down gets a
-// moving target.
-//
-// The collaborators the config layer is not allowed to import are stubbed here,
-// which is exactly the point of injecting them: the whole layer is testable
-// without the domain, the i18n registry or the view registry.
-//
-// This file owns the PARTS: the primitive readers every other config module is built out of —
-// optional strings and labels, enumerations, integers — and the three structured readers that
-// use them for actions, rooms and views.
-//
-// The boundary to config-normalize-modules.test.js next door: this file never assembles a
-// whole card configuration. A test that asks what a finished config looks like belongs there;
-// a test that asks what one reader does with one value belongs here.
+// Direct unit tests for config primitives, actions, rooms, and views. The error messages
+// are a user-facing contract — Home Assistant shows what setConfig() throws, and the README
+// quotes it — so they, and the order validation runs in, are asserted literally.
+// Collaborators are stubbed, which is the point of injecting them.
+// Boundary: this file owns the primitive readers (optional strings, enums, integers) and
+// the structured readers for actions, rooms and views; whole-configuration assembly is
+// config-normalize-modules.test.js. See interne Doku §4 „Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -123,9 +110,8 @@ test("booleanOption() accepts exactly true and false, and says so when it does n
 });
 
 test("booleanOption() answers undefined for an unwritten key without a word about it", () => {
-  // The two callers mean different things by "not written": a top-level option takes its
-  // default, while the `show:` block must stay silent about a decision nobody touched. So
-  // the reader reports absence and lets each decide — and never diagnoses it.
+  // A top-level option takes its default; the `show:` block stays silent about a decision
+  // nobody touched. The reader reports absence, never diagnoses it, and lets each caller decide.
   const { booleanOption } = primitives;
   const diagnostics = [];
   assert.equal(booleanOption(undefined, "auto_slide", diagnostics), undefined);

@@ -1,34 +1,20 @@
 "use strict";
 
-// Characterization ("golden master") harness. Its purpose is to pin the current
-// observable behaviour of room-climate-card.js as committed baseline files.
+// Characterization ("golden master") harness: pins the current observable behaviour of
+// room-climate-card.js as committed baseline files, verbatim down to whitespace and CSS
+// bytes, so an unintended change during a refactor fails even when a behavioural assertion
+// would let it pass. Visual/layout contracts live in test/browser/visual-golden.spec.js
+// instead; jsdom has no layout engine. Contract: interne Doku §4 "Baseline- und
+// Golden-Vertrag".
 //
-// The existing unit suite asserts INTENDED behaviour (a human wrote down what
-// should happen). These baselines assert ACTUAL behaviour verbatim — every
-// number, every whitespace character of the rendered markup, every byte of
-// the emitted CSS. That is deliberately over-specified: during a pure
-// refactoring, an unintended change is exactly what must fail, even when it
-// would look harmless to a behavioural assertion.
-//
-// Visual/layout contracts are NOT duplicated here — test/browser/
-// visual-golden.spec.js already owns them with real Chromium screenshots,
-// and jsdom has no layout engine at all (getBoundingClientRect() is always
-// zero). This harness covers the contracts that demonstrably had no
-// verbatim coverage for the frozen flat DTO, the shadow-DOM markup,
-// the generated CSS, the custom-element/HACS registration, the exact
-// diagnostic strings, and the wall-clock carousel timing.
-//
-// Determinism requirements (all three are load-bearing):
-//   1. TZ is pinned to UTC before anything constructs an Intl formatter —
-//      _formatTime() renders range_entity timestamps in LOCAL time, so an
-//      unpinned TZ would make the baselines machine-dependent. node:test
-//      runs every test file in its own process, so this assignment is
-//      scoped to the characterization files that require this helper.
-//   2. Date.now() is frozen inside the jsdom realm — _slideTiming() derives
-//      the CSS animation-delay from wall-clock time, and that value ends up
-//      in the captured markup.
-//   3. Object keys are sorted and non-JSON values (functions, ±Infinity,
-//      NaN, -0, undefined) get explicit textual markers before serialization.
+// Determinism requirements, all load-bearing:
+//   1. TZ is pinned to UTC before any Intl formatter is built — timestamps render in local
+//      time, so an unpinned TZ makes baselines machine-dependent. node:test runs each file
+//      in its own process, so this assignment stays scoped to the characterization files.
+//   2. Date.now() is frozen in the jsdom realm — the CSS animation-delay is derived from
+//      wall-clock time and ends up in the captured markup.
+//   3. Object keys are sorted and non-JSON values get explicit textual markers before
+//      serialization.
 process.env.TZ = "UTC";
 
 const assert = require("node:assert/strict");
@@ -38,18 +24,14 @@ const path = require("node:path");
 const { createTestEnvironment } = require("./load-card.jsdom.js");
 const { normalizeForBaseline, stableStringify } = require("./baseline-serialization.js");
 
-// Fixed wall clock for every capture. 1750000000000 = 2025-06-15T14:26:40Z.
-// Chosen only for being a round, reproducible constant; the card's phase math
-// is `Date.now() % cycleMs`, so any fixed value works as long as it never
-// changes again.
+// Fixed wall clock for every capture (2025-06-15T14:26:40Z). The card's phase math is
+// `Date.now() % cycleMs`, so any fixed value works as long as it never changes again.
 const FROZEN_NOW_MS = 1750000000000;
 
 const BASELINE_DIR = path.join(__dirname, "..", "baseline");
 const UPDATE_BASELINES = process.env.UPDATE_CHARACTERIZATION === "1";
 
-// One jsdom realm with the card loaded and its clock frozen. Same contract as
-// createTestEnvironment() (see load-card.jsdom.js), plus the frozen clock and
-// a console recorder.
+// createTestEnvironment() plus a frozen clock.
 function createFrozenEnvironment() {
   const env = createTestEnvironment();
   env.window.Date.now = () => FROZEN_NOW_MS;
@@ -79,10 +61,9 @@ function sha256(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-// Splits the single <style> block out of the shadow root's markup. The CSS is
-// pinned separately and in full by characterization-styles.test.js; carrying
-// its ~30 KB into every DOM baseline as well would make those files unusable
-// for review, so the markup baseline references it by digest instead.
+// Splits the single <style> block out of the shadow markup. The CSS is pinned in full by
+// characterization-styles.test.js; the markup baseline references it by digest so the DOM
+// baselines stay reviewable.
 function captureShadowMarkup(el) {
   const html = el.shadowRoot.innerHTML;
   const open = html.indexOf("<style>");
@@ -115,9 +96,8 @@ function firstDifference(expected, actual) {
   return "files differ only in trailing content length";
 }
 
-// Compares `actual` against the committed baseline file, or (re)writes it when
-// UPDATE_CHARACTERIZATION=1. Regenerating baselines is an explicit, reviewable
-// act: the diff of test/baseline/ IS the behaviour change.
+// Compares `actual` against the committed baseline, or rewrites it when
+// UPDATE_CHARACTERIZATION=1. The diff of test/baseline/ is the behaviour change.
 function expectBaseline(name, actual) {
   const file = baselinePath(name);
   if (UPDATE_BASELINES) {

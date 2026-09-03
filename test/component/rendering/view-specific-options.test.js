@@ -109,11 +109,8 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
 });
 
 test("optionsSchema: valid values for every key are honored, and footer:false folds onto show_footer", () => {
-  // `footer: false` is the older way of writing show_footer: false, from before the footer
-  // was split into whether it is drawn and which form it takes. It still says exactly that,
-  // and the fold happens once at resolveViewOptions() so that nothing downstream has to know
-  // there were ever two spellings — which is why `footer` comes back as its own default here
-  // rather than as `false`.
+  // `footer: false` is the old spelling of `show_footer: false`; resolveViewOptions() folds
+  // it once, so `footer` comes back as its own default here, not `false`.
   const el = env.createCard(
     baseConfig({
       range_entity: "sensor.range",
@@ -146,8 +143,7 @@ test("show_footer says whether, footer says which form, and the newer key decide
   assert.equal(internals.footerText(off, "scale"), null, "and no footer is drawn");
   env.cleanup(off);
 
-  // Both, disagreeing. The block-beats-the-older-spelling rule of the show: block applies
-  // here too: a card that says show_footer: true means it, whatever the older word says.
+  // Both, disagreeing: show_footer wins over the older `footer` word.
   const both = options([{ type: "range_scale", enabled: true, options: { show_footer: true, footer: false } }]);
   const resolved = both._computeViewModel().views.options.range_scale;
   assert.equal(resolved.show_footer, true, "the newer key decides");
@@ -343,7 +339,7 @@ test("extremes.show_value does not affect which room is coldest/warmest or their
   assert.equal(a.extremes.warmest.name, b.extremes.warmest.name);
 });
 
-// ==== setConfig() options-only change forces _renderAll() (regression of the already-generic structuralConfigSignature mechanism) ====
+// ==== setConfig() options-only change forces _renderAll() ====
 
 test("setConfig() changing only scale.markers (same active views) forces a full rebuild, actually removing the extrema markers from the DOM", () => {
   const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { markers: "extremes" } }] }), twoRoomStates());

@@ -1,16 +1,12 @@
 "use strict";
 
-// The four source topologies, seen from the rendered card.
-//
-// A card can be a primary entity with rooms, a primary alone, several rooms with a calculated
-// average, or a single room standing in as the headline. Which one it is decides what the
-// headline means, whether it is clickable, and whose tap action fires - and the card must not
-// change its mind about that just because a value went unavailable.
-//
-// The resolution itself is pure and lives in unit/application/source-topology.test.js. What
-// is checked here is the part that only exists once the card is assembled: identity held
-// steady across state changes, actions dispatched from the right source, and setConfig
-// rebuilding only when the markup really has to change.
+// The four source topologies, seen from the rendered card. A card can be a primary with
+// rooms, a primary alone, several rooms with a calculated average, or a single room as the
+// headline. Which one it is decides what the headline means, whether it is clickable, and
+// whose tap action fires -- and it must not change just because a value went unavailable.
+// Resolution itself is pure and lives in unit/application/source-topology.test.js; here:
+// identity held steady across state changes, actions from the right source, and setConfig
+// rebuilding only when the markup must.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -145,13 +141,10 @@ const cases = [
     states: { "sensor.a": state("sensor.a", 20), "sensor.b": state("sensor.b", 24) },
     expected: { empty: false, source: "calculated", entity: "", roomIndex: null, label: "", chips: true, comparable: true },
   },
-  // --- sources Home Assistant does not know ---------------------------------
-  //
-  // Absent from hass.states means the id was mistyped, never existed, or was deleted:
-  // Home Assistant keeps REGISTERED entities in the state machine even while their
-  // integration is unloaded, publishing them as `unavailable` with
-  // `attributes.restored === true`. Such a source therefore does not shape the card,
-  // while an unavailable one still does.
+  // --- sources Home Assistant does not know ---
+  // Absent from hass.states means the id was mistyped, never existed, or was deleted. A
+  // registered entity whose integration is unloaded is published `unavailable` with
+  // `restored: true` and still shapes the card; a missing one does not.
   {
     name: "a mistyped room leaves a genuine one-room card, not a two-room one",
     config: { rooms: [room("sensor.real", "Arbeitszimmer"), room("sensor.typo", "Bedroom")] },
@@ -181,11 +174,9 @@ const cases = [
     states: { "sensor.real": state("sensor.real", 28.7) },
     expected: { empty: false, source: "room", entity: "sensor.real", roomIndex: 0, label: "Arbeitszimmer", chips: false },
   },
-  // --- sources that measure something else ----------------------------------
-  //
+  // --- sources that measure something else ---
   // A room declaring a different measurement is data this card can never show, so it is not
-  // a source of it and does not shape it either. Same rule as above, second half: what
-  // counts is what a sensor DECLARES, and a declaration outlives an outage.
+  // a source and does not shape it. What a sensor declares outlives an outage.
   {
     name: "a room measuring something else leaves a genuine one-room card",
     config: { entity: "sensor.room", rooms: [room("sensor.room", "Kitchen"), room("sensor.humidity", "Bath")] },
@@ -202,8 +193,7 @@ const cases = [
       "sensor.primary": state("sensor.primary", 22),
       "sensor.humidity": state("sensor.humidity", 50, HUMIDITY),
     },
-    // No room to stand among, so the headline needs no caption telling it apart — and the
-    // excluded room is diagnosed rather than drawn as a chip, so no grid is left over.
+    // No room to stand among: no caption, and the excluded room is diagnosed, not drawn.
     expected: { empty: false, source: "sensor", entity: "sensor.primary", roomIndex: null, label: "", chips: false },
   },
   {
@@ -315,15 +305,11 @@ test("a direct-room headline uses the room tap and hold actions through the exis
   }
 });
 
-// One sensor can be BOTH the primary entity and a room, and the card then depends on how
-// many rooms there are — which reads like a defect until you see why.
-//
-// With exactly one room that IS the primary, the card refers to a single entity, so the
-// headline genuinely is that room: it carries the room's name and the room's tap action.
-// Add a second room and the same card is a whole-home card that happens to list its primary
-// among the rooms; captioning its headline "Kitchen" and firing Kitchen's action would be
-// wrong. The rule lives in src/application/model/source-topology.js and is resolved there;
-// what this checks is that the CAPTION on the assembled card follows it.
+// One sensor can be both the primary entity and a room, and the caption then depends on the
+// room count. One room that is the primary: the headline genuinely is that room (its name,
+// its tap action). Add a second and the card is a whole-home card that merely lists its
+// primary; captioning it "Kitchen" would be wrong. Rule: src/application/model/source-
+// topology.js; here we check the caption on the assembled card follows it.
 test("a sensor that is both the primary and the only room names the headline, and stops when a second room appears", () => {
   const shared = "sensor.living";
   const states = {

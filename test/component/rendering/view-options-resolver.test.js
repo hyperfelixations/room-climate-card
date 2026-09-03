@@ -1,20 +1,11 @@
 "use strict";
 
-// Generic per-view options resolve through each VIEW_REGISTRY optionsSchema
-// whitelist. This file tests the generic mechanism in
-// isolation, independent of any specific option (show_comfort_band/
-// show_optimal_band are tested
-// separately in scale-band-visibility.test.js) -- exactly the property a
-// "toolkit" needs proven on its own: any future optionsSchema key on any
-// view flows through this same resolver with zero changes to it.
-//
-// resolveViewOptions()/boolOption() are module-level pure functions (no
-// `this`, like resolveActiveViews()). Tests import their owning modules directly.
-//
-// normalize() rehomes plain objects/arrays returned across the vm.runInContext()
-// realm boundary into this realm's Object.prototype before deepEqual (see
-// load-card.jsdom.js) -- otherwise structurally-identical objects fail
-// deepEqual on prototype identity alone.
+// Generic per-view options resolve through each VIEW_REGISTRY optionsSchema whitelist. This
+// file tests the mechanism in isolation, independent of any specific option
+// (show_comfort_band/show_optimal_band are in scale-band-visibility.test.js): any future
+// optionsSchema key on any view flows through the same resolver unchanged.
+// resolveViewOptions()/boolOption() are module-level pure functions. normalize() rehomes
+// objects across the vm realm boundary before deepEqual (see load-card.jsdom.js).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

@@ -1,20 +1,11 @@
 "use strict";
 
-// Smoke test for the distribution contract.
-//
-// Everything else in the suite tests what the card DOES. This file tests what
-// the shipped file IS, because that is what the build can silently break:
-// HACS copies dist/room-climate-card.js into a Home Assistant installation
-// verbatim and Lovelace executes it as a plain dashboard resource. There is no
-// module resolver, no bundler and no network fetch on that path — a single
-// stray `import` or a missing registration would fail at runtime in every
-// user's browser, with nothing in this repository noticing.
-//
-// The bundle is therefore evaluated in a BARE jsdom realm here: no
-// ResizeObserver, no matchMedia, no document.fonts stubs (unlike
-// load-card.jsdom.js, which adds them so those code paths get coverage). If
-// the artifact needs anything a plain browser does not already provide, this
-// is where it shows up.
+// Smoke test for the distribution contract. The rest of the suite tests what the card does;
+// this file tests what the shipped file is. HACS copies dist/room-climate-card.js verbatim
+// and Lovelace runs it as a plain dashboard resource — no module resolver, no bundler, no
+// network fetch — so a stray `import` or a missing registration would fail in every user's
+// browser. The bundle is evaluated in a bare jsdom realm here (no ResizeObserver/matchMedia/
+// document.fonts stubs, unlike load-card.jsdom.js), so anything a plain browser lacks shows up.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -89,16 +80,12 @@ test("evaluating the artifact registers exactly one Home Assistant card-picker e
   ]);
   assert.equal(entries[0].name, "Room Climate Card");
   assert.equal(entries[0].preview, true);
-  // The registration baseline records this one as the string "[Function]", which pins
-  // that SOMETHING is there but not that it is callable. The type is asserted here, and
-  // what it answers two tests below.
+  // The registration baseline records this as "[Function]"; the actual type is asserted here.
   assert.equal(typeof entries[0].getEntitySuggestion, "function");
 });
 
-// The whole point of the suggestion hook is that it survives bundling and runs against
-// the real registry, so it is exercised through the built artifact rather than through
-// the module: a tree-shaken or reordered registration block would pass every unit test
-// of card-suggestions.js and still leave the picker with nothing.
+// The suggestion hook must survive bundling and run against the real registry — a reordered
+// registration block would pass every card-suggestions.js unit test and still leave the picker empty.
 test("the artifact's suggestion hook answers for climate entities and declines everything else", () => {
   const window = evaluateInBareRealm();
   const entry = window.customCards.find((card) => card.type === CARD_TAG);
@@ -108,9 +95,7 @@ test("the artifact's suggestion hook answers for climate entities and declines e
       "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: {} },
     },
   };
-  // Compared field by field rather than with deepEqual: the returned object is built
-  // inside the bare realm and carries that realm's prototype, which a strict deep-equal
-  // rejects before it ever looks at the values.
+  // Compared field by field: the object is built in the bare realm, so its prototype fails a strict deep-equal.
   const suggestion = entry.getEntitySuggestion(hass, "sensor.co2");
   assert.equal(suggestion.config.type, `custom:${CARD_TAG}`);
   assert.equal(suggestion.config.entity, "sensor.co2");
@@ -118,8 +103,7 @@ test("the artifact's suggestion hook answers for climate entities and declines e
   assert.equal(entry.getEntitySuggestion(undefined, undefined), null, "the picker may call it before hass exists");
 });
 
-// The other half of the picker surface: with real candidates the start configuration
-// names one of them, so the preview shows the user's own reading instead of an error.
+// With real candidates the stub config names one, so the preview shows the user's own reading.
 test("the artifact's stub configuration prefers a real climate entity over the placeholder template", () => {
   const window = evaluateInBareRealm();
   const ctor = window.customElements.get(CARD_TAG);

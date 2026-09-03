@@ -1,18 +1,10 @@
 "use strict";
 
-// The built-in classification boundaries, checked immediately either side of every threshold.
-//
-// A tier boundary is a > or a >=, and getting it the wrong way round moves a reading one tier
-// without moving it far enough for anyone to notice. So each threshold is probed just below,
-// exactly on, and just above.
-//
-// The colour helpers are here too, and belong here: HEX_COLOR_PATTERN accepts 3, 4, 6 and
-// 8-digit values, _rgba() has to handle every one of those lengths, and both are reached
-// through the classification path that turns a tier into a painted colour.
-
-// Built-in classification boundaries are checked immediately around every
-// threshold. HEX_COLOR_PATTERN accepts only 3/4/6/8-digit hex values, and
-// _rgba() must handle each accepted length.
+// Built-in classification boundaries, probed just below, on, and just above every
+// threshold: a > vs >= error moves a reading one tier without moving it far. The colour
+// helpers belong here too — HEX_COLOR_PATTERN accepts 3/4/6/8-digit hex and _rgba() must
+// handle each length, both reached through the tier-to-colour path.
+// Boundary: colour maths on its own is unit/domain/; here it runs through classification.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -116,11 +108,9 @@ function toneLabel(value, metricType) {
   return internals.fallbackTone(el, value, metricType).label;
 }
 
-// Tiers are checked top-to-bottom by descending `min`, first match with
-// `value >= tier.min` (or `value > tier.min` for pm25's exclusive table)
-// wins — so a tier's own min boundary belongs to THAT tier, not the one
-// below it (e.g. temperature 23 is exactly the start of "Slightly warm",
-// not the top of "Optimal"; "Optimal" is 21 <= value < 23).
+// Tiers match top-to-bottom by descending `min`, first `value >= tier.min` wins
+// (`value > tier.min` for pm25's exclusive table). A tier's own min belongs to that tier:
+// temperature 23 starts "Slightly warm", so "Optimal" is 21 <= value < 23.
 test("temperature thresholds: boundary values classify into the documented tiers", () => {
   assert.equal(toneLabel(21, "temperature"), "Optimal");
   assert.equal(toneLabel(22.99, "temperature"), "Optimal");

@@ -1,11 +1,9 @@
 "use strict";
 
 // Start-view preservation and dynamic view availability. _renderAll()'s fallback cascade
-// (previously visible key -> start_view -> first active view -> null
-// state), the timer self-cleanup in _scheduleAccessibilitySync()/
-// _resumeSynchronizedSlideWhenAligned(), and the mid-drag deferred-render
-// deferral must behave identically for setConfig()-driven and hass-driven
-// structural changes. These tests cover both paths.
+// (previously visible key -> start_view -> first active view -> null), the timer
+// self-cleanup, and the mid-drag deferred render must behave identically for
+// setConfig()-driven and hass-driven structural changes. Both paths are covered here.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -48,21 +46,13 @@ function withMockedNow(fixedMs, fn) {
   }
 }
 
-// ---- previousActiveKey must use the old timing definition,
-// never the new rotation_seconds/slide_seconds a live setConfig() is about
-// to install. ----
+// ---- previousActiveKey must use the old timing, never the rotation_seconds/slide_seconds
+// a live setConfig() is about to install. ----
 
 test("a live rotation_seconds/slide_seconds change preserves the view visible under the old timing", () => {
-  // 3 views -> holdSequence positions = [0,1,2,1], length 4.
-  // OLD (10s hold / 2s slide): segMs=12000, cycleMs=48000. At phaseMs=29000
-  // (segment index 2, well inside its hold, before the flip point at
-  // holdMs+slideMs/2=11000ms into the segment) the visible position is
-  // positions[2] = view index 2.
-  // NEW (3s hold / 1s slide): segMs=4000, cycleMs=16000. At the SAME
-  // absolute instant, phaseMs=29000%16000=13000 -> segment index 3,
-  // subPhase=1000 (before its own flip point at 3500ms) -> positions[3] = 1.
-  // The two configs genuinely disagree on which view is visible at this
-  // instant -- exactly what exposes the bug.
+  // 3 views -> holdSequence [0,1,2,1]. OLD (10s/2s): segMs=12000, at phaseMs=29000 the
+  // visible position is index 2. NEW (3s/1s): segMs=4000, phaseMs=29000%16000=13000 ->
+  // index 1. The two configs disagree at this instant -- which exposes the bug.
   withMockedNow(29000, () => {
     const el = threeViewCard({ rotation_seconds: 10, slide_seconds: 2 });
     assert.equal(el._views.length, 3, "range, scale, extremes");
@@ -77,9 +67,8 @@ test("a live rotation_seconds/slide_seconds change preserves the view visible un
   });
 });
 
-// ---- An in-flight but not yet classified pointer gesture
-// (pointerdown happened, drag threshold never crossed) must not survive a
-// structural rebuild triggered by a pure hass update. ----
+// ---- An in-flight but unclassified pointer gesture (pointerdown, threshold never crossed)
+// must not survive a structural rebuild from a pure hass update. ----
 
 test("a bare pointerdown is invalidated by a hass-driven structural rebuild", () => {
   const el = threeViewCard();
@@ -98,9 +87,7 @@ test("a bare pointerdown is invalidated by a hass-driven structural rebuild", ()
   assert.equal(el._interaction.pointer, null, "the stale pointer-down must be cleared by the structural rebuild, not carried over with pre-rebuild geometry");
   const activeViewAfterRebuild = el._activeView;
 
-  // The same physical touch releasing afterwards must be a safe no-op (the
-  // !this._interaction.pointer guard in _handlePointerUp() short-circuits it) rather
-  // than computing a swipe from stale pre-rebuild geometry.
+  // The touch releasing afterwards must be a safe no-op, not a swipe from stale geometry.
   assert.doesNotThrow(() => el._handlePointerUp({ pointerId: 1, clientX: 100, clientY: 50 }));
   assert.equal(el._activeView, activeViewAfterRebuild, "a pointerup on an already-invalidated pointer must not change _activeView");
   env.cleanup(el);
@@ -117,9 +104,7 @@ test("a bare pointerdown does not block accessibility resync after a hass-driven
     "sensor.r2": mkState("sensor.r2", 23, TEMPERATURE_C),
   });
 
-  // Still 3 views (>=2) after this rebuild -> _applyAutoSlideStyles() must
-  // have run to completion and (re-)armed the a11y sync timer; before the
-  // fix it bailed out early because this._interaction.pointer was still truthy.
+  // Still 3 views after the rebuild, so _applyAutoSlideStyles() must run to completion and re-arm the a11y timer.
   assert.equal(el._views.length, 3);
   assert.notEqual(el._carousel.accessibilityTimerHandle, null, "_scheduleAccessibilitySync() must have re-armed, proving _applyAutoSlideStyles() wasn't blocked by the stale pointer");
   env.cleanup(el);
@@ -131,12 +116,7 @@ test("a live availability cycle preserves a still-existing view without an extra
   const el = threeViewCard();
   assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"]);
   el._activeView = el._views.indexOf("scale");
-  // Freeze the track into manual mode so _currentVisualViewIndex() (which
-  // _renderAll() uses to determine the "previously visible" view) reads
-  // this._activeView deterministically instead of the wall-clock auto-slide
-  // phase -- without this, the real time elapsed between the two hass
-  // updates below could make the actually-visible view drift away from
-  // whatever this._activeView was set to, making the test non-deterministic.
+  // Freeze the track into manual mode so _currentVisualViewIndex() reads this._activeView deterministically, not the wall-clock phase.
   el._updateTrackTransform(false);
 
   // range_entity becomes unavailable -> "range" view disappears.
@@ -148,9 +128,7 @@ test("a live availability cycle preserves a still-existing view without an extra
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"], "range must be gone");
   assert.equal(el._views[el._activeView], "scale", "the still-existing previously-active view must be preserved");
 
-  // The first _renderAll() above re-engaged auto-slide (_applyAutoSlideStyles()
-  // removes "rtc-manual" whenever there's no pending resume) -- re-freeze
-  // before the second update for the same determinism reason as above.
+  // The first _renderAll() re-engaged auto-slide; re-freeze before the second update, same reason.
   el._updateTrackTransform(false);
 
   // range_entity comes back -> "range" reappears.
@@ -165,9 +143,7 @@ test("a live change falls back to the first active view when the previous and st
   el._activeView = el._views.indexOf("range");
   el._updateTrackTransform(false); // deterministic previousActiveKey, see the round-trip test above
 
-  // range_entity AND rooms both drop out in the same update -> "range"
-  // (the previous key) and "extremes" (start_view) are both gone at once;
-  // only "scale" is left.
+  // range_entity and rooms both drop: previous key "range" and start_view "extremes" both gone, only "scale" left.
   el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
   });
@@ -177,12 +153,7 @@ test("a live change falls back to the first active view when the previous and st
 });
 
 test("an available start_view wins over index 0 when the active view disappears", () => {
-  // Deliberately start_view:"extremes", NOT "scale" -- "scale" would be
-  // index 0 of the post-change views list regardless of start_view, which
-  // wouldn't distinguish "start_view was consulted" from "index-0 fallback
-  // happened to land there anyway". "extremes" ends up at index 1, so only
-  // an actual start_view lookup (not a coincidental index-0 match) can
-  // produce it.
+  // start_view:"extremes" not "scale": "scale" would be index 0 anyway, so only a real start_view lookup lands on "extremes".
   const el = threeViewCard({ start_view: "extremes" });
   el._activeView = el._views.indexOf("range");
   el._updateTrackTransform(false); // deterministic previousActiveKey, see the round-trip test above
@@ -198,16 +169,11 @@ test("an available start_view wins over index 0 when the active view disappears"
   env.cleanup(el);
 });
 
-// ---- Dropping to fewer than two active views renders a track-less solo/empty
-// layout (no ".rtc-track" element at all -- see the render template's
-// `data.views.length >= 2 ? <rotator+track> : ...`). _applyAutoSlideStyles()
-// bails out on its very first line when there's no track
-// (`if (!track || ...) return;`), which means it never reaches
-// _scheduleAccessibilitySync() -- the ONLY place that clears
-// this._carousel.accessibilityTimerHandle. A timer armed while >=2 views were active is left
-// with a stale (though harmless once it eventually fires and self-corrects)
-// handle instead of being cleared immediately, violating "Timer nur ab
-// zwei aktiven Views" for the window until it fires. ----
+// ---- Dropping below two active views renders a track-less solo/empty layout (no
+// ".rtc-track"). _applyAutoSlideStyles() returns on its first line with no track, so it
+// never reaches _scheduleAccessibilitySync() -- the only place that clears
+// accessibilityTimerHandle. A timer armed while >=2 views were active must be cleared
+// immediately, not left stale until it fires. ----
 
 test("timers remain safe over a live 2-view -> 1-view -> 2-view cycle", () => {
   const hassTwoViews = mkHass({
@@ -227,22 +193,16 @@ test("timers remain safe over a live 2-view -> 1-view -> 2-view cycle", () => {
   assert.equal(el._carousel.resumeTimerHandle, null, "no resume timer may linger with <2 active views");
   assert.equal(el._carousel.accessibilityTimerHandle, null, "no a11y sync timer may linger with <2 active views");
 
-  // Rooms come back -> 2 views again -> schedule a resume instead of synchronizing
-  // immediately because a non-first rebuild freezes visually first. _a11ySyncTimer
-  // itself only gets
-  // (re-)armed once that scheduled resume actually fires and hands off to
-  // _applyAutoSlideStyles() -- checking that exact hand-off isn't this
-  // test's concern; only scheduling and absence of abandoned timers matter here.
+  // Rooms back -> 2 views: a non-first rebuild freezes first and schedules a resume; the
+  // a11y timer re-arms only when that resume fires. Here only scheduling matters.
   el.hass = hassTwoViews;
   assert.deepEqual(Array.from(el._views), ["scale", "extremes"]);
   assert.notEqual(el._carousel.resumeTimerHandle, null, "a phase-aware resume must be scheduled once >=2 views are active again");
   env.cleanup(el);
 });
 
-// previousActiveKey/_activeView must be reflected in the rendered track, not only
-// preserved as JavaScript bookkeeping. Every non-first, non-empty rebuild freezes
-// visually on the resolved _activeView before scheduling a phase-aware resume; an
-// immediate synchronized animation could otherwise jump to the ambient phase.
+// _activeView must show in the rendered track, not just JS bookkeeping. Every non-first,
+// non-empty rebuild freezes on the resolved _activeView before a phase-aware resume.
 
 test("a non-first structural rebuild freezes visually on the resolved view instead of jumping to the ambient auto-slide phase", () => {
   const el = threeViewCard();
@@ -269,10 +229,8 @@ test("setConfig() leaves a structural rebuild frozen until its phase-aware resum
   env.cleanup(el);
 });
 
-// ---- The pre-config visual snapshot is
-// taken before this._render(false) runs and released AFTER it -- if _render()
-// (or anything it calls) throws and the release is not in a finally, the stash
-// survives and leaks into a later, unrelated hass-driven rebuild. ----
+// ---- The pre-config visual snapshot is released in a finally; if _render() threw and
+// the release were not, the stash would leak into a later hass-driven rebuild. ----
 
 test("the pre-config visual snapshot is released even if _render() throws mid-setConfig()", () => {
   const el = threeViewCard();
@@ -283,10 +241,8 @@ test("the pre-config visual snapshot is released even if _render() throws mid-se
   assert.throws(() => el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range" }), /simulated render failure/, "setConfig() must still propagate the error -- HA's config-validation contract must not be swallowed");
   el._render = originalRender;
 
-  // The snapshot is private to the controller, so the leak is proven by its effect
-  // instead: a later hass-driven structural rebuild must resolve its active view from
-  // what is actually on screen, not from a stale snapshot of a previous config. With
-  // the release outside a finally, the stashed key would win here.
+  // The snapshot is private, so the leak is proven by effect: a later rebuild must resolve
+  // its active view from what is on screen, not a stale snapshot of the previous config.
   const stillMounted = Array.from(el._views);
   el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 23, TEMPERATURE_C),
@@ -300,8 +256,7 @@ test("the pre-config visual snapshot is released even if _render() throws mid-se
 
 test("a hass-driven structural change arriving mid-drag is applied after the drag ends", () => {
   const el = threeViewCard();
-  // A real gesture through the handlers, so the test keeps its meaning without a
-  // writable window into the interaction runtime.
+  // A real gesture through the handlers -- no writable window into the interaction runtime.
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
   rotator.getBoundingClientRect = () => ({ width: 300 });
   el._handlePointerDown({ pointerId: 7, button: 0, isPrimary: true, clientX: 0, clientY: 0, composedPath: () => [rotator] });

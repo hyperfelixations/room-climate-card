@@ -1,20 +1,12 @@
 "use strict";
 
-// What has to be true after the card is taken out of the DOM, and after it comes back.
-//
-// Home Assistant removes and reinserts cards routinely: switching dashboard views,
-// editing a layout, a masonry reflow. Every one of those is a disconnect followed by a
-// reconnect on the SAME element instance, so anything the card was in the middle of
-// survives unless it is explicitly ended.
-//
-// A gesture is exactly such a thing. Before this contract existed, disconnecting during
-// a drag left `pointer` set and `isDragging` true; on reconnect the carousel refused to
-// start (a gesture was "in flight") and every hass update only set the pending-render
-// flag, waiting for a pointerup that could never arrive because the node that would
-// have produced it was gone. The card sat frozen on stale data.
-//
-// The tests below drive the element through real handlers rather than by assigning to
-// internals, so they keep their meaning once the writable test windows are gone.
+// What must be true after the card leaves the DOM, and after it comes back. HA removes and
+// reinserts cards routinely (view switch, layout edit, masonry reflow) — always a
+// disconnect/reconnect on the same instance, so anything in flight survives unless
+// explicitly ended. A gesture is such a thing: before this contract, disconnecting mid-drag
+// left `pointer` set and `isDragging` true, the carousel refused to start on reconnect, and
+// every hass update only set the pending flag — the card froze on stale data. Tests drive
+// the element through real handlers so they survive removal of the writable test windows.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -108,8 +100,7 @@ test("disconnect during a confirmed drag ends the gesture, so a reconnected card
 });
 
 test("disconnect after a bare pointerdown also clears the gesture", () => {
-  // Even an unconfirmed gesture blocks the carousel: isInteracting() is true as soon as
-  // a pointer exists, so applyAutoSlideStyles() bails out on reconnect.
+  // Even an unconfirmed gesture blocks the carousel: isInteracting() is true once a pointer exists.
   const el = threeViewCard();
   el._handlePointerDown(pointerDown(el));
   assert.notEqual(el._interaction.pointer, null);
@@ -142,20 +133,11 @@ test("disconnect while a resume timer is pending clears both, and reconnect re-a
   env.cleanup(el);
 });
 
-// ------------------------------------------- the deferred render across a disconnect --
-//
-// Two obligations end differently at a disconnect, and conflating them is what this
-// group exists to prevent:
-//
-//   the GESTURE      must not survive. Its geometry, its click suppression and its
-//                    timers all refer to a card that is no longer on screen.
-//   the DATA         must. `_hass` already holds the newest state; the card simply had
-//                    not been allowed to show it yet. Forgetting that leaves the card
-//                    displaying a value Home Assistant superseded before the removal,
-//                    for as long as it takes some unrelated update to arrive.
-//
-// The tests below assert the visible value after reconnect with no further hass
-// assignment or explicit `_render()` call; reconnect itself must settle the debt.
+// ---- the deferred render across a disconnect ----
+// Two obligations end differently at a disconnect: the gesture must not survive (its
+// geometry, click suppression and timers refer to an offscreen card), but the data must —
+// `_hass` holds the newest state the card was not yet allowed to show. Tests below assert
+// the visible value after reconnect with no further hass assignment; reconnect settles the debt.
 
 test("a hass update deferred by a drag becomes visible on reconnect, with no further update", () => {
   const el = threeViewCard();
@@ -174,8 +156,7 @@ test("a hass update deferred by a drag becomes visible on reconnect, with no fur
   el.remove();
   env.document.body.appendChild(el);
 
-  // Nothing else happens. Home Assistant has already handed over 30 and has no reason to
-  // send it again; the card owes that render and must pay it here.
+  // Nothing else happens: HA already sent 30 and won't resend; the card owes this render.
   assert.match(
     el.shadowRoot.querySelector(".rtc-avg-value-num").textContent,
     /30/,
@@ -194,8 +175,7 @@ test("the deferred render is paid exactly once, not on every subsequent connect"
   env.document.body.appendChild(el);
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
 
-  // A second connect has nothing left to catch up on: the debt was settled, and the
-  // signature fast path is what makes the repeat free.
+  // A second connect has nothing to catch up on; the signature fast path makes the repeat free.
   let renders = 0;
   const realComputeViewModel = el._computeViewModel.bind(el);
   el._computeViewModel = () => {
@@ -242,8 +222,7 @@ test("a bare pointerdown defers nothing, so a disconnect during one owes nothing
 });
 
 test("a structural update deferred by a drag rebuilds correctly on reconnect", () => {
-  // The deferred update is not always a value change. Losing a STRUCTURAL one leaves the
-  // card with markup for a view composition that no longer applies.
+  // A deferred update can be structural, not just a value — losing it leaves stale view markup.
   const el = threeViewCard();
   assert.deepEqual(Array.from(el._views), ["range", "scale", "extremes"]);
 
@@ -286,8 +265,7 @@ test("a successful setConfig during the disconnect settles the debt by rendering
   el.hass = states(30, 1000);
 
   el.remove();
-  // A live config edit while the card is out of the document renders immediately against
-  // the newest hass, so the earlier debt is already settled by the time it returns.
+  // A live config edit while detached renders against the newest hass, settling the earlier debt.
   el.setConfig({
     entity: "sensor.avg",
     range_entity: "sensor.range",
@@ -337,8 +315,7 @@ test("a render that throws while catching up leaves the debt outstanding", () =>
 });
 
 test("catching up happens after the events and the carousel are wired, not before", () => {
-  // Order matters: the catch-up render can rebuild the whole shadow DOM, and a carousel
-  // started against the OLD view list would then be pointing at markup that is gone.
+  // Order matters: the catch-up render can rebuild the shadow DOM, so the carousel must start after it.
   const el = threeViewCard();
   el._handlePointerDown(pointerDown(el));
   el._handlePointerMove(pointerMove(1, -60));
@@ -427,8 +404,7 @@ test("the render pipeline is not left waiting on a pending flag after a reconnec
 
   el.remove();
   env.document.body.appendChild(el);
-  // Reconnect must settle the deferred render and end the gesture, leaving no update
-  // queued behind an interaction that no longer exists.
+  // Reconnect settles the deferred render and ends the gesture — no update left queued.
   assert.equal(el._interaction.isInteracting(), false);
   el._render(false);
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);

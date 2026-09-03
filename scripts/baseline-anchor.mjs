@@ -1,19 +1,8 @@
-// Prints a single digest over the whole characterization baseline set.
-//
-// The test suite enforces each baseline separately; this provides one content
-// digest for comparing complete baseline sets without relying on timestamps.
-//
-// Recipe: files sorted by relative path, then for each file
-//   <relative path> NUL <file bytes> NUL
-// fed into one SHA-256.
-//
-// Two digests are printed, differing only in the path separator that goes into
-// the hash chain:
-//
-//   posix   forward slashes — the binding, platform-independent value from here
-//           on.
-//   native  this platform's separator, retained for platform-local comparisons;
-//           on POSIX platforms it is identical to posix.
+// Prints one SHA-256 digest over the whole characterization baseline set, for comparing
+// complete sets without relying on timestamps. Recipe: files sorted by relative path, then
+// per file `<relative path> NUL <bytes> NUL`. Two digests differ only in the path separator
+// hashed: `posix` (forward slashes) is the binding platform-independent value; `native`
+// uses this platform's separator and is identical to posix on POSIX.
 
 import crypto from "node:crypto";
 import fs from "node:fs";

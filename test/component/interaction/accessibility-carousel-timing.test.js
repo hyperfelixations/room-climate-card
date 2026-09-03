@@ -1,16 +1,10 @@
 "use strict";
 
-// The visual transition uses cubic-bezier(.45,0,.16,1), under which the
-// SPATIAL/eased progress reaches
-// 50% at only ~35.375% of the slide's time (at 50% time, spatial progress
-// is already ~78.6%). The accessible view must follow whichever view is
-// spatially/visually dominant, not the raw clock -- so this file (and the
-// production flip calculation it tests) therefore uses the EASED
-// midpoint, computed by numerically inverting the same easing curve CSS
-// uses (_timeFractionForEasedProgress()/SLIDE_EASING, see room-climate-card.js).
-//
-// Fixture numbers: holdMs=1000, slideMs=800 -> slideMs * 0.35375 = 283
-// exactly (no floating-point rounding in the assertions below), so
+// The visual transition uses cubic-bezier(.45,0,.16,1): eased/spatial progress reaches 50%
+// at only ~35.375% of slide time. The accessible view follows whichever view is spatially
+// dominant, so this file (and the production flip calc it tests) uses the eased midpoint,
+// from numerically inverting that curve (timeFractionForEasedProgress/SLIDE_EASING).
+// Fixture numbers: holdMs=1000, slideMs=800 -> slideMs*0.35375 = 283 exactly, so
 // flipOffset = holdMs + 283 = 1283.
 
 const test = require("node:test");
@@ -49,12 +43,9 @@ test("_timeFractionForEasedProgress: a point-symmetric easing curve inverts to e
   assert.ok(Math.abs(fraction - 0.5) < 1e-9, `expected exactly 0.5 for a symmetric curve, got ${fraction}`);
 });
 
-// Independent, test-local cross-check of the SAME cubic bezier curve,
-// inverted in the OTHER direction (given a TIME fraction t within a slide
-// transition, what EASED/spatial progress does the curve produce?) -- this
-// is what a browser's own cubic-bezier() timing-function evaluation does.
-// Deliberately not calling into the card's Y->X inversion helper, so the
-// "samples" test below doesn't just confirm the card agrees with itself.
+// Independent test-local cross-check of the same bezier, inverted the other way (time
+// fraction -> eased progress), matching what a browser's cubic-bezier() does. Deliberately
+// not the card's own helper, so the "samples" test isn't the card confirming itself.
 function easedProgressForTimeFraction(easing, t) {
   let lo = 0, hi = 1;
   for (let i = 0; i < 50; i++) {
@@ -71,8 +62,7 @@ function easedProgressForTimeFraction(easing, t) {
 const SLIDE_EASING = { x1: 0.45, y1: 0, x2: 0.16, y2: 1 };
 const timing2 = { positions: [0, 1], holdMs: 1000, slideMs: 800, segMs: 1800, cycleMs: 3600 };
 
-// Samples across a slide transition enforce the spatial rule: the outgoing view
-// remains accessible before the eased midpoint, then the incoming view takes over.
+// The outgoing view stays accessible before the eased midpoint; then the incoming one takes over.
 
 test("_accessibleViewIndexAt: samples across a full slide transition match the independently-computed spatial/eased progress at every 5% step", () => {
   for (let pct = 0; pct <= 100; pct += 5) {
@@ -115,10 +105,8 @@ test("_msUntilNextAccessibilityFlip: complements _accessibleViewIndexAt() -- wai
   }
 });
 
-// ---- Forward, backward, and wrap segments: a 3-view ping-pong cycle
-// (positions=[0,1,2,1]) exercises all
-// three segment kinds -- 0->1 and 1->2 are forward, 2->1 is the backward/
-// interior segment, 1->0 (closing the cycle) is the wrap segment. ----
+// ---- Forward, backward and wrap segments ----
+// positions=[0,1,2,1]: 0->1 and 1->2 forward, 2->1 backward/interior, 1->0 wrap.
 
 const timing3 = { positions: [0, 1, 2, 1], holdMs: 1000, slideMs: 800, segMs: 1800, cycleMs: 7200 };
 
@@ -150,11 +138,8 @@ test("_accessibleViewIndexAt: 3-view ping-pong -- wrap segment back to positions
 // ---- N = 2 to 10 ----
 
 function pingPongPositions(n) {
-  // Mirrors _holdSequence()'s formula (room-climate-card.js) independently,
-  // matching the existing hand-written timing2/timing3 fixtures above --
-  // this test's concern is the FLIP-TIMING logic for varying N, not the
-  // position-sequence generation itself (see hold-sequence.test.js for
-  // that, tested independently).
+  // Mirrors _holdSequence()'s formula independently (position-sequence generation itself
+  // is hold-sequence.test.js's concern; here it's the flip timing for varying N).
   if (n < 2) return [];
   const forward = Array.from({ length: n }, (_, i) => i);
   const backwardInterior = Array.from({ length: Math.max(0, n - 2) }, (_, i) => n - 2 - i);
@@ -192,8 +177,7 @@ test("_currentVisualViewIndex(): a bare element with no track falls back to this
   assert.equal(bare._currentVisualViewIndex(), 0);
 });
 
-// ---- prefers-reduced-motion produces no timer; this
-// suite (only covered, more loosely, by a browser test). ----
+// ---- prefers-reduced-motion arms no timer (also covered, more loosely, by a browser test) ----
 
 test("prefers-reduced-motion: a freshly rendered >=2-view card arms no _a11ySyncTimer", () => {
   const hass = mkHass({
@@ -210,8 +194,7 @@ test("prefers-reduced-motion: a freshly rendered >=2-view card arms no _a11ySync
   }
   assert.equal(reduced._carousel.accessibilityTimerHandle, null, "reduced motion must arm no accessibility-sync timer");
 
-  // Control: the identical config WITHOUT reduced motion does arm one --
-  // proves the assertion above is actually meaningful, not just vacuously true.
+  // Control: the same config without reduced motion does arm one.
   const normal = env.createCard({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, hass);
   assert.notEqual(normal._carousel.accessibilityTimerHandle, null, "control: without reduced motion, the same config must arm the timer");
 

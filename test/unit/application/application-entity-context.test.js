@@ -1,16 +1,11 @@
 "use strict";
 
-// Direct unit tests for entity parsing and measurement-context resolution.
-//
-// Where the card decides what ONE NUMBER is: which device class or unit names its metric
-// kind, what it is worth once converted to the unit the card computes in, whether it is
-// physically possible, and whether it is a measurement at all rather than a sentinel. Then
-// one step up — which of several such answers arbitrates the card's metric kind, and which
-// rooms may be averaged into it.
-//
-// The boundary to application-domain-view.test.js next door: this file stops at the moment
-// the participating set is settled. What that set MEANS — colours, summary, active views —
-// is that file's subject.
+// Direct unit tests for entity parsing and measurement-context resolution: which device
+// class or unit names a number's metric kind, its canonical value, whether it is physically
+// possible and a measurement at all, and then which of several such answers arbitrates the
+// card's kind and which rooms may be averaged in.
+// Boundary: this file stops when the participating set is settled; what that set means
+// (colours, summary, active views) is application-domain-view.test.js.
 
 process.env.TZ = "UTC";
 
@@ -31,8 +26,7 @@ function st(state, attributes) {
   return { state: String(state), attributes: attributes || {} };
 }
 
-// A normalized-config stand-in: only the fields the pipeline reads, so a test does
-// not have to run the whole normalizer to exercise one decision.
+// A normalized-config stand-in: only the fields the pipeline reads.
 function cfg(overrides = {}) {
   return {
     entity: "sensor.avg",
@@ -86,8 +80,6 @@ test("a Fahrenheit reading is canonicalized, not passed through", () => {
 });
 
 test("a MISSING unit is as unusable as an unknown one — never assumed canonical", () => {
-  // The asymmetry this replaced (missing -> canonical, wrong -> rejected) was the
-  // single most dangerous shortcut in the old pipeline.
   const missing = entityModel.buildEntityModel({ "sensor.a": st(21.5, TEMPERATURE) }, cfg(), "sensor.a", "primary");
   assert.equal(missing.metricKind, "temperature", "the kind is still resolved, for title and icon");
   assert.equal(missing.validUnit, false);
@@ -137,18 +129,15 @@ test("physical validity runs after canonicalization, not before", () => {
   assert.equal(negative.validPhysical, false);
   // A negative humidity is impossible.
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-5, RH) }, cfg(), "sensor.a", "primary").validPhysical, false);
-  // 120 °F is 48.9 °C — perfectly possible, and would have been rejected if the
-  // check had run against the raw value with Celsius limits.
+  // 120 °F is 48.9 °C — possible; rejected only if the check ran against the raw value.
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(120, F) }, cfg(), "sensor.a", "primary").validPhysical, true);
-  // -400 °F is -240 °C, which is cold beyond anything real and still above absolute
-  // zero: the limit has to be converted too, or this would be rejected.
+  // -400 °F is -240 °C, above absolute zero: the limit is converted too.
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-400, F) }, cfg(), "sensor.a", "primary").validPhysical, true);
   assert.equal(entityModel.buildEntityModel({ "sensor.a": st(-500, F) }, cfg(), "sensor.a", "primary").validPhysical, false);
 });
 
 test("validity is checked leniently, so a foreign-kind probe cannot throw", () => {
-  // An outdoor temperature profile is configured; an incidental humidity room is
-  // still probed for its own kind before the kind filter runs.
+  // An incidental humidity room is probed for its own kind before the kind filter runs.
   const config = cfg({ classification: { source: "profile", profile: "outdoor", custom: null } });
   assert.doesNotThrow(() => entityModel.buildEntityModel({ "sensor.h": st(55, RH) }, config, "sensor.h", "room"));
 });
@@ -259,9 +248,8 @@ test("an unavailable room can never out-vote an available one", () => {
 });
 
 test("mixed metric kinds produce a defined state, not a majority winner", () => {
-  // The primary declares nothing — no device_class, no unit — so there is genuinely
-  // nobody to settle the disagreement. That is what makes this a mixed state rather
-  // than an arbitrated one; the test below is the same rooms with an arbiter.
+  // The primary declares nothing (no device_class, no unit), so nobody settles the
+  // disagreement — a mixed state, not an arbitrated one.
   const states = {
     "sensor.avg": st("unavailable", {}),
     "sensor.r1": st(21, C),
@@ -295,9 +283,9 @@ test("the mixed diagnosis comes first, before any unusable-unit entries", () => 
 });
 
 test("an unreadable primary that DECLARES a kind settles a disagreement its rooms cannot", () => {
-  // BUG-10's shape: two thermometers, one hygrometer, and a primary whose state cannot be
-  // read. `device_class` is a statement about the sensor, so it outlives the outage and
-  // says what this card is about — and the rooms of that kind carry the value.
+  // Two thermometers, one hygrometer, and a primary whose state cannot be read. Its
+  // `device_class` outlives the outage and says what the card is about; the rooms of that
+  // kind carry the value.
   const states = {
     "sensor.avg": st("unavailable", C),
     "sensor.r1": st(21, C),
@@ -314,8 +302,8 @@ test("an unreadable primary that DECLARES a kind settles a disagreement its room
     assert.equal(context.sourceKind, "roomConsensus", unusable);
     assert.equal(context.averageSource.canonicalValue, 22, unusable);
     assert.deepEqual(context.participatingRooms.map((r) => r.entityId), ["sensor.r1", "sensor.r2"], unusable);
-    // The foreign room is excluded by name, in configuration order, exactly as it would be
-    // if the primary were readable — not swept into one card-wide "mixed" verdict.
+    // The foreign room is excluded by name in configuration order, not swept into a
+    // card-wide "mixed" verdict.
     assert.deepEqual(context.diagnostics, [
       { code: "excluded_foreign_metric_kind", entityId: "sensor.h", metricKind: "humidity" },
     ], unusable);
@@ -323,9 +311,8 @@ test("an unreadable primary that DECLARES a kind settles a disagreement its room
 });
 
 test("a declaration with no room of its own kind leaves the card its kind and no value", () => {
-  // The rooms are perfectly usable and simply not what this card measures. Which is the
-  // same answer a readable primary gives, and the reason the two no longer disagree about
-  // what the card is: only the VALUE depends on availability.
+  // The rooms are usable and simply not what this card measures — the same answer a readable
+  // primary gives. Only the value depends on availability.
   const context = measurementContext.resolveMeasurementContext(
     { "sensor.avg": st("unavailable", C), "sensor.h": st(55, RH) },
     cfg({ rooms: [room("sensor.h")] })
@@ -338,9 +325,8 @@ test("a declaration with no room of its own kind leaves the card its kind and no
 });
 
 test("an entity Home Assistant does not know declares nothing, so the rooms still decide", () => {
-  // The difference between an outage and a typo, and it is the one the fix must not blur:
-  // an id that is absent from hass.states is a property of the configuration, and there is
-  // nothing there to arbitrate with.
+  // An id absent from hass.states is a property of the configuration, with nothing there to
+  // arbitrate with — unlike an outage.
   const context = measurementContext.resolveMeasurementContext(
     { "sensor.r1": st(21, C), "sensor.h": st(55, RH) },
     cfg({ entity: "sensor.nowhere", rooms: [room("sensor.r1"), room("sensor.h")] })
@@ -359,10 +345,9 @@ test("compatible mixed units are averaged canonically", () => {
 });
 
 test("the consensus is the mean, whether or not its inputs can be added first", () => {
-  // ONE ANSWER, TWO ROADS TO IT. The ordinary road sums and divides, and it must keep
-  // producing the exact double it always did — anything else would move every average on
-  // every card by a bit. The other road exists because the sum can leave the number line
-  // while the mean stays on it, and it is checked here against the value written by hand.
+  // Two roads to one answer: the ordinary road sums and divides and must keep producing the
+  // exact double it always did; the other exists because the sum can overflow while the mean
+  // stays finite.
   const meanOf = (rooms) => {
     const states = Object.fromEntries(rooms.map((value, index) => [`sensor.r${index}`, st(value, C)]));
     const config = cfg({ entity: null, rooms: rooms.map((_, index) => room(`sensor.r${index}`)) });

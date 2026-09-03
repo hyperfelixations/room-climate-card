@@ -1,24 +1,13 @@
 "use strict";
 
-// The contract between what a renderer EMITS and what a patcher can UPDATE.
-//
-// A DOM patcher can only change nodes that exist. Every optional part of the markup —
-// a footer that only appears with rooms, the two extrema markers, a band and its
-// label — is therefore a structural decision: when its presence changes, patching is
-// not enough and the card has to be rebuilt.
-//
-// Before this contract existed, that was expressed as a hand-maintained list of
-// booleans in _render(): the chip grid, the view key list, the collapsed state. Any
-// optional part NOT on that list was simply missed. The reproduction below is the
-// cheapest way to see it: with show_rooms:false the chip grid is absent either way,
-// so a second room becoming valid changed nothing on the list — while the scale
-// view's footer and its extrema markers genuinely had to appear.
-//
-// The fix is not another boolean. Each view now declares its own structure signature
-// over exactly the optional parts it does NOT reconcile itself, the card shell
-// composes those with its own, and _render() compares one value. A new view, or a new
-// optional element in an existing view, extends that view's own signature — index.js
-// never learns about it.
+// The contract between what a renderer emits and what a patcher can update. A DOM patcher
+// only changes nodes that exist, so every optional part of the markup (a rooms-only footer,
+// the two extrema markers, a band and its label) is a structural decision: when its
+// presence changes, the card must be rebuilt, not patched. Each view declares its own
+// structure signature over the optional parts it does not reconcile itself; the shell
+// composes those with its own, and _render() compares one value. The reproduction: with
+// show_rooms:false the chip grid is absent either way, so a second valid room changed
+// nothing on the old boolean list — while the scale footer and extrema markers had to appear.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -37,9 +26,7 @@ test.after(() => {
 
 const C = TEMPERATURE_C;
 
-// show_rooms:false is what isolates the bug: it pins the chip grid to "absent" in both
-// states, so the only thing that changes when the second room becomes valid is inside
-// the scale view.
+// show_rooms:false pins the chip grid to "absent" in both states, isolating the change to the scale view.
 function config(overrides = {}) {
   return {
     entity: "sensor.avg",
@@ -53,8 +40,7 @@ function config(overrides = {}) {
   };
 }
 
-// A real attribute-only change always bumps last_updated; two mkState() calls in the
-// same millisecond would otherwise collide and be treated as a no-op update.
+// last_updated is bumped so two mkState() calls in the same ms don't collide as a no-op update.
 function bumped(states, offsetMs) {
   if (offsetMs) {
     for (const state of Object.values(states)) {
@@ -207,9 +193,8 @@ test("hide_footer keeps the footer absent while the extrema markers still appear
 });
 
 test("markers:all reconciles its room markers without a rebuild", () => {
-  // The counterpart to the rule: a part a view DOES reconcile must stay out of the
-  // signature, or every room appearing would cost a full rebuild and reset the
-  // carousel.
+  // The counterpart: a part a view reconciles itself must stay out of the signature, or
+  // every room appearing rebuilds and resets the carousel.
   const el = env.createCard(
     config({ show_rooms: true, views: [{ type: "scale", options: { markers: "all" } }] }),
     twoValidRooms()

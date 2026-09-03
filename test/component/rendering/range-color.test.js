@@ -1,10 +1,9 @@
 "use strict";
 
-// Daily minimum/maximum cards must be colored
-// from their own numeric value, never from the range_entity's own current
-// value_color/value_level attributes (which describe its *current* reading,
-// not the historical min/max being displayed) — otherwise both cards could
-// wrongly inherit one shared, unrelated color.
+// Daily minimum/maximum cards are coloured from their own numeric value, never from the
+// range_entity's current value_color/value_level (which describe its current reading, not
+// the historical min/max shown) — otherwise both cards could inherit one shared, unrelated
+// colour.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

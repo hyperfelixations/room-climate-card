@@ -1,31 +1,15 @@
 "use strict";
 
-// THE ONE MECHANIC, AND WHAT IT IS NOT ALLOWED TO DO.
-//
-// Three places on the card paint a palette colour at full strength on a tint of ITSELF: the
-// status pill, the header icon and a room chip's direction mark. They share one way of being
-// painted, so the adjustment is worked out ONCE and applied to all three unchanged — this file
-// is about that one computation. That the three actually receive the same answer is a question
-// about the assembled card and lives in test/component/rendering/tone-and-chip-legibility.test.js.
-//
-// The invariants below are the whole specification, and each one has a case behind it rather
-// than a hypothesis:
-//
-//   hue never moves          the colour must still be the colour the marker shows
-//   both directions, thrice  lighter and darker, more and less saturated, thinner and
-//                            stronger tint — the answer depends on the colour, not on a rule
-//                            of thumb about which way to go
-//   nothing already fine     a comfortable colour comes back by identity, so a card that never
-//                            had a problem is bit for bit what it was
-//   no reaching for contrast the caps exist because the cheapest way to pass any threshold is
-//                            near-black text on an opaque fill, and that is not this card
-//   a margin, not a boundary the floor is the role's own separation; the answer clears a
-//                            target ABOVE it, so it does not sit where "passes" and "is
-//                            comfortable to read" part company
-//
-// Every colour below is one an actual palette produces. The mechanic runs AFTER the palette
-// adaptation, so a colour that reaches it has already been made readable as a marker — feeding
-// it raw ramp ends would test a case the card cannot present.
+// The tint recipe: the status pill, header icon and chip direction mark each paint a palette
+// colour on a tint of itself, so the legibility adjustment is computed once and applied to
+// all three. This file is about that one computation. Its invariants: hue never moves;
+// lightness, chroma and tint move in whichever direction is the smaller answer; a
+// comfortable colour comes back by identity; caps forbid reaching for contrast; the answer
+// clears a target above the floor, not the floor itself. Every colour below is one a real
+// palette produces after adaptation.
+// Boundary: that the three places receive the same answer is
+// test/component/rendering/tone-and-chip-legibility.test.js. See interne Doku §5 „Die
+// Transformation" and „Die Darstellungsmechanik".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -55,8 +39,8 @@ function separationOf(recipe, paletteColor, card) {
 }
 
 test("the hue never moves, on any colour, on either theme", () => {
-  // The hard invariant. A repair that bends the hue has not repaired the pill, it has replaced
-  // the colour — and the marker beside it would still be the old one.
+  // A repair that bends the hue has replaced the colour, and the marker beside it is still
+  // the old one.
   const hues = [];
   for (const card of [LIGHT, DARK]) {
     for (const hex of ["#FFFF00", "#FFD700", "#00FF00", "#0020A3", "#008080", "#FF1493", "#B7B7B7", "#FFA500"]) {
@@ -64,23 +48,21 @@ test("the hue never moves, on any colour, on either theme", () => {
       if (recipe.ink === hex) continue;
       const before = oklch.hexToOklch(hex);
       const after = oklch.hexToOklch(recipe.ink);
-      // Achromatic colours have no hue to preserve — their angle is rounding noise, and both
-      // ends of the comparison would be noise.
+      // Achromatic colours have no hue to preserve.
       if (before.chroma < 0.01 || after.chroma < 0.01) continue;
       hues.push([hex, card, Math.abs(after.hue - before.hue)]);
     }
   }
   assert.ok(hues.length >= 6, `only ${hues.length} colours moved at all`);
   for (const [hex, card, drift] of hues) {
-    // The round trip through Oklch and back to eight-bit channels is exact to well under a
-    // degree; anything larger is a hue that was deliberately moved.
+    // The Oklch round trip is exact to well under a degree; more is a deliberate move.
     assert.ok(drift < 1, `${hex} on ${card} drifted ${drift.toFixed(2)}° of hue`);
   }
 });
 
 test("lightening wins where lightening is the smaller move", () => {
-  // `palette: yellow` at its deep end on the dark theme: a dark olive on near-black. There is
-  // nowhere darker to go that helps, and the answer goes up.
+  // `palette: yellow` at its deep end on the dark theme, a dark olive on near-black: nowhere
+  // darker helps, so the answer goes up.
   const recipe = tone.legibleTintRecipe("#686800", DARK);
   const before = oklch.hexToOklch("#686800");
   const after = oklch.hexToOklch(recipe.ink);
@@ -88,8 +70,8 @@ test("lightening wins where lightening is the smaller move", () => {
 });
 
 test("darkening wins where darkening is the smaller move", () => {
-  // The same palette at its own middle on the light theme, which is the case the supervisor
-  // reported: bright yellow text on a pale yellow tint over a white card.
+  // The same palette at its middle on the light theme: bright yellow text on a pale yellow
+  // tint over a white card.
   const recipe = tone.legibleTintRecipe("#DFDF00", LIGHT);
   const before = oklch.hexToOklch("#DFDF00");
   const after = oklch.hexToOklch(recipe.ink);
@@ -97,8 +79,8 @@ test("darkening wins where darkening is the smaller move", () => {
 });
 
 test("saturation moves in whichever direction is part of the smaller answer", () => {
-  // Both directions occur, and neither is a rule: pure yellow loses chroma on the way down
-  // because the gamut has none to give at that lightness, and a washed-out yellow gains it.
+  // Both directions occur: pure yellow loses chroma going darker (the gamut has none to give
+  // there), a washed-out yellow gains it.
   const deeper = oklch.hexToOklch(tone.legibleTintRecipe("#FFFF00", LIGHT).ink);
   assert.ok(deeper.chroma < oklch.hexToOklch("#FFFF00").chroma, "pure yellow kept its chroma");
 
@@ -110,16 +92,14 @@ test("the tint moves in both directions too, and thinning it is not the default"
   const thinner = tone.legibleTintRecipe("#FDFE5B", LIGHT);
   assert.ok(thinner.tintFactor < 1, `expected a thinner tint, got ${thinner.tintFactor}`);
 
-  // Upwards is the one that looks like a mistake and is not: with the ink moved away from the
-  // colour, a STRONGER tint of the original colour is further from the ink, not closer.
+  // Upwards is not a mistake: with the ink moved away from the colour, a stronger tint of the
+  // original colour is further from the ink.
   const stronger = tone.legibleTintRecipe("#00001B", DARK);
   assert.ok(stronger.tintFactor > 1, `expected a stronger tint, got ${stronger.tintFactor}`);
 
-  // And it is not reached for first. Over a whole ramp on the light theme the tint stays at
-  // its designed weight far more often than it moves — the pill keeps the soft fill the card
-  // is supposed to have, and the ink does the work.
-  // The ramp `palette: yellow` actually produces on a white card, after the palette
-  // adaptation has already made its steps readable as markers.
+  // The tint is not reached for first: over a ramp it stays at its designed weight more often
+  // than it moves, and the ink does the work. This is `palette: yellow` on a white card,
+  // after palette adaptation has made its steps readable as markers.
   const ramp = ["#A3A57F", "#C7C96C", "#ECED44", "#FFFF00", "#DFDF00", "#C1C100", "#A3A300", "#858500", "#686800"];
   const untouched = ramp.filter((hex) => tone.legibleTintRecipe(hex, LIGHT).tintFactor === 1).length;
   assert.ok(untouched >= ramp.length / 2, `the tint moved on ${ramp.length - untouched} of ${ramp.length}`);
@@ -134,8 +114,7 @@ test("a colour that is already comfortable comes back untouched", () => {
 });
 
 test("with nothing to measure against, nothing is claimed", () => {
-  // Every caller that has no surface — and there are several, including the whole render path
-  // before the card has been painted once.
+  // Several callers have no surface, including the render path before the first paint.
   assert.deepEqual({ ...tone.legibleTintRecipe("#FFFF00", null) }, { ink: "#FFFF00", tintFactor: 1 });
   assert.deepEqual({ ...tone.legibleTintRecipe(null, LIGHT) }, { ink: null, tintFactor: 1 });
 });
@@ -158,9 +137,8 @@ test("it clears a margin above the floor rather than sitting on it", () => {
 });
 
 test("it does not reach for contrast it was not asked for", () => {
-  // The trivial answer to every legibility question is black text on an opaque fill. The caps
-  // are what forbid it, and this is the assertion that they are doing so: nothing lands at the
-  // ends of the lightness range, and no tint is taken past what the search may spend.
+  // The trivial answer to legibility is black text on an opaque fill; the caps forbid it.
+  // Nothing lands at the ends of the lightness range, and no tint exceeds the search budget.
   const search = tone.TINT_SEARCH;
   const maxFactor = 1 + search.tintCapUp * search.tintStep;
   const minFactor = Math.max(0, 1 - search.tintCapDown * search.tintStep);
@@ -169,9 +147,7 @@ test("it does not reach for contrast it was not asked for", () => {
       const recipe = tone.legibleTintRecipe(hex, card);
       const before = oklch.hexToOklch(hex);
       const after = oklch.hexToOklch(recipe.ink);
-      // The tolerance is the gamut round trip, not slack in the cap: oklchToHex() resolves an
-      // out-of-gamut request by pulling chroma in at fixed lightness and hue, and the eight-bit
-      // result reads back a thousandth or two away from what was asked for.
+      // The tolerance is the gamut round trip, not slack in the cap.
       assert.ok(
         Math.abs(after.lightness - before.lightness) <= search.lightnessCap * search.lightnessStep + 0.01,
         `${hex} on ${card} moved ${(after.lightness - before.lightness).toFixed(3)} of lightness`
@@ -201,8 +177,8 @@ test("a table is built once for a palette and reused by value", () => {
 });
 
 test("a colour nobody prepared a recipe for is left exactly as it is", () => {
-  // A tier that named its own hex, an integration's value_color, a caller with no surface. The
-  // card leaves colours it was GIVEN alone, here as everywhere else.
+  // A tier's own hex, an integration's value_color, a caller with no surface: the card leaves
+  // colours it was given alone.
   const surface = roles.surfaceOf([LIGHT], "#212121");
   const recipes = tone.tintRecipesFor(["#FFFF00"], surface);
   assert.deepEqual({ ...tone.tintRecipeFor(recipes, "#123456") }, { ink: "#123456", tintFactor: 1 });
@@ -210,8 +186,7 @@ test("a colour nobody prepared a recipe for is left exactly as it is", () => {
 });
 
 test("the whole table for a palette costs a few milliseconds, once", () => {
-  // It runs once per palette and surface and never during a later render, so a few
-  // milliseconds is the right budget — but "a few" has to be a number somebody checked.
+  // Runs once per palette and surface, never during a later render.
   const surface = roles.surfaceOf(["#808080"], null);
   const ramp = ["#3A8B8B", "#4A9B9B", "#5AABAB", "#008080", "#007070", "#006060", "#005050", "#B7B7B7", "#FFFF00", "#0020A3", "#FF1493", "#7F8792"];
   const started = process.hrtime.bigint();

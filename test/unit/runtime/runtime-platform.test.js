@@ -1,14 +1,10 @@
 "use strict";
 
-// Direct tests for resize ownership and the browser-platform boundary.
-//
-// These tests are separate from runtime-controllers.test.js because they own browser
-// capability degradation, realm-bound handles, ResizeObserver and fonts-ready lifecycle.
-// Carousel integration appears here only where it proves that the platform clock is used.
-//
-// None of the tests below wait for anything. They set a millisecond and assert an
-// exact answer. The real browser test remains the integration proof; this is the
-// proof of the logic.
+// Direct tests for resize ownership and the browser-platform boundary: browser-capability
+// degradation, realm-bound handles, ResizeObserver and fonts-ready lifecycle. Carousel
+// integration appears only where it proves the platform clock is used. Nothing waits — a
+// millisecond is set and an exact answer asserted; the real browser test is the integration
+// proof. See interne Doku §4 „Platform-Adapter-Vertrag" and §5 „Resize- und Fonts-Ready-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -38,9 +34,8 @@ function makeTrack(jsdomWindow) {
   return document.querySelector(".rtc-track");
 }
 
-// A controller wired to a fake platform and a real (jsdom) track. `viewCount` decides
-// how many .rtc-view nodes exist; the timing values are the ones a card would resolve
-// from its configuration.
+// A controller wired to a fake platform and a real (jsdom) track. `viewCount` decides how
+// many .rtc-view nodes exist; the timing values are what a card resolves from its config.
 function makeController({
   viewCount = 3,
   rotationSeconds = 12,
@@ -149,10 +144,8 @@ test("the fonts subscription happens once per instance and honours a disconnecte
 });
 
 test("a platform without the Fonts API is simply skipped, and one with it still measures", async () => {
-  // Both halves, deliberately. The negative case on its own is a test that also passes when
-  // measureOnceFontsReady() has stopped doing anything at all — it asserted only that nothing
-  // happened, which is exactly what a broken implementation also achieves. Pairing it with the
-  // positive case is what makes "skipped" mean skipped rather than dead.
+  // Both halves: the negative case alone also passes if measureOnceFontsReady() does nothing
+  // at all, so the positive case is what makes "skipped" mean skipped rather than dead.
   let measuredWithout = 0;
   const without = resizeRuntime.createResizeRuntime({
     platform: createFakePlatform({ fontsReady: null }),
@@ -186,8 +179,8 @@ test("the browser adapter resolves its realm on every call, never at constructio
   assert.notEqual(handleInFirst, null);
   platform.clearTimeout(handleInFirst);
 
-  // The card is adopted into another document. An adapter that had captured the first
-  // realm would keep scheduling there.
+  // The card is adopted into another document; an adapter that captured the first realm
+  // would keep scheduling there.
   current = second.window.document;
   const event = platform.createEvent("hass-action", { bubbles: true, composed: true });
   assert.ok(event instanceof second.window.Event, "the event belongs to the CURRENT realm");
@@ -197,16 +190,14 @@ test("the browser adapter resolves its realm on every call, never at constructio
 test("the browser adapter degrades rather than throwing when a capability is missing", () => {
   const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
   const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
-  // A bare jsdom has no ResizeObserver, no matchMedia and no Fonts API — and, without
-  // pretendToBeVisual, reports itself as hidden. The adapter must report each of those
-  // faithfully rather than throwing or inventing a value.
+  // A bare jsdom has no ResizeObserver, matchMedia or Fonts API and reports itself hidden;
+  // the adapter reports each faithfully rather than throwing or inventing a value.
   assert.equal(platform.createResizeObserver(() => {}), null);
   assert.equal(platform.prefersReducedMotion(), false, "no matchMedia means no stated preference");
   assert.equal(platform.fontsReady(), null);
   assert.equal(platform.isDocumentHidden(), jsdom.window.document.hidden, "visibility is reported, not assumed");
   assert.equal(platform.readTranslateXPx(null), null);
-  // No Web Animations API, no element, and an element that has one but is running
-  // nothing: three different ways of "cannot be read", all one answer.
+  // No WAAPI, no element, and an element running nothing: three ways of "cannot be read".
   assert.equal(platform.readAnimationPhase(null, "rtc-track-slide"), null);
   assert.equal(platform.readAnimationPhase({}, "rtc-track-slide"), null);
   assert.equal(platform.readAnimationPhase({ getAnimations: () => [] }, "rtc-track-slide"), null);
@@ -224,8 +215,7 @@ test("the browser adapter reads the named animation's own phase and ignores ever
   };
   assert.deepEqual(platform.readAnimationPhase(element, "rtc-track-slide"), { phaseMs: 1150, cycleMs: 4600 });
 
-  // A finished or not-yet-started animation reports a null progress. There is no phase
-  // to read, so there is nothing to prefer over the wall clock.
+  // A finished or not-yet-started animation reports a null progress: no phase to read.
   const idle = {
     getAnimations: () => [
       { animationName: "rtc-track-slide", effect: { getComputedTiming: () => ({ progress: null, duration: 4600 }) } },
@@ -249,10 +239,9 @@ test("the browser adapter reads the named animation's own phase and ignores ever
   assert.equal(platform.readAnimationPhase(throwing, "rtc-track-slide"), null, "a throwing realm degrades");
 });
 
-// An animation clock is frozen for the whole of any one task and only advances between
-// rendered frames. Read inside requestAnimationFrame that is exactly right; read from
-// the timer callback that drives the accessibility sync it is as old as the last paint.
-// These build that situation by hand: a standing timeline and a performance clock that
+// An animation clock is frozen for the whole of one task and only advances between rendered
+// frames — inside requestAnimationFrame it is current, from a timer callback it is as old as
+// the last paint. These fixtures build a standing timeline against a performance clock that
 // has moved on.
 function animatedElement({ progress, duration, playState = "running", animationTimeMs, documentTimeMs, nowMs }) {
   const animation = {
@@ -285,8 +274,7 @@ test("the browser adapter reports the animation phase now, not the phase of the 
   // The same reading taken inside a frame, where the two clocks agree: nothing to add.
   assert.deepEqual(read({ nowMs: 8000 }), { phaseMs: 1150, cycleMs: 4600 });
 
-  // A paused animation's clock stands still on purpose. Adding wall-clock time to it
-  // would invent a position the track is demonstrably not at.
+  // A paused animation's clock stands still; adding wall-clock time would invent a position.
   assert.deepEqual(read({ playState: "paused" }), { phaseMs: 1150, cycleMs: 4600 });
   assert.deepEqual(read({ playState: "finished" }), { phaseMs: 1150, cycleMs: 4600 });
 
@@ -309,26 +297,24 @@ test("the browser adapter reports the animation phase now, not the phase of the 
 });
 
 test("the accessibility state is re-derived on the frame that actually starts the animation", () => {
-  // Declaring `animation` and `animation-delay` does not create an animation; the frame
-  // that applies them does. Anything the card decides in between has only the wall clock
-  // to go on — and the wall clock is precisely what the running animation will lag by
-  // however long that frame takes.
+  // Declaring `animation` does not create one; the frame that applies it does. Anything the
+  // card decides in between has only the wall clock, which the running animation then lags by
+  // however long that frame took.
   const platform = createFakePlatform();
   const { controller, track, views } = makeController({ rotationSeconds: 1, slideSeconds: 0.15, platform });
   const cycleMs = controller.timing().cycleMs;
   const inertFlags = () => views.map((view) => view.hasAttribute("inert"));
 
-  // Wall clock at phase 4550: past the flip in the cycle's last segment, so the wall
-  // clock says the accessible view is already view 0.
+  // Wall clock at phase 4550: past the flip in the last segment, so it says the accessible
+  // view is already view 0.
   platform.setNow(Math.ceil(platform.now() / cycleMs) * cycleMs + 4550);
   controller.applyAutoSlideStyles();
   assert.deepEqual(inertFlags(), [false, true, true], "with no animation to ask, the wall clock is all there is");
   assert.notEqual(controller.animationStartFrameHandle, null, "and a frame must be booked to ask again");
 
-  // One frame later the animation exists — and it is 60ms behind the wall clock, which
-  // puts it before that flip and on view 1. Without this second pass the card would hold
-  // the wrong accessible view until the NEXT flip, because the timer was armed from the
-  // same wrong phase.
+  // One frame later the animation exists and is 60ms behind the wall clock, putting it
+  // before that flip and on view 1. Without this second pass the card holds the wrong
+  // accessible view until the next flip.
   track.__animationPhase = { phaseMs: 4490, cycleMs };
   platform.flushFrames();
   assert.deepEqual(inertFlags(), [true, false, true], "the animation's own phase wins as soon as there is one");
@@ -345,9 +331,8 @@ test("the animation-start frame is cancelled with everything else the controller
 });
 
 test("a flip that is already due is not deferred by the re-arm floor", () => {
-  // The card's own defaults: holdMs 1000, slideMs 150, so a segment is 1150ms and the
-  // accessible view flips 1053.06ms into it. Park the clock ~1ms before that boundary —
-  // the exact situation a timer firing a hair early creates.
+  // holdMs 1000, slideMs 150: a segment is 1150ms and the accessible view flips 1053.06ms
+  // into it. Park the clock ~1ms before that boundary, as a timer firing a hair early does.
   const platform = createFakePlatform();
   const { controller, views } = makeController({ rotationSeconds: 1, slideSeconds: 0.15, platform });
   const cycleMs = controller.timing().cycleMs;
@@ -358,10 +343,8 @@ test("a flip that is already due is not deferred by the re-arm floor", () => {
   controller.applyAutoSlideStyles();
   assert.deepEqual(inertFlags(), [false, true, true], "before the boundary the first view is still the accessible one");
 
-  // The floor may round the wait up, but only to the shortest delay a browser will
-  // actually schedule. Anything longer is a due flip held back: at the previous 50ms
-  // this advance left the DOM on the outgoing view, which is precisely how the
-  // attributes fell ~92ms behind the track on CI.
+  // The floor rounds the wait up only to the shortest delay a browser will schedule;
+  // anything longer holds back a due flip.
   platform.advance(5);
   assert.deepEqual(inertFlags(), [true, false, true], "the flip lands within a schedulable delay, not a twentieth of a second");
 });
@@ -393,11 +376,8 @@ test("a detached document leaves the adapter inert instead of throwing", () => {
 
 // -------------------------------------------------- realm-bound lifetimes ----
 //
-// The distinction the platform contract has to make: a NEW capability comes from the
-// CURRENT realm, but an EXISTING handle must be cancelled in the realm that created it.
-// A timer id is only meaningful to the window that issued it — cancelling it against a
-// different window either does nothing (leaving a callback to fire into an adopted
-// card) or cancels an unrelated timer that happens to share the number there.
+// A new capability comes from the current realm, but an existing handle must be cancelled in
+// the realm that created it: a timer id is only meaningful to the window that issued it.
 
 function twoRealms() {
   const first = new JSDOM("<!doctype html><html><body><div id='host'></div></body></html>", { pretendToBeVisual: true });
@@ -440,8 +420,8 @@ test("handles created after adoption belong to the new realm and are untouched b
   let fired = 0;
   const afterAdoption = platform.setTimeout(() => (fired += 1), 5);
 
-  // Cancelling the OLD handle must not disturb the new one, even though a naive
-  // implementation could have handed out the same numeric id in both realms.
+  // Cancelling the old handle must not disturb the new one, even if both realms handed out
+  // the same numeric id.
   platform.clearTimeout(beforeAdoption);
   await new Promise((resolve) => second.window.setTimeout(resolve, 40));
   assert.equal(fired, 1, "the new realm's timer must still have fired");
@@ -523,10 +503,9 @@ test("a disconnected card is not measured when its fonts finally land", async ()
 
 // ------------------------------------------- fonts-ready across a disconnect ----
 //
-// The web font finishing loading is the one measurement trigger that is neither a data
-// change nor a resize, and it fires exactly once per document. If that moment lands
-// while the card is out of the DOM, measuring is impossible — and remembering only "we
-// already subscribed to this promise" loses the measurement for good.
+// The web font finishing loading is a measurement trigger that is neither a data change nor
+// a resize, and it fires once per document. If it lands while the card is out of the DOM,
+// remembering only "already subscribed" loses the measurement.
 
 function fontsRuntime({ noResizeObserver = false } = {}) {
   const platform = createFakePlatform({ noResizeObserver });
@@ -629,8 +608,8 @@ test("a superseded source that had already deferred does not measure after the s
   await Promise.resolve();
   assert.equal(runtime.resize.fontsStateForCurrentSource(), "deferred");
 
-  // Adopted into another document while the debt was outstanding: that debt belonged to
-  // a document the card has left, so it is dropped rather than paid in the new one.
+  // Adopted while the debt was outstanding: it belonged to a document the card has left, so
+  // it is dropped rather than paid in the new one.
   const newFonts = deferredPromise();
   runtime.platform.setFontsReady(newFonts.promise);
   runtime.setConnected(true);

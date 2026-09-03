@@ -1,24 +1,13 @@
 "use strict";
 
-// Direct unit tests for the `show:` block and the two header lines.
-//
-// Where the card decides WHICH PARTS it draws, and — for the title and the subtitle —
-// what each of them says and how it behaves when it does not fit. Both are pure
-// normalization: a configuration goes in, one normalized shape comes out, and nothing
-// here renders anything.
-//
-// Two rules run through every case below and are worth stating once. First, `show:`
-// decides WHETHER a part is drawn and the part's own key decides WHAT it says, which is
-// why `title: ""` and `show.title: false` both remove the line and neither replaces the
-// other. Second, the block is cosmetic and therefore never throws: Home Assistant's YAML
-// editor calls setConfig() on every keystroke, so a half-typed block has to degrade to
-// the default with a diagnostic rather than paint the dashboard red on every other
-// character.
-//
-// The boundary to config-normalize-modules.test.js next door: that file owns the
-// assembly of a whole configuration and the messages a user sees when one is rejected.
-// This file owns one block and two keys, including their precedence over the older
-// spellings they replace.
+// Direct unit tests for the `show:` block and the two header lines — pure normalization,
+// no rendering. Two rules run through every case: `show:` decides whether a part is drawn
+// and the part's own key decides what it says (so `title: ""` and `show.title: false` both
+// remove the line, neither replacing the other), and the block is cosmetic and never
+// throws.
+// Boundary: config-normalize-modules.test.js owns whole-configuration assembly and its
+// rejection messages; this file owns one block and two keys, including their precedence
+// over the older spellings they replace.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -30,8 +19,7 @@ let normalizeConfigModule;
 const SUPPORTED = new Set(["en", "de"]);
 const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
 
-// The same shape of stand-in the neighbouring config tests use: enough collaborators to
-// let normalizeConfig() run, and deliberately not the production registries.
+// Enough stub collaborators to let normalizeConfig() run, not the production registries.
 const COLLABORATORS = {
   classificationZones: ["optimal", "comfort", "outside", "invalid"],
   paletteForName: () => TINY_PALETTE,
@@ -112,15 +100,13 @@ test("a part that is not a boolean falls back to its default and is said out lou
 });
 
 test("rooms keeps its three states while every other part is a switch", () => {
-  // The three the user writes ARE the three the card carries: `true | false | "auto"`, the
-  // same shape views[].enabled uses for the same kind of decision. YAML's two spellings of
-  // a boolean both arrive here, and both mean the boolean.
+  // `true | false | "auto"`, the same shape views[].enabled uses; both YAML spellings of a
+  // boolean arrive here and both mean the boolean.
   for (const written of [true, "true"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, true);
   for (const written of [false, "false"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, false);
   assert.equal(showModule.normalizeShowConfig({ rooms: "auto" }).show.rooms, "auto");
 
-  // A typo here is the one case where falling back silently would be wrong: "auto" and
-  // "true" are different answers, and a user who wrote "alway" meant one of them.
+  // A typo here is not silently defaulted: "auto" and "true" are different answers.
   const { show, diagnostics } = showModule.normalizeShowConfig({ rooms: "alway" });
   assert.deepEqual(show, {});
   assert.match(diagnostics[0], /show\.rooms: expected auto, true or false, got "alway"/);
@@ -145,15 +131,14 @@ test("the older spelling still decides on its own", () => {
 });
 
 test("the top-level accent_line is gone, and only the block decides", () => {
-  // Committed once, never released, so there is nobody to be compatible with. It is now an
-  // unrecognized top-level key like any other, and the block is the one spelling.
+  // An unrecognized top-level key like any other; the block is the one spelling.
   assert.equal(configure({ accent_line: false }).show.accent_line, true);
   assert.equal(configure({ show: { accent_line: false } }).show.accent_line, false);
 });
 
 test("a block that mentions other parts does not silence the older spelling", () => {
-  // The precedence is per DECISION, not per block: writing `show:` at all must not
-  // quietly reset the keys it says nothing about.
+  // Precedence is per decision, not per block: writing `show:` must not reset keys it says
+  // nothing about.
   const config = configure({ show: { icon: false }, show_rooms: false, unavailable_values: "hide" });
   assert.equal(config.show.icon, false);
   assert.equal(config.show.rooms, false, "show_rooms still decides, because the block did not");
@@ -161,10 +146,8 @@ test("a block that mentions other parts does not silence the older spelling", ()
 });
 
 test("an older spelling nobody recognised carries no default of its own", () => {
-  // The point of legacyShowRequests(): each older key speaks only where it says
-  // something. If it answered for an unrecognised value too, that answer would be a
-  // second statement of a default SHOW_SWITCHES already owns, and the two could drift
-  // apart without anything failing.
+  // Each older key speaks only where it says something; answering for an unrecognised value
+  // would be a second statement of a default SHOW_SWITCHES already owns.
   for (const nonsense of ["auto", "alway", "", null, 0, 1]) {
     assert.equal(configure({ show_rooms: nonsense }).show.rooms, "auto", JSON.stringify(nonsense));
   }
@@ -206,8 +189,8 @@ test("the title takes the same four forms as the subtitle", () => {
 });
 
 test("each line keeps the overflow it has always had as its default", () => {
-  // Measured against the stylesheet rather than chosen: `.rtc-title` carries no nowrap and
-  // no ellipsis and therefore wraps, `.rtc-subtitle` carries both and therefore clips.
+  // Matches the stylesheet: `.rtc-title` has no nowrap/ellipsis and wraps, `.rtc-subtitle`
+  // has both and clips.
   assert.equal(configure({}).title.overflow, "wrap");
   assert.equal(configure({}).subtitle.overflow, "clip");
   assert.equal(configure({ title: "Hall" }).title.overflow, "wrap");
@@ -246,8 +229,8 @@ test("the block does not mutate the configuration it was handed", () => {
 });
 
 test("nothing in the block can throw", () => {
-  // The keystroke case, stated as a test: every half-typed shape a YAML editor produces
-  // on the way to a valid block has to come back with a value.
+  // Every half-typed shape a YAML editor produces on the way to a valid block comes back
+  // with a value.
   const shapes = [undefined, null, {}, { icon: undefined }, { icon: null }, { rooms: {} }, { "": true }, "sh", 0, [1, 2]];
   for (const shape of shapes) {
     assert.doesNotThrow(() => showModule.normalizeShowConfig(shape), JSON.stringify(shape));

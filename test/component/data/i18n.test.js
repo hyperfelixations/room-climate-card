@@ -1,18 +1,11 @@
 "use strict";
 
-// Manual `language` config override and translation-key parity: every
-// TRANSLATIONS language block must carry exactly the same key set as the
-// "en" reference block. TRANSLATIONS itself is scoped inside the file's own
-// IIFE closure (not exported), so key parity is verified the same way a
-// real user would ever notice it: by spying on console.warn during script
-// load and asserting the bundle's own self-check (verifyTranslationKeyParity()
-// from src/i18n/integrity.js, invoked at the end of src/i18n/registry.js)
-// never fires.
-//
-// This test needs its own console-instrumented realm (the shared helper's
-// environment has already evaluated the bundle by the time a test runs), but
-// it takes the artifact PATH from that helper — there is exactly one place in
-// the suite that knows where the build output lives.
+// Manual `language` config override, and translation-key parity: every TRANSLATIONS block
+// must carry the same key set as "en". TRANSLATIONS is not exported, so parity is checked
+// the way a user would notice it — spy on console.warn during a fresh script load and
+// assert the bundle's own verifyTranslationKeyParity() (src/i18n/integrity.js) never
+// fires. Uses its own console-instrumented realm; the artifact path comes from the shared
+// helper, the one place that knows where the build output lives.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -30,9 +23,8 @@ let internals;
 let access;
 
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
-// From the manifest, not written out again: this file iterates EVERY supported language,
-// so it is exactly the kind of generic matrix that must not carry its own copy. See
-// test/manifests/product-surface.js.
+// Every supported language is iterated here, so this matrix imports the list rather than
+// copying it. See test/manifests/product-surface.js.
 const { LANGUAGES: SUPPORTED_LANGUAGES } = require("../../manifests/product-surface.js");
 const { TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
@@ -339,10 +331,8 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
   for (const [count, expected] of roomExpected) {
     assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
   }
-  // The "count/total rooms" comfort sentence depends on v.total's OWN
-  // category, same as the existing Russian test above — v.total >= 2 does
-  // NOT collapse this to a single safe form for a zero/one/other language
-  // (10, 11, 20, 21 are all >= 2 but land in different categories).
+  // This sentence depends on v.total's own plural category, not count's: v.total >= 2 does
+  // not collapse to one safe form for a zero/one/other language (10/11/20/21 differ).
   assert.match(
     el._t("subtitle.aboveComfort", { diff: "1 °C", count: 1, total: 11, adjective: "siltas" }),
     /1\/11 telpu ir siltas\.$/,
@@ -403,9 +393,8 @@ test("pluralization: missingRooms uses singular/plural correctly for 1 vs N miss
     hass
   );
   const data = el._computeViewModel();
-  // "not found", not "without data": a room whose entity Home Assistant does not know
-  // is a configuration problem, and the card must not describe it the same way it
-  // describes a room whose sensor is merely offline — that one keeps its `--` chip.
+  // "not found", not "without data": an unknown entity is a config problem, described
+  // differently from a room whose sensor is merely offline (that one keeps its `--` chip).
   assert.match(data.subtitle, /1 configured room was not found/);
   env.cleanup(el);
 });

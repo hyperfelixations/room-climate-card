@@ -1,18 +1,12 @@
 "use strict";
 
-// The ownership contract between the element and the carousel controller.
-//
-// Since the runtime extraction the controller owns the active index and both timers,
-// and the element exposes them only as accessors. `_views` and `_activeView` write
-// through; `_resumeAutoTimer` and `_a11ySyncTimer` are READ-ONLY windows onto the
-// controller's real handles, because a writable window would be a second copy of the
-// same fact and could drift from it.
-//
-// A read-only accessor has a sharp edge in strict mode — and the shipped bundle is
-// strict: assigning to it throws a TypeError rather than being silently ignored. That
-// is what makes the tests below worth having permanently. The first one reproduces the
-// exact sequence a user performs: swipe once, then start a second swipe before the
-// phase-aware resume from the first one has fired.
+// The ownership contract between the element and the carousel controller. The controller
+// owns the active index and both timers; the element exposes them only as accessors.
+// `_views` and `_activeView` write through; `_resumeAutoTimer` and `_a11ySyncTimer` are
+// read-only windows onto the controller's real handles (a writable one would be a second
+// copy that could drift). The shipped bundle is strict, so assigning to a read-only
+// accessor throws a TypeError — which is why these tests stay. The first reproduces:
+// swipe once, then start a second swipe before the phase-aware resume has fired.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -29,8 +23,7 @@ test.after(() => {
   env.cleanupAll();
 });
 
-// range + scale + extremes, auto_slide on: three views is the smallest configuration in
-// which a swipe genuinely moves and a phase-aware resume is genuinely scheduled.
+// range + scale + extremes, auto_slide on: smallest config where a swipe moves and a resume is scheduled.
 function threeViewCard(overrides = {}) {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
@@ -50,8 +43,7 @@ function threeViewCard(overrides = {}) {
   );
 }
 
-// One complete swipe, driven through the real handlers rather than by setting fields:
-// down, a confirmed horizontal move, then up past the 18% threshold.
+// One complete swipe through the real handlers: down, confirmed horizontal move, up past the 18% threshold.
 function completeSwipe(el, { pointerId = 1, from = 0, distancePx = 200 } = {}) {
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
   rotator.getBoundingClientRect = () => ({ width: 300 });
@@ -105,8 +97,7 @@ test("a second swipe started while the first swipe's resume is still pending doe
   assert.equal(el._activeView, 1, "the first swipe moved exactly one view");
   assert.notEqual(el._carousel.resumeTimerHandle, null, "and armed the phase-aware resume this test needs");
 
-  // A second swipe before resume must mutate controller-owned state through its public
-  // operations; assigning a getter-only compatibility accessor would throw in strict mode.
+  // The second swipe mutates controller-owned state through its public operations, not a getter-only accessor.
   const rotator = el.shadowRoot.querySelector(".rtc-rotator");
   rotator.getBoundingClientRect = () => ({ width: 300 });
   el._handlePointerDown(pointerDownEvent(el, 2));
@@ -180,15 +171,9 @@ test("a swipe that never crosses the direction threshold leaves the pending resu
 // ------------------------------------------------------- the ownership guard --
 
 test("the read-only controller windows cannot be assigned to", () => {
-  // The permanent guard. These are the element's window onto state a controller owns;
-  // assigning to them would either create a second copy or, as it did, throw in strict
-  // mode. Both are wrong, so the accessors have no setter and this test pins that.
-  //
-  // _isDragging is on this list rather than the writable one below because a gesture can
-  // only begin with a pointer event: a test that assigned a hand-built drag state could
-  // describe a state the card is unable to reach (see test/helpers/gestures.js, which
-  // drives the real handlers instead). The in-flight pointer itself is not exposed here
-  // at all — nothing in production reads it, so it is asked of its owner.
+  // The permanent guard: these accessors are the element's window onto controller-owned
+  // state and have no setter. _isDragging is here (not the writable list) because a gesture
+  // can only begin with a pointer event; the in-flight pointer is not exposed at all.
   const el = threeViewCard();
   assert.equal(Object.getOwnPropertyDescriptor(el, "_pointer"), undefined, "the element carries no window it does not itself use");
   for (const name of ["_isDragging"]) {

@@ -1,28 +1,13 @@
 "use strict";
 
-// WHEN THE ADJUSTMENT IS WORKED OUT, AND WHEN IT IS MERELY LOOKED UP.
-//
-// The search behind it is a walk over a few thousand candidates — cheap enough to run once for
-// a palette, far too expensive to run inside a render. And a render is exactly where a score
-// changes: a reading moving from 22.9 °C to 23.1 °C moves the card from one ramp step to the
-// next and repaints the pill in a different colour.
-//
-// So the whole ramp is prepared together, the moment the palette and the surface are both
-// known, and everything after that is a lookup. What may make it run again is a change to one
-// of its two inputs and nothing else:
-//
-//   the palette or its configuration     different colours to prepare
-//   the background the card stands on    the same colours, a different answer
-//
-// A sensor value is neither, whether or not it crosses a tier boundary.
-//
-// THE PROOF IS OBJECT IDENTITY, and it is a complete one. The table lives in a single memo
-// slot keyed on the colours and the surface together. Asking for it again with the same key
-// returns the stored table without doing any work; asking with ANY other key replaces what is
-// stored. So a table that is still the same object after a hundred updates was never rebuilt —
-// there is no third possibility. A wall-clock budget would look like the stronger assertion
-// and would in fact be the weaker one: a hundred renders of a card in jsdom cost far more than
-// the search does, so the number would be dominated by everything except the thing under test.
+// When the tint adjustment is computed, and when it is merely looked up. The search behind
+// it walks a few thousand candidates — fine once per palette, far too slow inside a render,
+// which is exactly where a score changes (22.9 → 23.1 °C moves a ramp step and repaints the
+// pill). So the whole ramp is prepared once, when palette and surface are both known, and
+// everything after is a lookup. It reruns only when the palette/its config or the background
+// changes — a sensor value never does, tier boundary or not. The proof is object identity:
+// the table lives in one memo slot keyed on colours + surface, so a table still identical
+// after a hundred updates was never rebuilt.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -53,8 +38,7 @@ const statesAt = (value) =>
     "sensor.r2": mkState("sensor.r2", value + 2, TEMPERATURE_C),
   });
 
-// The table the card's own domain model would have asked for, fetched through the same single
-// slot it filled. Identical by reference when the slot still holds it.
+// The same table the card's domain model would ask for, through the same memo slot.
 function tableOf(card, paletteName) {
   const surface = card._surface();
   const palette = adaptation.adaptPalette(registry.paletteForColor(paletteName), surface);
@@ -68,8 +52,7 @@ test("a hundred readings, and a tier boundary crossed, do not rebuild it", () =>
 
   for (let step = 0; step < 100; step += 1) card.hass = statesAt(20 + step * 0.1);
 
-  // 20.0 through 29.9 crosses every tier the indoor profile has, so the pill changed colour
-  // repeatedly along the way — which is the case that must not cost a search.
+  // 20.0-29.9 crosses every indoor tier, so the pill recoloured repeatedly — the case that must not cost a search.
   assert.equal(tableOf(card, "yellow"), prepared, "the prepared table was rebuilt during ordinary updates");
   env.cleanup(card);
 });

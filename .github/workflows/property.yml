@@ -1,49 +1,20 @@
-# The expensive generated and mutation checks, once a week.
-#
-# WHY IT IS NOT IN CI. The pull-request run is small and fixed-seed on purpose: a check that
-# draws different cards every time will eventually fail on a change that did not cause it, and
-# a check people learn to re-run is a check they have stopped reading. So CI proves the card
-# survives a known population, and this job goes looking for a new one.
-#
-# WHY WEEKLY RATHER THAN NIGHTLY. This is a Home Assistant custom card, not a service. It is
-# not developed every day, most nights would sweep an unchanged commit, and a scheduled job
-# that usually reports on nothing is one nobody opens. Once a week is often enough to find a
-# regression while the change that caused it is still recent.
-#
-# TWO SWEEPS RUN HERE, and they ask different questions. The model sweep throws one described
-# dashboard at the card and checks that the card is self-consistent. The METAMORPHIC sweep
-# derives a second dashboard from the first and checks that the difference between the two
-# cards is the difference that was asked for — which is the only way to catch a card that is
-# not wrong, merely worse than it should be.
-#
-# They get different case counts because a metamorphic case costs about three times a model
-# one: it builds the card at least twice, and some relations apply a sequence of
-# configurations to it. Measured on this suite, roughly 15 ms and 48 ms per case.
-#
-# WHAT A PROPERTY FAILURE HERE MEANS. The run prints a locally minimized scenario description
-# in lossless JSON, small enough to read and directly usable as a fixture. Every accepted
-# shrink step and the final result reproduce the same exact violation signature. Paste it into
-# scenario(…) in a hand-written test. The JSON report records the exact seed and census too,
-# so the original population can be replayed before the reduced regression is added.
-#
-# Defects that are already understood do not fail this job: they are listed in
-# test/known-issues.js with per-violation matchers, counted in the run's census, and reproduced
-# deterministically by test/known-issues.test.js in every ordinary CI run.
-#
-# MUTATION IS SEPARATE. It asks whether the direct unit owners notice a changed branch or
-# boundary in three high-value domain/application modules. Running it in parallel keeps a
-# slow mutation cycle from hiding the property result, and its machine-readable and HTML
-# reports are kept even when its 98% semantic quality floor fails.
+# The expensive generated and mutation checks, once a week. Not in CI: a sweep that draws
+# different cards each run would eventually fail on an unrelated change. Weekly, not nightly:
+# a custom card is not developed every day and a job that usually reports nothing goes
+# unread. Two independent jobs: the property sweep (model + metamorphic, different case
+# counts because a metamorphic case costs ~3x a model one) and mutation, kept parallel so a
+# slow mutation cycle cannot hide the sweep result. See interne Doku §4 "GitHub-Workflows".
+# A property failure prints a locally minimized scenario as lossless JSON, usable directly
+# as a scenario(...) fixture; the JSON report records seed and census for replay. Known
+# defects (test/known-issues.js) do not fail this job.
 
 name: Weekly deep test sweeps
 
 on:
   schedule:
-    # Mondays, 04:17 UTC. Off the hour deliberately — the top of the hour is when every
-    # scheduled workflow on GitHub starts at once, and a queued job that runs an hour late is
-    # a job whose timestamps mean nothing.
+    # Mondays, 04:17 UTC — off the hour, where GitHub's scheduled-workflow queue is congested.
     - cron: "17 4 * * 1"
-  # So a change to the generator can be swept immediately rather than next Monday.
+  # So a generator change can be swept without waiting for Monday.
   workflow_dispatch:
     inputs:
       cases:
@@ -86,9 +57,9 @@ jobs:
 
       - name: Sweep
         env:
-          # The scheduled run has no inputs, so the fallbacks are what the weekly sweep uses.
-          # run_id changes for a new workflow run but stays fixed for its reruns: new weeks
-          # explore new populations, while rerunning one failure remains reproducible.
+          # The scheduled run has no inputs, so the fallbacks apply. run_id changes per run
+          # but is fixed across its reruns: new weeks explore new populations, a rerun stays
+          # reproducible.
           ROOM_CLIMATE_CARD_FUZZ_CASES: ${{ github.event.inputs.cases || '50000' }}
           ROOM_CLIMATE_CARD_METAMORPHIC_CASES: ${{ github.event.inputs.metamorphic_cases || '20000' }}
           ROOM_CLIMATE_CARD_FUZZ_SEED: ${{ github.event.inputs.seed || github.run_id }}

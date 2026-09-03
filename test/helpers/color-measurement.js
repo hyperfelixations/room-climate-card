@@ -1,22 +1,12 @@
 "use strict";
 
-// COLOUR MEASUREMENT for the test suite: perceptual distance, relative luminance, contrast,
-// and the order in which a palette's colours are actually read.
+// Colour measurement for the test suite: perceptual distance, relative luminance, contrast,
+// and the order in which a palette's colours are read.
 //
-// A SECOND IMPLEMENTATION, DELIBERATELY. The card computes contrast too, in
-// src/domain/classification/surface.js. If the tests imported that, a palette test would
-// only ever prove the card agrees with itself. The instrument has to be able to disagree
-// with the thing it measures, so the arithmetic here is written out independently — and one
-// test compares the two, which is the only place they are allowed to meet.
-//
-// WHAT USED TO BE HERE. This file also carried a Brettel-Viénot-Mollon (1997) dichromacy
-// simulator: twelve matrices, three separating planes, twelve frozen reference vectors, and
-// a self-test suite of its own. It existed to DERIVE the colour-vision palette, and it did
-// that job — the palette is now a set of anchored hex codes like every other. Keeping the
-// machinery would have meant maintaining a colour-science implementation to re-answer a
-// question that has been answered. The derivation and its measurements are recorded in the
-// RCC changelog; what the palette still has to satisfy is checked here, with the ordinary
-// instruments below.
+// A second implementation on purpose: the card computes contrast in
+// src/domain/classification/surface.js, and an instrument that imported that could only
+// prove the card agrees with itself. The arithmetic here is written out independently; one
+// test compares the two.
 
 // ---- sRGB ------------------------------------------------------------------
 
@@ -113,20 +103,17 @@ function contrastRatio(hex, background) {
 }
 
 // A palette read as one continuous ramp: the far end of `below`, inwards to optimal, out
-// again along `above`. That is the order a reader's eye travels it.
+// again along `above` — the order a reader's eye travels it.
 function asRamp(palette) {
   return [...[...palette.below].reverse(), palette.optimal, ...palette.above];
 }
 
-// A palette read as one continuous ramp: the far end of `below`, inwards to optimal, out
-// again along `above`. That is the order a reader's eye travels it.
 function asRamp(palette) {
   return [...[...palette.below].reverse(), palette.optimal, ...palette.above];
 }
 
-// The smallest gap between NEIGHBOURING steps, which is a different question from how far
-// the ends reach and the one a reader actually runs into: a ramp can span a huge distance
-// and still have two adjacent steps nobody can tell apart.
+// The smallest gap between neighbouring steps — a ramp can span a huge distance and still
+// have two adjacent steps nobody can tell apart.
 function smallestNeighbourStep(ramp) {
   let smallest = Infinity;
   for (let index = 1; index < ramp.length; index++) {
@@ -143,13 +130,10 @@ function measureRamp(palette) {
   const middle = palette.below.length;
   const fromMiddle = ramp.map((hex) => deltaE(ramp[middle], hex));
 
-  // TWO READINGS OF "IT KEEPS GOING OUTWARDS", and the difference is a step that stands still.
-  //
-  // `monotone` asks that every step be STRICTLY further from the middle than the one before —
-  // what a ramp with room to move owes. `neverReturns` allows a step to stay where it is, which
-  // is the honest answer for a wing with nowhere left to go: nothing is paler than white, so a
-  // white ramp's pale wing repeats itself rather than turning round. What neither allows is a
-  // wing that comes BACK towards the middle, which is a ramp that has folded over.
+  // Two readings of "it keeps going outwards": `monotone` requires each step strictly
+  // further from the middle than the last; `neverReturns` also allows a step to stand still
+  // (a white ramp's pale wing has nowhere paler to go). Neither allows a step back towards
+  // the middle — a ramp that has folded over.
   let monotone = true;
   let neverReturns = true;
   for (let index = middle + 1; index < ramp.length; index++) {

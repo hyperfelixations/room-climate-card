@@ -1,28 +1,17 @@
 "use strict";
 
-// FROZEN. This test-only adapter projects the current CardViewModel into the flat DTO
-// captured by the three allowlisted characterization suites.
+// Frozen test-only adapter: projects the current CardViewModel into the retired flat DTO
+// captured by the three allowlisted characterization suites (element-ownership.test.js
+// LEGACY_DTO_ALLOWLIST). Nothing may be added — an extra field would be an untested
+// contract and force a baseline re-record, which this file exists to avoid. Not importable
+// from src/. See interne Doku §4 "Baseline- und Golden-Vertrag".
 //
-// No production module may read this shape. Re-recording the committed DTO baselines
-// would discard their independent evidence that the current pipeline preserves the
-// observable contract.
-//
-// It is frozen in both senses:
-//
-//   - nothing may be added to it. An extra field would be an untested contract, and the
-//     baselines would have to be re-recorded to accept it — which is precisely the thing
-//     this file exists to avoid;
-//   - it is test-only. It is not importable from src/, not reachable from the
-//     composition root, and not present in dist/room-climate-card.js.
-//
-// The three marker positions of the daily-range axis default to 0 when that view is
-// not active, because the flat shape exposes them unconditionally.
+// The daily-range marker positions default to 0 when that view is inactive, since the flat
+// shape exposes them unconditionally.
 const NO_RANGE_SCALE_POSITION = 0;
 
-// The room-marker shape the flat object has always exposed. The structured model
-// carries a shadow colour and a tooltip too, which are rendering values; projecting
-// explicitly here keeps the frozen shape frozen instead of widening it whenever the
-// marker model grows.
+// The room-marker shape the flat object exposes. Projected explicitly so the structured
+// model's rendering fields (shadow colour, tooltip) do not widen the frozen shape.
 function toLegacyRoomMarker({ index, entity, name, value, position, color }) {
   return { index, entity, name, value, position, color };
 }

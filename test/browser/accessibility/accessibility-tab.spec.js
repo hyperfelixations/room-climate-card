@@ -1,11 +1,9 @@
 "use strict";
 
-// Real keyboard focus coverage complements jsdom's unit-layer
-// tests (accessibility-logic.test.js) verify the aria-hidden/inert
-// attributes get set correctly, but jsdom does not implement `inert`'s
-// actual focus-blocking behavior. This confirms a real browser's Tab key
-// genuinely cannot reach an offscreen view, and that reduced-motion/
-// dark-light rendering doesn't throw.
+// Real keyboard focus: jsdom's accessibility-logic.test.js verifies the aria-hidden/inert
+// attributes but does not implement `inert`'s focus-blocking. This confirms a real
+// browser's Tab cannot reach an offscreen view, and that reduced-motion / dark-light
+// rendering does not throw.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers");
@@ -35,20 +33,17 @@ function threeViewStates() {
 
 test("Tab only reaches per-view content (extrema/range cards) in the visible view, never the inert offscreen one — the average button and room chips are always reachable by design (they live outside the .rtc-view carousel)", async ({ page }) => {
   await gotoHarness(page);
-  // Case D: 3 views (range, scale, extremes) — both .rtc-view slots with
-  // focusable per-view content (.rtc-extreme-card) are exercised, unlike
-  // the 2-view avg+rooms case where the room-chip grid and average button
-  // are NOT gated by aria-hidden/inert at all (a separate DOM section
-  // below the carousel, always visible regardless of the active view).
+  // Case D: 3 views (range, scale, extremes) so both .rtc-view slots with focusable content
+  // (.rtc-extreme-card) are exercised. The room-chip grid and average button sit below the
+  // carousel and are not gated by aria-hidden/inert.
   const cardId = await createCard(
     page,
     { entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] },
     threeViewStates()
   );
   const card = page.locator(`#${cardId}`);
-  // The card opens on the "scale" view by default (see _renderAll()), which
-  // has no .rtc-extreme-card content at all (only "range"/"extremes" do) —
-  // explicitly land on "extremes" so there is something to actually reach.
+  // The card opens on "scale" by default, which has no .rtc-extreme-card content; land on
+  // "extremes" so there is something to reach.
   await card.evaluate((el) => {
     el._activeView = el._views.indexOf("extremes");
     el._updateTrackTransform(false);

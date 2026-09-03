@@ -1,23 +1,13 @@
 "use strict";
 
-// The golden screenshots as an INVENTORY, checked without a browser.
-//
-// This exists because of how the 2.37.0 label change went unnoticed: a baseline can
-// keep passing while depicting something the card no longer renders, and nothing in a
-// green suite says so. The pixel comparison is one guard (see maxDiffPixels in
-// playwright.config.js); this is the other, and it answers the questions that
-// comparison structurally cannot:
-//
-//   - is every screenshot the spec asks for actually committed? A missing baseline is
-//     silently CREATED on the next local run and then committed by accident, with
-//     nobody having looked at it.
-//   - is every committed screenshot still asked for? Renaming a scenario leaves its old
-//     PNG behind forever — never compared, never reviewed, quietly counted as coverage.
-//   - are two baselines byte-identical? Then two scenarios that were written to differ
-//     do not, and one of them is not testing what its name claims.
-//
-// It reads the spec's source rather than running it: the point is to check the
-// committed files against the committed intent, which needs no Chromium.
+// The golden screenshots as an inventory, checked without a browser. A baseline can keep
+// passing while depicting something the card no longer renders; the pixel comparison (see
+// maxDiffPixels in playwright.config.js) is one guard, this is the other. It answers what
+// the comparison cannot: is every screenshot the spec asks for committed (a missing one is
+// silently created on the next local run), is every committed screenshot still asked for
+// (a renamed scenario leaves its PNG behind, uncompared), and are two baselines byte-
+// identical (two scenarios written to differ that do not). It reads the spec's source
+// rather than running it — checking committed files against committed intent needs no Chromium.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -30,10 +20,9 @@ const SNAPSHOT_DIR = `${SPEC_PATH}-snapshots`;
 // Playwright appends "-{projectName}-{platform}" to the name the spec passes.
 const SUFFIX = "-chromium-win32.png";
 
-// Every .png string literal in the spec, including template literals. A name built from
-// a loop variable (`trend-summary-${mode}-narrow-320.png`) becomes a pattern rather than
-// an exact name, because only running the spec could enumerate its instances — but it
-// still constrains which files may exist.
+// Every .png string literal in the spec. A name built from a loop variable becomes a
+// pattern (only running the spec could enumerate its instances) but still constrains which
+// files may exist.
 function referencedNames(source) {
   const literals = [...source.matchAll(/["'`]([^"'`\n]*\.png)["'`]/g)].map((match) => match[1]);
   return literals.map((literal) => ({

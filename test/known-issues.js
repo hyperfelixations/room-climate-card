@@ -1,41 +1,19 @@
 "use strict";
 
-// KNOWN DEFECTS, HELD OPEN BY A TEST THAT MUST KEEP FAILING.
+// Known defects in the card, each held open by a reproduction that must keep failing.
 //
-// The suite is green at every commit. That rule is not negotiable: the moment a red run
-// becomes normal, nobody can tell a new regression from an old one that everybody agreed
-// to live with, and the suite stops being a gate.
-//
-// But a test that finds a real bug must not be deleted either, and softening it until it
-// passes is worse than deleting it — it leaves behind an assertion that looks like a
-// contract and is not one.
-//
-// So a defect that is understood, reproduced and deliberately NOT fixed yet gets an entry
-// here and a reproduction wrapped in expectedFailure(). The wrapper runs the reproduction
-// and requires it to FAIL. The run stays green, the bug stays documented in executable
-// form, and — the part that makes this honest rather than a way of hiding things —
-//
-//   IF THE REPRODUCTION EVER PASSES, THE RUN FAILS.
-//
-// It cannot rot. The day someone fixes the underlying defect, this suite tells them to
-// come here, delete the entry, and promote the reproduction to an ordinary test. That is
-// the same discipline pytest calls a strict xfail and Playwright calls test.fail().
-//
-// WHAT DOES NOT BELONG HERE: a test that is merely awkward, slow, or environment-
-// dependent. This register is for defects in the CARD.
-//
-// THE ID IS THE INTERNAL BACKLOG'S ID. Every entry below has a matching `BUG-xx` section in
-// the project's internal backlog carrying the reproduction, the affected module, an
-// assessment of the impact and whatever decision is still open. This file is the executable
-// half of that pair, not a substitute for it: a bug that lives only in a test file is a bug
-// nobody plans.
+// A defect that is understood, reproduced and deliberately not fixed yet gets an entry in
+// KNOWN_ISSUES and a reproduction wrapped in expectedFailure(), which requires the
+// reproduction to fail; if it ever passes, the run fails and the entry must be retired and
+// the reproduction promoted to an ordinary test. Each id matches a BUG-xx section in the
+// internal RCC backlog, which carries the full reproduction and assessment. Mechanism:
+// interne Doku §4 "Testarchitektur", subsection "Bekannte Fehler: das Register".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// Every entry must carry an id, a one-line summary a person can act on, the area of the
-// product it lives in, and the date it was found. The id is the link to the internal
-// backlog; nothing here is a substitute for that entry.
+// Each entry carries an id (the backlog link), a one-line actionable summary, the product
+// area, and the date found.
 const KNOWN_ISSUES = [
   {
     id: "BUG-06",
@@ -49,15 +27,10 @@ const KNOWN_ISSUES = [
       "both extremes; two ENTITY readings can no longer do it, because every metric now has a " +
       "floor and none of them can be far enough apart.",
     foundBy: "test/property/model.property.test.js",
-    // How the property run recognises THIS defect among the violations it collects, so a
-    // case that reproduces a registered bug is counted as one rather than reported as a new
-    // failure.
-    //
-    // Two symptoms, one cause. The overflow shows either as the spread itself going
-    // infinite, or — when the scale range is what overflows — as every derived POSITION
-    // going NaN with nothing else wrong. The second clause is an `every` rather than a
-    // `some` on purpose: a NaN position accompanied by any other kind of violation is a
-    // different finding and must still be reported as new.
+    // Assigns a property-run violation to this bug instead of reporting it as new. Two
+    // symptoms, one cause: the spread itself goes infinite, or every derived position goes
+    // NaN with nothing else wrong. The second is an `every`, not a `some` — a NaN position
+    // alongside any other violation is a different finding and stays new.
     matchesViolation: (violation) =>
       /everyNumberIsFinite: spread is Infinity$|calc\(NaN%|"\)" is expected|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
   },
@@ -90,7 +63,7 @@ function isExpectedReproductionFailure(error, matcher) {
   );
 }
 
-// Registers a reproduction that MUST fail with the identifying assertion for this defect.
+// Registers a reproduction that must fail with the identifying assertion for this defect.
 // Setup, harness and unrelated assertion failures are deliberately rethrown.
 function expectedFailure(id, matcher, body) {
   const issue = BY_ID.get(id);

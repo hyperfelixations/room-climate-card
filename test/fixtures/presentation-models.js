@@ -14,9 +14,7 @@ function stubTexts(overrides = {}) {
   };
 }
 
-// Which parts a card draws, as normalizeConfig() resolves them when nobody says otherwise.
-// Written out rather than imported so that a change to the defaults shows up here as a
-// deliberate edit instead of travelling silently into every presentation test.
+// The show defaults as normalizeConfig() resolves them, written out so a defaults change is a deliberate edit here.
 const SHOW_EVERYTHING = {
   accent_line: true,
   icon: true,
@@ -29,9 +27,8 @@ const SHOW_EVERYTHING = {
   unavailable_rooms: true,
 };
 
-// A NORMALIZED config, which is what the presentation layer is handed — never raw YAML.
-// The `show` block is merged rather than replaced, so a test can name the one part it is
-// about (`cfg({ show: { pill: false } })`) without restating the other eight.
+// A normalized config (what the presentation layer receives, never raw YAML). The `show`
+// block merges, so a test names only the part it is about.
 function cfg(overrides = {}) {
   const { show, ...rest } = overrides;
   return {
@@ -54,10 +51,8 @@ function cfg(overrides = {}) {
 function minimalDomainModel(overrides = {}) {
   return {
     empty: false,
-    // The model resolves this and the view model reads it rather than recomputing —
-    // deciding it needs `states`, which the presentation layer does not have. A fixture
-    // therefore has to state which sources its card refers to, exactly as the real
-    // model would (see resolveSourceTopology()).
+    // The model resolves topology and the view model reads it (recomputing would need
+    // `states`), so a fixture must state it, like resolveSourceTopology().
     topology: { kind: "primaryOnly", headlineEntity: "sensor.avg", roomIndex: null },
     metric: { kind: "temperature", canonicalUnit: "°C", unit: "°C", displayUnitProfile: { key: "celsius" } },
     context: { diagnostics: [], consistent: true, excludedRoomIds: [], sourceKind: "primary", sourceEntity: "sensor.avg" },

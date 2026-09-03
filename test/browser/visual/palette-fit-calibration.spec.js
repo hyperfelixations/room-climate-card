@@ -1,22 +1,11 @@
 "use strict";
 
-// Two things only a real browser can answer.
-//
-// FIRST, whether the card actually sees what it is painted on. jsdom hands back a computed
-// style that does not track a later inline change, so the unit layer can only check a card
-// that was styled before its first read. Here the cascade is real, and a card-mod-style
-// override behaves the way one would in a dashboard — including a gradient, where the card
-// has to read the colour stops rather than a `background-color` that is not there.
-//
-// SECOND — and this is the one that matters most — it RENDERS THE BORDERLINE CALIBRATION
-// PAIRS so a person can look at them. The visibility threshold is a number, and a number
-// cannot be reviewed. The swatches can: each shows a colour painted on its background at
-// text weight, next to the verdict the card gives it. If a swatch labelled "invisible" is
-// plainly readable, or one labelled "visible" is not, the calibration table is wrong and
-// this is where that becomes obvious.
-//
-// The screenshot is deliberately NOT a golden. A golden would freeze the pixels; the point
-// of this one is that a human looks at it when the threshold changes.
+// Two things only a real browser answers. First, whether the card sees what it is painted
+// on: jsdom's computed style does not track a later inline change, so only here does a
+// card-mod-style override (including a gradient, read as colour stops) behave as in a
+// dashboard. Second, it renders the borderline calibration pairs as swatches a person can
+// review — each colour on its background at text weight, next to the card's verdict. The
+// plate is attached each run, not a golden.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
@@ -25,9 +14,8 @@ const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
-// The card reads a SURFACE — the colours it sits on, and the theme's text colour. These
-// checks are about the first half; the text colour and what depends on it are the subject of
-// paint-role-calibration.spec.js next door.
+// The card reads a surface: the colours it sits on plus the theme's text colour. These
+// checks are the first half; the text colour is paint-role-calibration.spec.js.
 async function backgroundOf(page, cardId) {
   return page.evaluate((id) => document.getElementById(id)._surface().samples, cardId);
 }
@@ -129,9 +117,8 @@ test("the calibration swatches render for review", async ({ page }) => {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:14px;margin-bottom:8px;font:13px system-ui";
       const swatch = document.createElement("div");
-      // Text weight, not a solid block: the card paints NUMBERS in these colours, and a
-      // thin glyph is far harder to pick out than a filled rectangle. Judging the threshold
-      // against a block would set it far too low.
+      // Text weight, not a solid block: the card paints numbers in these colours, and a thin
+      // glyph is harder to pick out — judging against a block would set the threshold too low.
       swatch.style.cssText =
         `background:${entry.background};color:${entry.colour};width:230px;padding:10px 12px;` +
         "font:600 22px/1.1 system-ui;border-radius:8px;border:1px solid rgba(0,0,0,.15)";
@@ -146,8 +133,7 @@ test("the calibration swatches render for review", async ({ page }) => {
     }
   }, rows);
 
-  // Attached rather than compared: this exists to be LOOKED AT when the threshold moves,
-  // and freezing it as a golden would only assert that nobody had changed the fixture.
+  // Attached, not compared: it exists to be looked at when the threshold moves.
   await test.info().attach("palette-fit-calibration.png", {
     body: await page.locator("#stage").screenshot(),
     contentType: "image/png",

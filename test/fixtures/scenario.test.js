@@ -1,15 +1,9 @@
 "use strict";
 
-// The scenario builder is a fixture, and a fixture that lies is worse than no fixture at
-// all: everything downstream inherits the lie and reports it as a pass. The randomized
-// test is the cautionary tale — its home-grown entity builder omitted
-// `unit_of_measurement`, so five hundred iterations rendered the no-data card and every
-// one of them was green.
-//
-// So this file checks two separate things. First, that the builder produces what it says
-// it produces. Second, and more importantly, that what it produces is a card the product
-// actually recognises — a `hass` object the card reads and a configuration it accepts.
-// The second is the check the old builder never had.
+// The scenario builder is a fixture, and a fixture that lies is worse than none — everything
+// downstream inherits the lie and reports it as a pass. This file checks two things: that
+// the builder produces what it says, and that what it produces is a card the product
+// recognises (a `hass` object the card reads and a config it accepts).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -118,9 +112,7 @@ test("the builder is immutable — a shared prefix cannot be mutated by a later 
 });
 
 test("unit and device class are scenario-wide defaults, whatever order they are written in", () => {
-  // The trap this locks out: an earlier version applied .unit() to the rooms that existed
-  // AT THAT MOMENT, so .unit("K").rooms(3) silently gave three Celsius rooms. Order must
-  // not carry meaning here, because nothing about the chain suggests that it does.
+  // Order must not carry meaning: an earlier version applied .unit() only to rooms that existed at that moment.
   const before = scenario().temperature().unit("K").rooms(3).build();
   const after = scenario().temperature().rooms(3).unit("K").build();
   assert.deepEqual(before.states, after.states);

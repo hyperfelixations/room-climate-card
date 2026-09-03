@@ -22,10 +22,9 @@ const {
 } = require("./source-architecture.js");
 
 test("the legacy DTO adapter is gone from the shipped source entirely", () => {
-  // The flat object from the former rendering contract is not computed in src/:
-  // production
-  // renders from the CardViewModel, and the 32 committed DTO baselines are served by a
-  // frozen test-only helper (test/helpers/legacy-dto.js) that nothing here can reach.
+  // Production renders from the CardViewModel; the flat DTO shape must not exist
+  // in src/. The 32 committed DTO baselines are served by a frozen test-only
+  // helper (test/helpers/legacy-dto.js) the bundle cannot reach.
   for (const file of files) {
     assert.ok(!/legacy-data/.test(file), `${file} still ships the legacy adapter`);
     const code = stripCommentsAndStringText(readSource(file));
@@ -40,11 +39,9 @@ test("the legacy DTO adapter is gone from the shipped source entirely", () => {
   assert.ok(fs.existsSync(helper), "the frozen oracle must still exist for the baselines");
 });
 
-// The only tests allowed to reach the frozen adapter, and why each one is.
-//
-// The flat DTO records a retired public shape that production no longer produces.
-// Access is valid only for its historical oracle; behavioural tests must assert the
-// CardViewModel, the owning module, or rendered DOM instead.
+// The only tests allowed to reach the frozen adapter, each with its reason. The
+// flat DTO records a retired public shape; other tests assert the CardViewModel,
+// the owning module, or rendered DOM.
 const LEGACY_DTO_ALLOWLIST = new Map([
   [
     "characterization/model.test.js",
@@ -65,10 +62,8 @@ const LEGACY_DTO_ALLOWLIST = new Map([
 ]);
 
 test("only the historical characterization tests reach the frozen legacy DTO", () => {
-  // Without this, the adapter quietly becomes a convenient shortcut again: it reads
-  // nicely, it is one flat object, and every use of it is a test asserting against a
-  // shape the product abandoned. The allowlist is small on purpose and each entry
-  // states its reason.
+  // Keeps the retired flat shape from becoming a convenient shortcut again. The
+  // allowlist is small on purpose and each entry states its reason.
   const testDir = path.join(SRC_DIR, "..", "test");
   const offenders = [];
   const walk = (dir) => {
@@ -79,14 +74,13 @@ test("only the historical characterization tests reach the frozen legacy DTO", (
         continue;
       }
       if (!/\.(test|spec)\.js$/.test(entry.name)) continue;
-      // This file names both functions in the patterns that do the checking.
-      // Compare the resolved path so an unrelated same-named test cannot inherit the skip.
+      // This file names both checked functions in its own patterns; skip it by
+      // resolved path so an unrelated same-named test cannot inherit the skip.
       if (path.resolve(full) === path.resolve(__filename)) continue;
       const code = stripCommentsAndStringText(fs.readFileSync(full, "utf8"));
       if (!/\b(computeLegacyData|toLegacyData)\b/.test(code)) continue;
-      // Keyed on the path from test/, not on the bare filename: the suite has a taxonomy, and
-      // where a file sits is part of what it is. A basename key would also let a new file in
-      // another directory quietly inherit an allowance written for a different one.
+      // Keyed on the path from test/, not the bare filename, so an allowance
+      // cannot be inherited by a same-named file in another directory.
       const relative = path.relative(testDir, full).split(path.sep).join("/");
       if (!LEGACY_DTO_ALLOWLIST.has(relative)) offenders.push(relative);
     }
@@ -100,8 +94,7 @@ test("only the historical characterization tests reach the frozen legacy DTO", (
       "CardViewModel, the module under test or the rendered DOM instead:\n  " + offenders.join("\n  ")
   );
 
-  // The allowlist may not rot the other way either: an entry that no longer uses the
-  // adapter is an entry that should be deleted.
+  // An allowlist entry that no longer uses the adapter must be deleted.
   for (const name of LEGACY_DTO_ALLOWLIST.keys()) {
     const full = path.join(testDir, ...name.split("/"));
     assert.ok(fs.existsSync(full), `${name} is allowlisted but does not exist`);
@@ -127,16 +120,9 @@ const HOST_API = new Set([
 ]);
 
 test("the element carries no member that production never calls", () => {
-  // The element accumulated seventy thin methods that existed only so element-level
-  // tests could reach a pure function through a card — one line each, forwarding to a
-  // module that was perfectly reachable on its own. They were indistinguishable from
-  // real behaviour when reading the class, they made the element look like it still
-  // owned the whole data path, and every one of them was a second name for something
-  // that already had one.
-  //
-  // A test-only member is a failing test now rather than a habit. What a test genuinely
-  // needs from a LIVE card lives in test/helpers/card-internals.js, where it is
-  // explicitly test scaffolding and names the module it exercises.
+  // A test-only forwarding member on the element fails this test. What a test
+  // needs from a live card lives in test/helpers/card-internals.js, named against
+  // the module it exercises.
   const code = stripCommentsAndStringText(readSource(ELEMENT));
 
   const declared = [
@@ -165,10 +151,9 @@ test("the uncalled-member guard actually recognizes an orphan", () => {
 });
 
 test("the element imports nothing it does not use", () => {
-  // The build does not tree-shake (see rollup.config.mjs: treeshake:false, chosen after
-  // it silently dropped two DEFAULT_CONFIG keys), so an import that outlived its last
-  // caller is not free. It is also the most convincing possible evidence that a module
-  // still does something it stopped doing several rounds ago.
+  // The build does not tree-shake (rollup.config.mjs: treeshake:false), so an
+  // import that outlived its last caller ships dead weight and signals a module
+  // still doing something it stopped doing.
   const raw = readSource(ELEMENT);
   const statements = [...raw.matchAll(/^import\s*\{([^}]*)\}\s*from\s*"([^"]+)";/gms)];
   const last = [...raw.matchAll(/^import\s(?:\{[^}]*\}|[\w$]+)\s*from\s*"[^"]+";/gms)].pop();
@@ -185,15 +170,12 @@ test("the element imports nothing it does not use", () => {
 });
 
 test("nothing assigns to a read-only window onto controller-owned state", () => {
-  // Since the runtime extraction, some element fields are accessors onto state a
-  // controller owns. Those with a getter but NO setter are read-only on purpose: a
-  // setter would either create a second copy of the same fact or, in the strict-mode
-  // bundle, throw. The second one actually happened — `this._resumeAutoTimer = null`
-  // right after the owner had already cleared it, inside a pointermove listener, where
-  // a throw is invisible: the card just stops responding to gestures.
-  //
-  // This derives the read-only names from the source instead of listing them, so a
-  // future accessor is covered the day it is added.
+  // Some element fields are accessors onto controller-owned state. Those with a
+  // getter but no setter are read-only on purpose: assigning creates a second
+  // copy of the fact, or throws in the strict-mode bundle — and a throw inside a
+  // pointermove listener is invisible, the card just stops handling gestures.
+  // Read-only names are derived from the source, so a new accessor is covered
+  // the day it is added.
   const violations = [];
   for (const file of files) {
     const code = stripCommentsAndStringText(readSource(file));
@@ -238,10 +220,9 @@ test("the ownership guard actually recognizes an assignment", () => {
 });
 
 test("the custom element declares no method name twice", () => {
-  // A duplicate class member is legal JavaScript: the later definition silently wins
-  // and the earlier one becomes unreachable. During an extraction that is exactly how
-  // a stale implementation survives — it looks present, reads plausibly, and is never
-  // executed. A shadowed _trendDisplayText() lived here for a whole phase.
+  // A duplicate class member is legal JavaScript: the later definition wins and
+  // the earlier one becomes unreachable — a stale implementation that looks
+  // present, reads plausibly and never runs.
   const seen = new Map();
   readSource(ELEMENT)
     .split("\n")
@@ -261,8 +242,8 @@ test("the custom element declares no method name twice", () => {
 test("the custom element lives in its own layer and is reachable", () => {
   const elementFiles = files.filter((file) => classify(file).name === "element");
   assert.ok(elementFiles.includes(ELEMENT), "the element must live in element/");
-  // Reachability is already checked globally, but naming it here means a future
-  // source changes cannot quietly orphan the element while tests still pass.
+  // Reachability is checked globally too; named here so a source change cannot
+  // orphan the element while tests still pass.
   const rootImports = graph.get(ENTRY).specifiers.map((specifier) => resolveSpecifier(ENTRY, specifier));
   assert.ok(rootImports.includes(ELEMENT), "the composition root must import the element");
 });

@@ -1,26 +1,13 @@
 "use strict";
 
-// Direct unit tests for top-level config normalization, palette resolution,
-// and the tier colour contract.
-//
-// These messages are a user-facing contract: Home Assistant shows whatever
-// setConfig() throws straight in the dashboard, and the troubleshooting section
-// of the public README quotes them. They are therefore asserted literally, and
-// so is the ORDER in which validation happens — a config with two problems must
-// keep reporting the same one first, or a user fixing errors top-down gets a
-// moving target.
-//
-// The collaborators the config layer is not allowed to import are stubbed here,
-// which is exactly the point of injecting them: the whole layer is testable
-// without the domain, the i18n registry or the view registry.
-//
-// This file owns the TOP LEVEL: normalizeConfig() itself — the keys a card takes, the
-// defaults they fall back to, the order the checks run in — plus the palette resolution it
-// delegates to and the tier colour contract that comes out of it.
-//
-// The boundary to its two neighbours: config-primitives.test.js owns the small readers this
-// normalizer is built out of, and classification-normalize.test.js owns the classification
-// sub-tree. What is left here is the assembly, and the messages a user actually sees.
+// Direct unit tests for top-level config normalization, palette resolution, and the tier
+// colour contract. The error messages are a user-facing contract — Home Assistant shows
+// what setConfig() throws, and the README quotes it — so they, and the order validation
+// runs in, are asserted literally. Collaborators are stubbed, which is the point of
+// injecting them.
+// Boundary: config-primitives.test.js owns the small readers, classification-normalize.test.js
+// the classification sub-tree; this file owns the assembly. See interne Doku §4
+// „Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -30,9 +17,8 @@ let classification;
 let normalizeConfigModule;
 let paletteModule;
 
-// Minimal stand-ins for the injected registries. Deliberately not the real ones:
-// if a test only passes with the production registry, the injection boundary is
-// not doing its job.
+// Minimal stand-ins for the injected registries — not the real ones, so a test that needs
+// the production registry proves the injection boundary is not doing its job.
 const ZONES = ["optimal", "comfort", "outside", "invalid"];
 const SUPPORTED = new Set(["en", "de", "fr"]);
 const CELSIUS = {
@@ -46,21 +32,20 @@ const FAHRENHEIT = {
   deltaToCanonical: (v) => (v * 5) / 9,
 };
 
-// The palette collaborators, deliberately tiny: one colour per wing makes the anchoring
-// visible in a way five would not, and proves the layer never assumes the shipped
-// palette's reach.
+// Tiny palette collaborators: one colour per wing proves the layer never assumes the
+// shipped palette's reach.
 const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
 const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", below: ["#abcdef"], optimal: "#fedcba", above: ["#123456"] } };
 
 const COLLABORATORS = {
   classificationZones: ZONES,
   paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
-  // A stand-in for the colour lookup: one name that resolves, so precedence and the
-  // error message can both be exercised without the 148-entry table.
+  // Colour lookup stand-in: one name resolves, exercising precedence and the error message
+  // without the 148-entry table.
   paletteForColor: (name) =>
     name === "teal" ? { id: "teal", below: ["#003333"], optimal: "#006666", above: ["#009999"] } : null,
-  // A stand-in for the gradient lookup with the same contract as the real one: two or three
-  // colours it recognises, and null for everything else so the layer owns every message.
+  // Gradient lookup stand-in with the real contract: two or three recognised colours, null
+  // otherwise so the layer owns every message.
   paletteForGradient: (value) => {
     const parts = String(value).trim().split("-").map((part) => part.trim().toLowerCase());
     if (parts.length < 2 || parts.length > 3) return null;
@@ -166,9 +151,8 @@ test("the three top-level switches read a boolean the way the show: block does",
   assert.equal(n({ swipe: false }).swipe, false);
   assert.equal(n({ hide_footer: true }).hide_footer, true);
 
-  // The outcome for a value that is neither true nor false is the one these keys have
-  // always had — the default — so no released card changes behaviour. What is new is that
-  // the card now names the key instead of shrugging.
+  // A value that is neither true nor false falls back to the default; the card names the key
+  // in a diagnostic.
   const typo = n({ auto_slide: "yes", swipe: 1, hide_footer: "true" });
   assert.equal(typo.auto_slide, true, "the default, exactly as before");
   assert.equal(typo.swipe, true);
@@ -181,9 +165,7 @@ test("the three top-level switches read a boolean the way the show: block does",
 });
 
 test("the switch diagnostics share the one channel, ahead of the block and the views", () => {
-  // One list for every cosmetic fallback in the configuration, in the order the reader
-  // works through them, so a user reading the console sees the top level before the
-  // blocks nested inside it.
+  // One diagnostics list, ordered top level before the nested blocks.
   const result = normalizeConfigModule.normalizeConfig(
     { entity: "sensor.avg", auto_slide: "yes", show: { pill: "no" }, views: "not-an-array" },
     COLLABORATORS
@@ -227,8 +209,8 @@ test("entity_label preserves the explicit empty-string sentinel", () => {
 });
 
 test("show_rooms maps the three public states and defaults everything else to auto", () => {
-  // The older spelling of show.rooms, kept for the cards that already use it. It reaches
-  // the same three-state vocabulary; the block simply outranks it where both are written.
+  // The older spelling of show.rooms: same three-state vocabulary, and the block outranks it
+  // where both are written.
   const n = (value) => normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", show_rooms: value }, COLLABORATORS).show.rooms;
   assert.equal(n("auto"), "auto");
   assert.equal(n(true), true);
@@ -238,8 +220,8 @@ test("show_rooms maps the three public states and defaults everything else to au
 });
 
 test("unavailable_values accepts show or hide and silently defaults invalid values", () => {
-  // Likewise the older spelling of show.unavailable_rooms. The two words become one
-  // boolean here, which is why "hide" is the only value that turns the placeholders off.
+  // The older spelling of show.unavailable_rooms, collapsed to one boolean here, so "hide"
+  // is the only value that turns the placeholders off.
   const n = (value) =>
     normalizeConfigModule.normalizeConfig({ entity: "sensor.avg", unavailable_values: value }, COLLABORATORS).show.unavailable_rooms;
   assert.equal(n("show"), true);
@@ -258,8 +240,7 @@ test("normalizeConfig() carries view diagnostics on the returned config", () => 
 });
 
 test("normalizeConfig() never writes to the console", () => {
-  // Warning output and its deduplication belong to the caller; a pure normalizer
-  // must stay silent even for a config full of diagnosable mistakes.
+  // Warning output belongs to the caller; a pure normalizer stays silent.
   const original = { warn: console.warn, error: console.error, log: console.log };
   const captured = [];
   console.warn = (...a) => captured.push(a);
@@ -289,8 +270,8 @@ test("normalizeLanguage() accepts only languages the predicate confirms", () => 
 });
 
 test("normalizeConfig() reaches the injected collaborators, not a real registry", () => {
-  // "fr" is supported by the stub; a language the stub rejects must fall back,
-  // proving the predicate is actually consulted.
+  // "fr" is supported by the stub; a language it rejects falls back, proving the predicate
+  // is consulted.
   assert.equal(normalizeConfigModule.normalizeConfig({ entity: "sensor.a", language: "fr" }, COLLABORATORS).language, "fr");
   assert.equal(normalizeConfigModule.normalizeConfig({ entity: "sensor.a", language: "it" }, COLLABORATORS).language, "auto");
 });
@@ -309,14 +290,12 @@ test("the palette option resolves a name, a written-out palette, or the default"
   const written = normalizePalette({ below: ["#111"], optimal: "#222", above: ["#333"] }, COLLABORATORS);
   assert.deepEqual(written.below, ["#111111"]);
   assert.equal(written.optimal, "#222222");
-  // The one field a palette may leave out and still be complete: nobody has to invent a
-  // colour for a state they never see.
+  // invalid is the one field a palette may leave out and still be complete.
   assert.equal(written.invalid, "#7D7D7D");
 });
 
-// WHAT A PERSON ACTUALLY TYPES. `optimal: #1DB85D` is a YAML comment, so the strict
-// spelling is a trap rather than a safeguard here; every row below is a form somebody
-// reaches for, and all of them have to arrive as the same normalized hex.
+// `optimal: #1DB85D` is a YAML comment, so every row below is a form a person reaches for
+// instead, and all normalize to the same hex.
 test("a colour may be written the way a person writes it", () => {
   const { normalizePalette } = paletteModule;
   const optimalOf = (value) => normalizePalette({ optimal: value }, COLLABORATORS).optimal;
@@ -326,9 +305,8 @@ test("a colour may be written the way a person writes it", () => {
   assert.equal(optimalOf("  1DB85D  "), "#1DB85D", "surrounded by spaces");
   assert.equal(optimalOf("#0F8"), "#00FF88", "three digits, expanded the way CSS defines them");
   assert.equal(optimalOf("teal"), "#008080", "a CSS colour name");
-  // YAML turns an all-digit hex into a NUMBER and drops any leading zero on the way. The
-  // digits are recovered from the decimal spelling and padded back to six — which is what
-  // makes `080808` work at all. See core-modules.test.js for the whole table.
+  // YAML turns an all-digit hex into a number and drops leading zeros; the digits are
+  // recovered from the decimal spelling and padded to six. See core-modules.test.js.
   assert.equal(optimalOf(123456), "#123456", "six digits");
   assert.equal(optimalOf(80808), "#080808", "what YAML delivers for 080808");
   assert.equal(optimalOf(8000), "#008000", "and for 008000");
@@ -338,8 +316,7 @@ test("a colour may be written the way a person writes it", () => {
   assert.throws(() => optimalOf(1.5), /palette\.optimal/, "and a fraction is not one either");
 });
 
-// The wings are the other half of the same idea: a list is fine, one colour is fine, and
-// so is the comma-separated line people write without thinking about it.
+// A wing may be a list, one colour, or a comma-separated line.
 test("a wing may be a list, a single colour, or a comma-separated line", () => {
   const { normalizePalette } = paletteModule;
   const expected = ["#FD9808", "#EE2046"];
@@ -356,9 +333,8 @@ test("a wing may be a list, a single colour, or a comma-separated line", () => {
   assert.deepEqual(normalizePalette({ optimal: "1DB85D", above: "FD9808" }, COLLABORATORS).above, ["#FD9808"]);
 });
 
-// A palette with one wing, or none at all, is a legitimate thing to want: CO2 has no
-// "too little" to colour, and a single colour is a perfectly good way to say "this card
-// is teal". Requiring both wings made all of that an error for no gain.
+// One wing or none is legitimate: CO2 has no "too little" to colour, and a single colour is
+// a valid way to say "this card is teal".
 test("only optimal is required, and a wing left out is simply empty", () => {
   const { normalizePalette } = paletteModule;
   const single = normalizePalette({ optimal: "1DB85D" }, COLLABORATORS);
@@ -373,9 +349,8 @@ test("only optimal is required, and a wing left out is simply empty", () => {
   assert.throws(() => normalizePalette({ above: "FD9808" }, COLLABORATORS), /palette needs an optimal color/);
 });
 
-// The mistake this system makes most often produces an EMPTY value rather than a wrong
-// one, so "must be a hex color" would be describing something the user cannot see. The
-// message has to name the cause.
+// The common mistake here produces an empty value, so the message names the cause (a YAML
+// comment) rather than "must be a hex color".
 test("a value that a YAML comment swallowed is explained, not just rejected", () => {
   const { normalizePalette } = paletteModule;
   // What `optimal: #1DB85D` actually reaches the card as.
@@ -385,9 +360,7 @@ test("a value that a YAML comment swallowed is explained, not just rejected", ()
   assert.deepEqual(normalizePalette({ optimal: "1DB85D" }, COLLABORATORS).above, []);
 });
 
-// A name the card does not know is a hard error, not a silent fallback: a user who
-// typed it meant it, and a dashboard that quietly ignored them would look like a bug
-// in the palette rather than a typo.
+// An unknown palette name is a hard error, not a silent fallback.
 test("an unknown palette name is refused, and the message names all three roads in", () => {
   assert.throws(
     () => paletteModule.normalizePalette("neon", COLLABORATORS),
@@ -395,8 +368,7 @@ test("an unknown palette name is refused, and the message names all three roads 
   );
 });
 
-// A shipped palette wins over a colour of the same name, so adding a palette later can
-// take a word back without changing anything else.
+// A shipped palette wins over a colour of the same name.
 test("a registered palette name beats a colour name", () => {
   assert.equal(paletteModule.normalizePalette("teal", COLLABORATORS).id, "teal", "no palette is called teal here");
   const shadowed = { ...COLLABORATORS, paletteForName: (name) => (name === "teal" ? { id: "shipped" } : null) };
@@ -405,10 +377,8 @@ test("a registered palette name beats a colour name", () => {
 
 // -------------------------------------------------- a palette from two or three colours ----
 
-// The hyphen is only ever reached by a spelling the two lookups above could not resolve,
-// and that order is the whole safeguard: five CSS colours can be written either way
-// (`orangered` / `orange-red`) and two shipped palettes contain a hyphen (`color-vision`).
-// Every one of them keeps the meaning it already had, so no existing configuration changes.
+// The hyphen is reached only when the name and single-colour lookups fail; that order is
+// the safeguard for five CSS colours written either way and two hyphenated shipped palettes.
 test("a name and a single colour are both tried before the hyphen is", () => {
   const { normalizePalette } = paletteModule;
   const hyphenated = {
@@ -429,8 +399,7 @@ test("a name and a single colour are both tried before the hyphen is", () => {
   assert.equal(normalizePalette("  TEAL-BLACK  ", COLLABORATORS).id, "teal-black", "one palette, however it was spelled");
 });
 
-// Each way of getting a hyphenated palette wrong gets its own sentence, naming the part at
-// fault — a user who mistyped one of three colours should not have to work out which.
+// Each way of getting a hyphenated palette wrong gets its own message naming the part at fault.
 test("a hyphenated palette that does not resolve says which part was the problem", () => {
   const { normalizePalette } = paletteModule;
   assert.throws(
@@ -460,8 +429,7 @@ test("a written-out palette is refused for the same reasons a shipped one would 
 
 // -------------------------------------------------- tier colour contract ---
 
-// The rule that keeps every profile released before palettes existed valid: a tier that
-// names a colour paints itself and is held to no position rules at all.
+// A tier that names a colour paints itself and is held to no position rules.
 test("a tier with a colour may carry any finite score, as it always could", () => {
   for (const score of [2.5, 0, -3, 1e9]) {
     const result = classification.normalizeCustomClassification(
@@ -477,10 +445,8 @@ test("a tier with a colour may carry any finite score, as it always could", () =
   }
 });
 
-// THE RULE THE DOCUMENTATION PROMISED AND NOTHING ENFORCED. `[1, 5, -1]` normalized
-// without complaint, and the middle tier — the one marked `zone: optimal` — then took the
-// palette's most extreme colour. Valid YAML, a card that says the opposite of what it
-// means, and no way for the user to see why.
+// Palette-driven scores must descend with the thresholds, or the optimal tier can take the
+// palette's most extreme colour.
 test("palette-driven scores must descend with the thresholds", () => {
   const ramp = (scores) =>
     validCustom({
@@ -491,7 +457,6 @@ test("palette-driven scores must descend with the thresholds", () => {
       ],
     });
   assert.doesNotThrow(() => classification.normalizeCustomClassification(ramp([1, 0, -1]), COLLABORATORS));
-  // The reviewer's example, and the reason this test exists.
   assert.throws(
     () => classification.normalizeCustomClassification(ramp([1, 5, -1]), COLLABORATORS),
     /classification\.tiers\[1\]\.score is 5, which is not below the 1 of classification\.tiers\[0\]/
@@ -523,8 +488,8 @@ test("a tier that calls itself optimal must sit at the middle of the ramp", () =
     /classification\.tiers\[1\]\.score is 1, but a tier in the optimal zone is the middle of the ramp/
   );
 
-  // The converse is NOT required: a profile that only tells comfortable from outside is a
-  // legitimate thing to write, and its middle carries 0 without claiming to be optimal.
+  // The converse is not required: a profile that only tells comfortable from outside carries
+  // 0 in the middle without claiming to be optimal.
   assert.doesNotThrow(() =>
     classification.normalizeCustomClassification(
       validCustom({
@@ -538,8 +503,8 @@ test("a tier that calls itself optimal must sit at the middle of the ramp", () =
   );
 });
 
-// A painted tier answers to none of it, which is what keeps every profile written before
-// palettes existed valid — and a mixed profile is read as its colourless tiers alone.
+// A painted tier answers to none of the ramp rules; a mixed profile is read as its
+// colourless tiers alone.
 test("tiers that name their own colour are stepped over by the ramp rules", () => {
   assert.doesNotThrow(() =>
     classification.normalizeCustomClassification(
@@ -579,8 +544,7 @@ test("a tier without a colour needs a whole number of steps from optimal", () =>
   }
 });
 
-// A painted tier is not on the ramp at all, so its score is under no obligation to be a
-// distance -- which is what keeps every profile written before palettes existed valid.
+// A painted tier is not on the ramp, so its score need not be a whole-number distance.
 test("a mixed profile applies the distance rule only to the tiers that take a palette colour", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({

@@ -1,19 +1,12 @@
 "use strict";
 
-// Characterization of custom-element and Home Assistant registration.
-//
-// The registration block is the card's entire integration surface with Home
-// Assistant: the element tag, the HA lifecycle contract, the card-picker
-// metadata in window.customCards, and the version global. It runs as a
-// module-load side effect at the very END of the file, which makes it exactly
-// the kind of thing a bundler can reorder or tree-shake away — and it had no
-// unit coverage at all before this baseline.
-//
-// The double-load case is characterized too: Home Assistant can evaluate the
-// same resource twice (a dashboard reload with a stale cached copy, or the
-// same card registered under two resource URLs), and the file guards against
-// that with `if (!customElements.get(...))` plus an update-in-place merge of
-// the customCards entry.
+// Characterization of custom-element and Home Assistant registration. The registration block
+// is the card's entire integration surface: the element tag, the HA lifecycle contract, the
+// card-picker metadata in window.customCards, and the version global. It runs as a
+// module-load side effect at the end of the file — exactly what a bundler can reorder or
+// tree-shake. The double-load case is characterized too: HA can evaluate the same resource
+// twice (stale cache, or two resource URLs), guarded by `if (!customElements.get(...))` plus
+// an update-in-place merge of the customCards entry.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -73,9 +66,7 @@ test("the version global matches package.json (single source of truth for releas
 test("evaluating the card source twice in one realm neither throws nor duplicates the picker entry", () => {
   const before = env.window.customCards.length;
   const source = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
-  // runScripts:"outside-only" (see load-card.jsdom.js) exposes window.eval,
-  // which evaluates in the window's own realm — the same realm the first load
-  // used, which is exactly what the double-load guard needs to be exercised.
+  // window.eval evaluates in the window's own realm — the same realm the first load used, so the double-load guard is exercised.
   env.window.eval(source);
   assert.equal(env.window.customCards.length, before, "a second evaluation must update in place, not append");
   assert.equal(

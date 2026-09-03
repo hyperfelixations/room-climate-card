@@ -1,26 +1,12 @@
 "use strict";
 
-// Direct unit tests for classification and custom-profile normalization.
-//
-// These messages are a user-facing contract: Home Assistant shows whatever
-// setConfig() throws straight in the dashboard, and the troubleshooting section
-// of the public README quotes them. They are therefore asserted literally, and
-// so is the ORDER in which validation happens — a config with two problems must
-// keep reporting the same one first, or a user fixing errors top-down gets a
-// moving target.
-//
-// The collaborators the config layer is not allowed to import are stubbed here,
-// which is exactly the point of injecting them: the whole layer is testable
-// without the domain, the i18n registry or the view registry.
-//
-// This file owns the CLASSIFICATION sub-tree: the built-in profiles, a custom profile written
-// in YAML, and the parts a profile is assembled from. It is the one corner of the config
-// layer with a shape of its own rather than a flat list of keys, which is why it is tested
-// apart from the normalizer that calls it.
-//
-// The boundary to config-normalize-modules.test.js next door: how the classification result
-// is fitted into the finished config, and everything else about the top level, is that file's
-// subject.
+// Direct unit tests for classification and custom-profile normalization. The error messages
+// are a user-facing contract — Home Assistant shows what setConfig() throws, and the README
+// quotes it — so they, and the order validation runs in, are asserted literally.
+// Collaborators are stubbed, which is the point of injecting them.
+// Boundary: this file owns the classification sub-tree (built-in profiles, a YAML custom
+// profile, the parts a profile is assembled from); how the result fits into the finished
+// config is config-normalize-modules.test.js. See interne Doku §4 „Config-Normalisierungsvertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -29,9 +15,8 @@ const { VIEWS } = require("../../manifests/product-surface.js");
 let classification;
 let profileParts;
 
-// Minimal stand-ins for the injected registries. Deliberately not the real ones:
-// if a test only passes with the production registry, the injection boundary is
-// not doing its job.
+// Minimal stand-ins for the injected registries — not the real ones, so a test that needs
+// the production registry proves the injection boundary is not doing its job.
 const ZONES = ["optimal", "comfort", "outside", "invalid"];
 const SUPPORTED = new Set(["en", "de", "fr"]);
 const CELSIUS = {
@@ -45,21 +30,20 @@ const FAHRENHEIT = {
   deltaToCanonical: (v) => (v * 5) / 9,
 };
 
-// The palette collaborators, deliberately tiny: one colour per wing makes the anchoring
-// visible in a way five would not, and proves the layer never assumes the shipped
-// palette's reach.
+// Tiny palette collaborators: one colour per wing proves the layer never assumes the
+// shipped palette's reach.
 const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
 const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", below: ["#abcdef"], optimal: "#fedcba", above: ["#123456"] } };
 
 const COLLABORATORS = {
   classificationZones: ZONES,
   paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
-  // A stand-in for the colour lookup: one name that resolves, so precedence and the
-  // error message can both be exercised without the 148-entry table.
+  // Colour lookup stand-in: one name resolves, exercising precedence and the error message
+  // without the 148-entry table.
   paletteForColor: (name) =>
     name === "teal" ? { id: "teal", below: ["#003333"], optimal: "#006666", above: ["#009999"] } : null,
-  // A stand-in for the gradient lookup with the same contract as the real one: two or three
-  // colours it recognises, and null for everything else so the layer owns every message.
+  // Gradient lookup stand-in with the real contract: two or three recognised colours, null
+  // otherwise so the layer owns every message.
   paletteForGradient: (value) => {
     const parts = String(value).trim().split("-").map((part) => part.trim().toLowerCase());
     if (parts.length < 2 || parts.length > 3) return null;
@@ -175,9 +159,7 @@ test("a valid custom profile is converted into the canonical unit", () => {
   assert.equal(result.oneSided, false);
   assert.equal(result.invalidWhen, null, "no valid_range means no validity predicate");
   assert.equal(result.validRange, null);
-  // Colourless, like every other part of a profile: what an unusable reading looks like
-  // is the palette's answer, so a custom profile does not carry a fixed hex that would
-  // clash with every palette but the default.
+  // Colourless: what an unusable reading looks like is the palette's answer.
   assert.deepEqual(result.invalidClassification, {
     score: null,
     levelKey: "level.invalidReading",
@@ -214,18 +196,14 @@ test("custom scale switches and headroom are carried through", () => {
   assert.equal(result.headroom, 4);
 });
 
-// `classification.scale` describes the profile's reference axis, and it has exactly two
-// shapes: a declared range the drawn axis always covers, or no range at all and an axis
-// that follows the readings — which is what the built-in outdoor profile does, because
-// an outdoor range that is right in January is wrong in July. The two are alternatives,
-// not settings that combine, so declaring both is a contradiction rather than a
-// preference and is refused as one.
+// `classification.scale` has two shapes: a declared range the axis always covers, or no
+// range and an axis that follows the readings (what `outdoor` does). They are alternatives,
+// so declaring both is refused.
 test("a custom profile can hand the axis to the data by declaring no range at all", () => {
   const following = classification.normalizeCustomClassification(
     validCustom({
       scale: { step: 2, anchor_scale: false },
-      // A temperature profile derives its fire/low icon thresholds from the reference
-      // range; with none, it has to say them itself.
+      // With no reference range, a temperature profile has to state its icon thresholds.
       icons: { fire: 30, high: 26, normal: 19, low: 14 },
     }),
     COLLABORATORS
@@ -247,11 +225,8 @@ test("an omitted anchor_scale keeps the anchored axis every other built-in profi
   assert.equal(result.anchorScale, true);
 });
 
-// The rule this replaces refused any scale that did not fully contain the bands. The
-// bar is a window onto the value range and bands are clipped into that window, so a
-// band reaching past the declared range is drawn as far as the axis goes and no
-// further — the same thing that already happens whenever an anchored axis has not yet
-// grown to meet a band. Nothing about it is untrue, so nothing about it is refused.
+// A band reaching past the declared range is drawn as far as the axis goes and no further,
+// the same as an anchored axis that has not yet grown to meet a band, so it is not refused.
 test("a scale narrower than the comfort band is accepted and carried through unchanged", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({
@@ -265,10 +240,8 @@ test("a scale narrower than the comfort band is accepted and carried through unc
   assert.deepEqual(result.comfort, { min: 18, max: 26 });
 });
 
-// normalizeScale() is the only reader of the scale block, and every switch leaves it
-// already validated and camel-cased. Pinned here because the alternative — the caller
-// reaching back into the raw YAML for one of them — is what this replaced, and it is the
-// kind of thing that grows back.
+// normalizeScale() is the only reader of the scale block; every switch leaves it validated
+// and camel-cased, so no caller reaches back into the raw YAML.
 test("normalizeScale returns the range and every switch in its resolved form", () => {
   assert.deepEqual(
     profileParts.normalizeScale({ min: 16, max: 28, step: 2 }),
@@ -310,9 +283,7 @@ test("a custom valid_range becomes a predicate honouring both inclusivity flags"
   assert.equal(onlyMin.invalidWhen(-1), true);
 });
 
-// One meaning of "no icons", for every measurement: none. The temperature-only
-// derivation from the scale and comfort bands is gone, and with it the one place where
-// omitting a field meant something different depending on what was being measured.
+// "No icons" means none, for every measurement alike.
 test("omitting icons declares none, whatever the profile measures", () => {
   for (const overrides of [
     {},
@@ -323,9 +294,8 @@ test("omitting icons declares none, whatever the profile measures", () => {
   }
 });
 
-// The fire/high/normal/low object is the spelling released profiles use. It survives as
-// an INPUT only: what comes out is the same list every other profile carries, with the
-// five icons that spelling always implied.
+// The fire/high/normal/low object is an input spelling only; it normalizes into the same
+// {min, icon} list every profile carries, with the five icons it implies.
 test("the temperature threshold object normalizes into the shared icon list", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
@@ -340,8 +310,7 @@ test("the temperature threshold object normalizes into the shared icon list", ()
   ]);
 });
 
-// And the same profile written in the list form has to come out identical, or the two
-// spellings would not be two spellings of one thing.
+// The same icons written in list form come out identical.
 test("both spellings of the same temperature icons produce the same profile", () => {
   const asObject = classification.normalizeCustomClassification(
     validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
@@ -362,8 +331,7 @@ test("both spellings of the same temperature icons produce the same profile", ()
   assert.deepEqual(asList.iconTiers, asObject.iconTiers);
 });
 
-// A temperature profile may now choose its own icons, which the threshold object never
-// allowed — the card no longer owns that decision for one measurement and not the others.
+// A temperature profile may choose its own icons, in the list form.
 test("a temperature profile can choose icons of its own", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({
@@ -450,8 +418,7 @@ test("every custom-classification rejection keeps its exact message", () => {
   }
 });
 
-// The threshold object is a temperature-only compatibility spelling; anything else has
-// to use the one shape.
+// The threshold object is a temperature-only spelling; other metrics use the list form.
 test("only a temperature profile may use the legacy threshold object", () => {
   assert.throws(
     () =>

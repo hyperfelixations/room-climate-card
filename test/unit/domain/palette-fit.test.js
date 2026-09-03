@@ -1,29 +1,20 @@
 "use strict";
 
-// WHETHER A PALETTE CAN BE SEEN ON THE BACKGROUND THE CARD IS PAINTED ON — the measurement,
-// the reading of the background, and the seam that acts on the answer.
-//
-// This file replaces surface-detection.test.js, which tested a design that no longer
-// exists: palettes used to DECLARE which of two canonical backgrounds they suited
-// (`tunedFor`), and the card bucketed its own background into one of the two. Two buckets
-// cannot describe a dark blue card-mod card, and a declaration can drift from the colours
-// it describes. Both are now measured.
-//
-// The threshold is not asserted as a number anywhere here. It is asserted through the
-// VERDICTS it has to produce, which live in test/fixtures/palette-fit-calibration.js with a
-// reason on every row. That is deliberate: a number is not reviewable and a verdict is.
-//
-// This file is a UNIT test and imports src modules directly. How the card READS the
-// background it is painted on is a question about the assembled element, and lives next
-// door in test/component/rendering/background-reading.test.js.
+// Whether a palette can be seen on the background the card is painted on: the measurement,
+// and the seam (adaptation strategies) that acts on the verdict. The threshold is asserted
+// not as a number but through the verdicts in test/fixtures/palette-fit-calibration.js,
+// which carry a reason on every row.
+// Boundary: a unit test importing src directly; how the assembled element reads its own
+// background lives in test/component/rendering/background-reading.test.js.
+// Rationale for the fit model: see interne Doku §5 „Ob eine Palette auf diesem Grund
+// gesehen werden kann".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { VISIBLE, INVISIBLE, BORDERLINE } = require("../../fixtures/palette-fit-calibration.js");
-// CIEDE2000 rather than the Oklab distance the card itself uses: a spacing assertion measured
-// with the implementation's own instrument would only prove the implementation agrees with
-// itself.
+// CIEDE2000, not the Oklab distance the card uses: measuring with the implementation's own
+// instrument would only prove it agrees with itself.
 const measure = require("../../helpers/color-measurement.js");
 
 let fit;
@@ -42,8 +33,7 @@ test.before(async () => {
   paintRoles = await import("../../../src/domain/classification/paint-roles.js");
 });
 
-// A one-step palette, so a calibration pair can be judged as a palette without anything
-// else in the ramp interfering.
+// A one-step palette, so a calibration pair is judged without the rest of a ramp interfering.
 const swatch = (hex) => palettes.completePalette({ id: "swatch", origin: "builtin", optimal: hex, invalid: hex });
 
 // ======================================================== the calibration =====
@@ -63,9 +53,8 @@ test("every colour the table calls invisible is judged invisible", () => {
 });
 
 test("the two sides of the table do not overlap, and the threshold sits between them", () => {
-  // The property that makes the threshold defensible at all: there is a gap, and the number
-  // is inside it. If a future change to the instrument closes the gap, this fails before
-  // any individual verdict does — which is the more useful place to find out.
+  // What makes the threshold defensible: there is a gap between the labelled sets and the
+  // number is inside it. A change to the instrument that closes the gap fails here first.
   const distanceOf = ([colour, background]) => oklch.screenDistance(colour, background);
   const tightestVisible = Math.min(...VISIBLE.map(distanceOf));
   const widestInvisible = Math.max(...INVISIBLE.map(distanceOf));
@@ -80,9 +69,8 @@ test("the two sides of the table do not overlap, and the threshold sits between 
 });
 
 test("the borderline cases are the ones nearest the line, and each is labelled", () => {
-  // Keeps the list that gets rendered and looked at honest: a "borderline" pair that is
-  // nowhere near the line is not worth a swatch, and one that is near the line and NOT on
-  // the list would go unlooked-at.
+  // Keeps the rendered borderline list honest: a pair nowhere near the line is not worth a
+  // swatch, and one near the line but off the list goes unlooked-at.
   for (const [colour, background, verdict] of BORDERLINE) {
     const report = fit.evaluatePaletteFit(swatch(colour), [background]);
     assert.equal(report.fits, verdict === "visible", `${colour} on ${background} should be ${verdict}`);
@@ -91,8 +79,7 @@ test("the borderline cases are the ones nearest the line, and each is labelled",
 
 // ================================================== the shipped palettes =====
 
-// The behaviour the supervisor asked for, stated as cases rather than as a threshold.
-// "keep" means the card leaves the palette exactly as written.
+// The intended behaviour stated as cases. "keep" means the card leaves the palette as written.
 const EXPECTATIONS = [
   // The four shipped ramps, on the two backgrounds every dashboard actually uses.
   ["pastel", "#FFFFFF", "keep"],
@@ -107,8 +94,8 @@ const EXPECTATIONS = [
   ["pastel", "#0A2A4F", "keep"],
   ["vivid", "#113322", "keep"],
   ["signal", "#FAFAFA", "keep"],
-  // Mid grey is the one background no mid-light ramp survives, and saying so is correct
-  // rather than over-eager: on #808080 these colours genuinely cannot be read.
+  // Mid grey is the one background no mid-light ramp survives: on #808080 these colours
+  // genuinely cannot be read.
   ["pastel", "#808080", "adapt"],
   ["vivid", "#808080", "adapt"],
 ];
@@ -135,15 +122,12 @@ test("a generated palette gives you the colour you asked for wherever it can be 
     ["white", "#1C1C1C", "keep", "white on a dark card"],
     ["white", "#FFFFFF", "adapt", "white on white"],
     ["teal", "#FFFFFF", "keep", "teal on white"],
-    // Not a regression: a derived ramp carries eleven steps, and teal's deep wing needs more
-    // room below itself than the dark card leaves it — its outermost deep step lands where
-    // #1C1C1C is. The card repairs that, and the repair is the smallest one there is.
+    // A derived ramp has eleven steps; teal's deep wing needs more room below it than a
+    // near-black card leaves, so its outermost deep step lands on #1C1C1C and is repaired.
     ["teal", "#1C1C1C", "adapt", "teal has to move a little on a near-black card"],
     ["gray", "#FFFFFF", "keep", "a grey ramp has room to spare above white"],
-    // A grey ramp of eleven steps reaches further down than a near-black card leaves it, for
-    // the same reason teal does. Eleven steps a reader can separate need about half again the
-    // lightness that stays readable on both cards, so a derived ramp is tuned to the card it is
-    // on rather than to both at once.
+    // Same as teal: an eleven-step grey ramp reaches further down than the dark card leaves,
+    // so a derived ramp is tuned to the card it is on rather than to both at once.
     ["gray", "#1C1C1C", "adapt", "and rather less below the dark one"],
   ];
   for (const [name, background, expected, why] of cases) {
@@ -157,8 +141,7 @@ test("a generated palette gives you the colour you asked for wherever it can be 
 });
 
 test("a palette painted on its own colour always collides", () => {
-  // The degenerate case, and a useful sanity check on the whole instrument: whatever the
-  // threshold is, a colour is not visible on itself.
+  // The degenerate case: whatever the threshold, a colour is not visible on itself.
   for (const name of ["red", "teal", "yellow", "navy", "orange"]) {
     const palette = palettes.paletteForColor(name);
     const report = fit.evaluatePaletteFit(palette, [palette.optimal]);
@@ -193,9 +176,8 @@ test("the steps are reported in ramp order, outermost below to outermost above",
 });
 
 test("a collision in the middle is reported as a middle region, not as a broken palette", () => {
-  // The case that decides "change the whole ramp or only part of it": a blue-green-red ramp
-  // on a green card reaches the background in the MIDDLE and is perfectly legible at both
-  // ends. A finding that could not say that would force every method to move everything.
+  // Decides "change the whole ramp or only part of it": a blue-green-red ramp on a green card
+  // reaches the background in the middle and is legible at both ends.
   const blueGreenRed = palettes.completePalette({
     id: "bgr",
     origin: "builtin",
@@ -233,10 +215,8 @@ test("a collision at one end is reported as touching that end", () => {
 });
 
 test("a one-winged palette is not mislabelled: its middle is not its start", () => {
-  // The case the old `where` label got wrong. With no `below` wing, `optimal` is the ramp's
-  // first element — so a collision there "touches the start" as a matter of array position,
-  // and any name for that shape would have to claim it is the palette's beginning. The facts
-  // say what happened; they do not interpret it.
+  // With no `below` wing, `optimal` is the ramp's first element, so a collision there
+  // "touches the start" by array position; the report states that without interpreting it.
   const upwardsOnly = palettes.completePalette({
     id: "up",
     origin: "builtin",
@@ -274,8 +254,8 @@ test("the report carries the palette's geometry, so a method need not recompute 
 });
 
 test("a passing step reports how much room it still has", () => {
-  // Without this a method that moves the whole ramp cannot tell how far it may go before it
-  // breaks a step that currently works.
+  // A method that moves the whole ramp needs to know how far a passing step may go before it
+  // breaks.
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#1C1C1C"]);
   assert.equal(report.fits, true);
   for (const step of report.steps) {
@@ -288,7 +268,7 @@ test("a passing step reports how much room it still has", () => {
 
 test("the invalid colour is judged, and judged separately from the ramp", () => {
   // It is painted, so it counts; it is not a point on the scale, so it is not part of any
-  // region. A method that reshapes the ramp would otherwise leave it behind unnoticed.
+  // region, and a method reshaping the ramp must not leave it behind.
   const onGrey = fit.evaluatePaletteFit(palettes.paletteForName("vivid"), ["#7D7D7D"]);
   assert.equal(onGrey.invalid.key, "invalid");
   assert.equal(onGrey.invalid.fits, false, "the shared neutral #7D7D7D cannot be seen on itself");
@@ -319,11 +299,9 @@ test("the forbidden bands say which lightnesses are unusable, for a method to ai
 });
 
 test("two far-apart samples forbid two separate bands, never one merged one", () => {
-  // The defect this locks out: a single min/max over every sample says the WHOLE lightness
-  // range is unusable as soon as the samples sit at both ends of it. Measured on a ramp that
-  // reaches both ends over a white-to-black gradient, the merged answer was 0.000..1.000
-  // while 0.40..0.83 was in fact free — so a method reading it would conclude there was
-  // nowhere to move to and give up on a palette it could easily have rebuilt.
+  // The defect this locks out: a single min/max over every sample calls the whole lightness
+  // range unusable once samples sit at both ends of it, so a method reading it gives up on a
+  // palette it could have rebuilt.
   const wide = palettes.completePalette({
     id: "w",
     origin: "builtin",
@@ -350,8 +328,8 @@ test("two far-apart samples forbid two separate bands, never one merged one", ()
 });
 
 test("a gradient containing every lightness leaves nowhere to go, and says so", () => {
-  // The honest opposite: when the forbidden bands really do cover the range, `usable` is
-  // empty. A method may then answer "not achievable" instead of inventing a ramp.
+  // The opposite: when the forbidden bands really do cover the range, `usable` is empty and a
+  // method may answer "not achievable" instead of inventing a ramp.
   const wide = palettes.completePalette({
     id: "w",
     origin: "builtin",
@@ -370,10 +348,8 @@ test("a gradient containing every lightness leaves nowhere to go, and says so", 
 });
 
 test("the whole report is cached on what it was computed from, and never served stale", () => {
-  // The card asks this on every render with the same palette and the same surface, and the
-  // answer costs several hundred perceptual distances on a gradient. The classic way to get
-  // that wrong is to keep serving the first answer after something has changed, so every
-  // ingredient of the key is moved here and the answer has to move with it.
+  // The card asks this every render, and the answer costs hundreds of perceptual distances.
+  // Each ingredient of the memo key is changed here and the answer must move with it.
   const { surfaceOf } = paintRoles;
   const pastel = palettes.paletteForName("pastel");
   const onDark = fit.evaluatePaletteFit(pastel, ["#1C1C1C"]);
@@ -381,15 +357,15 @@ test("the whole report is cached on what it was computed from, and never served 
 
   // 1 — a different background.
   assert.notEqual(fit.evaluatePaletteFit(pastel, ["#808080"]).fits, onDark.fits);
-  // 2 — a different TEXT colour, with the background unchanged: the track moves, so a
-  // marker is painted on something else.
+  // 2 — a different text colour, background unchanged: the track moves, so a marker is
+  // painted on something else.
   const light = (text) => fit.evaluatePaletteFit(pastel, surfaceOf(["#FFFFFF"], text));
   assert.notDeepEqual(
     light("#212121").steps.map((step) => step.roles.marker.background),
     light("#727272").steps.map((step) => step.roles.marker.background)
   );
-  // 3 — a different palette under the same id, which is what a derived palette looks like
-  // when its colours change. Object identity would miss this; the key is over the values.
+  // 3 — a different palette under the same id (what a derived palette looks like when its
+  // colours change). Object identity would miss this; the key is over the values.
   const one = palettes.completePalette({ id: "same", origin: "builtin", optimal: "#000000" });
   const other = palettes.completePalette({ id: "same", origin: "builtin", optimal: "#FFFFFF" });
   assert.equal(fit.evaluatePaletteFit(one, ["#1C1C1C"]).fits, false);
@@ -404,8 +380,8 @@ test("the whole report is cached on what it was computed from, and never served 
 });
 
 test("a cached report cannot be altered by whoever received it", () => {
-  // The same object is handed out on the next call, so a consumer that sorted `failing` in
-  // place would change what every later render is told.
+  // The same object is handed out next call, so a consumer sorting `failing` in place would
+  // change what every later render is told.
   const report = fit.evaluatePaletteFit(palettes.paletteForName("pastel"), ["#808080"]);
   for (const list of [report.steps, report.failing, report.selfTintConflicts]) {
     assert.throws(
@@ -424,8 +400,8 @@ test("a cached report cannot be altered by whoever received it", () => {
 });
 
 test("the forbidden bands are cached on the background, and never served stale", () => {
-  // The bands depend on the background alone, so they are memoized — and the classic way to
-  // get that wrong is to keep serving the first answer after the background has changed.
+  // The bands depend on the background alone, so they are memoized on it and must change when
+  // it changes.
   const black = palettes.paletteForColor("black");
   const onDark = fit.evaluatePaletteFit(black, ["#1C1C1C"]);
   const onGrey = fit.evaluatePaletteFit(black, ["#808080"]);
@@ -497,8 +473,8 @@ test("a gradient is sampled through its interior, not only at its stops", () => 
 // ================================================ the origin gate ============
 
 test("the card adapts palettes it built itself and never one written out in YAML", () => {
-  // A written-out palette is a series of decisions somebody typed. Quietly moving those
-  // colours would overrule a person who was perfectly explicit, so the card does not.
+  // A written-out palette is a series of decisions somebody typed; the card does not move
+  // those colours.
   const written = palettes.completePalette({
     id: "custom",
     optimal: "#000000",
@@ -516,9 +492,8 @@ test("the card adapts palettes it built itself and never one written out in YAML
 });
 
 test("naming a CSS colour after `palette:` is still an automated palette", () => {
-  // The line is where the colours came from, not how they were spelled. `palette: deeppink`
-  // names a COLOUR and asks the card to build a ramp; the same word inside a written-out
-  // palette is a chosen step.
+  // What matters is where the colours came from: `palette: deeppink` names a colour and asks
+  // the card to build a ramp, so the ramp is adaptable.
   const derived = palettes.paletteForColor("deeppink");
   assert.equal(derived.origin, "derived");
   assert.equal(adaptation.isAdaptable(derived), true);
@@ -526,12 +501,10 @@ test("naming a CSS colour after `palette:` is still an automated palette", () =>
 
 // ================================================ the strategy contract ======
 
-// Everything an adaptation strategy owes, run against EVERY registered one, so a method added
-// later inherits the whole contract without anyone remembering to write these again.
-//
-// The subjects are chosen to cover the shapes that break things: a wing with nowhere paler to
-// go, a ramp whose middle is the colour of the card, a hand-designed ramp that has to move as
-// a whole, an interpolated ramp, and a one-winged ramp.
+// Everything an adaptation strategy owes, run against every registered one. The subjects
+// cover the shapes that break things: a wing with nowhere paler to go, a ramp whose middle is
+// the card's colour, a hand-designed ramp that must move as a whole, an interpolated ramp,
+// and a one-winged ramp.
 const SUBJECTS = () => [
   ["yellow on white", palettes.paletteForColor("yellow"), ["#FFFFFF"]],
   ["black on the dark card", palettes.paletteForColor("black"), ["#1C1C1C"]],
@@ -555,9 +528,8 @@ test("every registered strategy keeps a palette's shape, determinism and idempot
       const once = adaptPalette(palette, background, strategyId);
       const label = strategyId + ", " + why;
 
-      // 1 — SHAPE. The id is what documentation, diagnostics and golden screenshots name a
-      // palette by, so it survives; a wing that carried steps still carries steps, because a
-      // ramp with a wing emptied says less than it did; and every colour is still a colour.
+      // 1 — shape: the id survives (documentation, diagnostics and golden screenshots name a
+      // palette by it), a wing that carried steps still does, and every colour is still a colour.
       assert.equal(once.id, palette.id, label + ": id");
       assert.equal(once.below.length > 0, palette.below.length > 0, label + ": below is still a wing");
       assert.equal(once.above.length > 0, palette.above.length > 0, label + ": above is still a wing");
@@ -565,40 +537,29 @@ test("every registered strategy keeps a palette's shape, determinism and idempot
         assert.match(hex, /^#[0-9A-Fa-f]{6}$/, label + ": " + hex);
       }
 
-      // 5 — DETERMINISM.
+      // 2 — determinism.
       assert.deepEqual(adaptPalette(palette, background, strategyId), once, label + ": deterministic");
 
-      // 3 — IDEMPOTENCE. Applying it again changes nothing, which is what makes the result a
-      // fixed point rather than a step in a drift.
+      // 3 — idempotence: applying it again changes nothing, so the result is a fixed point.
       assert.deepEqual(adaptPalette(once, background, strategyId), once, label + ": idempotent");
     }
 
-    // 3 — a palette that already fits is returned untouched, by identity and not merely by
-    // value: the cheapest possible proof that nothing was rebuilt.
+    // 4 — a palette that already fits is returned untouched by identity, not merely by value.
     const fine = palettes.paletteForName("pastel");
     assert.equal(adaptPalette(fine, ["#1C1C1C"], strategyId), fine, strategyId + ": a fitting palette is untouched");
   }
 });
 
-// THE TIGHTEST PAIR THE CARD ALREADY SHIPS, in CIEDE2000. `palette: black` puts #0C0C0C beside
-// #000000 and reads 1.9 — the generators guarantee their steps in a plain Oklab distance, which
-// overstates a difference at the dark end, so this pair passes their bar at 0.150 while a
-// screen shows one colour. No repair may produce anything tighter than what already exists.
+// The tightest neighbour pair the card already ships, in CIEDE2000: `palette: black` puts
+// #0C0C0C beside #000000 and reads 1.9. No repair may produce anything tighter.
 const TIGHTEST_SHIPPED = 1.9;
 
 test("every registered strategy leaves every pair of steps distinguishable", () => {
-  // The property that stops a repair from buying contrast against the card and paying for it
-  // BETWEEN the steps. Measured with CIEDE2000 — neither the Oklab distance the generators use
-  // nor the screen distance the repair checks itself with, so the assertion and the
-  // implementation are not one instrument agreeing with itself.
-  //
-  // AN ABSOLUTE FLOOR AND NOTHING ELSE, because a relative one would claim a property the card
-  // does not have. A ramp that must move lands somewhere else in a space that is not uniform
-  // under translation, and the compression is real: measured, a snow-white ramp on a mid grey
-  // card keeps 42% of the spacing it started with, because a near-white ramp on a mid grey
-  // background has to fit into what is left above the background, and a rebuilt ramp that gains
-  // steps puts more of them between the same two ends. What can be promised is that no pair
-  // ends up tighter than a pair the card already ships.
+  // Stops a repair from buying contrast against the card and paying for it between the steps.
+  // Measured with CIEDE2000 — neither the Oklab distance the generators use nor the screen
+  // distance the repair checks with. An absolute floor only: a moved ramp compresses (a
+  // relative floor would claim a property the card does not have), so all that can be
+  // promised is that no pair ends up tighter than one the card already ships.
   const { ADAPTATION_STRATEGIES, adaptPalette } = adaptation;
   for (const strategyId of Object.keys(ADAPTATION_STRATEGIES)) {
     for (const [why, palette, background] of SUBJECTS()) {
@@ -613,15 +574,9 @@ test("every registered strategy leaves every pair of steps distinguishable", () 
 
 test("no repair leaves a pair of steps tighter than the palette already had them", () => {
   // The measured claim behind the bar above, over every palette and background the card can
-  // really meet rather than the ten subjects. The number that made this necessary: with the
-  // spacing checked in the generators' own Oklab distance, `palette: black` on a mid grey card
-  // came back with its darkest three steps at CIEDE2000 0.31 — one colour written three ways —
-  // while that arithmetic read 0.07 and called it twice the bar.
-  //
-  // NOT WORSE, rather than a fixed floor, because some ramps arrive already degenerate and a
-  // repair is not asked to invent room the colour never had. `palette: black` has nothing
-  // deeper than black, so its deep wing is five blacks whatever the background — and a repair
-  // that leaves it five blacks has taken nothing away.
+  // really meet rather than the ten subjects. "Not worse" rather than a fixed floor: some
+  // ramps arrive already degenerate (`palette: black` has nothing deeper than black), and a
+  // repair that leaves such a wing as it was has taken nothing away.
   const palettes3 = [
     ...["pastel", "vivid", "color-vision", "signal"].map((id) => palettes.paletteForName(id)),
     ...["yellow", "lime", "teal", "navy", "black", "white", "snow", "gray", "gold", "orange", "cyan"].map((name) =>
@@ -651,10 +606,9 @@ test("no repair leaves a pair of steps tighter than the palette already had them
 });
 
 test("every registered strategy either delivers a readable palette or says it cannot", () => {
-  // THE POSTCONDITION, and the reason it is written as a disjunction. `identity` never repairs
-  // anything, so it can only satisfy this by admitting it — which it does, in the only way the
-  // seam allows: adaptPalette() hands the user's own palette back. A method that CLAIMS to
-  // have repaired something has to have repaired it.
+  // The postcondition, written as a disjunction: `identity` never repairs anything and
+  // satisfies this only by handing the user's own palette back. A method that claims to have
+  // repaired something has to have repaired it.
   const { ADAPTATION_STRATEGIES, adaptPalette } = adaptation;
   for (const strategyId of Object.keys(ADAPTATION_STRATEGIES)) {
     for (const [why, palette, background] of SUBJECTS()) {
@@ -671,9 +625,8 @@ test("every registered strategy either delivers a readable palette or says it ca
 });
 
 test("the shipped method reaches every background a card can really have, and says so when it cannot", () => {
-  // The coverage claim, stated as a test rather than as a paragraph. The one case it does not
-  // reach is the one that has no answer: a card whose background runs from white to black
-  // contains every lightness, and no fixed ramp is legible over all of it.
+  // The coverage claim. The one case it does not reach has no answer: a background running
+  // from white to black contains every lightness, and no fixed ramp is legible over all of it.
   const backgrounds = [
     ["white", ["#FFFFFF"]],
     ["the dark card", ["#1C1C1C"]],
@@ -694,10 +647,9 @@ test("the shipped method reaches every background a card can really have, and sa
     ...["blue-red", "blue-green-red", "teal-orange"].map((spelling) => ["palette: " + spelling, palettes.paletteForGradient(spelling)]),
   ];
 
-  // THE TWO IT CANNOT REACH, named rather than glossed over. A grey ramp on a mid grey card
-  // has to fit eleven steps into the lightness that is left once the background's own
-  // neighbourhood is taken out, and there is not enough of it on either side. The card keeps
-  // what the user asked for, which is at least what they asked for.
+  // The three it cannot reach: a grey ramp on a mid grey card must fit eleven steps into the
+  // lightness left once the background's neighbourhood is removed, and there is not enough on
+  // either side. The card keeps what the user asked for.
   const OUT_OF_REACH = new Set([
     "palette: teal on mid grey",
     "palette: gray on mid grey",
@@ -718,34 +670,27 @@ test("the shipped method reaches every background a card can really have, and sa
       repaired += 1;
     }
   }
-  // Measured at 80 of the 190 pairs above. Asserted as a floor rather than an equality
-  // because a palette that starts fitting somewhere is not a regression — a drop to a handful
-  // would mean this test had quietly stopped exercising the method.
+  // A floor, not an equality: a palette that starts fitting somewhere is not a regression,
+  // but a drop to a handful would mean this test had stopped exercising the method.
   assert.ok(repaired >= 70, "only " + repaired + " palettes needed repairing, so this is not exercising much");
 });
 
 test("nothing the golden suite renders is touched on either theme", () => {
-  // THE PIXEL GUARANTEE, stated where it can be checked in a millisecond instead of in a
-  // browser. Every palette the visual suite renders, on both backgrounds Home Assistant ships,
-  // comes back BY IDENTITY — so the fifty-four golden images cannot move, and any that did
-  // would be a wiring mistake rather than an expected difference.
-  //
-  // It is worth pinning rather than assuming: the repair is reached through one call in
-  // buildCardDomainModel(), and the difference between "leaves a fitting palette alone" and
-  // "rebuilds it to the same colours" is invisible in a screenshot and very visible in a diff.
+  // The pixel guarantee, checkable in a millisecond instead of a browser: every palette the
+  // visual suite renders, on both shipped backgrounds, comes back by identity, so the golden
+  // images cannot move. "Leaves a fitting palette alone" vs "rebuilds it to the same colours"
+  // is invisible in a screenshot and visible in a diff, so it is pinned here.
   const rendered = [
     ...["pastel", "vivid", "color-vision", "signal"].map((id) => [id, palettes.paletteForName(id)]),
     ["palette: blue", palettes.paletteForColor("blue")],
     ["palette: blue-red", palettes.paletteForGradient("blue-red")],
     ["palette: blue-green-red", palettes.paletteForGradient("blue-green-red")],
-    // The written-out single-colour palette, which is `custom` and therefore never touched at
-    // all — a different guarantee reaching the same picture.
+    // A written-out single-colour palette is `custom` and never touched at all.
     ["a palette written out in YAML", palettes.completePalette({ optimal: "#1DB85D" })],
   ];
-  // THE ONE THAT IS TOUCHED, and it is the picture that exists to watch this. `palette: blue`
-  // carries eleven steps like every derived ramp, and its deep wing reaches further down than a
-  // near-black card leaves it — so on the dark theme the card tunes it, and the middle moves
-  // from pure blue to a blue with room under it. On the light theme nothing moves.
+  // The one that is touched: `palette: blue` has eleven steps and its deep wing reaches
+  // further down than a near-black card leaves, so on the dark theme the card tunes it. On
+  // the light theme nothing moves.
   const TUNED = new Set(["palette: blue on the dark theme"]);
 
   for (const [label, palette] of rendered) {
@@ -781,14 +726,12 @@ test("a background that contains every lightness has no answer, and the card kee
 
 // ================================================ what the method promises ===
 
-// One step of an 8-bit channel, in Oklab lightness. Two colours closer than this are the same
-// colour once written as a hex.
+// One 8-bit channel step in Oklab lightness. Two colours closer than this are the same hex.
 const QUANTISATION = 0.005;
 
 test("a built-in ramp keeps the order it was written in", () => {
-  // There is no seed behind pastel, so its finished steps are moved — and a monotone map on
-  // lightness is what "moved" means here. Whatever the ramp said about which step is lighter
-  // than which, it still says.
+  // Pastel has no seed, so its finished steps are moved by a monotone map on lightness:
+  // whatever the ramp said about which step is lighter than which, it still says.
   for (const id of ["pastel", "vivid", "color-vision", "signal"]) {
     for (const background of [["#808080"], ["#C8B400"], ["#FA8072"], ["#ADD8E6"]]) {
       const palette = palettes.paletteForName(id);
@@ -800,9 +743,8 @@ test("a built-in ramp keeps the order it was written in", () => {
       for (let a = 0; a < before.length; a += 1) {
         for (let b = 0; b < before.length; b += 1) {
           // A pair whose lightnesses differ by less than an 8-bit channel had no order to
-          // preserve: pastel's two coldest steps sit 0.001 apart, which is below what a hex
-          // colour can even express, so which of them rounds out lighter is noise both before
-          // and after. QUANTISATION is the tolerance, not a fudge factor.
+          // preserve (pastel's two coldest steps sit 0.001 apart); QUANTISATION is that
+          // tolerance.
           if (before[a] >= before[b] - QUANTISATION) continue;
           assert.ok(
             after[a] <= after[b] + QUANTISATION,
@@ -815,9 +757,8 @@ test("a built-in ramp keeps the order it was written in", () => {
 });
 
 test("a ramp derived from one colour is still that colour, to the hue", () => {
-  // The promise a monochrome ramp makes and the one a repair could most easily break: every
-  // step of `palette: yellow` is yellow, wherever the card puts it. Achromatic seeds are
-  // exempt because their hue angle is rounding noise and always was.
+  // Every step of `palette: yellow` is yellow wherever the card puts it. Achromatic seeds are
+  // exempt because their hue angle is rounding noise.
   for (const name of ["yellow", "lime", "teal", "navy", "gold", "deeppink", "orange", "cyan"]) {
     const palette = palettes.paletteForColor(name);
     const seedHue = oklch.hexToOklch(palette.source.color).hue;
@@ -838,10 +779,9 @@ test("a ramp derived from one colour is still that colour, to the hue", () => {
 });
 
 test("the named colour stays exactly itself while it can be seen, and moves the least it can when it cannot", () => {
-  // The rule the supervisor set, as two cases. `palette: lime` on white has a middle that is
-  // perfectly visible on the card, so it does not move at all and only the pale wing is
-  // rebuilt. `palette: snow` on white has a middle that is not, so it moves — in lightness,
-  // never to another colour.
+  // Two cases. `palette: lime` on white has a middle visible on the card, so only the pale
+  // wing is rebuilt. `palette: snow` on white does not, so it moves — in lightness, never to
+  // another colour.
   const lime = palettes.paletteForColor("lime");
   assert.equal(fit.evaluatePaletteFit(lime, ["#FFFFFF"]).fits, false);
   assert.equal(
@@ -860,9 +800,8 @@ test("the named colour stays exactly itself while it can be seen, and moves the 
 });
 
 test("the invalid colour is carried along, and is not treated as part of the ramp", () => {
-  // It is painted, so a repair that left it behind would leave exactly the colour that means
-  // "no reading" unreadable. It is not on the scale, so it has no neighbours to stay ordered
-  // with and is corrected on its own.
+  // Painted, so a repair leaving it behind leaves the "no reading" colour unreadable; not on
+  // the scale, so it has no neighbours to stay ordered with and is corrected on its own.
   const palette = palettes.paletteForName("pastel");
   const adapted = adaptation.adaptPalette(palette, ["#B4B2A9"]);
   assert.notEqual(adapted.invalid, palette.invalid, "the shared neutral cannot be seen on itself");
@@ -870,9 +809,9 @@ test("the invalid colour is carried along, and is not treated as part of the ram
 });
 
 test("the answer is memoized on the question, so a searching method is not paid for twice", () => {
-  // A strategy searches: it builds candidate ramps and measures them, which leaves the report
-  // memo in palette-fit.js holding the last CANDIDATE rather than the palette the card started
-  // from. Without a memo here, every render would pay for the whole search again.
+  // A strategy searches (builds candidate ramps and measures them), leaving the palette-fit.js
+  // memo holding the last candidate, not the card's starting palette; without a memo here
+  // every render pays for the whole search again.
   const palette = palettes.paletteForColor("lime");
   const first = adaptation.adaptPalette(palette, ["#FFFFFF"]);
   assert.equal(adaptation.adaptPalette(palette, ["#FFFFFF"]), first, "the same question gives the same object back");
@@ -881,11 +820,9 @@ test("the answer is memoized on the question, so a searching method is not paid 
   // never hit an identity check.
   assert.equal(adaptation.adaptPalette(palettes.paletteForColor("lime"), ["#FFFFFF"]), first);
 
-  // ONE SLOT, and a second question evicts it. That is the right size rather than a limitation:
-  // a card has one palette on one surface at a time and asks the same question every render,
-  // so the sequence a card really produces never alternates. What must never happen is the
-  // memo answering the wrong question — so the answer has to CHANGE when the background does,
-  // and be right again on the way back.
+  // One slot, evicted by a second question: a card has one palette on one surface at a time
+  // and asks the same question every render. The memo must never answer the wrong question,
+  // so the answer changes when the background does and is right again on the way back.
   const elsewhere = adaptation.adaptPalette(palette, ["#1C1C1C"]);
   assert.notEqual(elsewhere, first, "a different background is a different question");
   assert.notDeepEqual(elsewhere, first, "and a different answer");
@@ -902,9 +839,8 @@ test("an unknown strategy name falls back to the default rather than throwing", 
 });
 
 test("the verdict changes exactly once as a background sweeps from white to black", () => {
-  // Stability without hysteresis. The measurement is monotone in background lightness for a
-  // fixed colour, so a background drifting across the threshold flips the answer once and
-  // stays there — no state, no flapping, and nothing to tune.
+  // Stability without hysteresis: the measurement is monotone in background lightness for a
+  // fixed colour, so a background crossing the threshold flips the answer once and stays there.
   const palette = palettes.paletteForColor("black");
   let flips = 0;
   let previous = null;

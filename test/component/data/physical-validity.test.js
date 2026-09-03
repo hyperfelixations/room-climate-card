@@ -1,19 +1,11 @@
 "use strict";
 
-// What a reading cannot physically BE, for each of the four measurements, and what the
-// card does with one that says it anyway: excluded from the whole data pipeline (average,
-// extrema, comfort counting, spread) through _isPhysicallyValid(), not merely recoloured
-// grey — a faulty sensor must not pull the room average or supply a bogus "coolest room".
-//
-// ONE RULE ACROSS ALL FOUR: the limit itself is a reading, everything past it is not.
-// A concentration of 0 and a humidity of 0 % or 100 % are legitimate; a negative
-// concentration, a humidity outside 0-100 and a temperature below absolute zero are not.
-//
-// Temperature is the one whose limit needs converting, and that is what makes it worth its
-// own cases: the profile states -273.15 in Celsius, and a card reading Fahrenheit or Kelvin
-// has to reject the same PHYSICAL readings, not the same numbers.
-//
-// Absolute values, range state and trend rates intentionally have distinct validity rules.
+// What a reading cannot physically be, per measurement, and what the card does with one
+// that claims it anyway: excluded from the whole pipeline (average, extrema, comfort count,
+// spread) via _isPhysicallyValid(), not just recoloured grey. One rule for all four: the
+// limit itself is a reading, everything past it is not — 0 concentration and 0 %/100 %
+// humidity count, negatives and out-of-range do not. Temperature's limit needs converting
+// per unit, hence its own cases; range state and trend rates have distinct rules by design.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -116,9 +108,8 @@ test("a negative CO2 room reading is excluded from the room average, extrema, an
 });
 
 test("a CO2 room reading of exactly 0 counts, because nothing about it is impossible", () => {
-  // The card judges what a reading CAN be, not whether a sensor looks healthy. A CO2
-  // sensor stuck at zero is a stale reading, which is a different question with a
-  // different answer, and answering it here would cost the legitimate readings too.
+  // The card judges what a reading can be, not whether the sensor looks healthy — a
+  // stuck-at-zero sensor is a different question, and answering it here would cost real readings.
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 700, CO2),
     "sensor.r1": mkState("sensor.r1", 0, CO2),
@@ -172,10 +163,8 @@ test("all CO2 room readings physically invalid + no valid primary entity -> no-d
 });
 
 // ==== temperature, in every unit the card reads ====
-// The limit is stated once, in Celsius, on the profile. A card reading Fahrenheit or
-// Kelvin has to reject the same PHYSICAL readings — which is a different set of NUMBERS,
-// and the reason the limit travels as a range that gets converted rather than as a bare
-// comparison against -273.15.
+// The limit is stated once in Celsius on the profile; a °F or K card must reject the same
+// physical readings, a different set of numbers — hence a converted range, not a bare -273.15 test.
 
 test("a temperature room below absolute zero is excluded from the room average, extrema, and comfort count", () => {
   const hass = mkHass({
@@ -209,8 +198,8 @@ test("a temperature primary below absolute zero is rejected — falls back to th
 });
 
 test("the absolute-zero limit is converted, so a Fahrenheit card rejects the same physical readings", () => {
-  // -300 °F is -184 °C: absurdly cold for a room, and perfectly possible. A limit compared
-  // against the Celsius number would throw it away, which is the mistake this guards.
+  // -300 °F is -184 °C: absurdly cold, still possible. Comparing against the Celsius number
+  // would discard it — the mistake this guards.
   const cold = env.createCard({ entity: "sensor.avg" }, mkHass({ "sensor.avg": mkState("sensor.avg", -300, TEMPERATURE_F) }));
   assert.equal(cold._computeViewModel().empty, false, "-300 °F is above absolute zero and is a reading");
   env.cleanup(cold);
@@ -230,12 +219,8 @@ test("a Kelvin card reads 0 K and rejects everything below it", () => {
   env.cleanup(negative);
 });
 
-// Range state and trend validity: hasRange/hasRangeScale
-// axis and trendValue are exempt from _isPhysicallyValid() by design (they
-// are deltas/day-spans, not absolute concentration readings — see
-// the range model's own comment on min/max) — DATA-02's negative-range
-// concern for those is separately covered by DATA-02/DATA-03's own sign
-// checks (range-and-spread.test.js), not the physical-plausibility filter.
+// Range axis and trend value are exempt from _isPhysicallyValid() by design (deltas/day-
+// spans, not absolute readings); their negative-value checks live in range-and-spread.test.js.
 test("a CO2 trend value is not filtered by _isPhysicallyValid() (a negative trend is a legitimate falling rate, not an invalid reading)", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 700, CO2),

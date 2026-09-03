@@ -1,25 +1,17 @@
 "use strict";
 
-// Direct unit tests for src/i18n/* — the translation subsystem, tested
-// without a card instance.
-//
-// These contracts are tested through their owning modules; key parity
-// could only be observed by spying on console.warn during script load (see
-// i18n.test.js, which keeps doing exactly that as an end-to-end check of the
-// built artifact). These tests assert the same contracts against the modules
-// themselves, where a failure names the actual function.
-//
-// TZ is pinned before anything constructs an Intl formatter: formatTimeOfDay()
-// renders in local time, so an unpinned zone would make assertions
-// machine-dependent. node:test runs each file in its own process.
+// Direct unit tests for src/i18n/* — the translation subsystem, tested without a card
+// instance, where a failure names the actual function. Boundary: the built-artifact
+// end-to-end check that spies on console.warn during script load is i18n.test.js.
+// TZ is pinned to UTC before any Intl formatter is built, since formatTimeOfDay() renders
+// in local time; node:test runs each file in its own process.
 process.env.TZ = "UTC";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// From the manifest — see test/manifests/product-surface.js. The comparison of the
-// manifest against the registry itself lives in product-surface.test.js; what this file
-// does with the list is ask the translation modules about each language in turn.
+// From the manifest. The manifest-vs-registry comparison is product-surface.test.js's job;
+// this file asks the translation modules about each language in turn.
 const { LANGUAGES: EXPECTED_LANGUAGES } = require("../../manifests/product-surface.js");
 
 let locales;
@@ -38,9 +30,8 @@ test.before(async () => {
 
 // --------------------------------------------------------------- registry --
 
-// The registry-against-manifest comparison is product-surface.test.js's job and is not
-// repeated here. What is this module's own business is that the reference language it
-// key-checks everything else against actually exists.
+// This module's own business: the reference language it key-checks everything else against
+// exists.
 test("the reference language exists and is the default", () => {
   assert.equal(locales.DEFAULT_LANGUAGE, "en");
   assert.ok(registry.TRANSLATIONS.en, "the reference language must exist");
@@ -80,8 +71,8 @@ test("a value is always either a string or a function of the interpolation vars"
 });
 
 test("a key that is a function in the reference language is a function everywhere", () => {
-  // A language that hardcodes a plural form as a plain string would silently
-  // drop its interpolated variables.
+  // A language that hardcodes a plural form as a plain string would drop its interpolated
+  // variables.
   for (const [key, referenceValue] of Object.entries(registry.TRANSLATIONS.en)) {
     for (const [language, block] of Object.entries(registry.TRANSLATIONS)) {
       assert.equal(

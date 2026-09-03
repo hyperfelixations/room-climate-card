@@ -1,12 +1,9 @@
 "use strict";
 
-// Direct tests for the interaction and action controllers.
-//
-// Gesture maths is a pure function of numbers and the runtime takes a fake carousel,
-// so a failure names the threshold rule rather than rendered-card setup.
-//
-// The thresholds asserted below are the card's feel. They are pinned deliberately: they
-// must remain stable across implementation changes.
+// Direct tests for the interaction and action controllers. Gesture maths is a pure function
+// of numbers and the runtime takes a fake carousel, so a failure names the threshold rule
+// rather than rendered-card setup. The thresholds asserted below are the card's feel, pinned
+// so they stay stable across implementation changes.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -32,9 +29,8 @@ test("the direction threshold is 10px AND a 1.25 horizontal-to-vertical ratio", 
   assert.equal(logic.isHorizontalSwipe(9, 0), false, "under the minimum distance");
   assert.equal(logic.isHorizontalSwipe(10, 0), true, "exactly at it");
   assert.equal(logic.isHorizontalSwipe(-40, 0), true, "direction is irrelevant");
-  // The ratio is what protects vertical dashboard scrolling from a diagonal flick, and
-  // it is a STRICT comparison: exactly at the ratio the movement is not horizontal
-  // enough, so the page keeps scrolling.
+  // The ratio protects vertical dashboard scrolling from a diagonal flick, and it is a
+  // strict comparison: exactly at the ratio is not horizontal enough.
   assert.equal(logic.isHorizontalSwipe(20, 16), false, "20 > 16 * 1.25 is false — they are equal");
   assert.equal(logic.isHorizontalSwipe(21, 16), true, "a hair more horizontal is a swipe");
   assert.equal(logic.isHorizontalSwipe(50, 30), true);
@@ -95,8 +91,8 @@ test("the click suppression window is 450ms", () => {
 
 // -------------------------------------------------------------- fixtures ----
 
-// A carousel stand-in that records what it was asked to do. The interaction runtime must
-// never touch the DOM itself, so everything it needs shows up here.
+// A carousel stand-in that records what it was asked to do; the interaction runtime never
+// touches the DOM itself, so everything it needs shows up here.
 function fakeCarousel({ viewCount = 3, trackManual = false } = {}) {
   const calls = [];
   return {
@@ -273,8 +269,7 @@ test("a pointercancel mid-drag settles on the frozen position, not on the pre-ge
   const { runtime, renders } = makeRuntime({ carousel });
   runtime.handlePointerDown(down());
   runtime.handlePointerMove(move(-40));
-  // The drag was frozen at view 0 and then dragged; a cancel must land where the track
-  // actually is, which the runtime reads from the frozen translate.
+  // A cancel must land where the track actually is, read from the frozen translate.
   runtime.pointer.startTranslate = -100 / 3;
   runtime.handlePointerCancel({ pointerId: 1 });
 
@@ -456,11 +451,9 @@ test("the dispatched event comes from the platform, so it belongs to the card's 
 
 // ------------------------------------------------------ the disconnect contract --
 //
-// Home Assistant removes and reinserts cards on the same element instance. Anything the
-// runtime was in the middle of therefore survives unless it is explicitly ended — and a
-// surviving gesture does not merely leak, it BLOCKS the reconnected card: isInteracting()
-// stays true, the carousel refuses to start, and every update is deferred waiting on a
-// pointerup that can never arrive.
+// Home Assistant reinserts cards on the same element instance, so a gesture the runtime was
+// mid-way through survives unless explicitly ended — and it blocks the reconnected card:
+// isInteracting() stays true, the carousel refuses to start, updates defer forever.
 
 test("disconnect ends a confirmed drag without settling a track nobody will see", () => {
   const carousel = fakeCarousel();
@@ -479,8 +472,7 @@ test("disconnect ends a confirmed drag without settling a track nobody will see"
 });
 
 test("disconnect ends an unconfirmed gesture too", () => {
-  // This is the subtler half: a bare pointerdown never becomes a drag, but it is enough
-  // to make isInteracting() true and keep the carousel from engaging.
+  // A bare pointerdown never becomes a drag, but it still makes isInteracting() true.
   const { runtime } = makeRuntime();
   runtime.handlePointerDown(down());
   assert.equal(runtime.isInteracting(), true);
@@ -522,8 +514,8 @@ test("disconnect is idempotent and a gesture started afterwards behaves normally
 });
 
 test("a pointer event from the previous life is ignored after a disconnect", () => {
-  // The listeners live on the shadow root and survive a rebuild, so a stray move or up
-  // from the aborted gesture can still arrive. With the pointer cleared they are no-ops.
+  // The listeners live on the shadow root and survive a rebuild, so a stray move or up can
+  // still arrive; with the pointer cleared they are no-ops.
   const carousel = fakeCarousel();
   const { runtime } = makeRuntime({ carousel });
   runtime.handlePointerDown(down());

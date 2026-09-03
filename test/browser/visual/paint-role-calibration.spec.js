@@ -1,26 +1,14 @@
 "use strict";
 
-// THE PAINT ROLES, HELD AGAINST A LIVE CARD.
+// The paint roles (src/domain/classification/paint-roles.js) held against a live card: where
+// each palette colour lands and what is composited behind it, on that element, in that
+// order, over that background. The unit guard (test/unit/domain/paint-roles.test.js) checks
+// the alphas against the modules; only a real cascade checks the composition. Rationale:
+// interne Doku §5 palette subsections.
 //
-// src/domain/classification/paint-roles.js states where each palette colour lands and what
-// is behind it: the scale track is 8% of the theme's text colour over the card, the status
-// pill is a 20% tint of the tone colour, a room chip's mark an 18% tint over the chip's own
-// 10% tint. Every one of those is a claim about the STYLESHEET, and a claim about a
-// stylesheet that nothing renders will eventually stop being true.
-//
-// So this file renders the card and asks the browser. The unit-level guard next door
-// (test/unit/domain/paint-roles.test.js) checks that the alphas match the modules that own
-// them; only a real cascade can check that they are still combined in that order, on that
-// element, over that background.
-//
-// AND IT RENDERS THE BRACKETING CASES SO A PERSON CAN LOOK. The separation factors were set
-// by looking at cards at 400px on a light theme, not by a formula — a 12px/900 pill on a
-// tint of itself is either readable or it is not, and only an eye can say which. The plate
-// below is the same set of cards, with the verdict beside each, so the next person to touch
-// a factor can check it the way it was checked the first time.
-//
-// The screenshot is deliberately NOT a golden. A golden would freeze the pixels; the point
-// of this one is that a human looks at it.
+// It also renders the bracketing cases as a plate a person can look at — the separation
+// factors were set by eye at 400px on a light theme. The plate is attached each run, not a
+// golden.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj } = require("../../helpers/browser-helpers.js");
@@ -28,10 +16,8 @@ const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
-// A card with three rooms: one below the comfort band, one inside it, one above. That is the
-// smallest scenario in which every role is painted at once — the pill and the icon carry the
-// average's tone, the track carries three markers and the optimal band, and the chips carry
-// both an in-band mark and two out-of-band ones.
+// Three rooms — one below the comfort band, one inside, one above — the smallest scenario
+// that paints every role at once.
 const STATES = {
   "sensor.avg": mkStateObj("sensor.avg", 22, TEMP),
   "sensor.r1": mkStateObj("sensor.r1", 19.4, TEMP),
@@ -95,10 +81,9 @@ test("the card reads the theme's text colour, and follows it when it changes", a
   expect(relit.text).toBe("#727272");
   expect(relit.samples).toEqual(themed.samples);
 
-  // An opaque colour only, and only from THAT property. A translucent text colour is not a
-  // surface the roles can composite onto, and no second source is consulted: the track is
-  // mixed out of --primary-text-color by name, so anything else would be a different colour
-  // wearing the same label. Null is the honest answer and the roles fall back to the card.
+  // Opaque colour only, and only from --primary-text-color: a translucent text colour is not
+  // a surface the roles can composite onto, and no second source is consulted. Null is the
+  // answer and the roles fall back to the card.
   await page.evaluate((id) => {
     document.getElementById(id).style.setProperty("--primary-text-color", "rgba(0, 0, 0, 0.5)");
   }, cardId);
@@ -120,13 +105,9 @@ test("every role's background is the one the browser actually composites", async
   const surface = await page.evaluate((id) => document.getElementById(id)._surface(), cardId);
   const card = surface.samples[0];
 
-  // The tone colour as the card painted it, read off the card rather than recomputed: the whole
-  // point is to compare the model against what is on the screen.
-  //
-  // From `--tone-color` and NOT from the pill’s text. The two agree only where the palette
-  // colour needs no adjustment to be read on a tint of itself; where it does, the pill paints
-  // `--tone-ink` instead, and taking the tone from there would quietly measure every role
-  // against the adjusted colour. The distinction is the subject of the whole file below.
+  // The tone colour as the card painted it, from `--tone-color` (not the pill's text): where
+  // the palette colour needs adjustment to be read on a tint of itself the pill paints
+  // `--tone-ink`, and measuring roles against that would test the adjusted colour.
   const tone = (
     await page.evaluate(
       (id) => document.getElementById(id).shadowRoot.querySelector(".rtc-root").style.getPropertyValue("--tone-color"),
@@ -154,16 +135,15 @@ test("every role's background is the one the browser actually composites", async
     expect(entry.alpha, name).toBeCloseTo(0.2, 3);
   }
 
-  // 4 — the roles, given the same surface, produce exactly those backgrounds. This is the
-  // assertion the whole file exists for: the model and the paint agree.
+  // 4 — the roles, given the same surface, produce exactly those backgrounds: model and
+  // paint agree.
   const modelled = await page.evaluate(
     async ([cardColour, textColour, toneColour]) => {
       const roles = await import("/src/domain/classification/paint-roles.js");
       const point = roles.pointOf(cardColour, textColour);
       const byId = (id) => roles.PAINT_ROLES.find((role) => role.id === id);
-      // Through backgroundsFor() rather than off the role object: the header icon declares
-      // that it shares the status pill's measurement rather than restating it, so it has no
-      // background function of its own — see `mirrors` in paint-roles.js.
+      // Through backgroundsFor(): the header icon shares the pill's measurement (`mirrors`
+      // in paint-roles.js) and has no background function of its own.
       const backgroundOf = (id) => roles.backgroundsFor(byId(id), toneColour, point)[0];
       return {
         marker: backgroundOf("marker"),
@@ -175,15 +155,11 @@ test("every role's background is the one the browser actually composites", async
     [card, surface.text, tone]
   );
 
-  // 4a — AND WHAT THE CHIP MARK PAINTS IS THE ADJUSTMENT THE MODEL COMPUTED. Neither the mark's
-  // colour nor its tint weight is a constant any more: where a palette colour would be
-  // swallowed by a tint of itself, ONE adjustment is worked out for the whole ramp and applied
-  // to the pill, the icon and this mark alike. See domain/classification/tone-legibility.js.
-  //
-  // Read off the live element rather than assumed, and both halves of the adjustment at once:
-  // `--room-color` is the mark's ink, and `--room-mark-bg` is the tint underneath it — an rgba
-  // of the PALETTE colour, which is how the palette colour is recovered here whichever chip the
-  // mark happens to be sitting on.
+  // 4a — the chip mark paints the adjustment the model computed: where a palette colour
+  // would be swallowed by a tint of itself, one adjustment is worked out for the whole ramp
+  // and applied to pill, icon and mark alike (domain/classification/tone-legibility.js).
+  // Read off the live element: `--room-color` is the mark's ink, `--room-mark-bg` the tint
+  // beneath it (an rgba of the palette colour, so the palette colour is recovered here).
   const painted = await page.evaluate((id) => {
     const chip = document.getElementById(id).shadowRoot.querySelector(".rtc-room-chip");
     for (const element of chip.querySelectorAll(".rtc-room-top *")) {
@@ -241,9 +217,8 @@ test("every role's background is the one the browser actually composites", async
 
 // ---------------------------------------------- the plate to look at ---------
 
-// The cases the factors were bracketed against, in the order the bracket runs. Each is a
-// palette the card will build for itself, so what is rendered is a real card and not a
-// swatch — which is the whole difference between this plate and a colour table.
+// The cases the factors were bracketed against, in bracket order. Each is a real card built
+// from the palette, not a swatch.
 const BRACKET = [
   ["white", "toneBand", "no band at all — the failing side"],
   ["#AADDCC", "toneBand", "barely a tint — still the failing side"],
@@ -274,13 +249,11 @@ test("the bracketing cards, rendered for a person to look at", async ({ page }, 
   }
   await page.evaluate(() => document.fonts.ready);
 
-  // Not a golden: the file is written so it can be opened and judged, and it is regenerated
-  // on every run rather than compared against a stored copy.
+  // Regenerated each run, not compared against a stored copy.
   const plate = await page.locator("#stage").screenshot();
   await testInfo.attach("paint-role-calibration", { body: plate, contentType: "image/png" });
 
-  // What the plate is being checked against, asserted so the run still fails if the verdicts
-  // and the picture ever part company.
+  // The verdicts the plate is checked against, so the run fails if verdicts and picture part.
   const verdicts = await page.evaluate(async () => {
     const fit = await import("/src/domain/classification/palette-fit.js");
     const roles = await import("/src/domain/classification/paint-roles.js");
@@ -310,30 +283,17 @@ test("the bracketing cards, rendered for a person to look at", async ({ page }, 
 
 // ---------------------------------------------- what the screen actually shows ----
 
-// THE ONE QUESTION EVERYTHING ABOVE CANNOT ASK: can a person read it?
-//
-// Every assertion so far compares the card against the model — the alphas agree, the
-// backgrounds agree, the recipe agrees. All of them can hold while the stylesheet paints a
-// different colour from the one that was measured, because they read the custom PROPERTY and
-// never the rule that consumes it. A pill can ship in the raw palette colour with a perfectly
-// correct `--tone-ink` sitting unused beside it, and not one line above would notice.
-//
-// So this test reads only what the browser resolved: the colour the element paints its text
-// in, and the stack of backgrounds behind it composited down to the first opaque one. Nothing
-// here is told what the card intended. Then it asks the role's own separation, the same number
-// the palette machinery asks — so a colour that reaches its threshold in theory has to reach
-// it on the screen as well.
-//
-// The two mid-strength greys of a palette's ramp are the interesting steps and the two ends
-// are not: an extreme is nearly always far from a tint of itself. The cases below are the ones
-// that were reported or that bracket them.
+// The question the model comparisons above cannot ask: can a person read it? Those read the
+// custom property, not the rule that consumes it, so a pill could ship in the raw palette
+// colour with a correct `--tone-ink` unused beside it. This test reads only what the browser
+// resolved — the text colour and the backgrounds behind it composited to the first opaque
+// one — and checks the role's own separation. The cases below are the reported ones and
+// their brackets.
 
-// What is painted here, and what is behind it, both taken from the browser.
-//
-// The walk upwards stops at the first background whose alpha is 1, which is always the card:
-// `.rtc-card` names an opaque colour. Only `background-color` is read, so the card's 135°
-// overlay gradient is not part of the answer — the same simplification the card's own surface
-// reading makes, and the reason both agree on what "the card" is.
+// Foreground and composited background, both from the browser. The walk upward stops at the
+// first alpha-1 background (always `.rtc-card`). Only `background-color` is read, so the
+// 135° overlay gradient is excluded — the same simplification the card's surface reading
+// makes.
 async function paintedAgainstItsBackground(page, cardId, selector) {
   return page.evaluate(
     ([id, sel]) => {
@@ -375,8 +335,8 @@ async function paintedAgainstItsBackground(page, cardId, selector) {
   );
 }
 
-// The mark inside a room chip has no class of its own, so it is found the way the eye finds
-// it: the one element under `.rtc-room-top` that paints a background.
+// The chip mark has no class of its own: it is the one element under `.rtc-room-top` that
+// paints a background.
 const CHIP_MARK = ".rtc-room-chip .rtc-room-top";
 async function chipMarkHandle(page, cardId) {
   return page.evaluateHandle(

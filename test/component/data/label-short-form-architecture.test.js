@@ -1,15 +1,10 @@
 "use strict";
 
-// Long-/short-form label architecture: every collision-prone label gets
-// a canonical long form plus a short fallback in TRANSLATIONS, and the card
-// itself picks between them at measure time (see _resolveLabelForm(),
-// _resolveOptimalLabelPosition(), _resolveRangeScaleLabels() in
-// room-climate-card.js). Real width measurement (jsdom has no layout
-// engine -- getBoundingClientRect() always returns zeros there, see
-// test/helpers/load-card.jsdom.js's own header comment) is covered in
-// test/browser/geometry/label-geometry.spec.js instead; this file covers the two
-// things jsdom CAN verify: _resolveLabelForm()'s pure control flow, and the
-// TRANSLATIONS content itself.
+// Long-/short-form label architecture: every collision-prone label has a canonical long
+// form and a short fallback in TRANSLATIONS, and the card picks between them at measure
+// time (resolveLabelForm in src/render/layout/label-form.js). Real width measurement needs
+// a layout engine jsdom lacks — that is test/browser/geometry/label-geometry.spec.js.
+// Here: resolveLabelForm's pure control flow and the TRANSLATIONS content.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -36,7 +31,7 @@ function fakeLabelEl() {
   return env.document.createElement("span");
 }
 
-// ==== _resolveLabelForm() control flow ====
+// resolveLabelForm() control flow
 
 test("_resolveLabelForm: identical long/short forms always resolve to the long form, without ever calling fitsWithWidth", () => {
   const node = fakeLabelEl();
@@ -76,15 +71,13 @@ test("_resolveLabelForm: reverts a previously-shortened element back to the long
   const node = fakeLabelEl();
   labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
   assert.equal(node.textContent, "act.");
-  // A later resolve pass (e.g. the card grew wider) must not be stuck on
-// the short form just because an earlier pass left it there -- every
-  // call re-derives fresh from the long form, exactly like
-  // _resolveOptimalLabelPosition()'s own idempotency requirement.
+  // A later pass (card grew wider) must re-derive from the long form, not stay stuck on
+  // the short form an earlier pass left.
   labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);
   assert.equal(node.textContent, "maintenant");
 });
 
-// ==== TRANSLATIONS content: the actual fixes ====
+// TRANSLATIONS content
 
 // From the manifest — see test/manifests/product-surface.js.
 const { LANGUAGES } = require("../../manifests/product-surface.js");

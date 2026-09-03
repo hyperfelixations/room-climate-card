@@ -1,12 +1,10 @@
 "use strict";
 
-// Direct unit tests for src/domain/metrics/* and src/domain/units/*.
-//
-// This is the layer that decides what a number MEANS: which metric kind an
-// entity reports, which unit it is in, and how to move a value between units
-// without ever mixing an absolute reading with a difference. A mistake here is
-// not a rendering glitch — it produces a plausible-looking number that is
-// wrong by 32, or classifies a humidity reading against temperature tiers.
+// Direct unit tests for src/domain/metrics/* and src/domain/units/*: which metric kind an
+// entity reports, which unit it is in, and how to move a value between units without ever
+// mixing an absolute reading with a difference. A mistake here produces a plausible number
+// wrong by 32, or classifies humidity against temperature tiers. See interne Doku §5
+// „Unit-, Range-, Trend- und Scale-System".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -125,8 +123,7 @@ test("absolute temperature conversion applies the Fahrenheit offset", () => {
 test("delta and rate temperature conversion never apply the offset", () => {
   const c = tempProfile("celsius");
   const f = tempProfile("fahrenheit");
-  // A 0 °C difference is a 0 °F difference, not 32 °F — the bug this split
-  // exists to prevent.
+  // A 0 °C difference is a 0 °F difference, not 32 °F.
   assert.equal(conversion.convertUnitValue(0, "delta", c, f), 0);
   assert.equal(conversion.convertUnitValue(0, "rate", c, f), 0);
   for (const [deltaC, deltaF] of [[1, 1.8], [5, 9], [-2.5, -4.5]]) {
@@ -195,8 +192,7 @@ test("non-finite values pass through conversion without becoming NaN-by-accident
 // ------------------------------------------------- threshold derivation ----
 
 test("Fahrenheit classification thresholds are always whole numbers", () => {
-  // Product rule: a displayed boundary and the boundary actually used for
-  // classification must never disagree.
+  // A displayed boundary and the boundary used for classification must never disagree.
   const derived = conversion.deriveThresholdsForProfile(
     definitions.METRIC_DEFINITIONS.temperature.canonicalClassificationTiers,
     tempProfile("fahrenheit")
@@ -263,10 +259,9 @@ test("the device_class map covers Home Assistant's four sensor classes", () => {
 });
 
 test("METRIC_TYPE_BY_UNIT is derived from every registered unit alias", () => {
-  // The index must not be hand-maintained: every alias in every unitProfile has to be
-  // resolvable, which is what the earlier hand-written table got wrong for
-  // "c"/"celsius"/"f"/"fahrenheit". This answers WHICH measurement uses a unit; whether
-  // that is enough to identify a sensor is the separate question tested below.
+  // The index is derived, not hand-maintained: every alias in every unitProfile resolves.
+  // This answers which measurement uses a unit; whether that identifies a sensor is tested
+  // below.
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
     for (const profile of Object.values(definition.unitProfiles)) {
       for (const unit of profile.units) {
@@ -293,12 +288,9 @@ test("the derived index contains no entries beyond the registered aliases", () =
 
 // -------------------------------------- when a unit may stand in for a device class ---
 
-// device_class is Home Assistant's own declaration and is what the card asks for first.
-// The unit is a courtesy for hand-built template sensors that never got one — but a
-// courtesy that guesses is worse than none, because a wrong guess shows a real number
-// against the wrong scale, the wrong thresholds and the wrong colour, and says nothing.
-//
-// So the fallback applies exactly where the unit belongs to ONE measurement.
+// The card asks for device_class first; the unit is a fallback for template sensors that
+// never got one, and it applies only where the unit belongs to one measurement — a wrong
+// guess shows a real number against the wrong scale and colour.
 test("a unit stands in for a device class only when one measurement uses it", () => {
   for (const unit of ["°C", "°F", "K", "celsius", "kelvin", "%"]) {
     assert.equal(resolution.unitPredictsMetricKind(unit), true, unit);
@@ -313,8 +305,7 @@ test("a unit stands in for a device class only when one measurement uses it", ()
   }
 });
 
-// The rule is written as data, so a shared unit loses its fallback by itself rather than
-// by anybody remembering to remove it.
+// The rule is written as data, so a shared unit loses its fallback by itself.
 test("the ambiguity table is what decides, not a list of exceptions", () => {
   for (const [unit, deviceClasses] of Object.entries(resolution.DEVICE_CLASSES_BY_UNIT)) {
     assert.ok(deviceClasses.length >= 1, unit);
@@ -328,8 +319,8 @@ test("the ambiguity table is what decides, not a list of exceptions", () => {
   assert.ok(resolution.DEVICE_CLASSES_BY_UNIT.ppm.includes("carbon_dioxide"));
   assert.ok(resolution.DEVICE_CLASSES_BY_UNIT["µg/m³"].includes("pm25"));
 
-  // The two questions must not be answered by one table. A profile WRITTEN in ppm is a
-  // CO2 profile — there is only one — while a SENSOR reporting ppm is a guess.
+  // Two questions, two tables: a profile written in ppm is a CO2 profile (there is only
+  // one), while a sensor reporting ppm is a guess.
   assert.equal(resolution.METRIC_TYPE_BY_UNIT.ppm, "co2", "which measurement uses ppm");
   assert.equal(resolution.metricKindFromUnitAlone("ppm"), null, "but a sensor reporting it is not identified");
   assert.equal(resolution.metricKindFromUnitAlone("°C"), "temperature");

@@ -1,20 +1,12 @@
 "use strict";
 
-// Characterization of generated CSS, verbatim.
-//
-// _styles() is 870 lines of CSS inside one template literal and is the single
-// largest unit in the file. Splitting it into per-concern modules is a pure
-// concatenation change — but CSS is order-sensitive (cascade, specificity
-// ties, the @container/@supports blocks at the end), so "the same rules in a
-// different order" is a real regression that no behavioural test would catch
-// and that jsdom cannot see at all (it has no cascade).
-//
-// Three complementary baselines:
-//   styles/full.css       the complete emitted stylesheet for a canonical card
-//   styles/digests.txt    scenario -> sha256, so EVERY scenario's CSS is pinned
-//   styles/keyframes.txt  the dynamic @keyframes block across view counts and
-//                         timing configurations (the only part of _styles()
-//                         that is not static)
+// Characterization of generated CSS, verbatim. The stylesheet is assembled from per-concern
+// slices in src/styles/, and CSS is order-sensitive (cascade, specificity ties, the trailing
+// @container/@supports blocks), so "the same rules in a different order" is a regression no
+// behavioural test catches and jsdom cannot see (it has no cascade).
+// Three baselines: styles/full.css (complete stylesheet for a canonical card), styles/
+// digests.txt (scenario -> sha256, every scenario pinned), styles/keyframes.txt (the dynamic
+// @keyframes block across view counts and timings — the only non-static part).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

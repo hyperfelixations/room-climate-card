@@ -1,21 +1,12 @@
 "use strict";
 
-// setConfig() arriving mid-swipe must settle the confirmed drag before
-// rendering the new configuration. Otherwise the track could remain frozen
-// in "rtc-manual" at an intermediate position with no resume
-// timer ever scheduled -- a live-editing config change mid-swipe could
-// wedge the carousel indefinitely. These tests construct the exact
-// _pointer/_isDragging shape _handlePointerDown()/_handlePointerMove()
-// produce for a confirmed drag (same technique as pointer-logic.test.js's
-// UI-02 coverage of the sibling _handlePointerCancel() path), then call
-// setConfig() and verify the interaction is settled exactly the way
-// _handlePointerCancel() already settles one.
-//
-// setConfig() always replaces the whole config (matching the real Home
-// Assistant editor, which never sends a partial patch) -- every setConfig()
-// call below therefore repeats the full BASE_CONFIG plus one incremental
-// field, so the active view set (range/scale/extremes) stays unchanged and
-// the fix under test isn't confounded by an incidental structural change.
+// setConfig() arriving mid-swipe must settle the confirmed drag before rendering the new
+// config; otherwise the track can stay frozen in "rtc-manual" at an intermediate position
+// with no resume timer, wedging the carousel. Tests drive a confirmed drag through the
+// pointer handlers, then call setConfig() and verify the interaction settles exactly as
+// _handlePointerCancel() settles one. setConfig() always replaces the whole config (like
+// the HA editor), so each call repeats BASE_CONFIG plus one field, keeping the view set
+// unchanged so the fix isn't confounded by an incidental structural change.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -25,8 +16,7 @@ const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../../h
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
-// The render paths, imported from the source module so the assertions name the same
-// constants production does.
+// RENDER_PATH from source so assertions name the same constants production does.
 let RENDER_PATH;
 
 test.before(async () => {
@@ -45,8 +35,7 @@ const BASE_CONFIG = {
 
 const C = TEMPERATURE_C;
 
-// A fresh hass with a given average. `offsetMs` moves last_updated so a repeat push
-// with the same value is still a new state as far as the render signature is concerned.
+// A fresh hass; offsetMs moves last_updated so a same-value repeat still reads as a new state.
 function states(average = 22, offsetMs = 0) {
   const all = {
     "sensor.avg": mkState("sensor.avg", average, C),
@@ -101,9 +90,7 @@ test("setConfig without an active drag does not schedule a resume", () => {
   const el = threeViewCard();
   assert.equal(el._isDragging, false);
   assert.equal(el._interaction.pointer, null);
-  // The resume timer is owned by the carousel controller, so it is cleared through the
-  // owner rather than by writing the field. el._carousel.resumeTimerHandle is a read-only window
-  // onto that handle, which is exactly what keeps a second copy from existing.
+  // The resume timer is owned by the carousel controller; resumeTimerHandle is a read-only window onto it.
   el._stopRotation();
   assert.equal(el._carousel.resumeTimerHandle, null, "starting point: nothing pending");
 
@@ -127,20 +114,11 @@ test("setConfig during an unconfirmed pointerdown clears state without settling"
   env.cleanup(el);
 });
 
-// ---------------------------------------------- strong exception safety --
-//
-// A REJECTED setConfig() must change nothing at all.
-//
-// The previous contract was weaker and, on one path, actively harmful: setConfig()
-// ended the gesture first and only then validated. A configuration the editor rejects
-// therefore still destroyed the gesture — and with it the pointerup that was going to
-// settle a render deferred during that gesture. The card kept displaying a value Home
-// Assistant had already superseded, with no event left that would have applied it.
-//
-// So the rule is now all-or-nothing: normalize into a local first, and touch no state
-// until that has succeeded. An earlier assertion in this file demanded the opposite
-// ("the old interaction state must not be left dangling") — it described the behaviour
-// that caused the defect, and is replaced below.
+// ---- strong exception safety ----
+// A rejected setConfig() must change nothing. The old contract ended the gesture first and
+// validated after, so a rejected config destroyed the gesture — and the pointerup that
+// would have settled a render deferred during it. Rule now: normalize into a local first,
+// touch no state until that succeeds.
 
 test("an invalid setConfig leaves the running gesture completely untouched", () => {
   const el = threeViewCard();
@@ -155,9 +133,8 @@ test("an invalid setConfig leaves the running gesture completely untouched", () 
 });
 
 test("a render deferred by a drag survives an invalid setConfig and is settled by the pointerup", () => {
-  // The reported sequence, end to end. Nothing here reconnects the card and nothing
-  // pushes a second hass: the only thing that may settle the debt is the gesture ending,
-  // which is exactly what the old ordering destroyed.
+  // The reported sequence: nothing reconnects the card or pushes a second hass, so only the
+  // gesture ending can settle the debt — which the old ordering destroyed.
   const el = threeViewCard();
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/);
 
@@ -225,8 +202,7 @@ test("an invalid setConfig does not disturb a pending resume or the carousel", (
 });
 
 test("a valid setConfig mid-drag still settles the gesture exactly as before", () => {
-  // The strong-exception-safety rewrite must not weaken the accepted path: a VALID
-  // configuration still aborts the drag, snaps the track and schedules the resume.
+  // The accepted path is unweakened: a valid config still aborts the drag, snaps the track, schedules the resume.
   const el = threeViewCard();
   beginConfirmedDrag(el, 2);
   el._activeView = 0; // stale

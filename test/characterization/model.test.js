@@ -1,17 +1,11 @@
 "use strict";
 
-// Characterization of the frozen computeLegacyData() DTO, verbatim.
-//
-// computeLegacyData()'s return value is the single contract between the card's
-// data layer and every renderer/patcher, and the existing unit suite asserts
-// against it from 177 call sites. Before the source split it had no
-// whole-object baseline at all — individual fields were asserted, the SHAPE
-// never was. These baselines pin every key and every value for the full
-// scenario catalog, so a change that silently adds, drops, reorders or
+// Characterization of the frozen computeLegacyData() DTO, verbatim. Its return value is the
+// contract between the card's data layer and every renderer/patcher, and the unit suite
+// asserts individual fields against it — but not the whole shape. These baselines pin every
+// key and value for the full scenario catalogue, so a change that adds, drops, reorders or
 // re-rounds a field fails immediately.
-//
-// See test/helpers/characterization.js for the harness and the determinism
-// requirements (frozen clock, pinned TZ, stable serialization).
+// See test/helpers/characterization.js for the harness and determinism requirements.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");

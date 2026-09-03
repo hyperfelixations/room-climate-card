@@ -1,22 +1,19 @@
 "use strict";
 
-// The comfort label sits above the bar, centred on the comfort band's own centre. Until
-// this was pinned, nothing stopped it there: a band pushed towards one end of the axis
-// carried its label past the view's edge, where a solo view clipped it against the
-// rotator and a carousel painted it straight across the slide next door. All four
-// metrics reach that state with ordinary readings — CO2 from about 1200 ppm, PM2.5 from
-// about 24 µg/m³, and temperature at both ends (35 °C leaves on the left, 5 °C on the
-// right).
+// The comfort label is centred on the comfort band's centre and must stay inside its own
+// view: a band pushed to one end of the axis would otherwise carry the label past the
+// edge, clipped in a solo view or painted across the next carousel slide. All four metrics
+// reach that with ordinary readings (CO2 from ~1200 ppm, PM2.5 from ~24 µg/m³, temperature
+// at both ends).
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
 
 const CO2 = { device_class: "carbon_dioxide", unit_of_measurement: "ppm" };
 
-// The container queries are what make the narrow widths meaningful here, and they need a
-// block-level ha-card to apply to at all (see the same note in
-// narrow-width-overflow.spec.js). Installed per test rather than in a beforeEach, so the
-// rest of this file keeps measuring exactly what it measured before.
+// A block-level `ha-card` stand-in so the container queries apply — see interne Doku §4
+// "`ha-card` im Offline-Harness". Installed per test, not in a beforeEach, so the rest of
+// the file measures what it did before.
 test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
   async function gotoHarnessWithBlockCard(page) {
     await page.addInitScript(() => {
@@ -38,8 +35,7 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     ["temperature", "temperature", "°C", 35, "left"],
     ["temperature", "temperature", "°C", 5, "right"],
     ["humidity", "humidity", "%", 5, "right"],
-    // The control: a comfort band in the middle of the axis, which never needed
-    // clamping and must not be moved by it either.
+    // The control: a mid-axis comfort band, which must not be moved by the clamping either.
     ["temperature", "temperature", "°C", 22, "neither"],
   ];
 
@@ -49,15 +45,13 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
       page,
       { entity: "sensor.avg", auto_slide: false, views: [{ type: "scale" }] },
       { "sensor.avg": mkStateObj("sensor.avg", value, attributes) },
-      // German has the longest comfort label of the languages sharing this layout, so
-      // the assertion is made against the hardest realistic text.
+      // German has the longest comfort label of the languages sharing this layout.
       "de"
     );
   }
 
-  // Measured against the comfort ROW, which is the label's own containing block and,
-  // being a grid item of the same single-column .rtc-scale-view, exactly as wide as the
-  // bar its percentage refers to.
+  // Measured against the comfort row — the label's containing block, and as wide as the bar
+  // its percentage refers to.
   async function comfortLabelBox(page, cardId) {
     return page.evaluate((cardId) => {
       const view = document.getElementById(cardId).shadowRoot.querySelector(".rtc-scale-view");
@@ -97,10 +91,9 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     });
   }
 
-  // The clamp mixes two boxes: the percentage is a position on the AXIS, the containment
-  // is against the ROW. They are the same width because both are items of the same
-  // single-column grid — stated here so a future change to that grid fails loudly
-  // instead of quietly displacing every comfort label by the difference.
+  // The clamp mixes two boxes: the percentage is a position on the axis, the containment is
+  // against the row. They are the same width (both items of the same single-column grid) —
+  // stated so a change to that grid fails loudly.
   test("the comfort row and the scale bar are exactly as wide as each other", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
     const cardId = await scaleOnlyCard(page, 22, "temperature", "°C");
@@ -111,8 +104,7 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     }
   });
 
-  // A clamp that also moved the labels which were never in trouble would be a regression
-  // dressed as a fix.
+  // A clamp that also moved labels that were never in trouble would be a regression.
   test("a comfort band in the middle of the axis keeps its label over the band's centre", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
     const cardId = await scaleOnlyCard(page, 22, "temperature", "°C");
@@ -130,14 +122,9 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     }
   });
 
-  // Before the clamp and long before the ellipsis, the label may swap to its own short
-  // form — the same intermediate step the optimal label takes, because a real word beats
-  // a truncated one whenever a real word fits.
-  //
-  // Every one of the fifteen languages currently declares a short form identical to its
-  // long one, so nothing in the shipped card exercises this. Substituting a genuinely
-  // shorter pair on the live content model is therefore the only way to tell "the short
-  // form is chosen when it has to be" apart from "the key is still never read".
+  // Before the clamp and before the ellipsis, the label may swap to its own short form.
+  // Every shipped language declares a short form identical to its long one, so a genuinely
+  // shorter pair is substituted on the content model to exercise the choice at all.
   test("a comfort label that does not fit falls back to its short form before being clamped", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
     const cardId = await scaleOnlyCard(page, 22, "temperature", "°C");
@@ -173,9 +160,8 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     expect(measured.kept.text, "a long form that fits must not be shortened").toBe("20–24°C Komfort");
   });
 
-  // The last resort, below which there is nothing left to move: a row narrower than the
-  // label itself. Clipping with an ellipsis is the answer every other single-line label
-  // on this card gives.
+  // The last resort: a row narrower than the label itself, where the label clips with an
+  // ellipsis like every other single-line label on the card.
   test("a label wider than the whole row truncates instead of leaving it", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
     const cardId = await scaleOnlyCard(page, 22, "temperature", "°C");
@@ -185,15 +171,14 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
       const view = card.shadowRoot.querySelector(".rtc-scale-view");
       const label = view.querySelector(".rtc-scale-comfort-label");
       const row = view.querySelector(".rtc-scale-comfort-row");
-      // Substituted on the content model rather than on the node: the layout pass owns
-      // the text and would overwrite anything written straight into the DOM. BOTH forms
-      // are overlong, so this is the case where there is nothing left to fall back to.
+      // Substituted on the content model, not the node (the layout pass owns the text).
+      // Both forms are overlong, so there is nothing left to fall back to.
       const model = card._renderController.lastViewModel;
       const overlong = "Ein garantiert viel zu langer Komfortbereich der niemals in diese Zeile passt";
       model.views.byKey.scale.comfortLabel.long = overlong;
       model.views.byKey.scale.comfortLabel.short = overlong;
-      // The layout pass runs on render, on resize and on fonts.ready; a change made from
-      // a test is none of those, so it is invoked the way the card would invoke it.
+      // The layout pass runs on render/resize/fonts.ready; a test change is none of those,
+      // so it is invoked the way the card would.
       card._resolveViewLayouts(model);
       const labelRect = label.getBoundingClientRect();
       const rowRect = row.getBoundingClientRect();
@@ -213,8 +198,8 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     expect(measured.overRightEdge).toBeLessThanOrEqual(0.5);
   });
 
-  // The failure a user actually sees: nothing clips an individual carousel slide, so a
-  // label that leaves its own view is painted over the one beside it.
+  // Nothing clips an individual carousel slide, so a label that leaves its view is painted
+  // over the one beside it.
   test("in a carousel the comfort label never reaches into the neighbouring view", async ({ page }) => {
     await gotoHarnessWithBlockCard(page);
     const attributes = CO2;

@@ -1,17 +1,10 @@
 "use strict";
 
-// The card driven exactly the way Home Assistant drives it, end to end, in one test.
-//
-// Every other browser spec isolates one mechanism and is free to reach for an internal
-// to set it up. This one deliberately does not: it only ever calls `setConfig()`, assigns
-// `hass`, moves the mouse, resizes the host and adds or removes the element — the entire
-// public surface, and nothing else. No private field is written, and the only internals
-// read are the two the assertions cannot be phrased without (which view the model
-// believes is visible, and whether a timer is armed).
-//
-// It ensures a suite of green unit tests
-// proves each part still works in isolation, and says nothing about whether the parts
-// are still wired to each other. This is that check.
+// The card driven the way Home Assistant drives it, end to end, in one test — only
+// `setConfig()`, `hass`, mouse moves, host resize, and add/remove. No private field is
+// written; the only internals read are the two the assertions need (which view the model
+// believes is visible, and whether a timer is armed). This is the check that the parts are
+// still wired to each other, which green unit tests do not prove.
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, updateHass, mkStateObj } = require("../../helpers/browser-helpers");

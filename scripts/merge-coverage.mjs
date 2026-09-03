@@ -63,12 +63,9 @@ async function browserMap() {
   return sourceOnly(map, "browser");
 }
 
-// Every .js file under src/, as the paths the coverage maps use.
-//
-// Read from the DIRECTORY rather than from any one layer, because the failure this guards
-// against is a file no layer saw at all. Istanbul reports only files it was handed, so an
-// uncovered module does not appear as 0% — it does not appear, and every percentage in the
-// summary is quietly computed over a smaller product than the one that ships.
+// Every .js file under src/, read from the directory (not from any layer): Istanbul reports
+// only files it was handed, so an unmeasured module vanishes from the summary rather than
+// showing 0%. See interne Doku §4 "Coverage in drei Schichten".
 function sourceFileInventory(directory = path.join(ROOT, "src"), found = []) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
@@ -90,14 +87,9 @@ function describeDifference(label, expected, actual) {
   return parts.join(`\n`);
 }
 
-// The three layers must see the same product.
-//
-// They measure it in three different ways — src imported directly, the bundle mapped back
-// through its source map, and Chromium's V8 counters mapped the same way — and the merge is
-// only meaningful if all three are talking about the same files. A layer that silently stops
-// contributing a module leaves the merged percentages unchanged, because the union still has
-// it from somewhere else, while one of the three ways of running that module has stopped
-// being measured at all. Nothing about the numbers would say so.
+// All three layers, and the merge, must cover the same src/ inventory. A layer that stops
+// contributing a module leaves the merged percentages unchanged (the union still has it
+// elsewhere) while one way of running that module goes unmeasured.
 function enforceInventories(layers, merged) {
   const source = relativeSorted(sourceFileInventory());
   const failures = [];

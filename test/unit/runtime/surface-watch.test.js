@@ -1,24 +1,12 @@
 "use strict";
 
-// WHAT MAKES THE CARD ASK AGAIN WHETHER THE GROUND UNDER IT CHANGED.
-//
-// The card already re-reads its background on every render and already carries that reading
-// in its data signature, so a background change is picked up the moment anything renders.
-// What was missing is an OCCASION: only a hass push, a setConfig, a resize and a fonts
-// promise call the render path, and a theme switch is none of those. Switching a dashboard
-// from light to dark pushes no state, so the card kept the palette of a background it was no
-// longer on until some unrelated update happened along.
-//
-// This watch supplies the occasion and nothing else. It does not know what a colour is, does
-// not compare backgrounds, and cannot decide that anything changed — it says "ask again", and
-// the data signature answers with a string comparison. That division is deliberate: the
-// knowledge of what a background IS already lives in one place, and a second opinion here
-// would be a second place for it to drift.
-//
-// NO TIMER, EVER. The three sources below are events; a poll would burn a frame's worth of
-// getComputedStyle forever to catch something that happens twice a day. The tests assert the
-// absence of timers directly, because "we did not add a timer" is exactly the kind of promise
-// that quietly stops being true.
+// The occasion that makes the card re-read its background. The card already re-reads it on
+// every render and carries it in the data signature, but only a hass push, setConfig, resize
+// or fonts promise calls the render path — a theme switch is none of those. This watch
+// supplies the occasion and nothing else: it says "ask again", and the data signature
+// answers with a string comparison.
+// No timer, ever: the three sources are events; the tests assert the absence of timers
+// directly. See interne Doku §5 „Wann die Karte erneut fragt".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -51,11 +39,9 @@ test("it subscribes to the colour scheme and to the attributes that carry a them
   assert.ok(targets.includes(dom.window.document.documentElement), "Home Assistant writes its theme onto the root element");
   assert.ok(targets.includes(element), "a card-mod rule can colour this one card and nothing else");
 
-  // The root is watched for ANY attribute: Home Assistant writes custom properties into
-  // `style`, the sandbox flips `data-theme`, and a theme could name itself in a class. That
-  // element's attributes change so rarely that filtering would buy nothing and could miss
-  // the one that mattered. The card itself is filtered, because a card element's attributes
-  // do change during ordinary rendering.
+  // The root is watched for any attribute (theme goes into `style`, `data-theme`, or a
+  // class); its attributes change rarely enough that filtering would buy nothing. The card
+  // is filtered, because a card element's attributes change during ordinary rendering.
   const rootEntry = observer.observed.find((entry) => entry.target === dom.window.document.documentElement);
   assert.equal(rootEntry.options.attributes, true);
   assert.equal(rootEntry.options.attributeFilter, undefined, "no filter on the root");
@@ -120,9 +106,8 @@ test("disconnecting detaches everything, including a frame that had not run yet"
 });
 
 test("observing twice replaces the first subscription rather than doubling it", () => {
-  // connectedCallback can run more than once for the same element — Home Assistant moves
-  // cards between dashboards. Two live subscriptions would mean two renders per switch and
-  // one listener nobody holds the handle for.
+  // connectedCallback can run more than once for one element (Home Assistant moves cards
+  // between dashboards); two live subscriptions would mean two renders per switch.
   const { platform, watch, element, dom } = setup();
   watch.observe(element);
   const second = dom.window.document.createElement("div");
@@ -136,9 +121,8 @@ test("observing twice replaces the first subscription rather than doubling it", 
 });
 
 test("a realm without matchMedia or MutationObserver still works, minus what it cannot do", () => {
-  // Neither is a reason to fail: the card must render in a jsdom-like realm, and the ordinary
-  // render path still catches a background change on the next hass push. What must not happen
-  // is a throw during connectedCallback.
+  // The card must render in a jsdom-like realm; the ordinary render path still catches a
+  // background change on the next hass push. What must not happen is a throw in connectedCallback.
   const { platform, watch, element, changes } = setup({ noColorScheme: true, noMutationObserver: true });
   assert.doesNotThrow(() => watch.observe(element));
   assert.equal(platform.mutationObservers.length, 0);
@@ -147,8 +131,8 @@ test("a realm without matchMedia or MutationObserver still works, minus what it 
 });
 
 test("an element with no document is not a subscription", () => {
-  // The card can be constructed and never connected. Asking a null document for its root
-  // element is how a defensive-looking guard turns into a crash in somebody's dashboard.
+  // The card can be constructed and never connected; asking a null document for its root
+  // element must not crash.
   const { platform, watch } = setup();
   assert.doesNotThrow(() => watch.observe(null));
   assert.equal(platform.colorSchemeListenerCount(), 0);

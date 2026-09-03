@@ -1,25 +1,13 @@
 "use strict";
 
-// Characterization of rendered shadow-DOM markup, verbatim.
-//
-// The card builds its DOM from template strings and then patches it in place.
-// The browser layer (test/browser/visual/visual-golden.spec.js) owns the VISUAL
-// contract with real Chromium screenshots; what it cannot see is the markup
-// itself — class names, attribute order, ARIA labels, title tooltips,
-// data-* hooks, inline CSS custom properties, hidden flags, and the exact
-// whitespace that the template literals produce. Those are precisely what a
-// renderer extraction is most likely to disturb, and they had no verbatim
-// coverage before.
-//
-// The <style> block is replaced by a digest reference here; its full text is
-// pinned by characterization-styles.test.js.
-//
-// A second baseline captures the state AFTER a partial update (_updateContent()
-// via a plain hass push), because the keyed DOM-patching path builds the same
-// markup through completely different code (setAttribute/textContent/
-// style.setProperty instead of template strings). Render path and patch path
-// must converge on the same DOM — that convergence is an explicit acceptance
-// compatibility criterion.
+// Characterization of rendered shadow-DOM markup, verbatim. The card builds its DOM from
+// template strings and patches it in place. The browser layer
+// (test/browser/visual/visual-golden.spec.js) owns the visual contract; what it cannot see
+// is the markup — class names, attribute order, ARIA labels, title tooltips, data-* hooks,
+// inline custom properties, hidden flags, template whitespace. The <style> block is a digest
+// reference here (full text in characterization-styles.test.js). A second baseline captures
+// the state after a partial update, because the keyed patch path builds the same markup
+// through different code and the two must converge.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -53,10 +41,8 @@ test("the partial-update path (_updateContent) converges on the same DOM as the 
     const rendered = env.createCard(scenario.config, buildHass(scenario));
     const afterFullRender = captureShadowMarkup(rendered).markup;
 
-    // A fresh hass object with identical states forces _render() past its
-    // signature fast-path skip (the signature is unchanged, so allowSkip
-    // would return early) — pushing the same states through _render(false)
-    // exercises _updateContent()/the keyed patchers on an already-built DOM.
+    // _render(false) forces past the signature fast-path skip, exercising _updateContent()/
+    // the keyed patchers on an already-built DOM.
     rendered._render(false);
     const afterPatch = captureShadowMarkup(rendered).markup;
 

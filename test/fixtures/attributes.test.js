@@ -1,15 +1,11 @@
 "use strict";
 
-// The named attribute pairs, held against the manifest they are derived from.
-//
-// Their whole value is that they cannot drift from the product: a metric whose canonical unit
-// changed has to break here, in one place, rather than leave several hundred fixtures quietly
-// describing a sensor Home Assistant no longer produces.
-//
-// So this file checks two directions. Every constant still says what the manifest says, and
-// the manifest has not grown a metric or a unit that nothing here covers — the second is the
-// one that rots silently, because a missing constant looks exactly like a constant nobody
-// needed.
+// The named attribute pairs, held against the manifest they are derived from. Their value
+// is that they cannot drift from the product: a metric whose canonical unit changed must
+// break here, not in several hundred fixtures. Checked both directions — every constant
+// still says what the manifest says, and the manifest has not grown a metric or unit
+// nothing here covers (the direction that rots, since a missing constant looks like one
+// nobody needed).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -63,8 +59,7 @@ test("attributesFor() and classOnly() build the same thing the constants are", (
   assert.deepEqual({ ...A.attributesFor("temperature") }, { ...A.TEMPERATURE_C });
   assert.deepEqual({ ...A.attributesFor("temperature", "°F") }, { ...A.TEMPERATURE_F });
   assert.deepEqual({ ...A.classOnly("co2") }, { ...A.CO2_CLASS_ONLY });
-  // A unit the card does not know is still buildable, because a test that needs a WRONG
-  // sensor needs to say so on the line it is written on rather than reach for a name.
+  // A unit the card does not know is still buildable — a wrong-sensor test says so on its own line.
   assert.deepEqual({ ...A.attributesFor("temperature", "hPa") }, {
     device_class: "temperature",
     unit_of_measurement: "hPa",
@@ -72,9 +67,7 @@ test("attributesFor() and classOnly() build the same thing the constants are", (
 });
 
 test("a deliberately mismatched fixture is not given a name", () => {
-  // The rule this file exists to keep. `temperature` reported in hectopascals is the subject
-  // of several tests, and every one of them is about the mismatch — a constant called
-  // TEMPERATURE_HPA would hide the very thing the reader has to see.
+  // `temperature` in hectopascals is the subject of several tests; a TEMPERATURE_HPA constant would hide the mismatch.
   const named = Object.entries(A.ALL).filter(([, attributes]) => {
     if (!("unit_of_measurement" in attributes)) return false;
     const metric = METRIC_KINDS.find((kind) => METRICS[kind].deviceClass === attributes.device_class);

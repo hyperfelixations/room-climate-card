@@ -1,21 +1,13 @@
 "use strict";
 
 // Direct unit tests for the render primitives, the layout pass and the view registry.
-//
-// Markup and DOM patching are pure functions of a view model, and these tests take that
-// literally: no custom element anywhere in this file, no hass object, no configuration, and —
-// for most of it — no global document either. A view model is written by hand, a renderer is
-// called, and the resulting string or DOM is asserted.
-//
-// This file owns the pieces every view is built out of: the render context, the headline, the
-// room grid, the markers, the scale bar, focus handling, the DOM helpers, and the layout pass
-// that measures rendered nodes to place labels. Also the registry's own wiring, because a
-// missing or duplicated implementation has to fail at module load rather than as an empty
-// carousel slot.
-//
-// The boundary to its two neighbours: render-shell.test.js owns the markup around the views
-// and the stylesheet; render-views.test.js owns each view's own markup and patch path. What
-// is left here is what both of those are assembled FROM.
+// Markup and DOM patching are pure functions of a view model: no custom element, no hass, no
+// configuration, mostly no global document — a view model is written by hand, a renderer is
+// called, and the string or DOM is asserted. This file owns the pieces every view is built
+// from (render context, headline, room grid, markers, scale bar, focus, DOM helpers, the
+// label-placement layout pass) and the registry wiring.
+// Boundary: render-shell.test.js owns the markup around the views and the stylesheet;
+// render-views.test.js owns each view's own markup and patch path.
 
 process.env.TZ = "UTC";
 
@@ -56,8 +48,8 @@ test.before(async () => {
 
 // ------------------------------------------------------------------ fixtures --
 
-// A fresh jsdom window per call. Used both as "the" document and, deliberately, as a
-// SECOND, foreign realm — no render module may care which one it is handed.
+// A fresh jsdom window per call, used both as "the" document and as a second foreign realm —
+// no render module may care which one it is handed.
 function makeRealm() {
   const jsdom = new JSDOM("<!doctype html><html><body><div id='root'></div></body></html>");
   const ownerDocument = jsdom.window.document;
@@ -91,7 +83,7 @@ test("every registered view has a render and a patch function, and unique keys",
 
 test("every view definition has a content builder, and every builder a definition", () => {
   // The same guard the view-content module runs at load time, asserted directly so a
-  // failure names the mismatch instead of surfacing as an empty carousel slot.
+  // failure names the mismatch rather than showing as an empty carousel slot.
   assert.deepEqual(viewContent.VIEW_CONTENT_KEYS, viewState.VIEW_DEFINITIONS.map((d) => d.key));
 });
 
@@ -428,8 +420,7 @@ test("the side-label layout keeps a group inside its right edge", () => {
 test("computedStyleOf resolves against the element's OWN realm", () => {
   const first = makeRealm();
   const second = makeRealm();
-  // jsdom has no layout engine, but it does have a working getComputedStyle per realm;
-  // what matters here is that neither call needs an ambient window.
+  // jsdom has a working getComputedStyle per realm; neither call needs an ambient window.
   assert.equal(typeof dom.computedStyleOf(first.root).display, "string");
   assert.equal(typeof dom.computedStyleOf(second.root).display, "string");
   assert.equal(dom.measuredWidth(first.root), 0, "jsdom reports zero geometry, which is fine — the value is not asserted");

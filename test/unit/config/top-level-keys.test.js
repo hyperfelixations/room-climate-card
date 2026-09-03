@@ -1,16 +1,10 @@
 "use strict";
 
-// Direct unit tests for the top-level key check and its suggestion.
-//
-// Split out of config-normalize-modules.test.js next door, which is about what a KNOWN key
-// normalizes to. This file is about the key itself: whether the card owns it, whether it was
-// handed the key by Home Assistant, and — for one it has never heard of — which option the
-// writer was probably reaching for.
-//
-// The suggestion is the part worth testing hard. It is offered in a sentence that tells
-// somebody to go and edit their YAML, so a wrong one costs more than none at all: it sends
-// them to change a key they did not write. What that buys is one rule — the nearest allowed
-// key, and only when it is the only one that close.
+// Direct unit tests for the top-level key check and its suggestion. Boundary:
+// config-normalize-modules.test.js is about what a known key normalizes to; this file is
+// about the key itself — whether the card owns it, whether Home Assistant handed it over,
+// and which option a mistyped key was reaching for. The suggestion rule: the nearest
+// allowed key, within two edits, and only when it is the only one that close.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -23,8 +17,7 @@ test.before(async () => {
 });
 
 test("every misspelling the property generator writes is answered with the option meant", () => {
-  // The generator's list is what a person actually mistypes, so it is the population this
-  // has to cover rather than a set of examples chosen to pass.
+  // The generator's list is the population to cover, not examples chosen to pass.
   const expected = {
     entiy: "entity",
     entitiy: "entity",
@@ -65,12 +58,11 @@ test("case alone is not a mistake worth a different answer", () => {
 });
 
 test("two options equally close produce no suggestion at all", () => {
-  // `title` and `rooms` are both one edit from these, and naming either would send a reader
-  // to fix a key they did not write.
+  // Two options one edit away: naming either would send a reader to fix a key they did not
+  // write.
   assert.equal(keys.nearestKey("titl", new Set(["title", "titel"])), null);
   assert.equal(keys.nearestKey("swipes", new Set(["swipe", "swiper"])), null);
-  // One of them alone is answered, so the silence above is about the tie and not about
-  // the distance.
+  // One alone is answered, so the silence above is about the tie, not the distance.
   assert.equal(keys.nearestKey("titl", new Set(["title"])), "title");
 });
 
