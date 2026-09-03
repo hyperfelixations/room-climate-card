@@ -2,11 +2,10 @@
 
 // Direct unit tests for src/domain/trend.js.
 //
-// The deadband is what keeps a trend arrow from flickering on sensor noise, and
-// the epsilon around it is what keeps a converted Fahrenheit rate from landing
-// just outside an exact boundary. Both are easy to get subtly wrong and
-// invisible in a screenshot, so the boundaries are asserted from below, exactly
-// on, and above — in both directions.
+// The per-metric deadband classifies falling/stable/rising; the edge epsilon absorbs float
+// noise so a converted Fahrenheit rate never lands just outside an exact boundary. Both are
+// invisible in a screenshot, so every boundary is asserted from below, exactly on, and
+// above, in both directions.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
