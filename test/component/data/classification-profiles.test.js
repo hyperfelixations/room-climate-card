@@ -255,6 +255,152 @@ test("fridge cannot be applied to a non-temperature metric kind", () => {
   );
 });
 
+test("classification: freezer is a built-in temperature profile independent of room and fridge profiles", () => {
+  const card = createTemperatureCard("freezer");
+  assert.equal(internals.canonicalProfile(card, "temperature").id, "freezer");
+  env.cleanup(card);
+});
+
+test("freezer profile targets an appliance-appropriate frozen-storage band", () => {
+  const card = createTemperatureCard("freezer");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const scale = internals.scaleConfigFor(card, "temperature", celsius);
+
+  assert.deepEqual(normalize(scale.comfort), { min: -24, max: -15 });
+  assert.deepEqual(normalize(scale.optimal), { min: -21, max: -18 });
+  assert.deepEqual(normalize(scale.scale), { min: -30, max: -6 });
+  assert.equal(scale.step, 2);
+  assert.equal(
+    scale.anchorScale,
+    true,
+    "like fridge, freezer keeps a fixed reference axis"
+  );
+
+  env.cleanup(card);
+});
+
+test("freezer classification gives progressively stronger warm-side classifications", () => {
+  const card = createTemperatureCard("freezer");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+  const at = (value) =>
+    internals.fallbackTone(card, value, "temperature", celsius);
+
+  assert.equal(at(0).score, 5);
+  assert.equal(at(0).zone, "outside");
+
+  assert.equal(at(-6).score, 4);
+  assert.equal(at(-6).zone, "outside");
+
+  assert.equal(at(-12).score, 3);
+  assert.equal(at(-12).zone, "outside");
+
+  assert.equal(at(-15).score, 2);
+  assert.equal(at(-15).zone, "outside");
+
+  assert.equal(at(-18).score, 1);
+  assert.equal(at(-18).zone, "comfort");
+
+  assert.equal(at(-19).score, 0);
+  assert.equal(at(-19).zone, "optimal");
+
+  assert.equal(at(-21).score, 0);
+  assert.equal(at(-21).zone, "optimal");
+
+  assert.equal(at(-24).score, -1);
+  assert.equal(at(-24).zone, "comfort");
+
+  assert.equal(at(-27).score, -2);
+  assert.equal(at(-27).zone, "outside");
+
+  assert.equal(at(-30).score, -3);
+  assert.equal(at(-30).zone, "outside");
+
+  assert.equal(at(-31).score, -4);
+  assert.equal(at(-31).zone, "outside");
+
+  assert.equal(at(-34).score, -5);
+  assert.equal(at(-34).zone, "outside");
+
+  env.cleanup(card);
+});
+
+test("freezer temperature icons follow freezer-specific thresholds", () => {
+  const card = createTemperatureCard("freezer");
+  const celsius = access.getUnitProfile("temperature", "celsius");
+
+  assert.equal(
+    internals.profileIcon(card, 0, "temperature", celsius),
+    "mdi:fire-alert"
+  );
+  assert.equal(
+    internals.profileIcon(card, -12, "temperature", celsius),
+    "mdi:thermometer-high"
+  );
+  assert.equal(
+    internals.profileIcon(card, -18, "temperature", celsius),
+    "mdi:thermometer"
+  );
+  assert.equal(
+    internals.profileIcon(card, -30, "temperature", celsius),
+    "mdi:thermometer-low"
+  );
+  assert.equal(
+    internals.profileIcon(card, -30.01, "temperature", celsius),
+    "mdi:snowflake"
+  );
+
+  env.cleanup(card);
+});
+
+test("freezer profile is projected atomically into Fahrenheit without collapsing tiers", () => {
+  const card = createTemperatureCard("freezer");
+  const fahrenheit = access.getUnitProfile("temperature", "fahrenheit");
+  const scale = internals.scaleConfigFor(card, "temperature", fahrenheit);
+
+  assert.deepEqual(normalize(scale.comfort), { min: -11, max: 5 });
+  assert.deepEqual(normalize(scale.optimal), { min: -6, max: -0 });
+  assert.deepEqual(normalize(scale.scale), { min: -22, max: 21 });
+
+  const table = internals.displayProfile(card, "temperature", fahrenheit);
+  const warmTier = table.tiers.find((tier) => tier.score === 2);
+
+  assert.equal(
+    warmTier.min,
+    5,
+    "-15 °C must become the rounded 5 °F tier boundary"
+  );
+
+  assert.equal(
+    internals.profileIcon(card, 32, "temperature", fahrenheit),
+    "mdi:fire-alert"
+  );
+  assert.equal(
+    internals.profileIcon(card, 10, "temperature", fahrenheit),
+    "mdi:thermometer-high"
+  );
+  assert.equal(
+    internals.profileIcon(card, -22, "temperature", fahrenheit),
+    "mdi:thermometer-low"
+  );
+
+  env.cleanup(card);
+});
+
+test("freezer cannot be applied to a non-temperature metric kind", () => {
+  const hass = mkHass({
+    "sensor.avg": mkState("sensor.avg", 50, HUMIDITY),
+  });
+
+  assert.throws(
+    () =>
+      env.createCard(
+        { entity: "sensor.avg", classification: "freezer" },
+        hass
+      ),
+    /profile "freezer".*humidity/
+  );
+});
+
 test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thresholds", () => {
   const cases = [
     {

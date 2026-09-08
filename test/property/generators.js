@@ -557,9 +557,31 @@ function generateClassification(rng, metric) {
   };
   switch (rng.int(0, 4)) {
     case 0:
-      return rng.pick(["indoor", "outdoor", "fridge", V.typo(rng, "indoor")]);
+      return rng.pick([
+        "indoor",
+        "outdoor",
+        "fridge",
+        "freezer",
+        V.typo(rng, "indoor"),
+      ]);
+
     case 1:
-      return { source: rng.pick(["auto", "entity", "profile", "card", V.typo(rng, "entity")]), profile: rng.pick(["indoor", "outdoor", "fridge", 42]) };
+      return {
+        source: rng.pick([
+          "auto",
+          "entity",
+          "profile",
+          "card",
+          V.typo(rng, "entity"),
+        ]),
+        profile: rng.pick([
+          "indoor",
+          "outdoor",
+          "fridge",
+          "freezer",
+          42,
+        ]),
+      };
     case 2:
       return validCustom;
     case 3:

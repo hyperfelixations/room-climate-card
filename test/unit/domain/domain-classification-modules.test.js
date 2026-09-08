@@ -18,7 +18,7 @@ let classify;
 
 const KINDS = ["temperature", "humidity", "co2", "pm25"];
 const EXPECTED_PROFILE_IDS = {
-  temperature: ["indoor", "outdoor", "fridge"],
+  temperature: ["indoor", "outdoor", "fridge", "freezer"],
   humidity: ["indoor"],
   co2: ["indoor"],
   pm25: ["indoor"],
@@ -187,7 +187,7 @@ test("exactly one tier per profile is the optimal zone, and it contains the opti
 // ----------------------------------------------------- boundary behaviour --
 
 test("every tier boundary behaves correctly just below, exactly on, and just above", () => {
-  // For all six profiles: the threshold belongs to the tier that names it. The operator is
+  // For all seven profiles: the threshold belongs to the tier that names it.
   // asserted, not branched on, so a profile that stopped matching its neighbours fails by name.
   const EPS = 1e-9;
   for (const { kind, id, profile } of allProfiles()) {
@@ -332,15 +332,51 @@ test("temperature/fridge keeps its food-safety band and its anchored axis", () =
   assert.equal(selectTier(p, 8).zone, "outside", "8 °C is the start of the cited danger zone");
 });
 
-test("the three temperature profiles are genuinely different scales", () => {
-  const { indoor, outdoor, fridge } = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles;
+test("temperature/freezer keeps its frozen-storage band and its anchored axis", () => {
+  const p = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.freezer;
+  assert.deepEqual(p.comfort, { min: -24, max: -15 });
+  assert.deepEqual(p.optimal, { min: -21, max: -18 });
+  assert.deepEqual(p.scale, { min: -30, max: -6 });
+  assert.equal(p.step, 2);
+  assert.equal(
+    p.anchorScale,
+    undefined,
+    "a freezer has a well-defined operating band, so the axis stays fixed"
+  );
+  assert.deepEqual(
+    p.tiers.map((t) => t.min),
+    [0, -6, -12, -15, -18, -21, -24, -27, -30, -33, -Infinity]
+  );
+  assert.deepEqual(
+    p.iconTiers.map((t) => t.min),
+    [0, -12, -24, -30, -Infinity]
+  );
+  assert.equal(selectTier(p, -19).levelKey, "level.optimal");
+  assert.equal(
+    selectTier(p, -12).zone,
+    "outside",
+    "-12 °C is outside the full freezer storage target"
+  );
+  assert.equal(selectTier(p, -31).score, -4);
+  assert.equal(selectTier(p, -34).score, -5);
+});
+
+test("the four temperature profiles are genuinely different scales", () => {
+  const { indoor, outdoor, fridge, freezer } =
+    registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles;
+
   assert.notDeepEqual(indoor.comfort, outdoor.comfort);
   assert.notDeepEqual(indoor.comfort, fridge.comfort);
+  assert.notDeepEqual(indoor.comfort, freezer.comfort);
   assert.notDeepEqual(outdoor.comfort, fridge.comfort);
-  // The same reading must be judged differently by each profile.
-  assert.equal(selectTier(indoor, 22).levelKey, "level.optimal");
-  assert.equal(selectTier(outdoor, 22).levelKey, "level.slightlyWarm");
-  assert.equal(selectTier(fridge, 22).levelKey, "level.veryHot");
+  assert.notDeepEqual(outdoor.comfort, freezer.comfort);
+  assert.notDeepEqual(fridge.comfort, freezer.comfort);
+
+  // The same reading must be judged differently by the appliance and room profiles.
+  assert.equal(selectTier(indoor, 4).levelKey, "level.veryCold");
+  assert.equal(selectTier(outdoor, 4).levelKey, "level.cold");
+  assert.equal(selectTier(fridge, 4).levelKey, "level.optimal");
+  assert.equal(selectTier(freezer, 4).levelKey, "level.veryHot");
 });
 
 test("humidity/indoor keeps its symmetric band and icon tiers", () => {
@@ -423,6 +459,16 @@ const SHIPPED_ICONS = {
     [[10, 10.01, 11, 11.99], "mdi:thermometer-high"],
     [[12, 12.01, 13, 1000], "mdi:fire-alert"],
   ],
+  "temperature/freezer": [
+    [[-100, -31, -30.01], "mdi:snowflake"],
+    [[-30, -29.99, -29, -27.01, -27, -26.99, -25, -24.01], "mdi:thermometer-low"],
+    [[
+      -24, -23.99, -23, -21.01, -21, -20.99, -20, -18.01, -18, -17.99, -17,
+      -15.01, -15, -14.99, -14, -12.01,
+    ], "mdi:thermometer"],
+    [[-12, -11.99, -11, -6.01, -6, -5.99, -5, -0.01], "mdi:thermometer-high"],
+    [[0, 0.01, 1, 1000], "mdi:fire-alert"],
+  ],
   "humidity/indoor": [
     [[
       -100, 0, 24, 24.99, 25, 25.01, 26, 29, 29.99, 30, 30.01, 31, 34, 34.99, 35, 35.01,
@@ -452,7 +498,7 @@ const SHIPPED_ICONS = {
   ],
 };
 
-test("every built-in profile shows the icons it has always shown", () => {
+test("every built-in profile shows its recorded icon table", () => {
   let probes = 0;
   for (const { kind, id, profile } of allProfiles()) {
     const runs = SHIPPED_ICONS[`${kind}/${id}`];
@@ -464,7 +510,7 @@ test("every built-in profile shows the icons it has always shown", () => {
       }
     }
   }
-  assert.equal(probes, 248, "the whole recorded table was replayed");
+  assert.equal(probes, 287, "the whole recorded table was replayed");
 });
 
 // One icon-tier shape for every measurement.
