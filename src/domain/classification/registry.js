@@ -20,7 +20,7 @@ export const CLASSIFICATION_PROFILE_REGISTRY = {
       indoor: temperatureIndoor,
       outdoor: temperatureOutdoor,
       fridge: temperatureFridge,
-	  freezer: temperatureFreezer,
+      freezer: temperatureFreezer,
     },
   },
   humidity: {
