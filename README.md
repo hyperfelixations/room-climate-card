@@ -25,7 +25,7 @@ below. The card follows your dashboard's light or dark theme.
   add rooms — or laid out to a grid you choose
 - Daily minimum/maximum views and a rate-of-change display
 - Built-in classification profiles for every measurement, including `indoor`,
-  `outdoor`, and `fridge` for temperature, plus custom profiles in YAML
+  `outdoor`, `fridge`, and `freezer` for temperature, plus custom profiles in YAML
 - Built-in color palettes, ramps made from one to three colors, and custom
   palettes in YAML
 - Translated into 15 languages, following your Home Assistant language setting
@@ -391,6 +391,17 @@ classification: fridge
 The fridge profile uses food-safety ranges: an optimal band of `3–5 °C`, a
 comfort band of `1–6 °C`, and a base scale of `0–8 °C`.
 
+Select the built-in freezer profile for frozen-storage monitoring:
+
+```yaml
+classification: freezer
+```
+
+The freezer profile is centred on the `-18 °C` frozen-storage target. It uses an
+optimal band of `-21–-18 °C`, a comfort band of `-24–-15 °C`, and a base scale
+of `-30–-6 °C`. Warm-side tiers become progressively more severe as the
+temperature rises, while colder readings are treated more gently.
+
 The header icon follows the active profile unless you set `icon` yourself:
 temperature moves through thermometer, fire, and snowflake icons; humidity
 through the water-percent variants; CO₂ switches to an alert icon at its
@@ -421,7 +432,7 @@ classification:
 ```
 
 `auto` and `profile` use the metric's default profile when `profile` is
-omitted. `outdoor` and `fridge` exist for temperature only; `indoor` is the
+omitted. `outdoor`, `fridge`, and `freezer` exist for temperature only; `indoor` is the
 default profile for temperature, humidity, CO₂, and PM2.5.
 
 A custom profile defines its tiers, bands, scale, and icons together.
@@ -502,7 +513,7 @@ Custom-profile rules:
   greater than zero.
 - `scale` describes the axis the card draws, and it comes in two shapes. Give
   it a `min` and a `max` for an axis that always covers that range and grows
-  outwards when readings go further — that is what `indoor` and `fridge` do.
+  outwards when readings go further — that is what `indoor`, `fridge`, and `freezer` do.
   Or leave both out and add `anchor_scale: false` for an axis that follows the
   readings themselves, which suits a measurement whose sensible range moves
   with the season — that is what `outdoor` does:

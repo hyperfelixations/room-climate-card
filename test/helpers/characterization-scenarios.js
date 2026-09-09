@@ -7,7 +7,7 @@
 //   configuration cases   A (minimal) / B (rooms) / C (range) / D (full)
 //   metric kinds          temperature, humidity, CO2, PM2.5
 //   unit profiles         °C, °F, K, and a mixed-unit room consensus
-//   classification        auto/builtin, indoor, outdoor, fridge, entity, custom
+//   classification        auto/builtin, indoor, outdoor, fridge, freezer, entity, custom
 //   measurement states    empty, missing rooms, mixed metric kinds
 //   view composition      auto, explicit order, solo, collapsed, unavailable
 //   view options          bands, footers, marker modes, timestamps, values
@@ -283,6 +283,11 @@ const SCENARIOS = [
     name: "classification-fridge-profile",
     config: { entity: "sensor.avg", classification: { source: "profile", profile: "fridge" } },
     states: { "sensor.avg": st("sensor.avg", 4.2, C) },
+  },
+  {
+    name: "classification-freezer-profile",
+    config: { entity: "sensor.avg", classification: { source: "profile", profile: "freezer" } },
+    states: { "sensor.avg": st("sensor.avg", -19.2, C) },
   },
   {
     name: "classification-entity-attributes",

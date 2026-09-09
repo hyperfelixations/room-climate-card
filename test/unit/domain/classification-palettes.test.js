@@ -331,7 +331,7 @@ const SHIPPED_BY_DEVIATION = {
 };
 const SHIPPED_INVALID = "#B4B2A9";
 
-test("every built-in tier keeps exactly the colour it always had", () => {
+test("every built-in tier maps to the established pastel colour for its deviation", () => {
   let tiers = 0;
   for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
     for (const [id, profile] of Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
@@ -370,8 +370,8 @@ test("every built-in tier keeps exactly the colour it always had", () => {
       }
     }
   }
-  // 11 + 11 + 11 (temperature) + 11 (humidity) + 6 (CO2) + 6 (PM2.5).
-  assert.equal(tiers, 56, "every tier of every built-in profile was checked");
+  // 11 + 11 + 11 + 11 (temperature) + 11 (humidity) + 6 (CO2) + 6 (PM2.5).
+  assert.equal(tiers, 67, "every tier of every built-in profile was checked");
 });
 
 test("the same profiles under the second palette differ everywhere and stay coherent", () => {
