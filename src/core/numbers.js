@@ -54,6 +54,13 @@ export function isOutsideRange(value, range) {
   return range.max !== null && (range.maxInclusive ? value > range.max : value >= range.max);
 }
 
+// Collapses IEEE-754 negative zero onto plain zero. Rounding a small negative value
+// (Math.round(-0.4)) yields -0, which Intl renders as "-0" and which no measurement means;
+// the unit projection and the number formatter both pass their result through here.
+export function withoutNegativeZero(value) {
+  return Object.is(value, -0) ? 0 : value;
+}
+
 // Clamps a value to a fixed range.
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));

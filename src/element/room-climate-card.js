@@ -588,6 +588,18 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return `${this._fmt(value, digits)}${separator}${this._unit()}`;
     }
 
+    // Same pair, with an explicit sign on positive values; a signed band range uses it so
+    // both of its bounds read as signed quantities.
+    _fmtSigned(value, digits) {
+      const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
+      return formatNumber(this._language(), value, d, "exceptZero");
+    }
+
+    _fmtSignedWithUnit(value, digits, withSpace = true) {
+      const separator = withSpace ? " " : "";
+      return `${this._fmtSigned(value, digits)}${separator}${this._unit()}`;
+    }
+
     _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
       return roomGridRows(count, columns, rows, autoMaxColumns);
     }
@@ -663,7 +675,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
     }
 
-    // The narrow presentation collaborator: a translator and three formatters,
+    // The narrow presentation collaborator: a translator and five formatters,
     // nothing that could reach the card, the DOM or the configuration.
     _texts() {
       return {
@@ -671,6 +683,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         t: (key, vars) => this._t(key, vars),
         fmt: (value, digits) => this._fmt(value, digits),
         fmtWithUnit: (value, digits, withSpace) => this._fmtWithUnit(value, digits, withSpace),
+        fmtSigned: (value, digits) => this._fmtSigned(value, digits),
+        fmtSignedWithUnit: (value, digits, withSpace) => this._fmtSignedWithUnit(value, digits, withSpace),
         formatTime: (isoString) => this._formatTime(isoString),
       };
     }

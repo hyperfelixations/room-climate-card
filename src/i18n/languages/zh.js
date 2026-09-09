@@ -85,6 +85,7 @@ export const zh = {
   "scale.comfortLabelShort": (v) => `${v.range} 舒适`,
   "scale.optimalLabel": (v) => `${v.range} 最佳`,
   "scale.optimalLabelShort": (v) => `${v.range} 最佳`,
+  "scale.bandRangeSigned": (v) => `${v.min}至${v.max}`,
 
   "rangeScale.currentLabel": "当前",
   "rangeScale.currentLabelShort": "当前",

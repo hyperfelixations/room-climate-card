@@ -88,6 +88,7 @@ export const nl = {
   "scale.comfortLabelShort": (v) => `${v.range} comfort`,
   "scale.optimalLabel": (v) => `${v.range} optimaal`,
   "scale.optimalLabelShort": (v) => `${v.range} optimaal`,
+  "scale.bandRangeSigned": (v) => `${v.min} tot ${v.max}`,
 
   "rangeScale.currentLabel": "nu",
   "rangeScale.currentLabelShort": "nu",

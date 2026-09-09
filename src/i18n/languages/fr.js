@@ -89,6 +89,7 @@ export const fr = {
   "scale.comfortLabelShort": (v) => `${v.range} confort`,
   "scale.optimalLabel": (v) => `${v.range} optimal`,
   "scale.optimalLabelShort": (v) => `${v.range} optimal`,
+  "scale.bandRangeSigned": (v) => `${v.min} à ${v.max}`,
 
   // Keep the full label as the primary value; the layout resolver substitutes
   // the short form only when the rendered width requires it.

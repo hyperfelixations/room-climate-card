@@ -100,6 +100,7 @@ export const lv = {
   "scale.comfortLabelShort": (v) => `${v.range} komforts`,
   "scale.optimalLabel": (v) => `${v.range} optimāli`,
   "scale.optimalLabelShort": (v) => `${v.range} optimāli`,
+  "scale.bandRangeSigned": (v) => `${v.min} līdz ${v.max}`,
 
   "rangeScale.currentLabel": "tagad",
   "rangeScale.currentLabelShort": "tagad",

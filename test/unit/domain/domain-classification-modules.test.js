@@ -187,7 +187,7 @@ test("exactly one tier per profile is the optimal zone, and it contains the opti
 // ----------------------------------------------------- boundary behaviour --
 
 test("every tier boundary behaves correctly just below, exactly on, and just above", () => {
-  // For all seven profiles: the threshold belongs to the tier that names it.
+  // For all seven profiles: the threshold belongs to the tier that names it. The operator is
   // asserted, not branched on, so a profile that stopped matching its neighbours fails by name.
   const EPS = 1e-9;
   for (const { kind, id, profile } of allProfiles()) {
@@ -349,7 +349,7 @@ test("temperature/freezer keeps its frozen-storage band and its anchored axis", 
   );
   assert.deepEqual(
     p.iconTiers.map((t) => t.min),
-    [0, -12, -24, -30, -Infinity]
+    [0, -6, -24, -30, -Infinity]
   );
   assert.equal(selectTier(p, -19).levelKey, "level.optimal");
   assert.equal(
@@ -377,6 +377,73 @@ test("the four temperature profiles are genuinely different scales", () => {
   assert.equal(selectTier(outdoor, 4).levelKey, "level.cold");
   assert.equal(selectTier(fridge, 4).levelKey, "level.optimal");
   assert.equal(selectTier(freezer, 4).levelKey, "level.veryHot");
+});
+
+// `score` is the signed distance from optimal, so the same distance must read the same
+// way in every temperature profile: one wording per score, one icon per score. Pinning
+// both maps is what stops a new profile from inventing its own vocabulary or reusing one
+// label for two tiers. See internal dev doc §5 "Classification und Profile".
+const TEMPERATURE_LEVEL_BY_SCORE = {
+  5: "level.veryHot",
+  4: "level.hot",
+  3: "level.veryWarm",
+  2: "level.warm",
+  1: "level.slightlyWarm",
+  0: "level.optimal",
+  "-1": "level.slightlyCool",
+  "-2": "level.fresh",
+  "-3": "level.cool",
+  "-4": "level.cold",
+  "-5": "level.veryCold",
+};
+
+const TEMPERATURE_ICON_BY_SCORE = {
+  5: "mdi:fire-alert",
+  4: "mdi:thermometer-high",
+  3: "mdi:thermometer",
+  2: "mdi:thermometer",
+  1: "mdi:thermometer",
+  0: "mdi:thermometer",
+  "-1": "mdi:thermometer",
+  "-2": "mdi:thermometer-low",
+  "-3": "mdi:thermometer-low",
+  "-4": "mdi:snowflake",
+  "-5": "mdi:snowflake",
+};
+
+function temperatureProfiles() {
+  return Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles);
+}
+
+test("every temperature profile names each score with the same level key", () => {
+  for (const [id, profile] of temperatureProfiles()) {
+    const seen = new Set();
+    for (const tier of profile.tiers) {
+      assert.equal(
+        tier.levelKey,
+        TEMPERATURE_LEVEL_BY_SCORE[tier.score],
+        `temperature/${id}: score ${tier.score}`
+      );
+      assert.equal(seen.has(tier.score), false, `temperature/${id}: score ${tier.score} appears twice`);
+      seen.add(tier.score);
+    }
+    assert.equal(seen.size, 11, `temperature/${id}: all eleven scores are present exactly once`);
+  }
+});
+
+test("every temperature profile shows the same icon for the same score", () => {
+  // The open-ended tier has no finite min; probe far below the coldest boundary instead.
+  const OPEN_TIER_PROBE = -1e6;
+  for (const [id, profile] of temperatureProfiles()) {
+    for (const tier of profile.tiers) {
+      const probe = Number.isFinite(tier.min) ? tier.min : OPEN_TIER_PROBE;
+      assert.equal(
+        icons.profileIconForValue(probe, profile),
+        TEMPERATURE_ICON_BY_SCORE[tier.score],
+        `temperature/${id}: score ${tier.score} at ${probe}`
+      );
+    }
+  }
 });
 
 test("humidity/indoor keeps its symmetric band and icon tiers", () => {
@@ -464,9 +531,9 @@ const SHIPPED_ICONS = {
     [[-30, -29.99, -29, -27.01, -27, -26.99, -25, -24.01], "mdi:thermometer-low"],
     [[
       -24, -23.99, -23, -21.01, -21, -20.99, -20, -18.01, -18, -17.99, -17,
-      -15.01, -15, -14.99, -14, -12.01,
+      -15.01, -15, -14.99, -14, -12.01, -12, -11.99, -11, -6.01,
     ], "mdi:thermometer"],
-    [[-12, -11.99, -11, -6.01, -6, -5.99, -5, -0.01], "mdi:thermometer-high"],
+    [[-6, -5.99, -5, -0.01], "mdi:thermometer-high"],
     [[0, 0.01, 1, 1000], "mdi:fire-alert"],
   ],
   "humidity/indoor": [

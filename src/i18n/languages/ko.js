@@ -85,6 +85,7 @@ export const ko = {
   "scale.comfortLabelShort": (v) => `${v.range} 쾌적 범위`,
   "scale.optimalLabel": (v) => `${v.range} 최적 범위`,
   "scale.optimalLabelShort": (v) => `${v.range} 최적 범위`,
+  "scale.bandRangeSigned": (v) => `${v.min}~${v.max}`,
 
   "rangeScale.currentLabel": "현재",
   "rangeScale.currentLabelShort": "현재",

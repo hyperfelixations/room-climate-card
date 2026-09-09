@@ -9,6 +9,9 @@ function stubTexts(overrides = {}) {
     t: (key, vars) => (vars ? `${key}(${JSON.stringify(vars)})` : key),
     fmt: (value, digits) => `fmt:${value}:${digits ?? "auto"}`,
     fmtWithUnit: (value, digits, withSpace) => `unit:${value}:${digits ?? "auto"}:${withSpace === false ? "nospace" : "space"}`,
+    fmtSigned: (value, digits) => `signed:${value}:${digits ?? "auto"}`,
+    fmtSignedWithUnit: (value, digits, withSpace) =>
+      `signedunit:${value}:${digits ?? "auto"}:${withSpace === false ? "nospace" : "space"}`,
     formatTime: (isoString) => (isoString ? `time:${isoString}` : null),
     ...overrides,
   };

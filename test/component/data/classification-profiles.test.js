@@ -333,8 +333,13 @@ test("freezer temperature icons follow freezer-specific thresholds", () => {
     "mdi:fire-alert"
   );
   assert.equal(
-    internals.profileIcon(card, -12, "temperature", celsius),
+    internals.profileIcon(card, -6, "temperature", celsius),
     "mdi:thermometer-high"
+  );
+  assert.equal(
+    internals.profileIcon(card, -12, "temperature", celsius),
+    "mdi:thermometer",
+    "the high icon belongs to the same score here as in every other temperature profile"
   );
   assert.equal(
     internals.profileIcon(card, -18, "temperature", celsius),
@@ -358,7 +363,9 @@ test("freezer profile is projected atomically into Fahrenheit without collapsing
   const scale = internals.scaleConfigFor(card, "temperature", fahrenheit);
 
   assert.deepEqual(normalize(scale.comfort), { min: -11, max: 5 });
-  assert.deepEqual(normalize(scale.optimal), { min: -6, max: -0 });
+  // -18 °C is -0.4 °F; the projection's rounding must not hand on a negative zero.
+  assert.deepEqual(normalize(scale.optimal), { min: -6, max: 0 });
+  assert.equal(Object.is(scale.optimal.max, -0), false);
   assert.deepEqual(normalize(scale.scale), { min: -22, max: 21 });
 
   const table = internals.displayProfile(card, "temperature", fahrenheit);
@@ -375,14 +382,55 @@ test("freezer profile is projected atomically into Fahrenheit without collapsing
     "mdi:fire-alert"
   );
   assert.equal(
+    internals.profileIcon(card, 21, "temperature", fahrenheit),
+    "mdi:thermometer-high",
+    "-6 °C rounds to the 21 °F icon boundary"
+  );
+  assert.equal(
     internals.profileIcon(card, 10, "temperature", fahrenheit),
-    "mdi:thermometer-high"
+    "mdi:thermometer"
   );
   assert.equal(
     internals.profileIcon(card, -22, "temperature", fahrenheit),
     "mdi:thermometer-low"
   );
 
+  env.cleanup(card);
+});
+
+// A band whose bounds are negative cannot use the dash form: "-24–-15" reads as one run of
+// signs. The signed form is chosen per band, from the values, not per profile.
+function bandLabels(card) {
+  return {
+    comfort: card.shadowRoot.querySelector(".rtc-scale-comfort-label").textContent,
+    optimal: card.shadowRoot.querySelector(".rtc-scale-label-center").textContent,
+  };
+}
+
+test("a band with a negative bound is written with a word instead of a dash", () => {
+  const card = createTemperatureCard("freezer", -19.2);
+  assert.deepEqual(bandLabels(card), {
+    comfort: "-24 to -15°C comfort",
+    optimal: "-21 to -18°C optimal",
+  });
+  env.cleanup(card);
+});
+
+test("a signed band marks its positive bound explicitly and leaves zero unsigned", () => {
+  const card = createTemperatureCard("freezer", -2, { unit_of_measurement: "°F" });
+  assert.deepEqual(bandLabels(card), {
+    comfort: "-11 to +5°F comfort",
+    optimal: "-6 to 0°F optimal",
+  });
+  env.cleanup(card);
+});
+
+test("a band that stays positive keeps the dash form unchanged", () => {
+  const card = createTemperatureCard("indoor", 22);
+  assert.deepEqual(bandLabels(card), {
+    comfort: "20–24°C comfort",
+    optimal: "21–23°C optimal",
+  });
   env.cleanup(card);
 });
 

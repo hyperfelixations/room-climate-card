@@ -223,6 +223,27 @@ test("formatNumber() honours the requested digit count exactly", () => {
   assert.equal(formatNumber("en", "21.5", 1), "21.5", "numeric strings are coerced");
 });
 
+test("formatNumber() never prints a negative zero", () => {
+  const { formatNumber } = formatters;
+  // Math.round(-0.4) is -0, and Intl renders that as "-0". Nothing the card displays may
+  // read as a signed nothing, whatever produced the value.
+  assert.equal(formatNumber("en", -0, 0), "0");
+  assert.equal(formatNumber("de", -0, 1), "0,0");
+  assert.equal(formatNumber("en", Math.round(-0.4), 0), "0", "the projection rounds -0.4 °F to -0");
+  // A value that is genuinely below zero keeps its sign; only the signless -0 is normalized.
+  assert.equal(formatNumber("en", -0.4, 1), "-0.4");
+});
+
+test("formatNumber() can force an explicit sign on positive values", () => {
+  const { formatNumber } = formatters;
+  assert.equal(formatNumber("en", 4, 0, "exceptZero"), "+4");
+  assert.equal(formatNumber("en", -5, 0, "exceptZero"), "-5");
+  assert.equal(formatNumber("en", 0, 0, "exceptZero"), "0", "zero stays unsigned");
+  assert.equal(formatNumber("en", -0, 0, "exceptZero"), "0");
+  assert.equal(formatNumber("de", 4, 0, "exceptZero"), "+4");
+  assert.equal(formatNumber("en", 4, 0), "4", "the default keeps the plain form");
+});
+
 test("formatTimeOfDay() renders 24-hour local time and rejects unusable input", () => {
   const { formatTimeOfDay } = formatters;
   // TZ is pinned to UTC above, so the rendered time equals the ISO time.

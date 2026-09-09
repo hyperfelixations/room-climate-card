@@ -397,10 +397,9 @@ Select the built-in freezer profile for frozen-storage monitoring:
 classification: freezer
 ```
 
-The freezer profile is centred on the `-18 °C` frozen-storage target. It uses an
-optimal band of `-21–-18 °C`, a comfort band of `-24–-15 °C`, and a base scale
-of `-30–-6 °C`. Warm-side tiers become progressively more severe as the
-temperature rises, while colder readings are treated more gently.
+The freezer profile uses frozen-storage ranges: an optimal band of `-21 °C` to
+`-18 °C`, a comfort band of `-24 °C` to `-15 °C`, and a base scale of `-30 °C`
+to `-6 °C`.
 
 The header icon follows the active profile unless you set `icon` yourself:
 temperature moves through thermometer, fire, and snowflake icons; humidity
@@ -432,8 +431,8 @@ classification:
 ```
 
 `auto` and `profile` use the metric's default profile when `profile` is
-omitted. `outdoor`, `fridge`, and `freezer` exist for temperature only; `indoor` is the
-default profile for temperature, humidity, CO₂, and PM2.5.
+omitted. `outdoor`, `fridge`, and `freezer` exist for temperature only;
+`indoor` is the default profile for temperature, humidity, CO₂, and PM2.5.
 
 A custom profile defines its tiers, bands, scale, and icons together.
 
@@ -513,10 +512,10 @@ Custom-profile rules:
   greater than zero.
 - `scale` describes the axis the card draws, and it comes in two shapes. Give
   it a `min` and a `max` for an axis that always covers that range and grows
-  outwards when readings go further — that is what `indoor`, `fridge`, and `freezer` do.
-  Or leave both out and add `anchor_scale: false` for an axis that follows the
-  readings themselves, which suits a measurement whose sensible range moves
-  with the season — that is what `outdoor` does:
+  outwards when readings go further — that is what `indoor`, `fridge`, and
+  `freezer` do. Or leave both out and add `anchor_scale: false` for an axis
+  that follows the readings themselves, which suits a measurement whose
+  sensible range moves with the season — that is what `outdoor` does:
   ```yaml
   scale:
     step: 1

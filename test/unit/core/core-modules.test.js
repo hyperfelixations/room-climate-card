@@ -105,6 +105,18 @@ test("floorToStep()/ceilToStep() round outwards on a step grid, including negati
   assert.equal(ceilToStep(20, 5), 20);
 });
 
+test("withoutNegativeZero() collapses -0 and leaves every other value alone", () => {
+  const { withoutNegativeZero } = numbers;
+  assert.equal(Object.is(withoutNegativeZero(-0), 0), true, "-0 becomes +0, not merely equal to it");
+  assert.equal(Object.is(withoutNegativeZero(Math.round(-0.4)), 0), true);
+  assert.equal(Object.is(withoutNegativeZero(0), 0), true);
+  assert.equal(withoutNegativeZero(-5), -5);
+  assert.equal(withoutNegativeZero(21.4), 21.4);
+  assert.equal(withoutNegativeZero(-Infinity), -Infinity);
+  assert.equal(withoutNegativeZero(Infinity), Infinity);
+  assert.equal(Number.isNaN(withoutNegativeZero(NaN)), true);
+});
+
 // ------------------------------------------------------------------- text --
 
 test("escapeHtml() neutralizes every character that could break out of markup", () => {

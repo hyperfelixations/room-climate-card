@@ -86,6 +86,7 @@ export const en = {
   "scale.comfortLabelShort": (v) => `${v.range} comfort`,
   "scale.optimalLabel": (v) => `${v.range} optimal`,
   "scale.optimalLabelShort": (v) => `${v.range} optimal`,
+  "scale.bandRangeSigned": (v) => `${v.min} to ${v.max}`,
 
   "rangeScale.currentLabel": "now",
   "rangeScale.currentLabelShort": "now",

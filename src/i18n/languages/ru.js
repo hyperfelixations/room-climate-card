@@ -90,6 +90,7 @@ export const ru = {
   "scale.comfortLabelShort": (v) => `${v.range} комфорт`,
   "scale.optimalLabel": (v) => `${v.range} оптимум`,
   "scale.optimalLabelShort": (v) => `${v.range} оптимум`,
+  "scale.bandRangeSigned": (v) => `${v.min} до ${v.max}`,
 
   "rangeScale.currentLabel": "сейчас",
   "rangeScale.currentLabelShort": "сейчас",

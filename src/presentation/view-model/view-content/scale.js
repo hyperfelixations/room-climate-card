@@ -3,7 +3,7 @@
 
 import { extremeRoomLabel } from "../metric-meta.js";
 import { buildMarker } from "../marker.js";
-import { buildScaleBarContent } from "./scale-bar.js";
+import { buildBandRangeText, buildScaleBarContent } from "./scale-bar.js";
 
 // Room footer combines comfort count, spread and an optional reporting trend.
 function buildFooterText(shared) {
@@ -35,7 +35,7 @@ export function buildScaleViewContent(shared, options) {
     // Layout selects long or short comfort text from measured width.
     comfortLabel: options.show_comfort_band
       ? (() => {
-          const range = `${texts.fmt(comfort.min, 0)}–${texts.fmtWithUnit(comfort.max, 0, false)}`;
+          const range = buildBandRangeText(texts, comfort.min, comfort.max);
           return {
             long: texts.t("scale.comfortLabel", { range }),
             short: texts.t("scale.comfortLabelShort", { range }),

@@ -91,6 +91,37 @@ test.describe(".rtc-scale-comfort-label stays inside its own view", () => {
     });
   }
 
+  // A band with negative bounds is written with a word instead of a dash, which makes the
+  // longest comfort label the card can produce. Containment and the short-form swap are
+  // measured from rendered width, so the longest label is the one that has to be tried.
+  test("a signed comfort label is the longest one and still stays inside the row", async ({ page }) => {
+    await gotoHarnessWithBlockCard(page);
+    const cardId = await createCard(
+      page,
+      { entity: "sensor.avg", classification: "freezer", auto_slide: false, views: [{ type: "scale" }] },
+      {
+        "sensor.avg": mkStateObj("sensor.avg", -19.2, {
+          device_class: "temperature",
+          unit_of_measurement: "°C",
+        }),
+      },
+      "de"
+    );
+    for (const width of [320, 400, 520, 700]) {
+      await setCardWidth(page, cardId, width);
+      const measured = await comfortLabelBox(page, cardId);
+      if (measured.hidden) continue;
+      expect(
+        measured.overLeftEdge,
+        `the signed label at ${width}px reaches ${measured.overLeftEdge.toFixed(1)}px past the left edge`
+      ).toBeLessThanOrEqual(0.5);
+      expect(
+        measured.overRightEdge,
+        `the signed label at ${width}px reaches ${measured.overRightEdge.toFixed(1)}px past the right edge`
+      ).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   // The clamp mixes two boxes: the percentage is a position on the axis, the containment is
   // against the row. They are the same width (both items of the same single-column grid) —
   // stated so a change to that grid fails loudly.

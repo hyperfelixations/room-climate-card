@@ -145,6 +145,7 @@ test("I18N-02: every function-valued translation executes with the full runtime 
     "trend.aria",
     "scale.comfortLabel",
     "scale.optimalLabel",
+    "scale.bandRangeSigned",
     "rangeScale.footer",
     "card.ariaOpen",
     "room.ariaOpen",

@@ -93,6 +93,7 @@ export const pl = {
   // short form only when the rendered width requires it.
   "scale.optimalLabel": (v) => `${v.range} optymalny`,
   "scale.optimalLabelShort": (v) => `${v.range} opt.`,
+  "scale.bandRangeSigned": (v) => `${v.min} do ${v.max}`,
 
   "rangeScale.currentLabel": "teraz",
   "rangeScale.currentLabelShort": "teraz",

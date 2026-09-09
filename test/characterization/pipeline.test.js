@@ -91,11 +91,14 @@ function buildTexts(config, hass, unit, metricKind) {
   const language = resolveLanguage(config.language, hass);
   const digitsFor = (digits) => digits ?? config.decimals ?? metricMetaFor(metricKind).decimals;
   const fmt = (value, digits) => formatNumber(language, value, digitsFor(digits));
+  const fmtSigned = (value, digits) => formatNumber(language, value, digitsFor(digits), "exceptZero");
   return {
     language,
     t: (key, vars) => translate(language, key, vars),
     fmt,
     fmtWithUnit: (value, digits, withSpace = true) => `${fmt(value, digits)}${withSpace ? " " : ""}${unit}`,
+    fmtSigned,
+    fmtSignedWithUnit: (value, digits, withSpace = true) => `${fmtSigned(value, digits)}${withSpace ? " " : ""}${unit}`,
     formatTime: (isoString) => formatTimeOfDay(language, isoString),
   };
 }

@@ -91,6 +91,7 @@ export const uk = {
   "scale.comfortLabelShort": (v) => `${v.range} комфорт`,
   "scale.optimalLabel": (v) => `${v.range} оптимально`,
   "scale.optimalLabelShort": (v) => `${v.range} оптимально`,
+  "scale.bandRangeSigned": (v) => `${v.min} до ${v.max}`,
 
   "rangeScale.currentLabel": "зараз",
   "rangeScale.currentLabelShort": "зараз",

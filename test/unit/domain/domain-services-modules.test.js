@@ -545,7 +545,8 @@ test("a profile whose gaps collapse under rounding is rejected with a usable mes
 });
 
 test("the built-in profiles survive projection into every temperature unit", () => {
-  for (const id of ["indoor", "outdoor", "fridge"]) {
+  // Read from the registry, not a written-out list: a new profile has to be projected too.
+  for (const id of Object.keys(temperatureRegistry().profiles)) {
     for (const unit of ["celsius", "fahrenheit", "kelvin"]) {
       assert.doesNotThrow(
         () =>

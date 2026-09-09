@@ -2,17 +2,18 @@
 // formatter is cached per locale/digits combination: a multi-room render formats a
 // dozen-plus numbers, and a fresh Intl instance per call would be built each time.
 
+import { withoutNegativeZero } from "../core/numbers.js";
 import { NUMBER_LOCALE_BY_LANGUAGE } from "./locales.js";
 
 const NUMBER_FORMAT_CACHE = new Map();
 const TIME_FORMAT_CACHE = new Map();
 const PLURAL_RULES_CACHE = new Map();
 
-export function getNumberFormat(locale, digits) {
-  const key = `${locale}|${digits}`;
+export function getNumberFormat(locale, digits, signDisplay = "auto") {
+  const key = `${locale}|${digits}|${signDisplay}`;
   let fmt = NUMBER_FORMAT_CACHE.get(key);
   if (!fmt) {
-    fmt = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    fmt = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits, signDisplay });
     NUMBER_FORMAT_CACHE.set(key, fmt);
   }
   return fmt;
@@ -44,9 +45,11 @@ export function selectPlural(language, count, forms) {
 
 // Formats a number in the given language. The digit count is decided by the
 // caller (config override, then the metric's own default), because that is a
-// presentation decision this module has no way to resolve.
-export function formatNumber(language, value, digits) {
-  return getNumberFormat(NUMBER_LOCALE_BY_LANGUAGE[language], digits).format(Number(value));
+// presentation decision this module has no way to resolve. `signDisplay` follows
+// Intl; "exceptZero" is what a signed band range uses to mark its positive bound.
+export function formatNumber(language, value, digits, signDisplay) {
+  const number = withoutNegativeZero(Number(value));
+  return getNumberFormat(NUMBER_LOCALE_BY_LANGUAGE[language], digits, signDisplay).format(number);
 }
 
 // Formats an ISO timestamp as local "HH:MM" (hour12:false keeps this

@@ -85,6 +85,7 @@ export const ja = {
   "scale.comfortLabelShort": (v) => `${v.range} 快適`,
   "scale.optimalLabel": (v) => `${v.range} 最適`,
   "scale.optimalLabelShort": (v) => `${v.range} 最適`,
+  "scale.bandRangeSigned": (v) => `${v.min}〜${v.max}`,
 
   "rangeScale.currentLabel": "現在",
   "rangeScale.currentLabelShort": "現在",
