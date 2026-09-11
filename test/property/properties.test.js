@@ -83,6 +83,40 @@ test("non-finite averages say whether finite inputs overflowed or an input was a
   ]);
 });
 
+test("a reading that overflows only on its way into the display unit is named as such", () => {
+  // °C and K are finite when canonicalized; only the later projection into °F scales them.
+  const projected = {
+    metric: { unit: "°F" },
+    rooms: { visible: [{ value: Infinity, entity: "sensor.room0" }] },
+    roomMarkers: [{ value: Infinity, entity: "sensor.room0" }],
+    spread: Infinity,
+  };
+  const withUnit = (unit) => ({
+    states: { "sensor.room0": { state: "1e308", attributes: { unit_of_measurement: unit } } },
+  });
+  for (const unit of ["°C", "K"]) {
+    assert.deepEqual(MODEL_INVARIANTS.everyNumberIsFinite(projected, withUnit(unit)), [
+      "rooms.visible[0].value is Infinity (a finite reading overflowed on projection into the display unit)",
+      "roomMarkers[0].value is Infinity (a finite reading overflowed on projection into the display unit)",
+      "spread is Infinity (derived from a finite reading that overflowed on projection into the display unit)",
+    ], unit);
+  }
+
+  // A display unit that does not scale cannot overflow a finite reading: no provenance.
+  assert.deepEqual(MODEL_INVARIANTS.everyNumberIsFinite({ ...projected, metric: { unit: "°C" } }, withUnit("°C")), [
+    "rooms.visible[0].value is Infinity",
+    "roomMarkers[0].value is Infinity",
+    "spread is Infinity",
+  ]);
+
+  // A Fahrenheit reading overflows on its way in; that provenance keeps precedence.
+  assert.deepEqual(MODEL_INVARIANTS.everyNumberIsFinite(projected, withUnit("°F")), [
+    "rooms.visible[0].value is Infinity (a finite Fahrenheit entity state overflowed during conversion)",
+    "roomMarkers[0].value is Infinity (a finite Fahrenheit entity state overflowed during conversion)",
+    "spread is Infinity (derived from a finite Fahrenheit entity state that overflowed during conversion)",
+  ]);
+});
+
 test("the model walker reaches values deeper than the former depth limit", () => {
   const root = {};
   let cursor = root;

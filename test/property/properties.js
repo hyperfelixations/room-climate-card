@@ -44,12 +44,21 @@ const PERMITTED_NON_FINITE = /^metric\.displayUnitProfile\.dynamicDisplaySteps\[
 const ROOM_VALUE_PATH = /^(?:rooms\.visible\[\d+\]\.value|rooms\.chips\[\d+\]\.room\.value|rooms\.chipRows\[\d+\]\.chips\[\d+\]\.room\.value|extremes\.(?:coolest|warmest)\.value|roomMarkers\[\d+\]\.value)$/;
 const FAHRENHEIT_UNITS = new Set(["°f", "f", "fahrenheit"]);
 
-function finiteFahrenheitState(states, entityId) {
+function normalizeUnit(unit) {
+  return String(unit || "").normalize("NFKC").trim().toLowerCase();
+}
+
+function rawReading(states, entityId) {
   const state = states && entityId ? states[entityId] : null;
-  const rawValue = state ? Number(state.state) : NaN;
-  const rawUnit = state && state.attributes ? state.attributes.unit_of_measurement : null;
-  const normalizedUnit = String(rawUnit || "").normalize("NFKC").trim().toLowerCase();
-  return Number.isFinite(rawValue) && FAHRENHEIT_UNITS.has(normalizedUnit);
+  return {
+    value: state ? Number(state.state) : NaN,
+    unit: normalizeUnit(state && state.attributes ? state.attributes.unit_of_measurement : null),
+  };
+}
+
+function finiteFahrenheitState(states, entityId) {
+  const { value, unit } = rawReading(states, entityId);
+  return Number.isFinite(value) && FAHRENHEIT_UNITS.has(unit);
 }
 
 function hasFahrenheitConversionOverflow(model, states) {
@@ -68,6 +77,19 @@ function hasFahrenheitConversionOverflow(model, states) {
   );
 }
 
+// A finite °C or K reading is finite once canonicalized; only a Fahrenheit display unit scales
+// it afterwards, and that projection is not checked (RCC backlog BUG-15).
+function hasDisplayProjectionOverflow(model, states) {
+  if (!FAHRENHEIT_UNITS.has(normalizeUnit(model.metric && model.metric.unit))) return false;
+  const comparableRooms = Array.isArray(model.roomMarkers) ? model.roomMarkers : [];
+  const visibleRooms = model.rooms && Array.isArray(model.rooms.visible) ? model.rooms.visible : [];
+  return [...comparableRooms, ...visibleRooms].some((room) => {
+    if (Number.isFinite(room.value)) return false;
+    const { value, unit } = rawReading(states, room.entity);
+    return Number.isFinite(value) && unit !== "" && !FAHRENHEIT_UNITS.has(unit);
+  });
+}
+
 function everyNumberIsFinite(model, context = {}) {
   const violations = [];
   const roomValues = Array.isArray(model.roomMarkers)
@@ -77,6 +99,7 @@ function everyNumberIsFinite(model, context = {}) {
     (value) => typeof value === "number" && !Number.isFinite(value)
   );
   const fahrenheitConversionOverflow = hasFahrenheitConversionOverflow(model, context.states);
+  const displayProjectionOverflow = hasDisplayProjectionOverflow(model, context.states);
   for (const { path, value } of walk(model)) {
     if (typeof value !== "number" || Number.isFinite(value)) continue;
     if (PERMITTED_NON_FINITE.test(path)) continue;
@@ -98,8 +121,12 @@ function everyNumberIsFinite(model, context = {}) {
       }
     } else if (fahrenheitConversionOverflow && ROOM_VALUE_PATH.test(path)) {
       provenance = " (a finite Fahrenheit entity state overflowed during conversion)";
+    } else if (displayProjectionOverflow && ROOM_VALUE_PATH.test(path)) {
+      provenance = " (a finite reading overflowed on projection into the display unit)";
     } else if (path === "spread" && fahrenheitConversionOverflow && hasNonFiniteRoomInput) {
       provenance = " (derived from a finite Fahrenheit entity state that overflowed during conversion)";
+    } else if (path === "spread" && displayProjectionOverflow && hasNonFiniteRoomInput) {
+      provenance = " (derived from a finite reading that overflowed on projection into the display unit)";
     }
     violations.push(`${path || "<root>"} is ${String(value)}${provenance}`);
   }

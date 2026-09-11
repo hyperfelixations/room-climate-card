@@ -84,6 +84,22 @@ test("every violation is judged on its own, not on the company it keeps", () => 
   assert.deepEqual(classified.unknown, [other]);
 });
 
+test("BUG-15 is recognised by its provenance, not by the path it shows up on", () => {
+  // A bare infinite room value, a Fahrenheit conversion overflow and an infinite range bound
+  // are other findings; only the projection provenance belongs to BUG-15.
+  const room = "everyNumberIsFinite: roomMarkers[2].value is Infinity (a finite reading overflowed on projection into the display unit)";
+  const spread = "everyNumberIsFinite: spread is Infinity (derived from a finite reading that overflowed on projection into the display unit)";
+  const bareRoom = "everyNumberIsFinite: roomMarkers[2].value is Infinity";
+  const conversion = "everyNumberIsFinite: roomMarkers[0].value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)";
+  const range = "everyNumberIsFinite: range.max is Infinity";
+  const classified = classifyViolations([room, bareRoom, spread, conversion, range]);
+  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [
+    ["BUG-15", room],
+    ["BUG-15", spread],
+  ]);
+  assert.deepEqual(classified.unknown, [bareRoom, conversion, range]);
+});
+
 test("expected reproductions accept only their identifying assertion", () => {
   const matching = new assert.AssertionError({ message: "the whole card emptied when only the primary went unavailable" });
   const unrelated = new assert.AssertionError({ message: "an unrelated assertion failed" });
@@ -164,6 +180,42 @@ test("BUG-06's neighbourhood: two readings can no longer be far enough apart to 
     const model = card._computeViewModel();
     assert.ok(Number.isFinite(model.spread), `spread is ${model.spread}`);
     assert.ok(!/NaN/.test(card.shadowRoot.innerHTML));
+  });
+});
+
+// BUG-15 (open). A °C reading of 1e308 is finite and valid once canonicalized, but the Fahrenheit
+// projection (v * 9) / 5 + 32 overflows to Infinity, which reaches the room chips as text. Expected:
+// the same answer as a reading whose canonical conversion overflows. Found by the weekly model
+// sweep; full analysis in RCC Backlog BUG-15.
+function bug15Scenario(overflowingState) {
+  const celsiusRoom = (state) => ({ state, unit: { value: "°C" }, deviceClass: { value: "temperature" } });
+  return buildScenario({
+    metric: "temperature",
+    primary: { state: 38.53, unit: { value: "℉" } },
+    rooms: [celsiusRoom(overflowingState), celsiusRoom(11), celsiusRoom(-15.33)],
+  });
+}
+
+expectedFailure("BUG-15", /roomMarkers\[\d+\]\.value is Infinity|Infinity reached the card/, () => {
+  const built = bug15Scenario(1e308);
+  env.withCard(built.config, built.hass, (card) => {
+    const model = card._computeViewModel();
+    model.roomMarkers.forEach((room, index) => {
+      assert.ok(Number.isFinite(room.value), `roomMarkers[${index}].value is ${room.value}`);
+    });
+    assert.ok(!/Infinity|∞/.test(card.shadowRoot.textContent), "Infinity reached the card");
+  });
+});
+
+// fromCanonical multiplies by 9 before dividing by 5, so the largest °C a Fahrenheit display can
+// hold is Number.MAX_VALUE / 9 ≈ 1.997e307: records the boundary, must keep passing.
+test("BUG-15's neighbourhood: a reading just inside the limit is projected into °F", () => {
+  const built = bug15Scenario(1.99e307);
+  env.withCard(built.config, built.hass, (card) => {
+    const model = card._computeViewModel();
+    assert.equal(model.roomMarkers.length, 3, "the case must exercise all three rooms");
+    for (const room of model.roomMarkers) assert.ok(Number.isFinite(room.value), `${room.entity} is ${room.value}`);
+    assert.ok(!/Infinity|∞/.test(card.shadowRoot.textContent));
   });
 });
 
