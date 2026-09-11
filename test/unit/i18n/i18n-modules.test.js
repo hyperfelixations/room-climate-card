@@ -84,6 +84,58 @@ test("a key that is a function in the reference language is a function everywher
   }
 });
 
+// The variable contract of every function-valued translation, with a representative value.
+// A translation that reads a name missing here, or a name here that no translation reads,
+// fails by that name. See internal dev doc §6 "i18n und sprachabhängige Formatierung".
+const INTERPOLATION_VARS = Object.freeze({
+  label: "Test label",
+  value: "22.0 °C",
+  diff: "2.0 °C",
+  count: 2,
+  entities: "sensor.one, sensor.two",
+  entity: "sensor.one",
+  total: 4,
+  adjective: "test adjective",
+  name: "Test room",
+  direction: "rising",
+  range: "20–24 °C",
+  span: "5.0 °C",
+  min: "18.0 °C",
+  minTime: "06:00",
+  max: "23.0 °C",
+  maxTime: "15:00",
+  time: "06:00",
+});
+
+test("every function-valued translation reads exactly the documented variables, in every language", () => {
+  const reference = registry.TRANSLATIONS.en;
+  const functionKeys = Object.keys(reference).filter((key) => typeof reference[key] === "function");
+  assert.ok(functionKeys.length > 0, "the reference language has function-valued keys");
+  const readAnywhere = new Set();
+  for (const language of Object.keys(registry.TRANSLATIONS)) {
+    for (const key of functionKeys) {
+      const missing = new Set();
+      const vars = new Proxy(INTERPOLATION_VARS, {
+        get(target, property, receiver) {
+          if (typeof property === "string") {
+            readAnywhere.add(property);
+            if (!Object.hasOwn(target, property)) missing.add(property);
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      const text = translateModule.translate(language, key, vars);
+      const where = `${language}/${key}`;
+      assert.deepEqual([...missing], [], `${where} reads variables the contract does not supply`);
+      assert.equal(typeof text, "string", `${where} must return a string`);
+      assert.ok(text.length > 0, `${where} must not be empty`);
+      assert.doesNotMatch(text, /undefined|NaN|\[object Object\]/, `${where}: every variable must resolve`);
+    }
+  }
+  const unread = Object.keys(INTERPOLATION_VARS).filter((name) => !readAnywhere.has(name));
+  assert.deepEqual(unread, [], "the contract names variables no translation reads");
+});
+
 // -------------------------------------------------------------- integrity --
 
 test("the key-parity check stays silent for a consistent table", () => {

@@ -126,62 +126,6 @@ test("I18N-02: every new language has native representative card text instead of
   }
 });
 
-test("I18N-02: every function-valued translation executes with the full runtime variable contract in all supported languages", () => {
-  const functionKeys = [
-    "value.tooltip",
-    "value.tooltipCalculated",
-    "subtitle.aboveComfort",
-    "subtitle.aboveComfortNoRooms",
-    "subtitle.belowComfort",
-    "subtitle.belowComfortNoRooms",
-    "subtitle.inComfortIssue",
-    "subtitle.missingRooms",
-    "footer.comfort",
-    "footer.spread",
-    "footer.trend",
-    "trend.direction.rising",
-    "trend.direction.stable",
-    "trend.direction.falling",
-    "trend.aria",
-    "scale.comfortLabel",
-    "scale.optimalLabel",
-    "scale.bandRangeSigned",
-    "rangeScale.footer",
-    "card.ariaOpen",
-    "room.ariaOpen",
-    "availability.entitiesMissing",
-  ];
-  const vars = {
-    label: "Test label",
-    value: "22.0 °C",
-    diff: "2.0 °C",
-    count: 2,
-    entities: "sensor.one, sensor.two",
-    total: 4,
-    adjective: "test adjective",
-    name: "Test room",
-    sign: "+",
-    unit: "°C/h",
-    direction: "rising",
-    range: "20–24 °C",
-    span: "5.0 °C",
-    min: "18.0 °C",
-    minTime: "06:00",
-    max: "23.0 °C",
-    maxTime: "15:00",
-  };
-  for (const lang of SUPPORTED_LANGUAGES) {
-    const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
-    for (const key of functionKeys) {
-      const text = el._t(key, vars);
-      assert.equal(typeof text, "string", `lang=${lang}, key=${key}: must return a string`);
-      assert.ok(text.length > 0, `lang=${lang}, key=${key}: must not be empty`);
-      assert.doesNotMatch(text, /undefined|\[object Object\]/, `lang=${lang}, key=${key}: all runtime vars must resolve`);
-    }
-    env.cleanup(el);
-  }
-});
-
 test("I18N-02: new language locales drive decimal/group separators and keep 24-hour time", () => {
   const expectedNumbers = {
     es: "1234,5",
