@@ -23,10 +23,11 @@ function readTranslateXPx(element) {
 
 // Animation timelines advance between rendered frames, so timer callbacks see a frame-old
 // phase. Extrapolate by the frame age only while running; paused/finished animations must
-// remain still. Missing clocks yield the unextrapolated phase. Details: see internal dev doc
-// §4 "Platform-Adapter-Vertrag".
+// remain still, and a pending one has not started: its progress is its start phase and has no
+// age. Missing clocks yield the unextrapolated phase. Details: see internal dev doc §4
+// "Platform-Adapter-Vertrag".
 function msSinceAnimationFrame(element, animation) {
-  if (animation?.playState !== "running") return 0;
+  if (animation?.playState !== "running" || animation.pending) return 0;
   const document = element.ownerDocument;
   const frameMs = Number(animation.timeline?.currentTime ?? document?.timeline?.currentTime);
   const nowMs = Number(document?.defaultView?.performance?.now?.());

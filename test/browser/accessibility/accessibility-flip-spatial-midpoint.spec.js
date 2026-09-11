@@ -10,7 +10,9 @@
 // _accessibleViewIndexAt()) to find the spatially closer position, and checks it against
 // the real attributes. Freezing before card creation makes the CSS animation-delay and the
 // first synchronous _updateViewAccessibility() derive from the same instant, with no
-// dependence on the page.evaluate() round-trip.
+// dependence on the page.evaluate() round-trip. One case adds synchronous work to that task:
+// the animation it declares is still pending, and its phase must not be aged by the work.
+// See internal dev doc §4 "Platform-Adapter-Vertrag".
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, mkStateObj } = require("../../helpers/browser-helpers");
@@ -24,12 +26,17 @@ function twoViewStates() {
   };
 }
 
-async function createCardAtPhase(page, config, statesObj, phaseMs) {
+async function createCardAtPhase(page, config, statesObj, phaseMs, { synchronousLoadMs = 0 } = {}) {
   return page.evaluate(
-    ({ config, statesObj, phaseMs }) => {
+    ({ config, statesObj, phaseMs, synchronousLoadMs }) => {
       const originalNow = Date.now;
       Date.now = () => phaseMs;
       try {
+        // Other work sharing the card's task, as on a slow device or runner.
+        const loadUntil = performance.now() + synchronousLoadMs;
+        while (performance.now() < loadUntil) {
+          // busy-wait
+        }
         const hass = {
           language: "en",
           locale: { language: "en" },
@@ -62,7 +69,7 @@ async function createCardAtPhase(page, config, statesObj, phaseMs) {
         Date.now = originalNow;
       }
     },
-    { config, statesObj, phaseMs }
+    { config, statesObj, phaseMs, synchronousLoadMs }
   );
 }
 
@@ -87,30 +94,41 @@ test.describe("A11Y-01 spatial midpoint: accessible view follows the real render
     { label: "well after the spatial midpoint (87.5% into the slide, control)", phaseMs: 1700, expectDominant: 1 },
   ];
 
+  function expectAccessibleViewMatchesTransform(result, phaseMs, expectDominant) {
+    expect(result.viewCount, "fixture must render exactly 2 views (scale, extremes)").toBe(2);
+
+    // Spatial dominance from the real transform: position 0 at x=0%, position 1 at
+    // x=-(100/viewCount)% of the track width; compare the observed offset against the
+    // midpoint of those two, not against the card's own JS.
+    const x0Px = 0;
+    const x1Px = -(result.trackWidthPx / result.viewCount);
+    const midpointPx = (x0Px + x1Px) / 2;
+    const observedDominant = Math.abs(result.observedXPx - x1Px) < Math.abs(result.observedXPx - x0Px) ? 1 : 0;
+    expect(
+      observedDominant,
+      `real track transform at phaseMs=${phaseMs} (observedX=${result.observedXPx}px, midpoint=${midpointPx}px, x0=${x0Px}px, x1=${x1Px}px)`
+    ).toBe(expectDominant);
+
+    result.states.forEach((s, i) => {
+      const shouldBeAccessible = i === expectDominant;
+      expect(s.inert, `view ${i} inert at phaseMs=${phaseMs}`).toBe(!shouldBeAccessible);
+      expect(s.ariaHidden, `view ${i} aria-hidden at phaseMs=${phaseMs}`).toBe(shouldBeAccessible ? null : "true");
+    });
+  }
+
   for (const { label, phaseMs, expectDominant } of samplePoints) {
     test(label, async ({ page }) => {
       await gotoHarness(page);
       const result = await createCardAtPhase(page, config, twoViewStates(), phaseMs);
-
-      expect(result.viewCount, "fixture must render exactly 2 views (scale, extremes)").toBe(2);
-
-      // Spatial dominance from the real transform: position 0 at x=0%, position 1 at
-      // x=-(100/viewCount)% of the track width; compare the observed offset against the
-      // midpoint of those two, not against the card's own JS.
-      const x0Px = 0;
-      const x1Px = -(result.trackWidthPx / result.viewCount);
-      const midpointPx = (x0Px + x1Px) / 2;
-      const observedDominant = Math.abs(result.observedXPx - x1Px) < Math.abs(result.observedXPx - x0Px) ? 1 : 0;
-      expect(
-        observedDominant,
-        `real track transform at phaseMs=${phaseMs} (observedX=${result.observedXPx}px, midpoint=${midpointPx}px, x0=${x0Px}px, x1=${x1Px}px)`
-      ).toBe(expectDominant);
-
-      result.states.forEach((s, i) => {
-        const shouldBeAccessible = i === expectDominant;
-        expect(s.inert, `view ${i} inert at phaseMs=${phaseMs}`).toBe(!shouldBeAccessible);
-        expect(s.ariaHidden, `view ${i} aria-hidden at phaseMs=${phaseMs}`).toBe(shouldBeAccessible ? null : "true");
-      });
+      expectAccessibleViewMatchesTransform(result, phaseMs, expectDominant);
     });
   }
+
+  // 250 ms of work in the creating task is more than the 183 ms between the first sample and
+  // the flip; aging the not-yet-started animation by it would hand the view over too early.
+  test("a long synchronous render does not advance an animation that has not started", async ({ page }) => {
+    await gotoHarness(page);
+    const result = await createCardAtPhase(page, config, twoViewStates(), 1100, { synchronousLoadMs: 250 });
+    expectAccessibleViewMatchesTransform(result, 1100, 0);
+  });
 });

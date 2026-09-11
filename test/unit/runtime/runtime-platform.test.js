@@ -243,10 +243,11 @@ test("the browser adapter reads the named animation's own phase and ignores ever
 // frames — inside requestAnimationFrame it is current, from a timer callback it is as old as
 // the last paint. These fixtures build a standing timeline against a performance clock that
 // has moved on.
-function animatedElement({ progress, duration, playState = "running", animationTimeMs, documentTimeMs, nowMs }) {
+function animatedElement({ progress, duration, playState = "running", pending = false, animationTimeMs, documentTimeMs, nowMs }) {
   const animation = {
     animationName: "rtc-track-slide",
     playState,
+    pending,
     timeline: animationTimeMs === undefined ? undefined : { currentTime: animationTimeMs },
     effect: { getComputedTiming: () => ({ progress, duration }) },
   };
@@ -277,6 +278,10 @@ test("the browser adapter reports the animation phase now, not the phase of the 
   // A paused animation's clock stands still; adding wall-clock time would invent a position.
   assert.deepEqual(read({ playState: "paused" }), { phaseMs: 1150, cycleMs: 4600 });
   assert.deepEqual(read({ playState: "finished" }), { phaseMs: 1150, cycleMs: 4600 });
+
+  // A pending animation has not started: its progress is the position it will start from, and
+  // however long the task that declared it has run, that position has no age yet.
+  assert.deepEqual(read({ pending: true }), { phaseMs: 1150, cycleMs: 4600 }, "a pending animation is not aged");
 
   // The document's timeline is the fallback when the animation does not name its own.
   assert.deepEqual(read({ animationTimeMs: undefined, documentTimeMs: 8000 }), { phaseMs: 1190, cycleMs: 4600 });
