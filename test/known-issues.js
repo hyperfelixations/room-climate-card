@@ -14,7 +14,18 @@ const assert = require("node:assert/strict");
 
 // Each entry carries an id (the backlog link), a one-line actionable summary, the product
 // area, and the date found.
-const KNOWN_ISSUES = [];
+const KNOWN_ISSUES = [
+  {
+    id: "BUG-16",
+    area: "render/layout",
+    discovered: "2026-09-12",
+    summary:
+      "The scale's min and max edge labels are pinned to the bar's ends and never capped: once " +
+      "both are wider together than the bar (a single 1e6 °C reading on a 250 px card) they " +
+      "cover each other in the scale and range_scale views.",
+    foundBy: "exploratory Chromium measurement of the scale's edge labels",
+  },
+];
 
 // Partition violations one by one. A known symptom can never make an unrelated violation
 // disappear merely because both occurred in the same generated case. `issues` defaults to

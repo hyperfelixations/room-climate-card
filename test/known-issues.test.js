@@ -127,6 +127,32 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
+// BUG-16 (open). The scale's edge labels are pinned to the bar's ends by CSS and never capped;
+// resolveOptimalLabelPosition() measures them only to place the optimal label between them.
+// Wider together than the bar, they cover each other. Widths measured in Chromium for a single
+// 1e9 °C reading on a 250 px card (bar 77 px); full analysis in RCC Backlog BUG-16.
+async function assertEdgeLabelsApart({ barWidth, minWidth, maxWidth }) {
+  const { resolveOptimalLabelPosition } = await import("../src/render/layout/optimal-label.js");
+  const { container } = buildOptimalLabelContainer({ barWidth, minWidth, centerWidth: 76, maxWidth });
+  resolveOptimalLabelPosition(container, OPTIMAL_LABEL_CONTENT);
+  // As laid out: the natural width, capped by a max-width the layout sets, nothing when hidden.
+  const laidOut = (selector, natural) => {
+    const el = container.querySelector(selector);
+    if (el.hidden) return 0;
+    const cap = Number.parseFloat(el.style.maxWidth);
+    return Number.isFinite(cap) ? Math.min(natural, cap) : natural;
+  };
+  const overlap =
+    laidOut(".rtc-scale-label-min", minWidth) + OPTIMAL_LABEL_GAP_PX + laidOut(".rtc-scale-label-max", maxWidth) - barWidth;
+  assert.ok(overlap <= 1e-9, `the edge labels overlap by ${overlap.toFixed(1)}px`);
+}
+
+expectedFailure("BUG-16", /edge labels overlap/, () => assertEdgeLabelsApart({ barWidth: 77, minWidth: 22, maxWidth: 75.5 }));
+
+test("BUG-16's neighbourhood: edge labels that fit side by side stay apart", () =>
+  // The same reading on a 320 px card: a 105 px bar leaves room for both and the gap.
+  assertEdgeLabelsApart({ barWidth: 105, minWidth: 22, maxWidth: 75.5 }));
+
 // BUG-06 regression: an axis wider than Number.MAX_VALUE is drawn. Its span overflows to
 // Infinity, but a position on it is an ordinary ratio, computed without the overflow; a
 // boundary the display unit cannot hold is refused when the card is configured.
