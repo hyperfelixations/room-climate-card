@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "build": "rollup -c",
+    "build:dev": "node scripts/build-dev.mjs",
     "baseline:anchor": "node scripts/baseline-anchor.mjs",
     "test": "npm run build && npm run check:run && npm run test:node:run && npm run test:browser:run",
     "check": "npm run build && npm run check:run",

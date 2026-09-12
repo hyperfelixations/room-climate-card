@@ -346,4 +346,5 @@ test("card metadata matches the package version", () => {
   assert.equal(metadata.CARD_TYPE, "room-climate-card");
   assert.equal(metadata.CARD_NAME, "Room Climate Card");
   assert.equal(metadata.CARD_VERSION, packageJson.version);
+  assert.equal(metadata.CARD_VERSION_GLOBAL, "roomClimateCardVersion");
 });

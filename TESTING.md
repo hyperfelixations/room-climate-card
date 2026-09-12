@@ -263,6 +263,31 @@ and promote the reproduction to an ordinary test.
 `test/known-issues.js` is the list of what is known to be wrong and deliberately left that
 way.
 
+## Trying a change in your own Home Assistant
+
+```bash
+npm run build:dev
+```
+
+Builds `dist/room-climate-card-dev.js`: the same card under a development identity, so it loads
+as a second dashboard resource beside the released card instead of replacing it. It registers
+`custom:room-climate-card-dev`, appears in the card picker as "Room Climate Card (Dev)", sets
+`window.roomClimateCardDevVersion` and announces its version once in the browser console. The
+version is the package version plus `-dev+`, a UTC build stamp, the commit, and `.dirty` when the
+working tree has uncommitted changes.
+
+1. Copy the file into your Home Assistant `www/` folder.
+2. Add it as a JavaScript module resource (Settings → Dashboards → the three-dot menu →
+   **Resources**) with the URL the command prints, e.g.
+   `/local/room-climate-card-dev.js?v=20260912T112621Z`. After each new build, replace the file
+   and change only the `?v=` value, so the browser cannot serve the previous build from its cache.
+3. Use `type: custom:room-climate-card-dev` in a test card.
+
+Remove the resource and the file when you are done. Apart from its identity
+(`src/core/card-metadata.js`), its banner and the console line, the file is the product bundle
+byte for byte; `test/contract/dev-build.test.js` holds that, and holds both cards registering side
+by side. It is never a release asset and never committed.
+
 ## Continuous integration
 
 [`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push and pull request —

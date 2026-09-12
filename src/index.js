@@ -6,7 +6,7 @@
 // a card can only register itself against the real global registry. The build wraps
 // this tree in the dependency-free IIFE — see internal dev doc §4 "Build-/Dist-Vertrag".
 
-import { CARD_NAME, CARD_TYPE, CARD_VERSION } from "./core/card-metadata.js";
+import { CARD_NAME, CARD_TYPE, CARD_VERSION, CARD_VERSION_GLOBAL } from "./core/card-metadata.js";
 import { suggestionsForEntity } from "./application/model/card-suggestions.js";
 import { RoomClimateCard } from "./element/room-climate-card.js";
 
@@ -36,4 +36,4 @@ if (existingCard) {
   window.customCards.push(cardMetadata);
 }
 
-window.roomClimateCardVersion = CARD_VERSION;
+window[CARD_VERSION_GLOBAL] = CARD_VERSION;

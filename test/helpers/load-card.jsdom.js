@@ -43,8 +43,9 @@ class ResizeObserverStub {
 
 // Creates one isolated jsdom window and loads the card script into it. Call once
 // per test file (e.g. in a `before()` hook), not per test case — it is correct
-// per case but pays the eval cost each time.
-function createTestEnvironment() {
+// per case but pays the eval cost each time. `additionalScripts` are further bundle
+// paths evaluated into the same realm after the card (the dev build's coexistence test).
+function createTestEnvironment({ additionalScripts = [] } = {}) {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: "http://localhost/",
     runScripts: "outside-only",
@@ -76,6 +77,9 @@ function createTestEnvironment() {
 
   const context = dom.getInternalVMContext();
   vm.runInContext(CARD_SOURCE, context, { filename: CARD_SOURCE_PATH });
+  for (const script of additionalScripts) {
+    vm.runInContext(fs.readFileSync(script, "utf8"), context, { filename: script });
+  }
 
   if (!window.customElements.get(CARD_TAG)) {
     throw new Error(`${CARD_SOURCE_PATH} did not register <${CARD_TAG}> in the jsdom environment`);
