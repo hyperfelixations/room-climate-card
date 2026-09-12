@@ -335,6 +335,96 @@ test("the animation-start frame is cancelled with everything else the controller
   assert.equal(controller.animationStartFrameHandle, null);
 });
 
+test("an animation still pending on its start frame is re-read once its start is resolved", () => {
+  // A pending animation reports its start phase. Chromium can resolve its start time to the
+  // frame before the task that declared it, so by then the track has moved on for as long as
+  // that task ran — and the start frame may still find it pending.
+  const platform = createFakePlatform();
+  const { controller, track } = makeController({ rotationSeconds: 1, slideSeconds: 0.15, platform });
+  const cycleMs = controller.timing().cycleMs;
+
+  // Declared 800ms into a segment, 253.06ms before its flip at 1053.06ms.
+  platform.setNow(Math.ceil(platform.now() / cycleMs) * cycleMs + 800);
+  track.__animationPhase = { phaseMs: 800, cycleMs };
+  controller.applyAutoSlideStyles();
+  platform.flushFrames();
+  assert.equal(platform.pendingAnimationStartCount(), 1, "the card waits for the start to be resolved");
+  assert.ok(Math.abs(platform.nextTimerDelay() - 253.06) < 0.05, `armed for ${platform.nextTimerDelay()}ms`);
+
+  // Resolved 210ms back: the track is at 1010ms, and the flip 43.06ms away rather than 253.06ms.
+  track.__animationPhase = { phaseMs: 1010, cycleMs };
+  platform.startAnimations();
+  assert.ok(Math.abs(platform.nextTimerDelay() - 43.06) < 0.05, `re-armed for ${platform.nextTimerDelay()}ms`);
+  assert.equal(platform.pendingAnimationStartCount(), 0, "a one-shot, not a subscription");
+});
+
+test("the start watch is withdrawn with everything else the controller owns, and never doubled", () => {
+  const { controller, platform } = makeController();
+  controller.applyAutoSlideStyles();
+  controller.applyAutoSlideStyles();
+  assert.equal(platform.pendingAnimationStartCount(), 1, "a new declaration replaces the watch on the previous one");
+  assert.notEqual(controller.animationStartWatchHandle, null);
+  controller.destroy();
+  assert.equal(platform.pendingAnimationStartCount(), 0, "a card torn down before its animation started leaves no listener behind");
+  assert.equal(controller.animationStartWatchHandle, null);
+});
+
+test("the browser adapter calls back once, when a pending animation's start is resolved", async () => {
+  const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
+  const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const pendingAnimation = () => {
+    let resolve;
+    const ready = new Promise((resolveReady) => (resolve = resolveReady));
+    return { animation: { animationName: "rtc-track-slide", pending: true, ready }, resolve };
+  };
+  // Another pending animation on the same element is not the one asked about.
+  const holding = (animation) => ({
+    getAnimations: () => [{ animationName: "something-else", pending: true, ready: Promise.resolve() }, animation],
+  });
+
+  const first = pendingAnimation();
+  let calls = 0;
+  platform.onAnimationStart(holding(first.animation), "rtc-track-slide", () => (calls += 1));
+  await settle();
+  assert.equal(calls, 0, "not before the start is resolved");
+  first.resolve();
+  await settle();
+  assert.equal(calls, 1);
+
+  const withdrawn = pendingAnimation();
+  let withdrawnCalls = 0;
+  platform.onAnimationStart(holding(withdrawn.animation), "rtc-track-slide", () => (withdrawnCalls += 1))();
+  withdrawn.resolve();
+  await settle();
+  assert.equal(withdrawnCalls, 0, "the unsubscribe withdraws the listener");
+
+  // Nothing to wait for: an unsubscribe that does nothing, and no call.
+  let idleCalls = 0;
+  const idle = [
+    holding({ animationName: "rtc-track-slide", pending: false, ready: Promise.resolve() }),
+    holding({ animationName: "rtc-track-slide", pending: true }),
+    { getAnimations: () => [] },
+    {},
+    null,
+    {
+      getAnimations: () => {
+        throw new Error("no");
+      },
+    },
+  ];
+  for (const element of idle) {
+    const unsubscribe = platform.onAnimationStart(element, "rtc-track-slide", () => (idleCalls += 1));
+    assert.equal(typeof unsubscribe, "function");
+    assert.doesNotThrow(unsubscribe);
+  }
+  // A cancelled animation (the track handed to manual control) rejects `ready`; nothing surfaces.
+  const cancelled = { animationName: "rtc-track-slide", pending: true, ready: Promise.reject(new Error("AbortError")) };
+  platform.onAnimationStart(holding(cancelled), "rtc-track-slide", () => (idleCalls += 1));
+  await settle();
+  assert.equal(idleCalls, 0);
+});
+
 test("a flip that is already due is not deferred by the re-arm floor", () => {
   // holdMs 1000, slideMs 150: a segment is 1150ms and the accessible view flips 1053.06ms
   // into it. Park the clock ~1ms before that boundary, as a timer firing a hair early does.

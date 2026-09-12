@@ -1,4 +1,4 @@
-// Owns carousel position, resume/A11y timers and the animation-start frame. It knows no
+// Owns carousel position, resume/A11y timers, the animation-start frame and watch. It knows no
 // hass, config object, model or renderer; clock and DOM access arrive through narrow ports.
 // Contract: see internal dev doc §5 "Carousel, Swipe und Accessibility".
 
@@ -30,6 +30,7 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
   let resumeTimer = null;
   let a11yTimer = null;
   let animationStartFrame = null;
+  let animationStartWatch = null;
 
   const viewCount = () => viewKeys.length;
   const interacting = () => Boolean(isInteracting?.());
@@ -202,6 +203,14 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
       animationStartFrame = null;
       scheduleAccessibilitySync();
     });
+    // That frame can still find the animation pending, its phase a guess until the start time
+    // is resolved — possibly to a frame before this task. Resync once more when it is.
+    clearAnimationStartWatch();
+    animationStartWatch =
+      platform.onAnimationStart?.(track, TRACK_ANIMATION_NAME, () => {
+        animationStartWatch = null;
+        scheduleAccessibilitySync();
+      }) ?? null;
   }
 
   // Rejoin only while global phase holds the parked view, avoiding a visible jump.
@@ -258,10 +267,18 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     }
   }
 
+  function clearAnimationStartWatch() {
+    if (animationStartWatch !== null) {
+      animationStartWatch();
+      animationStartWatch = null;
+    }
+  }
+
   function stop() {
     clearResumeTimer();
     clearA11yTimer();
     clearAnimationStartFrame();
+    clearAnimationStartWatch();
   }
 
   return {
@@ -301,6 +318,9 @@ export function createCarouselController({ platform, getTrack, getViewElements, 
     },
     get animationStartFrameHandle() {
       return animationStartFrame;
+    },
+    get animationStartWatchHandle() {
+      return animationStartWatch;
     },
 
     start: applyAutoSlideStyles,

@@ -14,6 +14,7 @@ function createFakePlatform(options = {}) {
   const visibilityListeners = new Set();
   const colorSchemeListeners = new Set();
   const mutationObservers = [];
+  const animationStarts = new Set();
   let hidden = Boolean(options.hidden);
   let reducedMotion = Boolean(options.reducedMotion);
   let currentFontsReady = options.fontsReady ?? null;
@@ -111,6 +112,14 @@ function createFakePlatform(options = {}) {
     // wall-clock fallback. Set `animationPhase` / `element.__animationPhase` to
     // {phaseMs, cycleMs} to reproduce the real browser's clock offset.
     readAnimationPhase: (element, _animationName) => options.animationPhase ?? element?.__animationPhase ?? null,
+
+    // Every call registers; startAnimations() resolves them all, the way a browser resolves a
+    // pending animation's start time. The unsubscribe withdraws the registration.
+    onAnimationStart(element, animationName, listener) {
+      const registration = { element, animationName, listener };
+      animationStarts.add(registration);
+      return () => animationStarts.delete(registration);
+    },
   };
 
   // ---- the controls a test drives -------------------------------------------
@@ -158,6 +167,12 @@ function createFakePlatform(options = {}) {
       frames.clear();
       for (const [, fn] of pending) fn();
     },
+    // Resolves every registered animation start once, in registration order.
+    startAnimations() {
+      const registrations = [...animationStarts];
+      animationStarts.clear();
+      for (const { listener } of registrations) listener();
+    },
     triggerResize() {
       for (const observer of observers) observer.callback([], observer);
     },
@@ -174,6 +189,7 @@ function createFakePlatform(options = {}) {
       return soonest === null ? null : soonest - now;
     },
     pendingFrameCount: () => frames.size,
+    pendingAnimationStartCount: () => animationStarts.size,
     visibilityListenerCount: () => visibilityListeners.size,
     colorSchemeListenerCount: () => colorSchemeListeners.size,
     mutationObservers,

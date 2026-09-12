@@ -57,6 +57,31 @@ function readAnimationPhase(element, animationName) {
   }
 }
 
+// Calls `listener` once the named animation's start time is resolved. Until then its phase is
+// a guess: Chromium may resolve the start to a frame before the task that declared it. Returns
+// an unsubscribe; with nothing pending to wait for, one that does nothing. Details: see
+// internal dev doc §4 "Platform-Adapter-Vertrag".
+function onAnimationStart(element, animationName, listener) {
+  let animation;
+  try {
+    animation = element?.getAnimations?.().find((candidate) => candidate.animationName === animationName);
+  } catch (_error) {
+    return () => {};
+  }
+  if (!animation?.pending || typeof animation.ready?.then !== "function") return () => {};
+  let subscribed = true;
+  animation.ready.then(
+    () => {
+      if (subscribed) listener();
+    },
+    // A cancelled animation (the track handed to manual control) rejects `ready`.
+    () => {}
+  );
+  return () => {
+    subscribed = false;
+  };
+}
+
 // Read exactly `--primary-text-color`, which the stylesheet uses for track/chip tints.
 // Return opaque hex or null; guessing from `style.color` would measure a colour those tints
 // do not use. Reading ladders: see internal dev doc §5 "Lesung von Hintergrund und Textfarbe".
@@ -197,6 +222,7 @@ export function createBrowserPlatform(getDocument) {
 
     readTranslateXPx,
     readAnimationPhase,
+    onAnimationStart,
     readBackgroundSamples,
     readTextColor,
   };
