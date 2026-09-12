@@ -1,16 +1,18 @@
 // Main dynamic scale with optional bands and average, extrema or all-room markers.
 // Band toggles affect drawing only, never classification, footer data or colours.
 
+import { UNAVAILABLE_TEXT } from "../../../core/text.js";
 import { extremeRoomLabel } from "../metric-meta.js";
 import { buildMarker } from "../marker.js";
 import { buildBandRangeText, buildScaleBarContent } from "./scale-bar.js";
 
-// Room footer combines comfort count, spread and an optional reporting trend.
+// Room footer combines comfort count, spread and an optional reporting trend. A spread no
+// double can hold is null and shown as the card's no-number text.
 function buildFooterText(shared) {
   const { texts, comfort, rooms, spread, trend } = shared;
   const segments = [
     texts.t("footer.comfort", { count: comfort.inComfort, total: rooms.count }),
-    texts.t("footer.spread", { value: texts.fmtWithUnit(spread) }),
+    texts.t("footer.spread", { value: spread === null ? UNAVAILABLE_TEXT : texts.fmtWithUnit(spread) }),
   ];
   if (trend.model) segments.push(texts.t("footer.trend", { value: trend.text }));
   return segments.join(" · ");

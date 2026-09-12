@@ -173,7 +173,9 @@ export function normalizeValidRange(value) {
   return validRange;
 }
 
-// The icons the legacy fire/high/normal/low temperature object mapped to, in its order.
+// The legacy fire/high/normal/low temperature object: its keys in threshold order, and the
+// icons they map to.
+export const LEGACY_TEMPERATURE_ICON_KEYS = ["fire", "high", "normal", "low"];
 const LEGACY_TEMPERATURE_ICONS = ["mdi:fire-alert", "mdi:thermometer-high", "mdi:thermometer", "mdi:thermometer-low"];
 const LEGACY_TEMPERATURE_DEFAULT_ICON = "mdi:snowflake";
 
@@ -189,10 +191,10 @@ export function normalizeIcons(value, metricKind) {
     if (metricKind !== "temperature") {
       pathError("classification.icons", "must be a list of {min, icon} tiers with a final {default: true, icon} entry");
     }
-    assertAllowedKeys(value, new Set(["fire", "high", "normal", "low"]), "classification.icons");
+    assertAllowedKeys(value, new Set(LEGACY_TEMPERATURE_ICON_KEYS), "classification.icons");
     const iconTiers = [];
     let previous = Infinity;
-    ["fire", "high", "normal", "low"].forEach((key, index) => {
+    LEGACY_TEMPERATURE_ICON_KEYS.forEach((key, index) => {
       const threshold = numberAtPath(value[key], `classification.icons.${key}`);
       if (threshold >= previous) pathError("classification.icons", "must descend from fire to low");
       previous = threshold;

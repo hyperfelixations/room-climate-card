@@ -376,6 +376,19 @@ test("the spread prefers a valid sensor attribute and falls back otherwise", () 
   assert.equal(aggregates.computeSpread({ attributeValue: null, roomsComparable: false, coolest: null, warmest: null }), 0);
 });
 
+test("a spread between readings at opposite ends of the number line is no number", () => {
+  // warmest - coolest overflows; the spread is unavailable rather than Infinity.
+  const coolest = { value: -1e308 };
+  const warmest = { value: 1e308 };
+  assert.equal(aggregates.computeSpread({ attributeValue: null, roomsComparable: true, coolest, warmest }), null);
+  assert.equal(aggregates.computeSpread({ attributeValue: 4, roomsComparable: true, coolest, warmest }), 4, "a valid attribute still wins");
+  assert.equal(
+    aggregates.computeSpread({ attributeValue: null, roomsComparable: true, coolest, warmest: { value: 0 } }),
+    1e308,
+    "the largest spread a double holds is still a spread"
+  );
+});
+
 test("the value sort breaks ties by name, deterministically", () => {
   const rooms = [
     { name: "Zimmer", value: 21 },

@@ -3,7 +3,7 @@
 // One reproduction per open entry in the known-defect register (test/known-issues.js), plus
 // the checks that keep the register honest. Each reproduction asserts the behaviour the card
 // should have, so a fix flips it to passing and expectedFailure() turns that into a failing
-// run demanding the entry be retired. Fixed BUG-07..BUG-15 stay here as ordinary regression
+// run demanding the entry be retired. Fixed BUG-06..BUG-15 stay here as ordinary regression
 // tests; their history is in the RCC Changelog.
 
 const test = require("node:test");
@@ -44,21 +44,35 @@ test("no id is registered twice", () => {
   assert.equal(new Set(ids).size, ids.length, ids.join(", "));
 });
 
+// The mechanism tests below run against this entry, not the register, which may be empty. Its
+// matcher has the shape a two-symptom defect uses: either symptom, each anchored.
+const SYNTHETIC_ISSUE = {
+  id: "BUG-99",
+  area: "test",
+  discovered: "2026-09-12",
+  summary: "A synthetic entry whose two symptoms stand in for a real defect in the mechanism tests.",
+  foundBy: "test/known-issues.test.js",
+  matchesViolation: (violation) => /everyNumberIsFinite: spread is Infinity$|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
+};
+
 test("known-issue classification never hides an unrelated violation", () => {
   // Partitioning is per violation, not per case: a matching violation must not absorb an
   // unrelated one from the same generated case.
   const known = "everyNumberIsFinite: scale.markerPositions.average is NaN";
   const unrelated = ["active view is unavailable", "rooms lost when only the primary went unavailable: sensor.room0"];
-  const classified = classifyViolations([known, ...unrelated]);
-  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [["BUG-06", known]]);
+  const classified = classifyViolations([known, ...unrelated], [SYNTHETIC_ISSUE]);
+  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [["BUG-99", known]]);
   assert.deepEqual(classified.unknown, unrelated);
 });
 
 test("a defect that was fixed no longer absorbs its old signature", () => {
-  // The exact violation strings BUG-07, BUG-11, BUG-12 and BUG-15 were recognised by while
-  // open. With those entries gone, each must now come through as unknown, not be filed under
-  // a defect that no longer exists.
+  // The exact violation strings BUG-06, BUG-07, BUG-11, BUG-12 and BUG-15 were recognised by
+  // while open. With those entries gone, each must now come through as unknown, not be filed
+  // under a defect that no longer exists.
   const retired = [
+    "everyNumberIsFinite: spread is Infinity",
+    "everyNumberIsFinite: scale.markerPositions.avg is NaN",
+    'calc(NaN% + 0px): ")" is expected',
     "everyNumberIsFinite: average.value is -Infinity (source room; a finite Fahrenheit entity state overflowed during conversion)",
     "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)",
     "aggregatesStayWithinTheirInputs: average Infinity lies outside its rooms",
@@ -73,17 +87,21 @@ test("a defect that was fixed no longer absorbs its old signature", () => {
 });
 
 test("every violation is judged on its own, not on the company it keeps", () => {
-  // Both of BUG-06's symptoms plus a third string that only resembles them; order and count
+  // Both synthetic symptoms plus a third string that only resembles them; order and count
   // are asserted so an over-broad matcher shows up here.
   const span = "everyNumberIsFinite: spread is Infinity";
   const position = "everyNumberIsFinite: roomMarkers[0].position is NaN";
   const other = "everyNumberIsFinite: range.min is Infinity";
-  const classified = classifyViolations([span, other, position]);
+  const classified = classifyViolations([span, other, position], [SYNTHETIC_ISSUE]);
   assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [
-    ["BUG-06", span],
-    ["BUG-06", position],
+    ["BUG-99", span],
+    ["BUG-99", position],
   ]);
   assert.deepEqual(classified.unknown, [other]);
+});
+
+test("a reproduction can only be registered for an entry in the register", () => {
+  assert.throws(() => expectedFailure("BUG-99", /anything/, () => {}), /"BUG-99" has no entry in KNOWN_ISSUES/);
 });
 
 test("expected reproductions accept only their identifying assertion", () => {
@@ -109,11 +127,9 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
-// BUG-06 (open). A custom profile whose declared scale spans both extremes (±1e308) gives a
-// span that overflows to Infinity; a derived position becomes NaN and reaches the DOM as
-// `calc(NaN% + 0px)` (dropped in a browser, a hard throw under jsdom). Expected: an
-// unusable computed span reaches the no-data state, like any unusable reading. Full analysis
-// in RCC Backlog BUG-06.
+// BUG-06 regression: an axis wider than Number.MAX_VALUE is drawn. Its span overflows to
+// Infinity, but a position on it is an ordinary ratio, computed without the overflow; a
+// boundary the display unit cannot hold is refused when the card is configured.
 const BUG_06_PROFILE = {
   source: "custom",
   unit: "°C",
@@ -127,21 +143,45 @@ const BUG_06_PROFILE = {
   ],
 };
 
-expectedFailure("BUG-06", (error) =>
-  (error && error.name === "SyntaxError" && error.source === "calc(NaN% + 0px)" && /"\)" is expected/.test(error.message)) ||
-  (error && error.code === "ERR_ASSERTION" && /spread is Infinity|scale\.markerPositions\..+ is NaN|NaN reached the DOM/.test(error.message)), () => {
-  const built = buildScenario({
-    metric: "temperature",
-    primary: { state: 1e308 },
-    config: { classification: BUG_06_PROFILE },
-  });
+function assertHeadlineDrawnAt(built, expected) {
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
     for (const [name, position] of Object.entries(model.scale.markerPositions)) {
       assert.ok(Number.isFinite(position), `scale.markerPositions.${name} is ${position}`);
     }
+    const actual = model.scale.markerPositions.avg;
+    assert.ok(Math.abs(actual - expected) < 1e-9, `the headline marker sits at ${actual} %, not ${expected} %`);
     assert.ok(!/NaN/.test(card.shadowRoot.innerHTML), "NaN reached the DOM");
   });
+}
+
+test("an axis wider than the number line is drawn, not written as NaN", () => {
+  assertHeadlineDrawnAt(
+    buildScenario({ metric: "temperature", primary: { state: 1e308 }, config: { classification: BUG_06_PROFILE } }),
+    100
+  );
+});
+
+test("a reading that stretches a finite axis past the number line is drawn too", () => {
+  // The written span [-1e308, 0] is a double; the reading widens the drawn axis beyond one.
+  const profile = { ...BUG_06_PROFILE, scale: { min: -1e308, max: 0, step: 5 } };
+  assertHeadlineDrawnAt(buildScenario({ metric: "temperature", primary: { state: 1e308 }, config: { classification: profile } }), 100);
+});
+
+test("a step wider than the number line leaves the marker where it belongs", () => {
+  // step 1e308 rounds the axis out to ±1e308; 21 °C is its middle, not its left edge.
+  const profile = { ...BUG_06_PROFILE, scale: { min: 0, max: 40, step: 1e308 } };
+  assertHeadlineDrawnAt(buildScenario({ metric: "temperature", primary: { state: 21 }, config: { classification: profile } }), 50);
+});
+
+test("an axis the display unit cannot hold is refused when the card is configured", () => {
+  // ±5e307 °C is a double; its Fahrenheit projection is not.
+  const profile = { ...BUG_06_PROFILE, scale: { min: -5e307, max: 5e307, step: 5 } };
+  const built = buildScenario({ metric: "temperature", primary: { state: 70, unit: { value: "°F" } }, config: { classification: profile } });
+  assert.throws(
+    () => env.withCard(built.config, built.hass, () => {}),
+    /cannot be expressed in °F \(scale\.min lies beyond the largest number °F can hold\)/
+  );
 });
 
 // The neighbouring span that fits in a double: records the boundary, must keep passing.
@@ -159,13 +199,39 @@ test("BUG-06's neighbourhood: a span that fits in a double is handled correctly"
 });
 
 test("BUG-06's neighbourhood: two readings can no longer be far enough apart to overflow", () => {
-  // The route the defect was found on, closed by the metric physical floors. Recorded so a
-  // metric added without a floor is known to reopen it.
+  // The route the defect was found on, closed for built-in profiles by the metric physical
+  // floors. A custom profile without valid_range lifts the floor; that route is the next test.
   const built = buildScenario({ metric: "temperature", rooms: [{ state: 1e308 }, { state: -273.15 }] });
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
     assert.ok(Number.isFinite(model.spread), `spread is ${model.spread}`);
     assert.ok(!/NaN/.test(card.shadowRoot.innerHTML));
+  });
+});
+
+test("a spread beyond the number line is shown as unavailable, not as Infinity", () => {
+  // A custom profile without valid_range accepts any reading, so two valid rooms can sit at
+  // opposite ends of the number line; their positions are ordinary, their spread is not a
+  // double. Found by the model sweep (seed 0x5eed2026), shrunk to this.
+  const profile = {
+    source: "custom",
+    unit: "ppm",
+    comparison: ">=",
+    bands: { comfort: { min: 20, max: 80 }, optimal: { min: 40, max: 60 } },
+    scale: { min: 0, max: 100, step: 5 },
+    tiers: [
+      { min: 80, score: 1, level: "high", zone: "outside" },
+      { min: 40, score: 0, level: "ok", zone: "optimal" },
+      { default: true, score: -1, level: "low", zone: "outside" },
+    ],
+  };
+  const built = buildScenario({ metric: "co2", primary: null, rooms: [{ state: -1e308 }, { state: 1e308 }], config: { classification: profile } });
+  env.withCard(built.config, built.hass, (card) => {
+    const model = card._computeViewModel();
+    assert.equal(model.spread, null);
+    assert.equal(model.scale.markerPositions.avg, 50);
+    assert.match(card.shadowRoot.textContent, /Spread --/);
+    assert.doesNotMatch(card.shadowRoot.textContent, /Infinity|∞|NaN/);
   });
 });
 

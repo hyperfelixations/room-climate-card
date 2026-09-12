@@ -93,6 +93,23 @@ test("clamp() and percentInRange() map values onto a bounded scale", () => {
   assert.equal(percentInRange(25, 20, 20), 0, "a degenerate scale must not divide by zero");
 });
 
+test("percentInRange() places a value correctly on an axis wider than the number line", () => {
+  const { percentInRange } = numbers;
+  // max - min overflows to Infinity on these axes; the position itself is an ordinary ratio.
+  assert.equal(percentInRange(1e308, -1e308, 1e308), 100);
+  assert.equal(percentInRange(-1e308, -1e308, 1e308), 0);
+  assert.equal(percentInRange(0, -1e308, 1e308), 50);
+  assert.equal(percentInRange(21, -1e308, 1e308), 50, "a small value sits in the middle, not at the left edge");
+  assert.equal(percentInRange(-Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE), 0);
+  assert.equal(percentInRange(Number.MAX_VALUE, -Number.MAX_VALUE, Number.MAX_VALUE), 100);
+  assert.ok(Math.abs(percentInRange(5e307, -1e308, 1e308) - 75) < 1e-9);
+  // Wherever max - min is a number, the result is the ordinary expression, bit for bit.
+  for (const [value, min, max] of [[21.4, 16, 28], [-3.3, -10, 9], [812, 400, 1600], [0.1, 0, 0.3], [1e308, -1e308, 0]]) {
+    const ordinary = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+    assert.equal(percentInRange(value, min, max), ordinary, `${value} on [${min}, ${max}]`);
+  }
+});
+
 test("floorToStep()/ceilToStep() round outwards on a step grid, including negatives", () => {
   const { floorToStep, ceilToStep } = numbers;
   assert.equal(floorToStep(21.4, 1), 21);

@@ -71,10 +71,15 @@ export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-// Converts a value into a percentage position inside [min, max].
+// Converts a value into a percentage position inside [min, max]. An axis wider than a double
+// (max - min overflows) takes the same ratio on halved operands, which is exact and cannot
+// overflow; every other axis keeps the ordinary expression bit for bit. See internal dev doc
+// §5 "Scale- und Geometry-System".
 export function percentInRange(value, min, max) {
   if (max === min) return 0;
-  return clamp(((value - min) / (max - min)) * 100, 0, 100);
+  const span = max - min;
+  const ratio = Number.isFinite(span) ? (value - min) / span : (value / 2 - min / 2) / (max / 2 - min / 2);
+  return clamp(ratio * 100, 0, 100);
 }
 
 export function floorToStep(value, step) {

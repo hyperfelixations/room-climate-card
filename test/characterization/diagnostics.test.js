@@ -285,6 +285,24 @@ const INVALID_CONFIGS = [
       },
     },
   ],
+  [
+    "custom-value-cannot-be-converted-to-the-canonical-unit",
+    VALID_HASS,
+    {
+      entity: "sensor.avg",
+      classification: {
+        ...validCustom(),
+        unit: "°F",
+        bands: { comfort: { min: 66, max: 77 }, optimal: { min: 70, max: 73 } },
+        scale: { min: 60, max: 1e308, step: 2 },
+      },
+    },
+  ],
+  [
+    "custom-profile-cannot-be-expressed-in-fahrenheit",
+    FAHRENHEIT_HASS,
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: -5e307, max: 5e307, step: 2 } } },
+  ],
 ];
 
 const WARNING_CONFIGS = [

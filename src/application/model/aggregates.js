@@ -1,6 +1,8 @@
 // Aggregates always use every participating room; grid visibility is presentation-only.
 // Subtitles remain semantic descriptors, while `language` only stabilizes name tie-breaks.
 
+import { finiteOrNull } from "../../core/numbers.js";
+
 // This shared order keeps extrema and equal-value name tie-breaks consistent.
 export function sortRoomsByValue(rooms, language) {
   return [...rooms].sort((a, b) => a.value - b.value || a.name.localeCompare(b.name, language));
@@ -45,7 +47,8 @@ export function computeComfortCounts(rooms, comfort, roomsComparable) {
 export function computeSpread({ attributeValue, roomsComparable, coolest, warmest }) {
   // Negative, undefined and NaN attributes fall back; `null >= 0` returns `null` unchanged.
   const attrSpread = attributeValue >= 0 ? attributeValue : null;
-  const computedSpread = roomsComparable ? warmest.value - coolest.value : 0;
+  // Two readings at opposite ends of the number line have no spread a double can hold: null.
+  const computedSpread = roomsComparable ? finiteOrNull(warmest.value - coolest.value) : 0;
   return attrSpread !== null ? attrSpread : computedSpread;
 }
 

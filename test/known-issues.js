@@ -14,35 +14,16 @@ const assert = require("node:assert/strict");
 
 // Each entry carries an id (the backlog link), a one-line actionable summary, the product
 // area, and the date found.
-const KNOWN_ISSUES = [
-  {
-    id: "BUG-06",
-    area: "domain/scale",
-    discovered: "2026-08-24",
-    summary:
-      "An axis wider than Number.MAX_VALUE overflows: the span becomes Infinity, every " +
-      "position derived from it becomes NaN, and the card writes that into the DOM as " +
-      "calc(NaN% + 0px). An unusable computed span should reach the no-data state the way an " +
-      "unusable reading does. Reachable through a custom profile whose declared scale spans " +
-      "both extremes; two ENTITY readings can no longer do it, because every metric now has a " +
-      "floor and none of them can be far enough apart.",
-    foundBy: "test/property/model.property.test.js",
-    // Assigns a property-run violation to this bug instead of reporting it as new. Two
-    // symptoms, one cause: the spread itself goes infinite, or every derived position goes
-    // NaN with nothing else wrong. The second is an `every`, not a `some` — a NaN position
-    // alongside any other violation is a different finding and stays new.
-    matchesViolation: (violation) =>
-      /everyNumberIsFinite: spread is Infinity$|calc\(NaN%|"\)" is expected|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
-  },
-];
+const KNOWN_ISSUES = [];
 
 // Partition violations one by one. A known symptom can never make an unrelated violation
-// disappear merely because both occurred in the same generated case.
-function classifyViolations(violations) {
+// disappear merely because both occurred in the same generated case. `issues` defaults to
+// the register; the mechanism tests pass a synthetic one.
+function classifyViolations(violations, issues = KNOWN_ISSUES) {
   const known = [];
   const unknown = [];
   for (const violation of violations) {
-    const issue = KNOWN_ISSUES.find(
+    const issue = issues.find(
       (candidate) => typeof candidate.matchesViolation === "function" && candidate.matchesViolation(violation)
     );
     if (issue) known.push({ issue, violation });

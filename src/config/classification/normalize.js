@@ -12,7 +12,14 @@
 import { isOutsideRange } from "../../core/numbers.js";
 import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
 import { pathError } from "../errors.js";
-import { normalizeBands, normalizeIcons, normalizeScale, normalizeTiers, normalizeValidRange } from "./profile-parts.js";
+import {
+  LEGACY_TEMPERATURE_ICON_KEYS,
+  normalizeBands,
+  normalizeIcons,
+  normalizeScale,
+  normalizeTiers,
+  normalizeValidRange,
+} from "./profile-parts.js";
 
 const AUTO_POLICY = { source: "auto", profile: null, custom: null };
 
@@ -85,15 +92,42 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
 
   // Everything above is in the user's unit; from here it is canonical. Absolute readings
   // via toCanonical(), step and headroom via deltaToCanonical() (a difference takes no offset).
-  const toCanonical = sourceUnitProfile.toCanonical;
-  const deltaToCanonical = sourceUnitProfile.deltaToCanonical;
-  const convertBand = (band) => ({ min: toCanonical(band.min), max: toCanonical(band.max) });
+  // A finite value written in a scaling unit can overflow on the way; it is refused at the
+  // path it was written under. The open ends of tier and icon lists (-Infinity) are not written.
+  const unit = value.unit.trim();
+  const converting = (convert) => (written, path) => {
+    const converted = convert(written);
+    if (!Number.isFinite(converted)) {
+      pathError(path, `cannot be converted from ${unit} into the canonical unit, because the result exceeds the largest representable number`);
+    }
+    return converted;
+  };
+  const toCanonical = converting(sourceUnitProfile.toCanonical);
+  const deltaToCanonical = converting(sourceUnitProfile.deltaToCanonical);
+  const convertBand = (band, path) => ({ min: toCanonical(band.min, `${path}.min`), max: toCanonical(band.max, `${path}.max`) });
+  const convertTierMins = (tiers, pathOf) =>
+    tiers.map((tier, index) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min, pathOf(index)) : tier.min }));
+
+  const comfort = convertBand(sourceComfort, "classification.bands.comfort");
+  const optimal = convertBand(sourceOptimal, "classification.bands.optimal");
+  // null all the way through when there is no reference range: nothing to convert, and
+  // an invented range would be indistinguishable from a declared one downstream.
+  const scale = sourceScale && convertBand(sourceScale, "classification.scale");
+  const step = deltaToCanonical(sourceStep, "classification.scale.step");
+  const headroom = sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom, "classification.scale.headroom");
+  const tiers = convertTierMins(sourceTiers, (index) => `classification.tiers[${index}].min`);
   const canonicalValidRange = sourceValidRange && {
-    min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min),
-    max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max),
+    min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min, "classification.valid_range.min"),
+    max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max, "classification.valid_range.max"),
     minInclusive: sourceValidRange.minInclusive,
     maxInclusive: sourceValidRange.maxInclusive,
   };
+  // The legacy temperature object names its thresholds by key, the list by index.
+  const iconTiers =
+    sourceIconTiers &&
+    convertTierMins(sourceIconTiers, (index) =>
+      Array.isArray(value.icons) ? `classification.icons[${index}].min` : `classification.icons.${LEGACY_TEMPERATURE_ICON_KEYS[index]}`
+    );
   // The same comparison (isOutsideRange) the built-in profiles use, so a written window
   // and a declared one cannot disagree about their edges.
   const invalidWhen = canonicalValidRange ? (reading) => isOutsideRange(reading, canonicalValidRange) : null;
@@ -102,14 +136,12 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     id: "custom",
     metricKind,
     comparison,
-    tiers: sourceTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
-    comfort: convertBand(sourceComfort),
-    optimal: convertBand(sourceOptimal),
-    // null all the way through when there is no reference range: nothing to convert, and
-    // an invented range would be indistinguishable from a declared one downstream.
-    scale: sourceScale && convertBand(sourceScale),
-    step: deltaToCanonical(sourceStep),
-    headroom: sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom),
+    tiers,
+    comfort,
+    optimal,
+    scale,
+    step,
+    headroom,
     oneSided,
     // Needs no conversion — it says whether the axis is pinned to `scale`, not where — and
     // reaches the axis maths untouched.
@@ -119,6 +151,6 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
     // Colourless: a custom profile takes tier colours from the palette, and an invalid
     // reading takes the palette's own invalid colour.
     invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
-    iconTiers: sourceIconTiers && sourceIconTiers.map((tier) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min) : tier.min })),
+    iconTiers,
   };
 }

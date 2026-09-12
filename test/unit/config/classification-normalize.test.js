@@ -187,6 +187,59 @@ test("a Fahrenheit custom profile converts absolutes and deltas differently", ()
   assert.equal(result.tiers[2].min, -Infinity, "the open-ended tier survives conversion");
 });
 
+// A Fahrenheit profile with one part replaced; everything it starts with converts finitely.
+function fahrenheitCustom(overrides = {}) {
+  return validCustom({
+    unit: "°F",
+    bands: { comfort: { min: 66, max: 77 }, optimal: { min: 70, max: 73 } },
+    scale: { min: 60, max: 82, step: 2 },
+    tiers: [
+      { min: 75, score: 3, level: "Warm", color: "#cc4444", zone: "outside" },
+      { min: 68, score: 2, level: "Ok", color: "#44cc66", zone: "optimal" },
+      { default: true, score: 1, level: "Cold", color: "#4488cc", zone: "outside" },
+    ],
+    ...overrides,
+  });
+}
+
+test("a custom value its unit cannot convert into the canonical unit is refused at its path", () => {
+  // 1e308 °F is a finite YAML number; (v - 32) * 5 / 9 is not, and a delta overflows alike.
+  const huge = 1e308;
+  const cases = [
+    ["classification.bands.comfort.max", { bands: { comfort: { min: 66, max: huge }, optimal: { min: 70, max: 73 } } }],
+    ["classification.bands.comfort.min", { bands: { comfort: { min: -huge, max: 77 }, optimal: { min: 70, max: 73 } } }],
+    ["classification.scale.max", { scale: { min: 60, max: huge, step: 2 } }],
+    ["classification.scale.step", { scale: { min: 60, max: 82, step: huge } }],
+    ["classification.scale.headroom", { scale: { min: 60, max: 82, step: 2, headroom: huge } }],
+    [
+      "classification.tiers[0].min",
+      {
+        tiers: [
+          { min: huge, score: 3, level: "Hot", color: "#cc4444", zone: "outside" },
+          { default: true, score: 1, level: "Cold", color: "#4488cc", zone: "outside" },
+        ],
+      },
+    ],
+    ["classification.valid_range.max", { valid_range: { min: -459.67, max: huge } }],
+    ["classification.icons[0].min", { icons: [{ min: huge, icon: "mdi:fire-alert" }, { default: true, icon: "mdi:snowflake" }] }],
+    ["classification.icons.fire", { icons: { fire: huge, high: 80, normal: 70, low: 60 } }],
+  ];
+  for (const [path, overrides] of cases) {
+    assert.throws(
+      () => classification.normalizeCustomClassification(fahrenheitCustom(overrides), COLLABORATORS),
+      (error) =>
+        error.message ===
+        `Invalid configuration: ${path} cannot be converted from °F into the canonical unit, because the result exceeds the largest representable number.`,
+      path
+    );
+  }
+  assert.doesNotThrow(() => classification.normalizeCustomClassification(fahrenheitCustom(), COLLABORATORS));
+  // The same magnitude written in the canonical unit converts to itself and is accepted.
+  assert.doesNotThrow(() =>
+    classification.normalizeCustomClassification(validCustom({ scale: { min: -1e308, max: 1e308, step: 5 } }), COLLABORATORS)
+  );
+});
+
 test("custom scale switches and headroom are carried through", () => {
   const result = classification.normalizeCustomClassification(
     validCustom({ scale: { min: 16, max: 28, step: 2, headroom: 4, one_sided: true } }),

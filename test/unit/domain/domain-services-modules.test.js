@@ -544,6 +544,51 @@ test("a profile whose gaps collapse under rounding is rejected with a usable mes
   );
 });
 
+test("a profile boundary the display unit cannot hold is rejected with its field name", () => {
+  // Finite in °C, beyond Number.MAX_VALUE once (v * 9) / 5 + 32 is applied.
+  const base = {
+    id: "custom",
+    metricKind: "temperature",
+    comparison: ">=",
+    tiers: [
+      { min: 24, score: 1, level: "A", color: "#cc4444", zone: "outside" },
+      { min: 18, score: 0, level: "B", color: "#44cc66", zone: "optimal" },
+      { min: -Infinity, score: -1, level: "C", color: "#4488cc", zone: "outside" },
+    ],
+    comfort: { min: -10, max: 40 },
+    optimal: { min: 18, max: 24 },
+    scale: { min: 0, max: 40 },
+    step: 2,
+    validRange: null,
+    invalidWhen: null,
+    iconTiers: null,
+  };
+  const huge = 5e307;
+  const cases = [
+    ["comfort.max", { comfort: { min: -10, max: huge } }],
+    ["optimal.min", { optimal: { min: -huge, max: 24 } }],
+    ["scale.min", { scale: { min: -huge, max: 40 } }],
+    ["scale.max", { scale: { min: 0, max: huge } }],
+    ["step", { step: 1e308 }],
+    ["headroom", { headroom: 1e308 }],
+    ["validRange.max", { validRange: { min: null, max: huge, minInclusive: true, maxInclusive: true } }],
+    ["tiers[0].min", { tiers: [{ ...base.tiers[0], min: huge }, ...base.tiers.slice(1)] }],
+    ["iconTiers[0].min", { iconTiers: [{ min: huge, icon: "mdi:fire-alert" }, { min: -Infinity, icon: "mdi:snowflake" }] }],
+  ];
+  const temperature = definitions.METRIC_DEFINITIONS.temperature;
+  for (const [field, patch] of cases) {
+    assert.throws(
+      () => projection.projectProfileToDisplayUnit({ ...base, ...patch }, temperature, tempUnit("fahrenheit"), "temperature"),
+      (error) =>
+        error.message ===
+        `Invalid configuration: classification profile for "temperature" cannot be expressed in °F (${field} lies beyond the largest number °F can hold) — keep every classification boundary within the range a sensor can report.`,
+      field
+    );
+    // Kelvin only shifts, so the same profile is expressible there.
+    assert.doesNotThrow(() => projection.projectProfileToDisplayUnit({ ...base, ...patch }, temperature, tempUnit("kelvin"), "temperature"), field);
+  }
+});
+
 test("the built-in profiles survive projection into every temperature unit", () => {
   // Read from the registry, not a written-out list: a new profile has to be projected too.
   for (const id of Object.keys(temperatureRegistry().profiles)) {
