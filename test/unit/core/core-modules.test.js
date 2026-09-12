@@ -117,6 +117,16 @@ test("withoutNegativeZero() collapses -0 and leaves every other value alone", ()
   assert.equal(Number.isNaN(withoutNegativeZero(NaN)), true);
 });
 
+test("finiteOrNull() passes a finite number and turns everything else into null", () => {
+  const { finiteOrNull } = numbers;
+  for (const value of [0, -0, 21.4, -273.15, Number.MAX_VALUE, -Number.MAX_VALUE, Number.MIN_VALUE]) {
+    assert.ok(Object.is(finiteOrNull(value), value), String(value));
+  }
+  for (const value of [Infinity, -Infinity, NaN, null, undefined, "21", 1e308 * 10]) {
+    assert.equal(finiteOrNull(value), null, String(value));
+  }
+});
+
 // ------------------------------------------------------------------- text --
 
 test("escapeHtml() neutralizes every character that could break out of markup", () => {

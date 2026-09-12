@@ -34,19 +34,6 @@ const KNOWN_ISSUES = [
     matchesViolation: (violation) =>
       /everyNumberIsFinite: spread is Infinity$|calc\(NaN%|"\)" is expected|everyNumberIsFinite: \S*[Pp]osition\S* is NaN/.test(violation),
   },
-  {
-    id: "BUG-15",
-    area: "application/model",
-    discovered: "2026-08-31",
-    summary:
-      "A finite canonical reading can overflow on its way into the display unit: 1e308 °C is " +
-      "valid (temperature has no upper limit) but its Fahrenheit projection (v * 9) / 5 + 32 " +
-      "overflows to Infinity, and the room chip shows it as text. The finiteness check covers " +
-      "the conversion into the canonical unit only; the projection into the display unit is not checked.",
-    foundBy: "test/property/model.property.test.js",
-    // The oracle names this provenance; a bare infinite room value stays a new finding.
-    matchesViolation: (violation) => /overflowed on projection into the display unit\)$/.test(violation),
-  },
 ];
 
 // Partition violations one by one. A known symptom can never make an unrelated violation

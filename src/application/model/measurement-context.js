@@ -91,9 +91,25 @@ function withContextAvailability(model, metricKind, mixed) {
   return model;
 }
 
+// A usable reading of the card's kind must stay finite in the unit it is displayed in:
+// (v * 9) / 5 + 32 overflows where the canonical value did not. Same answer as an overflowing
+// canonical conversion. Only a primary imposes a unit on rooms reporting in others; a consensus
+// or single room displays in a participant's own or the canonical unit, into which a finite
+// canonical value always projects finitely. See internal dev doc §3 "EntityModel und MeasurementContext".
+function withDisplayRepresentability(model, metricKind, displayUnitProfile) {
+  if (model.availability !== AVAILABILITY.USABLE || model.metricKind !== metricKind) return model;
+  if (Number.isFinite(displayUnitProfile.fromCanonical(model.canonicalValue))) return model;
+  return {
+    ...model,
+    validPhysical: false,
+    availability: AVAILABILITY.INVALID_VALUE,
+    unusableReason: UNUSABLE_REASON.OUT_OF_RANGE,
+  };
+}
+
 export function resolveMeasurementContext(states, config) {
   const primaryModel = buildEntityModel(states, config, config?.entity, "primary");
-  const roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
+  let roomModels = (config?.rooms || []).map((room) => buildEntityModel(states, config, room.entity, "room"));
   const topology = resolveSourceTopology(config, resolveSourceEligibility(states, config));
   const resolvedIdentityMetricKind = identityMetricKind(primaryModel, roomModels);
 
@@ -123,6 +139,8 @@ export function resolveMeasurementContext(states, config) {
     displayUnitProfileKey = isUsable(room) ? room.unitProfile : null;
   } else if (isUsable(primaryModel)) {
     metricKind = primaryModel.metricKind;
+    const primaryDisplayProfile = METRIC_DEFINITIONS[metricKind].unitProfiles[primaryModel.unitProfile];
+    roomModels = roomModels.map((room) => withDisplayRepresentability(room, metricKind, primaryDisplayProfile));
     ({ participatingRooms, excludedRoomIds, diagnostics } = partitionRooms(roomModels, metricKind));
     averageSource = {
       kind: "primary",

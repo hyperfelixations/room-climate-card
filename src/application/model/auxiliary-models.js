@@ -2,6 +2,7 @@
 // Range state is a delta, range min/max are absolute, and trend is a rate.
 // Timestamps stay raw for presentation-layer formatting.
 
+import { finiteOrNull } from "../../core/numbers.js";
 import { classifyTrendRate, TREND_DIRECTION_META, TREND_POLICY_REGISTRY } from "../../domain/trend.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { classificationColorOf, isValuePhysicallyValid } from "./classification.js";
@@ -37,15 +38,19 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
   const definition = METRIC_DEFINITIONS[metricKind];
   const profileKey = resolveAuxiliaryUnitProfileKey(states, config.range_entity, metricKind);
 
+  // Each conversion below can overflow a finite reading, into the canonical or into the display
+  // unit; a non-finite result is no value.
   let state = profileKey ? readNumericState(states, config.range_entity) : null;
   if (state !== null) {
-    state = toDisplayDelta(
-      convertMetricValue(state, {
-        metricKind,
-        quantityKind: "delta",
-        fromProfileKey: profileKey,
-        toProfileKey: definition.canonicalProfileKey,
-      })
+    state = finiteOrNull(
+      toDisplayDelta(
+        convertMetricValue(state, {
+          metricKind,
+          quantityKind: "delta",
+          fromProfileKey: profileKey,
+          toProfileKey: definition.canonicalProfileKey,
+        })
+      )
     );
   }
   // Validate the projected display value; a negative width is impossible.
@@ -54,13 +59,17 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
   let min = hasRange ? readNumericAttribute(states, config.range_entity, "minimum") : null;
   let max = hasRange ? readNumericAttribute(states, config.range_entity, "maximum") : null;
   if (min !== null) {
-    min = toDisplay(
-      convertMetricValue(min, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+    min = finiteOrNull(
+      toDisplay(
+        convertMetricValue(min, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+      )
     );
   }
   if (max !== null) {
-    max = toDisplay(
-      convertMetricValue(max, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+    max = finiteOrNull(
+      toDisplay(
+        convertMetricValue(max, { metricKind, quantityKind: "absolute", fromProfileKey: profileKey, toProfileKey: definition.canonicalProfileKey })
+      )
     );
   }
   if (min !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, min)) min = null;
@@ -97,13 +106,16 @@ export function buildTrendContext({ states, config, metricKind, unit, toDisplayD
   let canonicalValue = null;
   let value = null;
   if (rawValue !== null) {
-    canonicalValue = convertMetricValue(rawValue, {
-      metricKind,
-      quantityKind: "rate",
-      fromProfileKey: profileKey,
-      toProfileKey: definition.canonicalProfileKey,
-    });
-    value = toDisplayDelta(canonicalValue);
+    // Both conversions can overflow a finite rate; a non-finite result is no trend.
+    canonicalValue = finiteOrNull(
+      convertMetricValue(rawValue, {
+        metricKind,
+        quantityKind: "rate",
+        fromProfileKey: profileKey,
+        toProfileKey: definition.canonicalProfileKey,
+      })
+    );
+    value = canonicalValue === null ? null : finiteOrNull(toDisplayDelta(canonicalValue));
   }
   // Label the converted number with the display unit, never the raw entity unit.
   const displayUnit = config.trend_entity ? `${unit}/h` : null;

@@ -61,6 +61,11 @@ export function withoutNegativeZero(value) {
   return Object.is(value, -0) ? 0 : value;
 }
 
+// A computed quantity is passed on only as a finite number; an overflow or NaN becomes null.
+export function finiteOrNull(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
 // Clamps a value to a fixed range.
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));

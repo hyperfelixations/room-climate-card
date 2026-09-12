@@ -1,6 +1,7 @@
 // Numeric and semantic card state; presentation owns text, formatting, CSS and geometry.
 // Classification hex values are semantic inputs here, never CSS-ready paint recipes.
 
+import { finiteOrNull } from "../../core/numbers.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { adaptPalette } from "../../domain/classification/palettes/adaptation.js";
 import { tintRecipesFor } from "../../domain/classification/tone-legibility.js";
@@ -120,13 +121,16 @@ export function buildCardDomainModel({ states, config, context, language, surfac
 
   let spreadAttribute = averageSourceKind === "sensor" ? readNumericAttribute(states, config.entity, "spread") : null;
   if (spreadAttribute !== null && context.averageSource.unitProfile && METRIC_DEFINITIONS[metricKind]) {
-    spreadAttribute = toDisplayDelta(
-      convertMetricValue(spreadAttribute, {
-        metricKind,
-        quantityKind: "delta",
-        fromProfileKey: context.averageSource.unitProfile,
-        toProfileKey: METRIC_DEFINITIONS[metricKind].canonicalProfileKey,
-      })
+    // A finite attribute can overflow as a delta; then the rooms decide the spread.
+    spreadAttribute = finiteOrNull(
+      toDisplayDelta(
+        convertMetricValue(spreadAttribute, {
+          metricKind,
+          quantityKind: "delta",
+          fromProfileKey: context.averageSource.unitProfile,
+          toProfileKey: METRIC_DEFINITIONS[metricKind].canonicalProfileKey,
+        })
+      )
     );
   }
   const spread = computeSpread({ attributeValue: spreadAttribute, roomsComparable, coolest, warmest });

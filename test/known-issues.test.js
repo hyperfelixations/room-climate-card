@@ -3,7 +3,7 @@
 // One reproduction per open entry in the known-defect register (test/known-issues.js), plus
 // the checks that keep the register honest. Each reproduction asserts the behaviour the card
 // should have, so a fix flips it to passing and expectedFailure() turns that into a failing
-// run demanding the entry be retired. Fixed BUG-07..BUG-14 stay here as ordinary regression
+// run demanding the entry be retired. Fixed BUG-07..BUG-15 stay here as ordinary regression
 // tests; their history is in the RCC Changelog.
 
 const test = require("node:test");
@@ -55,15 +55,17 @@ test("known-issue classification never hides an unrelated violation", () => {
 });
 
 test("a defect that was fixed no longer absorbs its old signature", () => {
-  // The exact violation strings BUG-07, BUG-11 and BUG-12 were recognised by while open.
-  // With those entries gone, each must now come through as unknown, not be filed under a
-  // defect that no longer exists.
+  // The exact violation strings BUG-07, BUG-11, BUG-12 and BUG-15 were recognised by while
+  // open. With those entries gone, each must now come through as unknown, not be filed under
+  // a defect that no longer exists.
   const retired = [
     "everyNumberIsFinite: average.value is -Infinity (source room; a finite Fahrenheit entity state overflowed during conversion)",
     "everyNumberIsFinite: average.value is Infinity (source calculated; finite room inputs)",
     "aggregatesStayWithinTheirInputs: average Infinity lies outside its rooms",
     'average moved from {"value":44,"position":50,"source":"room"} to {"value":44,"position":50,"source":"sensor"}',
     "setConfig refused with a message that does not identify itself: Cannot read properties of undefined (reading 'color')",
+    "everyNumberIsFinite: roomMarkers[2].value is Infinity (a finite reading overflowed on projection into the display unit)",
+    "everyNumberIsFinite: rooms.visible[0].value is Infinity (a finite reading overflowed on projection into the display unit)",
   ];
   const classified = classifyViolations(retired);
   assert.deepEqual(classified.known, []);
@@ -82,22 +84,6 @@ test("every violation is judged on its own, not on the company it keeps", () => 
     ["BUG-06", position],
   ]);
   assert.deepEqual(classified.unknown, [other]);
-});
-
-test("BUG-15 is recognised by its provenance, not by the path it shows up on", () => {
-  // A bare infinite room value, a Fahrenheit conversion overflow and an infinite range bound
-  // are other findings; only the projection provenance belongs to BUG-15.
-  const room = "everyNumberIsFinite: roomMarkers[2].value is Infinity (a finite reading overflowed on projection into the display unit)";
-  const spread = "everyNumberIsFinite: spread is Infinity (derived from a finite reading that overflowed on projection into the display unit)";
-  const bareRoom = "everyNumberIsFinite: roomMarkers[2].value is Infinity";
-  const conversion = "everyNumberIsFinite: roomMarkers[0].value is -Infinity (a finite Fahrenheit entity state overflowed during conversion)";
-  const range = "everyNumberIsFinite: range.max is Infinity";
-  const classified = classifyViolations([room, bareRoom, spread, conversion, range]);
-  assert.deepEqual(classified.known.map(({ issue, violation }) => [issue.id, violation]), [
-    ["BUG-15", room],
-    ["BUG-15", spread],
-  ]);
-  assert.deepEqual(classified.unknown, [bareRoom, conversion, range]);
 });
 
 test("expected reproductions accept only their identifying assertion", () => {
@@ -183,10 +169,9 @@ test("BUG-06's neighbourhood: two readings can no longer be far enough apart to 
   });
 });
 
-// BUG-15 (open). A °C reading of 1e308 is finite and valid once canonicalized, but the Fahrenheit
-// projection (v * 9) / 5 + 32 overflows to Infinity, which reaches the room chips as text. Expected:
-// the same answer as a reading whose canonical conversion overflows. Found by the weekly model
-// sweep; full analysis in RCC Backlog BUG-15.
+// BUG-15 regression: a °C reading of 1e308 is finite and valid once canonicalized, but its
+// Fahrenheit projection (v * 9) / 5 + 32 is not a number. It gets the answer a reading whose
+// canonical conversion overflows gets, and never reaches the room chips as text.
 function bug15Scenario(overflowingState) {
   const celsiusRoom = (state) => ({ state, unit: { value: "°C" }, deviceClass: { value: "temperature" } });
   return buildScenario({
@@ -196,13 +181,15 @@ function bug15Scenario(overflowingState) {
   });
 }
 
-expectedFailure("BUG-15", /roomMarkers\[\d+\]\.value is Infinity|Infinity reached the card/, () => {
+test("a reading beyond what the display unit can hold is refused, not shown as Infinity", () => {
   const built = bug15Scenario(1e308);
   env.withCard(built.config, built.hass, (card) => {
     const model = card._computeViewModel();
+    assert.equal(model.roomMarkers.length, 2, "the two representable rooms still compare");
     model.roomMarkers.forEach((room, index) => {
       assert.ok(Number.isFinite(room.value), `roomMarkers[${index}].value is ${room.value}`);
     });
+    assert.ok(Number.isFinite(model.spread), `spread is ${model.spread}`);
     assert.ok(!/Infinity|∞/.test(card.shadowRoot.textContent), "Infinity reached the card");
   });
 });

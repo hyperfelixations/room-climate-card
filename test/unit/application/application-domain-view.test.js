@@ -12,7 +12,7 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { stableStringify } = require("../../helpers/baseline-serialization.js");
-const { HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { HUMIDITY, TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js");
 
 let measurementContext;
 let cardDomainModel;
@@ -109,6 +109,23 @@ test("a grid cap limits nothing but the chip count", () => {
   assert.equal(capped.extremes.coolest.value, uncapped.extremes.coolest.value);
   assert.equal(capped.extremes.warmest.value, uncapped.extremes.warmest.value);
   assert.deepEqual(Object.keys(capped.roomColors), Object.keys(uncapped.roomColors));
+});
+
+test("a spread attribute that is no finite number after conversion yields to the rooms", () => {
+  // 1e308 °F is finite as written; as a delta into °C it is not.
+  const states = {
+    "sensor.avg": st(70, { ...TEMPERATURE_F, spread: 1e308 }),
+    "sensor.r1": st(68, TEMPERATURE_F),
+    "sensor.r2": st(72, TEMPERATURE_F),
+  };
+  const model = domainFor(cfg({ rooms: [room("sensor.r1"), room("sensor.r2")] }), states);
+  assert.ok(Math.abs(model.spread - 4) < 1e-9, `spread ${model.spread}`);
+
+  const readable = domainFor(cfg({ rooms: [room("sensor.r1"), room("sensor.r2")] }), {
+    ...states,
+    "sensor.avg": st(70, { ...TEMPERATURE_F, spread: 6.5 }),
+  });
+  assert.ok(Math.abs(readable.spread - 6.5) < 1e-9, "a finite attribute still wins over the rooms");
 });
 
 test("the domain model carries no rendering geometry at all", () => {

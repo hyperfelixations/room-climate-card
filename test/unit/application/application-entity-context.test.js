@@ -391,6 +391,69 @@ test("the display unit follows a usable primary", () => {
   assert.equal(context.unit, "K");
 });
 
+test("a room the display unit cannot hold is out of range, not a participant", () => {
+  // The Fahrenheit primary sets the display unit. 1e308 °C is a finite, valid canonical reading,
+  // but (v * 9) / 5 + 32 is not a number: the same answer as a canonical conversion that
+  // overflows, and a data state rather than a configuration diagnosis.
+  const states = { "sensor.avg": st(70, F), "sensor.huge": st(1e308, C), "sensor.r1": st(21, C) };
+  const context = measurementContext.resolveMeasurementContext(states, cfg({ rooms: [room("sensor.huge"), room("sensor.r1")] }));
+  assert.deepEqual(context.participatingRooms.map((model) => model.entityId), ["sensor.r1"]);
+  const huge = context.rooms.find((model) => model.entityId === "sensor.huge");
+  assert.equal(huge.availability, "invalid_value");
+  assert.equal(huge.unusableReason, "out_of_range");
+  assert.equal(huge.validPhysical, false);
+  assert.deepEqual(context.excludedRoomIds, []);
+  assert.deepEqual(context.diagnostics, []);
+  assert.equal(context.averageSource.entityId, "sensor.avg", "the headline stays the primary's");
+});
+
+test("the largest reading a Fahrenheit display can hold still participates", () => {
+  // fromCanonical multiplies by 9 before dividing, so the limit is Number.MAX_VALUE / 9.
+  const context = measurementContext.resolveMeasurementContext(
+    { "sensor.avg": st(70, F), "sensor.big": st(1.99e307, C) },
+    cfg({ rooms: [room("sensor.big")] })
+  );
+  assert.deepEqual(context.participatingRooms.map((model) => model.entityId), ["sensor.big"]);
+  assert.equal(context.rooms[0].availability, "usable");
+});
+
+test("only a usable room of the card's kind is held against the display unit", () => {
+  // A °C or K display does not scale, and a foreign kind keeps its own verdict.
+  for (const primary of [st(21, C), st(294.15, K)]) {
+    const context = measurementContext.resolveMeasurementContext(
+      { "sensor.avg": primary, "sensor.huge": st(1e308, C) },
+      cfg({ rooms: [room("sensor.huge")] })
+    );
+    assert.equal(context.rooms[0].availability, "usable", primary.attributes.unit_of_measurement);
+    assert.equal(context.participatingRooms.length, 1);
+  }
+  const foreign = measurementContext.resolveMeasurementContext(
+    { "sensor.avg": st(70, F), "sensor.h": st(55, RH) },
+    cfg({ rooms: [room("sensor.h")] })
+  );
+  assert.equal(foreign.rooms[0].availability, "incompatible_kind");
+  assert.deepEqual(foreign.excludedRoomIds, ["sensor.h"]);
+});
+
+test("a room consensus displays every participant it averaged", () => {
+  // Without a usable primary the display unit is a unanimous room unit or the canonical one,
+  // and a finite canonical value projects finitely into either.
+  const mixed = measurementContext.resolveMeasurementContext(
+    { "sensor.avg": st("unavailable", F), "sensor.f": st(3e307, F), "sensor.c": st(1e308, C) },
+    cfg({ rooms: [room("sensor.f"), room("sensor.c")] })
+  );
+  assert.equal(mixed.displayUnitProfile.key, "celsius");
+  assert.deepEqual(mixed.participatingRooms.map((model) => model.entityId), ["sensor.f", "sensor.c"]);
+  const unanimous = measurementContext.resolveMeasurementContext(
+    { "sensor.avg": st("unavailable", F), "sensor.f1": st(3e307, F), "sensor.f2": st(-400, F) },
+    cfg({ rooms: [room("sensor.f1"), room("sensor.f2")] })
+  );
+  assert.equal(unanimous.displayUnitProfile.key, "fahrenheit");
+  for (const model of unanimous.participatingRooms) {
+    assert.ok(Number.isFinite(unanimous.displayUnitProfile.fromCanonical(model.canonicalValue)), model.entityId);
+  }
+});
+
 test("an unavailable source preserves its kind while absent metadata preserves null", () => {
   const fromPrimary = measurementContext.resolveMeasurementContext({ "sensor.avg": st("unavailable", RH) }, cfg());
   assert.equal(fromPrimary.metricKind, "humidity", "an unavailable primary still names the kind");

@@ -13,6 +13,7 @@ const { TEMPERATURE_C, TEMPERATURE_F } = require("../../fixtures/attributes.js")
 
 let auxiliary;
 let aggregates;
+let FAHRENHEIT;
 
 const C = TEMPERATURE_C;
 const F = TEMPERATURE_F;
@@ -51,6 +52,7 @@ test.before(async () => {
   auxiliary = await import("../../../src/application/model/auxiliary-models.js");
   aggregates = await import("../../../src/application/model/aggregates.js");
   ({ pastel: PASTEL } = await import("../../../src/domain/classification/palettes/pastel.js"));
+  FAHRENHEIT = (await import("../../../src/domain/metrics/definitions.js")).METRIC_DEFINITIONS.temperature.unitProfiles.fahrenheit;
 });
 
 // ------------------------------------------------------ auxiliary models --
@@ -159,6 +161,57 @@ test("historical range extremes classify numerically, never from the entity's co
   assert.notEqual(range.minColor, range.maxColor, "18 °C and 25 °C are different tiers");
 });
 
+// A range on a Fahrenheit card, with the card's own projections.
+function fahrenheitRange(attributes, state) {
+  return auxiliary.buildRangeModel({
+    states: { "sensor.range": st(state, attributes) },
+    config: cfg({ range_entity: "sensor.range" }),
+    policy: AUTO_POLICY,
+    palette: PASTEL,
+    metricKind: "temperature",
+    displayUnitProfile: FAHRENHEIT,
+    toDisplay: FAHRENHEIT.fromCanonical,
+    toDisplayDelta: FAHRENHEIT.deltaFromCanonical,
+  });
+}
+
+test("a range extreme that is no finite number in the display unit is no extreme", () => {
+  // 1e308 °C is finite and valid, its Fahrenheit projection is not; the other extreme stays.
+  const range = fahrenheitRange({ ...C, minimum: 10, maximum: 1e308 }, 5);
+  assert.equal(range.hasRange, true);
+  assert.equal(range.min, 50);
+  assert.equal(range.max, null);
+  assert.equal(range.maxColor, null);
+  assert.equal(range.rangeScaleAvailable, false);
+});
+
+test("a range width that overflows on either conversion is no range", () => {
+  // 1e308 °F overflows on its way into °C; 1e308 °C on its way into the °F display.
+  for (const attributes of [{ ...F, minimum: 50, maximum: 60 }, { ...C, minimum: 10, maximum: 15 }]) {
+    const range = fahrenheitRange(attributes, 1e308);
+    assert.equal(range.state, null, attributes.unit_of_measurement);
+    assert.equal(range.hasRange, false, attributes.unit_of_measurement);
+    assert.equal(range.min, null);
+    assert.equal(range.max, null);
+  }
+});
+
+test("a Fahrenheit range extreme that overflows into the canonical unit is no extreme", () => {
+  const range = auxiliary.buildRangeModel({
+    states: { "sensor.range": st(5, { ...F, minimum: 60, maximum: 1e308 }) },
+    config: cfg({ range_entity: "sensor.range" }),
+    policy: AUTO_POLICY,
+    palette: PASTEL,
+    metricKind: "temperature",
+    displayUnitProfile: null,
+    toDisplay: (v) => v,
+    toDisplayDelta: (v) => v,
+  });
+  assert.ok(Math.abs(range.min - 15.555555555555555) < 1e-9, `min ${range.min}`);
+  assert.equal(range.max, null);
+  assert.equal(range.rangeScaleAvailable, false);
+});
+
 test("the trend is a RATE and keeps its own deadband", () => {
   const identity = (v) => v;
   const build = (value, attributes) =>
@@ -194,6 +247,22 @@ test("a trend entity that reports nothing usable yields a null model", () => {
   });
   assert.equal(unusable.model, null);
   assert.equal(unusable.unit, "°C/h", "the label exists because the entity is configured");
+});
+
+test("a trend rate that overflows on either conversion is no trend", () => {
+  // 1e308 °F/h overflows into °C/h; 1e308 °C/h overflows into the °F display.
+  for (const unit of ["°F/h", "°C/h"]) {
+    const trend = auxiliary.buildTrendContext({
+      states: { "sensor.trend": st(1e308, { unit_of_measurement: unit }) },
+      config: cfg({ trend_entity: "sensor.trend" }),
+      metricKind: "temperature",
+      unit: "°F",
+      toDisplayDelta: FAHRENHEIT.deltaFromCanonical,
+    });
+    assert.equal(trend.value, null, unit);
+    assert.equal(trend.model, null, unit);
+    assert.equal(trend.unit, "°F/h", "the configured entity still owns its label");
+  }
 });
 
 test("buildTrendModel() rejects a non-finite value and a missing unit", () => {

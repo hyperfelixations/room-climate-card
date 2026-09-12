@@ -78,7 +78,7 @@ function hasFahrenheitConversionOverflow(model, states) {
 }
 
 // A finite °C or K reading is finite once canonicalized; only a Fahrenheit display unit scales
-// it afterwards, and that projection is not checked (RCC backlog BUG-15).
+// it afterwards. Names the provenance should that projection check (measurement-context.js) regress.
 function hasDisplayProjectionOverflow(model, states) {
   if (!FAHRENHEIT_UNITS.has(normalizeUnit(model.metric && model.metric.unit))) return false;
   const comparableRooms = Array.isArray(model.roomMarkers) ? model.roomMarkers : [];
