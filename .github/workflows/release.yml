@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Exact package version, for example 2.38.0 or 2.39.0-beta.1"
+        description: "Exact package version, for example 2.38.0 or 2.39.0-dev.1"
         required: true
         type: string
       expected_sha:
@@ -19,13 +19,13 @@ on:
         required: true
         type: string
       release_kind:
-        description: "Stable creates a normal draft; beta creates a prerelease draft"
+        description: "Stable creates a normal draft; dev creates a pre-release draft"
         required: true
         default: stable
         type: choice
         options:
           - stable
-          - beta
+          - dev
 
 permissions:
   contents: read
@@ -98,23 +98,24 @@ jobs:
             throw "The selected commit is $actualSha, not the approved commit $expectedSha."
           }
 
+          # SemVer without leading zeros. Case-sensitive and ASCII-only on purpose: -notmatch
+          # ignores case and \d accepts every Unicode digit.
           switch ($releaseKind) {
             "stable" {
-              if ($version -notmatch '^\d+\.\d+\.\d+$') {
+              if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
                 throw "A stable version must look like 2.38.0."
               }
-              $title = "Room Climate Card $version"
             }
-            "beta" {
-              if ($version -notmatch '^\d+\.\d+\.\d+-beta\.\d+$') {
-                throw "A beta version must look like 2.39.0-beta.1."
+            "dev" {
+              if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-dev\.[1-9][0-9]*$') {
+                throw "A dev pre-release version must look like 2.39.0-dev.1."
               }
-              $title = "Room Climate Card $version (Beta)"
             }
             default {
               throw "Unsupported release kind '$releaseKind'."
             }
           }
+          $title = "Room Climate Card $version"
 
           $tag = "v$version"
           $existingTags = @(git tag --list $tag)
@@ -367,6 +368,14 @@ jobs:
 
           Install or update Room Climate Card through HACS. Reload the browser after the update.
           EOF
+          if [[ "$RELEASE_KIND" == "dev" ]]; then
+            cat >> "$notes_file" <<'EOF'
+
+          ## Pre-release
+
+          This is a development pre-release for testing. HACS offers it only where pre-releases are enabled for this repository.
+          EOF
+          fi
 
           args=(
             gh release create "$RELEASE_TAG"
@@ -378,7 +387,7 @@ jobs:
             --notes-file "$notes_file"
             --fail-on-no-commits
           )
-          if [[ "$RELEASE_KIND" == "beta" ]]; then
+          if [[ "$RELEASE_KIND" == "dev" ]]; then
             args+=(--prerelease --latest=false)
           fi
           "${args[@]}"
@@ -396,6 +405,7 @@ jobs:
             echo
             echo "- Draft: ${{ steps.draft.outputs.url }}"
             echo "- Tag to be created on publish: \`$RELEASE_TAG\`"
+            echo "- Release kind: \`$RELEASE_KIND\`"
             echo "- Commit: \`$EXPECTED_SHA\`"
             echo "- Asset: \`$RELEASE_ASSET\`"
             echo "- SHA-256: \`$EXPECTED_SHA256\`"
