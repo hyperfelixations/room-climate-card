@@ -93,9 +93,9 @@ function withContextAvailability(model, metricKind, mixed) {
 
 // A usable reading of the card's kind must stay finite in the unit it is displayed in:
 // (v * 9) / 5 + 32 overflows where the canonical value did not. Same answer as an overflowing
-// canonical conversion. Only a primary imposes a unit on rooms reporting in others; a consensus
-// or single room displays in a participant's own or the canonical unit, into which a finite
-// canonical value always projects finitely. See internal dev doc §3 "EntityModel und MeasurementContext".
+// canonical conversion. Only a primary imposes a unit on rooms reporting in others; a single
+// room displays in its own unit, a consensus in the unit all participants share or else the
+// canonical one, and a finite canonical value projects finitely into each. See internal dev doc §3 "EntityModel und MeasurementContext".
 function withDisplayRepresentability(model, metricKind, displayUnitProfile) {
   if (model.availability !== AVAILABILITY.USABLE || model.metricKind !== metricKind) return model;
   if (Number.isFinite(displayUnitProfile.fromCanonical(model.canonicalValue))) return model;
