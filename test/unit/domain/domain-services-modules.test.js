@@ -544,7 +544,7 @@ test("a profile whose gaps collapse under rounding is rejected with a usable mes
   );
 });
 
-test("a profile boundary the display unit cannot hold is rejected with its field name", () => {
+test("a profile boundary the display unit cannot hold is rejected with the path it was written under", () => {
   // Finite in °C, beyond Number.MAX_VALUE once (v * 9) / 5 + 32 is applied.
   const base = {
     id: "custom",
@@ -565,15 +565,15 @@ test("a profile boundary the display unit cannot hold is rejected with its field
   };
   const huge = 5e307;
   const cases = [
-    ["comfort.max", { comfort: { min: -10, max: huge } }],
-    ["optimal.min", { optimal: { min: -huge, max: 24 } }],
-    ["scale.min", { scale: { min: -huge, max: 40 } }],
-    ["scale.max", { scale: { min: 0, max: huge } }],
-    ["step", { step: 1e308 }],
-    ["headroom", { headroom: 1e308 }],
-    ["validRange.max", { validRange: { min: null, max: huge, minInclusive: true, maxInclusive: true } }],
-    ["tiers[0].min", { tiers: [{ ...base.tiers[0], min: huge }, ...base.tiers.slice(1)] }],
-    ["iconTiers[0].min", { iconTiers: [{ min: huge, icon: "mdi:fire-alert" }, { min: -Infinity, icon: "mdi:snowflake" }] }],
+    ["classification.bands.comfort.max", { comfort: { min: -10, max: huge } }],
+    ["classification.bands.optimal.min", { optimal: { min: -huge, max: 24 } }],
+    ["classification.scale.min", { scale: { min: -huge, max: 40 } }],
+    ["classification.scale.max", { scale: { min: 0, max: huge } }],
+    ["classification.scale.step", { step: 1e308 }],
+    ["classification.scale.headroom", { headroom: 1e308 }],
+    ["classification.valid_range.max", { validRange: { min: null, max: huge, minInclusive: true, maxInclusive: true } }],
+    ["classification.tiers[0].min", { tiers: [{ ...base.tiers[0], min: huge }, ...base.tiers.slice(1)] }],
+    ["classification.icons[0].min", { iconTiers: [{ min: huge, icon: "mdi:fire-alert" }, { min: -Infinity, icon: "mdi:snowflake" }] }],
   ];
   const temperature = definitions.METRIC_DEFINITIONS.temperature;
   for (const [field, patch] of cases) {

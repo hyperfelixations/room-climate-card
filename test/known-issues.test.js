@@ -180,7 +180,7 @@ test("an axis the display unit cannot hold is refused when the card is configure
   const built = buildScenario({ metric: "temperature", primary: { state: 70, unit: { value: "°F" } }, config: { classification: profile } });
   assert.throws(
     () => env.withCard(built.config, built.hass, () => {}),
-    /cannot be expressed in °F \(scale\.min lies beyond the largest number °F can hold\)/
+    /cannot be expressed in °F \(classification\.scale\.min lies beyond the largest number °F can hold\)/
   );
 });
 

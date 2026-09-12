@@ -11,23 +11,34 @@
 // it and catches only what the projection introduced. Built-in profiles never trigger either
 // (finite, gaps >= 1 °C, well above the ~0.56 °C that survives integer Fahrenheit rounding).
 
-// Every numeric boundary a profile carries, canonical and projected side by side.
+// Every numeric boundary a profile carries, canonical and projected side by side, named by the
+// YAML path it is written under. Only a custom profile can fail here; its legacy temperature
+// icon object counts as icons[0..3] in the order fire, high, normal, low.
 function boundaryPairs(canonical, projected) {
-  const pairs = [
-    ["comfort.min", canonical.comfort.min, projected.comfort.min],
-    ["comfort.max", canonical.comfort.max, projected.comfort.max],
-    ["optimal.min", canonical.optimal.min, projected.optimal.min],
-    ["optimal.max", canonical.optimal.max, projected.optimal.max],
-  ];
+  const pairs = [];
+  for (const band of ["comfort", "optimal"]) {
+    for (const edge of ["min", "max"]) {
+      pairs.push([`classification.bands.${band}.${edge}`, canonical[band][edge], projected[band][edge]]);
+    }
+  }
   if (canonical.scale) {
-    pairs.push(["scale.min", canonical.scale.min, projected.scale.min], ["scale.max", canonical.scale.max, projected.scale.max]);
+    for (const edge of ["min", "max"]) {
+      pairs.push([`classification.scale.${edge}`, canonical.scale[edge], projected.scale[edge]]);
+    }
   }
-  pairs.push(["step", canonical.step, projected.step], ["headroom", canonical.headroom, projected.headroom]);
-  for (const edge of ["min", "max"]) {
-    if (canonical.validRange) pairs.push([`validRange.${edge}`, canonical.validRange[edge], projected.validRange[edge]]);
+  pairs.push(
+    ["classification.scale.step", canonical.step, projected.step],
+    ["classification.scale.headroom", canonical.headroom, projected.headroom]
+  );
+  if (canonical.validRange) {
+    for (const edge of ["min", "max"]) {
+      pairs.push([`classification.valid_range.${edge}`, canonical.validRange[edge], projected.validRange[edge]]);
+    }
   }
-  canonical.tiers.forEach((tier, index) => pairs.push([`tiers[${index}].min`, tier.min, projected.tiers[index].min]));
-  canonical.iconTiers?.forEach((tier, index) => pairs.push([`iconTiers[${index}].min`, tier.min, projected.iconTiers[index].min]));
+  canonical.tiers.forEach((tier, index) => pairs.push([`classification.tiers[${index}].min`, tier.min, projected.tiers[index].min]));
+  canonical.iconTiers?.forEach((tier, index) =>
+    pairs.push([`classification.icons[${index}].min`, tier.min, projected.iconTiers[index].min])
+  );
   return pairs;
 }
 
