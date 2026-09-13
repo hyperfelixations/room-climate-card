@@ -15,7 +15,6 @@
 // The two controller groups sit on one layer and may not import each other:
 // controllers/render decides WHETHER and HOW MUCH, controllers/runtime decides WHEN.
 
-import { CARD_NAME } from "../core/card-metadata.js";
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
 import { isSupportedLanguage, resolveLanguage, translate } from "../i18n/translate.js";
 import { DEFAULT_LANGUAGE } from "../i18n/locales.js";
@@ -56,6 +55,7 @@ import {
   patchCardBody,
   patchEmptyCardBody,
   renderCardBody,
+  renderFailureBody,
   resolveViewLayouts,
 } from "../render/composition/card-shell.js";
 import { VIEW_RENDERERS } from "../views/registry.js";
@@ -156,15 +156,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // decides whether anything changed. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
       this._surfaceWatch = createSurfaceWatch({
         platform: this._platform,
-        onChange: () => {
-          try {
-            this._render();
-          } catch (err) {
-            // Same contract as set hass(): a background change must not turn a theme
-            // switch into a thrown listener that takes the dashboard with it.
-            console.error(`${CARD_NAME}: render failed`, err);
-          }
-        },
+        onChange: () => this._renderSafely(),
       });
 
       // Hands a user action to Home Assistant. Gets neither hass nor this element:
@@ -195,7 +187,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // follows clears it, and only if it succeeds.
         requestRender: ({ viewChanged }) => {
           if (!viewChanged && !this._renderController.isRenderPending) return;
-          this._render(false);
+          this._renderSafely(false);
         },
       });
       // Separate from this._views: the key list alone can't tell a deliberately
@@ -274,15 +266,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return stubConfigFor(hass?.states, entities, entitiesFallback);
     }
 
-    // Strong exception safety: everything that can throw runs first and writes nothing;
-    // the commit phase cannot fail. HA's live YAML editor calls setConfig() on every
-    // keystroke, so invalid calls are the norm and must leave the card untouched. See
-    // internal dev doc §3 "setConfig() und YAML-Normalisierung" and §5 "Atomare
-    // setConfig()-Probe für renderzeitige Fehler".
+    // Strong exception safety: normalization runs first and writes nothing; the commit
+    // phase cannot fail, because a render that fails shows its failure message instead of
+    // throwing. HA's live YAML editor calls setConfig() on every keystroke, so refused calls
+    // are the norm and must leave the card untouched. See internal dev doc §3 "setConfig()
+    // und YAML-Normalisierung".
     setConfig(config) {
       // ---- validate: no observable state may change in here --------------------
       const normalized = this._normalizeConfig(config);
-      this._assertRenderable(normalized);
 
       // ---- commit: from here on nothing throws ---------------------------------
       // The "before" view must be read while the OLD config and view list are still
@@ -301,25 +292,17 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // Rotation is deliberately not restarted here: _render(false) handles rotation
         // state itself (via _renderAll() when structural, not at all for a cosmetic edit
         // mid-resume-wait), and connectedCallback() starts it on first attach.
-        this._render(false);
+        this._renderSafely(false);
       } finally {
-        // Transient snapshot for exactly the one render above; `finally` because
-        // _render() can still throw on a malformed entity STATE, and a stuck snapshot
-        // would leak into a later rebuild.
+        // Transient snapshot for exactly the one render above; a stuck snapshot would leak
+        // into a later rebuild.
         this._renderController.releasePreConfigVisualKey();
       }
     }
 
     set hass(hass) {
       this._hass = hass;
-      try {
-        this._render();
-      } catch (err) {
-        // A malformed/unexpected entity state shouldn't crash the whole
-        // dashboard on every subsequent hass update; log once per
-        // occurrence for diagnosability and leave the last good render in place.
-        console.error(`${CARD_NAME}: render failed`, err);
-      }
+      this._renderSafely();
     }
 
     connectedCallback() {
@@ -333,7 +316,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._bindResizeObserver();
       // A card can return into a different document, dashboard or theme, and none of
       // that arrives as an update. Costs one signature comparison on the same ground.
-      this._render();
+      this._renderSafely();
     }
 
     // Pays a render deferred by a gesture that the disconnect then ended: HA sends the
@@ -343,13 +326,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // committed. See internal dev doc §5 "Lifecycle, Disconnect und Reconnect".
     _catchUpDeferredRender() {
       if (!this._renderController.isRenderPending) return;
-      try {
-        this._render(false);
-      } catch (err) {
-        // As in set hass(): a bad state must not throw out of connectedCallback. The
-        // debt stays outstanding (controller commit-on-success), retried next connect.
-        console.error(`${CARD_NAME}: render failed`, err);
-      }
+      // A failure leaves the debt outstanding (controller commit-on-success), paid next connect.
+      this._renderSafely(false);
     }
 
     disconnectedCallback() {
@@ -561,30 +539,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Data computation ====
 
-    // Would this configuration survive being rendered? Some faults (a custom profile in
-    // %, a sensor in °C) are only decidable once the entities are in hand, so the model
-    // builders throw. To keep setConfig() all-or-nothing, the render is REHEARSED here:
-    // the candidate is installed for one synchronous call and removed again (the real
-    // path, not a reconstruction), and everything it can write — its memoization — is
-    // restored. No hass, nothing to rehearse. See internal dev doc §5 "Atomare
-    // setConfig()-Probe für renderzeitige Fehler".
-    _assertRenderable(candidate) {
-      if (!this._hass) return;
-      const saved = {
-        config: this._config,
-        metricContext: [this._metricContextCacheHass, this._metricContextCacheConfig, this._metricContextCacheValue],
-        language: [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue],
-      };
-      this._config = candidate;
-      try {
-        this._computeViewModel();
-      } finally {
-        this._config = saved.config;
-        [this._metricContextCacheHass, this._metricContextCacheConfig, this._metricContextCacheValue] = saved.metricContext;
-        [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue] = saved.language;
-      }
-    }
-
     // The surface this card is painted on: every colour it sits on (a LIST, since a
     // card-mod gradient is several), plus the theme's text colour, both MEASURED from
     // the browser rather than read off `hass.themes.darkMode` — which describes the
@@ -672,8 +626,39 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // The console reports what is on screen; a skipped or deferred render put nothing new there.
       if (path === RENDER_PATH.FULL || path === RENDER_PATH.EMPTY || path === RENDER_PATH.CONTENT) {
         this._diagnostics.reportWarnings(this._renderController.lastViewModel.notices.warnings);
+        this._diagnostics.reportRenderSuccess();
       }
       return path;
+    }
+
+    // Every render entry point goes through here: a program error in the render path shows a
+    // short message instead of a stale or empty card, and reaches the console once per cause.
+    // See internal dev doc §4 "Diagnosevertrag".
+    _renderSafely(allowSkip = true) {
+      try {
+        return this._render(allowSkip);
+      } catch (error) {
+        this._diagnostics.reportRenderFailure(error);
+        this._showRenderFailure();
+        return null;
+      }
+    }
+
+    _showRenderFailure() {
+      this._interaction.abandonGestureForRebuild();
+      this._stopRotation();
+      this._renderController.markFailed();
+      let message;
+      try {
+        message = this._t("error.renderFailed");
+      } catch (_error) {
+        message = translate(DEFAULT_LANGUAGE, "error.renderFailed");
+      }
+      try {
+        this.shadowRoot.innerHTML = `<style>${this._styles()}</style><ha-card class="rtc-card">${renderFailureBody(message)}</ha-card>`;
+      } catch (_error) {
+        this.shadowRoot.textContent = message;
+      }
     }
 
     _renderAll(viewModel, { isFirstRender = !this._renderController.hasRendered, preConfigVisualKey = undefined } = {}) {

@@ -32,16 +32,14 @@ function fromEntityAttributes(entity, level) {
 
 // lenient: while probing a room's OWN metric kind (before kind filtering has run), a
 // card-wide profile scoped to a different kind is not yet known to be irrelevant, so fall
-// back to that kind's default instead of throwing. Every other caller passes the resolved
-// kind, so a genuine primary/profile mismatch still surfaces as the documented config error.
+// back to that kind's default instead of throwing. The render path passes the effective
+// policy (application/model/classification-policy.js), for which a mismatch is a bug.
 export function resolveClassificationProfile(registryForKind, policy, metricKind, { lenient = false } = {}) {
   if (!registryForKind) throw new Error(`No classification profiles registered for metric kind "${metricKind}"`);
   if (policy.source === "custom") {
     if (policy.custom.metricKind !== metricKind) {
       if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
-      throw new Error(
-        `Invalid configuration: custom classification unit belongs to "${policy.custom.metricKind}", not detected metric kind "${metricKind}".`
-      );
+      throw new Error(`custom classification unit belongs to "${policy.custom.metricKind}", not detected metric kind "${metricKind}".`);
     }
     return policy.custom;
   }
@@ -49,7 +47,7 @@ export function resolveClassificationProfile(registryForKind, policy, metricKind
   const profile = registryForKind.profiles[profileId];
   if (!profile) {
     if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
-    throw new Error(`Invalid configuration: classification profile "${profileId}" is not available for metric kind "${metricKind}".`);
+    throw new Error(`classification profile "${profileId}" is not available for metric kind "${metricKind}".`);
   }
   return profile;
 }

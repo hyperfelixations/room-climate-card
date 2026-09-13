@@ -126,5 +126,9 @@ export const es = {
   "fallback.firstView": "Se empieza por la primera vista disponible.",
   "fallback.defaults": "Se usan los valores predeterminados.",
   "value.empty": "(vacío)",
+  "warning.profileUnavailable": (v) => `${v.profile} no es un perfil de clasificación para ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} no corresponde a ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `El perfil personalizado no se puede mostrar en ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "No se pudo dibujar la tarjeta. Detalles en la consola del navegador.",
 
 };

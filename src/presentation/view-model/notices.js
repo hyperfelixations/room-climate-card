@@ -21,6 +21,11 @@ function instead(fallback) {
   return message(`fallback.${fallback.phrase}`);
 }
 
+// A classification that fell back names the profile the card uses instead.
+function defaultProfile(diagnostic) {
+  return message("fallback.value", { value: diagnostic.params.fallback });
+}
+
 const MESSAGE_FOR_CODE = {
   "value.invalid": (diagnostic) =>
     message("warning.invalidValue", {
@@ -30,6 +35,20 @@ const MESSAGE_FOR_CODE = {
     }),
   "config.foreign_key": (diagnostic) => message("warning.foreignKey", { key: diagnostic.path }),
   "sources.mixed": () => message("warning.mixedMeasurements"),
+  "classification.profile_unavailable": (diagnostic) =>
+    message("warning.profileUnavailable", {
+      profile: writtenValue(diagnostic.value),
+      measurement: message(`title.${diagnostic.params.measurement}`),
+      instead: defaultProfile(diagnostic),
+    }),
+  "classification.unit_mismatch": (diagnostic) =>
+    message("warning.profileUnitMismatch", {
+      unit: writtenValue(diagnostic.value),
+      measurement: message(`title.${diagnostic.params.measurement}`),
+      instead: defaultProfile(diagnostic),
+    }),
+  "classification.not_representable": (diagnostic) =>
+    message("warning.profileNotRepresentable", { unit: diagnostic.params.unit, instead: defaultProfile(diagnostic) }),
 };
 
 export function messageForDiagnostic(diagnostic) {

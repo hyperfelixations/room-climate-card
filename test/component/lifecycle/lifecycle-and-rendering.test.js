@@ -47,11 +47,16 @@ test("ROB-01: a thrown _computeViewModel() does not commit the render signature,
   env.window.console.error = originalConsoleError;
 
   assert.ok(threw, "the induced failure must actually have been reached");
-  assert.equal(loggedErrors.length, 1, "set hass()'s try/catch must log exactly once, not crash");
+  assert.equal(loggedErrors.length, 1, "the failure is reported exactly once, not thrown");
+  assert.equal(
+    el.shadowRoot.querySelector(".rtc-render-failed")?.textContent,
+    "The card could not be drawn. Details in the browser console.",
+    "the card says it could not be drawn instead of keeping stale content"
+  );
   el._computeViewModel = original;
   // The retry carries the data that just failed; a prematurely committed signature would
-  // compare equal and skip it, freezing the card on stale content.
-  assert.equal(el._render(), RENDER_PATH.CONTENT, "the retry must actually re-render, not be skipped as 'unchanged'");
+  // compare equal and skip it, leaving the failure message on screen.
+  assert.equal(el._render(), RENDER_PATH.FULL, "the retry must rebuild the card, not be skipped as 'unchanged'");
   env.cleanup(el);
 });
 

@@ -62,18 +62,20 @@ test("a custom policy wins over the built-in profiles", () => {
   assert.equal(profile, custom);
 });
 
-test("an unknown profile name is a configuration error", () => {
+// The render path resolves an effective policy first (classification-policy.js), so for it
+// these two are bugs, not configuration problems.
+test("an unknown profile name has nothing to resolve to", () => {
   assert.throws(
     () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "profile", profile: "greenhouse", custom: null }, "temperature"),
-    { message: 'Invalid configuration: classification profile "greenhouse" is not available for metric kind "temperature".' }
+    { message: 'classification profile "greenhouse" is not available for metric kind "temperature".' }
   );
 });
 
-test("a custom profile scoped to another metric kind is a configuration error", () => {
+test("a custom profile scoped to another metric kind has nothing to resolve to", () => {
   const custom = { id: "custom", metricKind: "humidity" };
   assert.throws(
     () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "custom", profile: null, custom }, "temperature"),
-    { message: 'Invalid configuration: custom classification unit belongs to "humidity", not detected metric kind "temperature".' }
+    { message: 'custom classification unit belongs to "humidity", not detected metric kind "temperature".' }
   );
 });
 
@@ -521,7 +523,7 @@ test("projection re-derives a custom valid_range in the display unit", () => {
   assert.equal(projected.invalidWhen(105), true);
 });
 
-test("a profile whose gaps collapse under rounding is rejected with a usable message", () => {
+test("a profile whose gaps collapse under rounding reports the collapse and where it is", () => {
   const canonical = {
     id: "custom",
     metricKind: "temperature",
@@ -538,13 +540,20 @@ test("a profile whose gaps collapse under rounding is rejected with a usable mes
     scale: { min: 16, max: 28 },
     step: 2,
   };
+  const temperature = definitions.METRIC_DEFINITIONS.temperature;
+  assert.deepEqual(projection.projectProfile(canonical, temperature, tempUnit("fahrenheit")).fault, {
+    kind: "collapse",
+    field: "classification.tiers[2].min",
+  });
+  // A render never projects such a profile; if it did, that is a bug and says where.
   assert.throws(
-    () => projection.projectProfileToDisplayUnit(canonical, definitions.METRIC_DEFINITIONS.temperature, tempUnit("fahrenheit"), "temperature"),
-    /becomes degenerate when rounded to °F \(tier thresholds collapse near 72°F\)/
+    () => projection.projectProfileToDisplayUnit(canonical, temperature, tempUnit("fahrenheit"), "temperature"),
+    { message: 'classification profile for "temperature" projects with a collapse at classification.tiers[2].min' }
   );
+  assert.equal(projection.projectProfile(canonical, temperature, tempUnit("kelvin")).fault, null, "Kelvin rounds nothing");
 });
 
-test("a profile boundary the display unit cannot hold is rejected with the path it was written under", () => {
+test("a profile boundary the display unit cannot hold is reported with the path it was written under", () => {
   // Finite in °C, beyond Number.MAX_VALUE once (v * 9) / 5 + 32 is applied.
   const base = {
     id: "custom",
@@ -577,15 +586,13 @@ test("a profile boundary the display unit cannot hold is rejected with the path 
   ];
   const temperature = definitions.METRIC_DEFINITIONS.temperature;
   for (const [field, patch] of cases) {
-    assert.throws(
-      () => projection.projectProfileToDisplayUnit({ ...base, ...patch }, temperature, tempUnit("fahrenheit"), "temperature"),
-      (error) =>
-        error.message ===
-        `Invalid configuration: classification profile for "temperature" cannot be expressed in °F (${field} lies beyond the largest number °F can hold) — keep every classification boundary within the range a sensor can report.`,
+    assert.deepEqual(
+      projection.projectProfile({ ...base, ...patch }, temperature, tempUnit("fahrenheit")).fault,
+      { kind: "overflow", field },
       field
     );
     // Kelvin only shifts, so the same profile is expressible there.
-    assert.doesNotThrow(() => projection.projectProfileToDisplayUnit({ ...base, ...patch }, temperature, tempUnit("kelvin"), "temperature"), field);
+    assert.equal(projection.projectProfile({ ...base, ...patch }, temperature, tempUnit("kelvin")).fault, null, field);
   }
 });
 
@@ -593,14 +600,9 @@ test("the built-in profiles survive projection into every temperature unit", () 
   // Read from the registry, not a written-out list: a new profile has to be projected too.
   for (const id of Object.keys(temperatureRegistry().profiles)) {
     for (const unit of ["celsius", "fahrenheit", "kelvin"]) {
-      assert.doesNotThrow(
-        () =>
-          projection.projectProfileToDisplayUnit(
-            temperatureRegistry().profiles[id],
-            definitions.METRIC_DEFINITIONS.temperature,
-            tempUnit(unit),
-            "temperature"
-          ),
+      assert.equal(
+        projection.projectProfile(temperatureRegistry().profiles[id], definitions.METRIC_DEFINITIONS.temperature, tempUnit(unit)).fault,
+        null,
         `${id} -> ${unit}`
       );
     }

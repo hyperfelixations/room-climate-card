@@ -10,11 +10,13 @@
 // headroom are DELTAS via deltaFromCanonical(), which must never pick up a unit offset.
 
 import { isOutsideRange } from "../../core/numbers.js";
-import { assertProjectedGeometry } from "./geometry-guard.js";
+import { findProjectedGeometryFault } from "./geometry-guard.js";
 
-export function projectProfileToDisplayUnit(canonical, definition, unitProfile, metricKind) {
+// The projected profile, and the first fault the projection introduced (null when there is
+// none; see geometry-guard.js). The canonical unit returns the profile itself.
+export function projectProfile(canonical, definition, unitProfile) {
   const displayProfile = unitProfile || definition.unitProfiles[definition.canonicalProfileKey];
-  if (displayProfile.key === definition.canonicalProfileKey) return canonical;
+  if (displayProfile.key === definition.canonicalProfileKey) return { projected: canonical, fault: null };
 
   const projectAbsolute = (value) => {
     const converted = displayProfile.fromCanonical(value);
@@ -52,6 +54,14 @@ export function projectProfileToDisplayUnit(canonical, definition, unitProfile, 
       min: Number.isFinite(tier.min) ? projectAbsolute(tier.min) : tier.min,
     })),
   };
-  assertProjectedGeometry(canonical, projected, metricKind, displayProfile);
+  return { projected, fault: findProjectedGeometryFault(canonical, projected) };
+}
+
+// The projection a render uses. The effective classification policy has already fallen back
+// from a profile with a fault (application/model/classification-policy.js), so a fault here is
+// a bug, not a configuration problem.
+export function projectProfileToDisplayUnit(canonical, definition, unitProfile, metricKind) {
+  const { projected, fault } = projectProfile(canonical, definition, unitProfile);
+  if (fault) throw new Error(`classification profile for "${metricKind}" projects with a ${fault.kind} at ${fault.field}`);
   return projected;
 }

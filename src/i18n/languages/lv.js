@@ -139,5 +139,9 @@ export const lv = {
   "fallback.firstView": "Karte sāk ar pirmo pieejamo skatu.",
   "fallback.defaults": "Tiek izmantotas noklusējuma vērtības.",
   "value.empty": "(tukšs)",
+  "warning.profileUnavailable": (v) => `${v.profile} nav klasifikācijas profils mērījumam „${v.measurement}”. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} neatbilst mērījumam „${v.measurement}”. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Pielāgoto profilu nevar attēlot vienībā ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Karti neizdevās uzzīmēt. Sīkāk pārlūka konsolē.",
 
 };

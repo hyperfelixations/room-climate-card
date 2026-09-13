@@ -104,6 +104,16 @@ test("only the named browser adapter touches an ambient platform global", () => 
   );
 });
 
+test("only the browser adapter and the translation self-check write to the console", () => {
+  // Warnings and render failures reach the console through the platform's log port, once per
+  // change; a direct console call anywhere else would bypass that.
+  const allowed = new Set([BROWSER_ADAPTER, "i18n/integrity.js"]);
+  const offenders = files
+    .filter((file) => !allowed.has(file))
+    .filter((file) => /\bconsole\b/.test(stripCommentsAndStringText(readSource(file))));
+  assert.deepEqual(offenders, []);
+});
+
 test("the browser adapter is the only production implementation of the platform", () => {
   // A second implementation would be a second answer to "what does this card do to the
   // browser", and the fake belongs to the tests, not to the shipped bundle.

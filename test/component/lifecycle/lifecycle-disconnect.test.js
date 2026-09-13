@@ -303,8 +303,8 @@ test("a render that throws while catching up leaves the debt outstanding", () =>
   env.document.body.appendChild(el);
   env.window.console.error = originalConsoleError;
 
-  assert.equal(logged.length, 1, "a failing catch-up render is logged, not thrown into the dashboard");
-  assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /22/, "nothing was committed");
+  assert.equal(logged.length, 1, "a failing catch-up render is logged once, not thrown into the dashboard");
+  assert.ok(el.shadowRoot.querySelector(".rtc-render-failed"), "the card says it could not be drawn");
 
   // Commit-on-success: the debt is still owed, so the next connect pays it properly.
   el._computeViewModel = realComputeViewModel;

@@ -130,4 +130,8 @@ export const uk = {
   "fallback.firstView": "Картка почне з першого доступного вигляду.",
   "fallback.defaults": "Використовуються значення за замовчуванням.",
   "value.empty": "(порожньо)",
+  "warning.profileUnavailable": (v) => `${v.profile} — не профіль класифікації для вимірювання «${v.measurement}». ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} не підходить для вимірювання «${v.measurement}». ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Власний профіль не можна показати в ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Не вдалося намалювати картку. Подробиці в консолі браузера.",
 };

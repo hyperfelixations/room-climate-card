@@ -245,14 +245,17 @@ test("fridge profile is projected atomically into Fahrenheit without collapsing 
   env.cleanup(card);
 });
 
-test("fridge cannot be applied to a non-temperature metric kind", () => {
+test("fridge on a non-temperature measurement falls back to that measurement's default profile, with a warning", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 50, HUMIDITY),
   });
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", classification: "fridge" }, hass),
-    /profile "fridge".*humidity/
+  const card = env.createCard({ entity: "sensor.avg", classification: "fridge" }, hass);
+  assert.equal(
+    card.shadowRoot.querySelector(".rtc-warning-text").textContent,
+    '"fridge" is not a classification profile for Humidity. Using default: indoor.'
   );
+  assert.equal(card._computeViewModel().empty, false);
+  env.cleanup(card);
 });
 
 test("classification: freezer is a built-in temperature profile independent of room and fridge profiles", () => {
@@ -434,19 +437,16 @@ test("a band that stays positive keeps the dash form unchanged", () => {
   env.cleanup(card);
 });
 
-test("freezer cannot be applied to a non-temperature metric kind", () => {
+test("freezer on a non-temperature measurement falls back to that measurement's default profile, with a warning", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 50, HUMIDITY),
   });
-
-  assert.throws(
-    () =>
-      env.createCard(
-        { entity: "sensor.avg", classification: "freezer" },
-        hass
-      ),
-    /profile "freezer".*humidity/
+  const card = env.createCard({ entity: "sensor.avg", classification: "freezer" }, hass);
+  assert.equal(
+    card.shadowRoot.querySelector(".rtc-warning-text").textContent,
+    '"freezer" is not a classification profile for Humidity. Using default: indoor.'
   );
+  env.cleanup(card);
 });
 
 test("humidity, CO2, and PM2.5 header icons follow metric-specific profile thresholds", () => {

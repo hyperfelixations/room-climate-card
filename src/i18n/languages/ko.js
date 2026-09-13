@@ -123,5 +123,9 @@ export const ko = {
   "fallback.firstView": "사용 가능한 첫 번째 보기부터 시작합니다.",
   "fallback.defaults": "기본값을 사용합니다.",
   "value.empty": "(비어 있음)",
+  "warning.profileUnavailable": (v) => `${v.profile}은(는) ${v.measurement}의 분류 프로필이 아닙니다. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit}은(는) ${v.measurement}에 맞지 않습니다. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `사용자 지정 프로필은 ${v.unit}(으)로 표시할 수 없습니다. ${v.instead}`,
+  "error.renderFailed": "카드를 그릴 수 없습니다. 자세한 내용은 브라우저 콘솔을 확인하세요.",
 
 };

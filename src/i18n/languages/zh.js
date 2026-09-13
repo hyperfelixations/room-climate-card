@@ -123,5 +123,9 @@ export const zh = {
   "fallback.firstView": "将从第一个可用视图开始。",
   "fallback.defaults": "将使用默认值。",
   "value.empty": "（空）",
+  "warning.profileUnavailable": (v) => `${v.profile} 不是 ${v.measurement} 的分类配置。${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} 与 ${v.measurement} 不匹配。${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `自定义配置无法以 ${v.unit} 显示。${v.instead}`,
+  "error.renderFailed": "无法绘制此卡片。详情请查看浏览器控制台。",
 
 };

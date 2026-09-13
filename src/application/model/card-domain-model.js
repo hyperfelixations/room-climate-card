@@ -19,6 +19,7 @@ import { effectiveMetricKind } from "./measurement-context.js";
 import { resolveSourceEligibility, resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
 import { collectSourceDiagnostics } from "./source-diagnostics.js";
+import { resolveEffectivePolicy } from "./classification-policy.js";
 import {
   buildRoomModels,
   buildSubtitleModel,
@@ -28,7 +29,6 @@ import {
 } from "./aggregates.js";
 
 export function buildCardDomainModel({ states, config, context, language, surface }) {
-  const policy = classificationPolicyOf(config);
   // Adapt only card-built palettes to the measured surface.
   const palette = adaptPalette(paletteOf(config), surface);
   // Resolve self-tint recipes once for every composed colour; explicit colours stay untouched.
@@ -91,6 +91,12 @@ export function buildCardDomainModel({ states, config, context, language, surfac
     };
   }
 
+  // The classification this render applies, decided once and used everywhere below.
+  const { policy, diagnostics: policyDiagnostics } = resolveEffectivePolicy({
+    policy: classificationPolicyOf(config),
+    metricKind,
+    displayUnitProfile: context.displayUnitProfile,
+  });
   const scaleConfig = resolveScaleConfig(policy, metricKind, context.displayUnitProfile);
   const comfort = scaleConfig.comfort;
   const optimal = scaleConfig.optimal;
@@ -224,6 +230,6 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       warmest,
       missingRooms,
     }),
-    diagnostics,
+    diagnostics: { warnings: [...policyDiagnostics, ...diagnostics.warnings], hints: diagnostics.hints },
   };
 }

@@ -146,6 +146,28 @@ test("crossing into and out of the no-data state rebuilds; staying there patches
   assert.equal(render({ dataSignature: "d4" }), RENDER_PATH.FULL, "leaving the no-data state changes it back");
 });
 
+// ------------------------------------------------------------- a failed render --
+
+test("a failed render marks the controller so the next render rebuilds in full", () => {
+  const { controller, render, calls } = harness();
+  render();
+  controller.markFailed();
+  assert.equal(controller.hasRendered, false);
+  assert.equal(controller.lastViewModel, null);
+  assert.equal(render(), RENDER_PATH.FULL, "the same data is rendered again, from scratch");
+  assert.equal(calls.renderAll.length, 2);
+  assert.equal(calls.renderAll[1].options.isFirstRender, true, "nothing on screen is a previous view to protect");
+});
+
+test("marking a failure keeps a deferred render owed", () => {
+  const { controller, render, state } = harness();
+  render();
+  state.dragging = true;
+  assert.equal(render({ dataSignature: "d2" }), RENDER_PATH.DEFERRED);
+  controller.markFailed();
+  assert.equal(controller.isRenderPending, true);
+});
+
 // -------------------------------------------------------- commit on success --
 
 test("a throwing computeViewModel commits nothing, so the identical retry still renders", () => {

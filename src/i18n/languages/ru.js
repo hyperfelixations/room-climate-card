@@ -129,5 +129,9 @@ export const ru = {
   "fallback.firstView": "Карточка начнёт с первого доступного представления.",
   "fallback.defaults": "Используются значения по умолчанию.",
   "value.empty": "(пусто)",
+  "warning.profileUnavailable": (v) => `${v.profile} — не профиль классификации для измерения «${v.measurement}». ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} не подходит для измерения «${v.measurement}». ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Собственный профиль нельзя отобразить в ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Не удалось отрисовать карточку. Подробности в консоли браузера.",
 
 };

@@ -1,12 +1,11 @@
 "use strict";
 
-// setConfig() is all-or-nothing, including for errors only a render can find. A
-// classification profile is scoped to a measurement, and which measurement a card shows
-// comes from its entities, so "profile in %, sensor in °C" is only decidable once both
-// exist — the check lives in the model builders and throws. HA's live YAML editor calls
-// setConfig() per keystroke, so a doomed call that committed before the render rejected it
-// would leave the card dark until a full reload. Asserted end to end on a running card,
-// the only state in which the bug is reachable.
+// setConfig() is all-or-nothing: a configuration it refuses leaves a running card exactly as
+// it was — config, screen, timers and render bookkeeping. HA's live YAML editor calls
+// setConfig() per keystroke, so refused calls are the norm. A fault only a render can find (a
+// classification profile the sensors cannot use) is not a refusal: the card applies the
+// measurement's default profile with a warning, whichever of setConfig() and hass comes first
+// (config-order-invariance.test.js).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -36,7 +35,7 @@ function runningCard() {
   );
 }
 
-// Everything a rejected setConfig() must leave untouched: config, screen, scheduled timers.
+// Everything a refused setConfig() must leave untouched: config, screen, scheduled timers.
 function observableState(card) {
   return {
     config: JSON.stringify(card._config, (key, value) => (typeof value === "function" ? "[Function]" : value)),
@@ -47,6 +46,10 @@ function observableState(card) {
     renderPending: card._renderController.isRenderPending,
   };
 }
+
+// A typo of an option: refused before any value is read.
+const REFUSED = { entity: "sensor.avg", pallete: "vivid" };
+const REFUSAL = /^Invalid configuration: pallete is not an option of this card\. Did you mean palette\?$/;
 
 // Valid on its own, impossible for this °C card — the mismatch is only decidable with entities.
 const HUMIDITY_PROFILE = {
@@ -60,41 +63,38 @@ const HUMIDITY_PROFILE = {
   ],
 };
 
-test("a rejected setConfig() leaves a running card exactly as it was", () => {
+test("a refused setConfig() leaves a running card exactly as it was", () => {
   const card = runningCard();
   const before = observableState(card);
   assert.equal(before.color, "#79A86C", "the card starts out classified and rendered");
 
-  assert.throws(
-    () => card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE }),
-    /custom classification unit belongs to "humidity", not detected metric kind "temperature"/
-  );
+  assert.throws(() => card.setConfig(REFUSED), { message: REFUSAL });
 
   const after = observableState(card);
   for (const key of Object.keys(before)) {
-    assert.deepEqual(after[key], before[key], `${key} must be untouched by a rejected setConfig()`);
+    assert.deepEqual(after[key], before[key], `${key} must be untouched by a refused setConfig()`);
   }
   env.cleanup(card);
 });
 
 // The render bookkeeping must be untouched too: the commit phase invalidates the data
 // signature, so if it had run, an unchanged repeat would re-render instead of being skipped.
-test("a rejected setConfig() does not disturb the render bookkeeping", () => {
+test("a refused setConfig() does not disturb the render bookkeeping", () => {
   const card = runningCard();
   const hass = card._hass;
   assert.equal(card._render(), RENDER_PATH.SKIPPED, "an unchanged repeat is skipped, so the card is settled");
 
-  assert.throws(() => card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE }), /humidity/);
+  assert.throws(() => card.setConfig(REFUSED), { message: REFUSAL });
 
   card.hass = hass;
   assert.equal(card._render(), RENDER_PATH.SKIPPED, "still settled: nothing about the render state moved");
   env.cleanup(card);
 });
 
-// The card must still be usable — a rejected keystroke may not cost the next, correct one.
-test("a card that rejected a configuration still accepts the next one", () => {
+// The card must still be usable — a refused keystroke may not cost the next, correct one.
+test("a card that refused a configuration still accepts the next one", () => {
   const card = runningCard();
-  assert.throws(() => card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE }), /humidity/);
+  assert.throws(() => card.setConfig(REFUSED), { message: REFUSAL });
 
   card.setConfig({ entity: "sensor.avg", classification: "outdoor" });
   assert.equal(card._config.classification.profile, "outdoor");
@@ -102,31 +102,14 @@ test("a card that rejected a configuration still accepts the next one", () => {
   env.cleanup(card);
 });
 
-// The rehearsal runs the real render path, so it could leave memoized context or a
-// deduplicated warning behind. It must not — for an accepted configuration either.
-test("the rehearsal leaves no memoized state behind, accepted or rejected", () => {
+test("a profile the sensors cannot use is accepted on a running card, with a warning and the default profile", () => {
   const card = runningCard();
-  const before = { hass: card._metricContextCacheHass, config: card._metricContextCacheConfig };
-
-  assert.throws(() => card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE }), /humidity/);
-  assert.equal(card._metricContextCacheHass, before.hass, "rejected: the context cache key is untouched");
-  assert.equal(card._metricContextCacheConfig, before.config);
-
-  card.setConfig({ entity: "sensor.avg", classification: "fridge" });
-  assert.equal(
-    card._metricContextCacheConfig === card._config || card._metricContextCacheConfig === before.config,
-    true,
-    "accepted: the cache is either cold or keyed on the configuration now installed"
-  );
-  assert.notEqual(card._computeViewModel().tone.color, null);
-  env.cleanup(card);
-});
-
-// With no hass there is nothing to rehearse against, so an entity-dependent failure is still accepted.
-test("a configuration set before hass arrives is not rehearsed", () => {
-  const card = env.document.createElement("room-climate-card");
-  env.document.body.appendChild(card);
   card.setConfig({ entity: "sensor.avg", classification: HUMIDITY_PROFILE });
-  assert.equal(card._config.classification.source, "custom", "accepted: there is nothing to check it against yet");
-  card.remove();
+  assert.equal(card._config.classification.source, "custom", "accepted as written");
+  assert.equal(
+    card.shadowRoot.querySelector(".rtc-warning-text").textContent,
+    'classification.unit "%" does not fit Temperature. Using default: indoor.'
+  );
+  assert.equal(card._computeViewModel().tone.color, "#79A86C", "classified with the default profile");
+  env.cleanup(card);
 });

@@ -103,6 +103,16 @@ export function createRenderController({
       dataSignature = "";
     },
 
+    // A render threw and the element replaced the DOM with its failure message: nothing on
+    // screen matches any signature, so the next render is a full one. Debt stays owed.
+    markFailed() {
+      rendered = false;
+      dataSignature = "";
+      structuralConfigSignature = null;
+      structureSignature = null;
+      lastViewModel = null;
+    },
+
     // Capture against the old view list and timing before config replacement.
     capturePreConfigVisualKey(key) {
       preConfigVisualKey = key;

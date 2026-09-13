@@ -91,11 +91,6 @@ const INVALID_CONFIGS = [
     { entity: "sensor.avg", classification: { source: "profile", profile: "   " } },
   ],
   [
-    "classification-unknown-profile-for-metric-kind",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { source: "profile", profile: "greenhouse" } },
-  ],
-  [
     "custom-unit-missing",
     VALID_HASS,
     { entity: "sensor.avg", classification: { ...validCustom(), unit: undefined } },
@@ -258,35 +253,6 @@ const INVALID_CONFIGS = [
     },
   ],
   [
-    "custom-unit-belongs-to-another-metric-kind",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: {
-        ...validCustom(),
-        unit: "%",
-        bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
-        scale: { min: 30, max: 70, step: 5 },
-      },
-    },
-  ],
-  [
-    "custom-profile-collapses-when-projected-to-fahrenheit",
-    FAHRENHEIT_HASS,
-    {
-      entity: "sensor.avg",
-      classification: {
-        ...validCustom(),
-        tiers: [
-          { min: 24, score: 4, level: "A", color: "#cc4444", zone: "outside" },
-          { min: 22.3, score: 3, level: "B", color: "#ccaa44", zone: "comfort" },
-          { min: 22.0, score: 2, level: "C", color: "#44cc66", zone: "optimal" },
-          { default: true, score: 1, level: "D", color: "#4488cc", zone: "outside" },
-        ],
-      },
-    },
-  ],
-  [
     "custom-value-cannot-be-converted-to-the-canonical-unit",
     VALID_HASS,
     {
@@ -299,15 +265,46 @@ const INVALID_CONFIGS = [
       },
     },
   ],
-  [
-    "custom-profile-cannot-be-expressed-in-fahrenheit",
-    FAHRENHEIT_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: -5e307, max: 5e307, step: 2 } } },
-  ],
   ["top-level-misspelled-key", VALID_HASS, { entity: "sensor.avg", pallete: "vivid" }],
 ];
 
+// [name, config, hass]; hass defaults to VALID_HASS.
 const WARNING_CONFIGS = [
+  // Decidable only with the sensors: the card applies the measurement's default profile.
+  ["classification-unknown-profile-for-metric-kind", { entity: "sensor.avg", classification: { source: "profile", profile: "greenhouse" } }],
+  [
+    "custom-unit-belongs-to-another-metric-kind",
+    {
+      entity: "sensor.avg",
+      classification: {
+        ...validCustom(),
+        unit: "%",
+        bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
+        scale: { min: 30, max: 70, step: 5 },
+      },
+    },
+  ],
+  [
+    "custom-profile-collapses-when-projected-to-fahrenheit",
+    {
+      entity: "sensor.avg",
+      classification: {
+        ...validCustom(),
+        tiers: [
+          { min: 24, score: 4, level: "A", color: "#cc4444", zone: "outside" },
+          { min: 22.3, score: 3, level: "B", color: "#ccaa44", zone: "comfort" },
+          { min: 22.0, score: 2, level: "C", color: "#44cc66", zone: "optimal" },
+          { default: true, score: 1, level: "D", color: "#4488cc", zone: "outside" },
+        ],
+      },
+    },
+    FAHRENHEIT_HASS,
+  ],
+  [
+    "custom-profile-cannot-be-expressed-in-fahrenheit",
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: -5e307, max: 5e307, step: 2 } } },
+    FAHRENHEIT_HASS,
+  ],
   ["top-level-foreign-key", { entity: "sensor.avg", wibble_wobble: 1 }],
   ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
   ["views-not-an-array", { entity: "sensor.avg", views: "scale" }],
@@ -361,8 +358,8 @@ test("every rejected configuration throws its documented message", () => {
 
 test("every invalid value and foreign key warns in the warnings block and in the console", () => {
   const catalog = {};
-  for (const [name, config] of WARNING_CONFIGS) {
-    const el = newCard(VALID_HASS);
+  for (const [name, config, hass = VALID_HASS] of WARNING_CONFIGS) {
+    const el = newCard(hass);
     const recorder = recordConsole(env);
     el.setConfig(config);
     recorder.restore();
@@ -379,12 +376,12 @@ test("every invalid value and foreign key warns in the warnings block and in the
 });
 
 test("a tolerated misconfiguration still renders a working card (degrade, never break)", () => {
-  for (const [name, config] of WARNING_CONFIGS) {
-    const el = newCard(VALID_HASS);
+  for (const [name, config, hass = VALID_HASS] of WARNING_CONFIGS) {
+    const el = newCard(hass);
     const recorder = recordConsole(env);
     el.setConfig(config);
     recorder.restore();
-    assert.ok(el.shadowRoot.querySelector(".rtc-card"), `${name}: the card must still render`);
+    assert.ok(el.shadowRoot.querySelector(".rtc-main-panel"), `${name}: the card must still render`);
     el.remove();
   }
 });
@@ -413,22 +410,29 @@ test("incompatible room metric kinds warn once and are exposed as a defined conf
   el.remove();
 });
 
-test("a throwing hass object is contained: logged once, last good render preserved", () => {
+test("a render that throws is contained: reported once, shown as one line, and recovered from", () => {
   const el = newCard(VALID_HASS);
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] });
-  const before = el.shadowRoot.innerHTML;
-
-  const recorder = recordConsole(env);
-  el.hass = {
+  const throwing = () => ({
     language: "en",
     locale: { language: "en" },
     states: new Proxy({}, { get() { throw new Error("simulated integration failure"); } }),
     callService: () => {},
-  };
+  });
+
+  const recorder = recordConsole(env);
+  el.hass = throwing();
+  el.hass = throwing();
+  el.hass = throwing();
   recorder.restore();
 
-  assert.equal(recorder.errors.length, 1, "the failure must be reported exactly once");
+  assert.equal(recorder.errors.length, 1, "one cause over three updates is reported exactly once");
   assert.match(recorder.errors[0], /^Room Climate Card: render failed/);
-  assert.equal(el.shadowRoot.innerHTML, before, "the last good render must stay on screen");
+  assert.equal(
+    el.shadowRoot.querySelector(".rtc-render-failed").textContent,
+    "The card could not be drawn. Details in the browser console."
+  );
+  el.hass = VALID_HASS;
+  assert.ok(el.shadowRoot.querySelector(".rtc-main-panel"), "the next good update rebuilds the card");
   el.remove();
 });

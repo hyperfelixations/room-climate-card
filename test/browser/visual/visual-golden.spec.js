@@ -320,6 +320,22 @@ test.describe("visual golden: the warnings block", () => {
   });
 });
 
+// A render that failed: one line in the card's frame, in place of a stale or empty card.
+test("visual golden: a render that failed", async ({ page }) => {
+  await gotoHarness(page);
+  const cardId = await createCard(page, { entity: "sensor.avg" }, { "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C) });
+  await page.evaluate((id) => {
+    document.getElementById(id).hass = {
+      language: "en",
+      locale: { language: "en" },
+      states: new Proxy({}, { get() { throw new Error("simulated integration failure"); } }),
+      callService: () => {},
+    };
+  }, cardId);
+  await expect(page.locator(`#${cardId} .rtc-render-failed`)).toHaveText("The card could not be drawn. Details in the browser console.");
+  await shot(page, cardId, "render-failed.png");
+});
+
 test.describe("visual golden: long-/short-form label architecture", () => {
   // Polish scale.optimalLabel and French rangeScale.currentLabel are the full word by
   // default, abbreviated only at measure time when they do not fit (_resolveLabelForm()).

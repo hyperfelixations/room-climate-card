@@ -129,5 +129,9 @@ export const fr = {
   "fallback.firstView": "La carte démarre sur la première vue disponible.",
   "fallback.defaults": "Les valeurs par défaut sont utilisées.",
   "value.empty": "(vide)",
+  "warning.profileUnavailable": (v) => `${v.profile} n’est pas un profil de classification pour ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} ne correspond pas à ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Le profil personnalisé ne peut pas être affiché en ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "La carte n’a pas pu être affichée. Détails dans la console du navigateur.",
 
 };

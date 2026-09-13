@@ -126,5 +126,9 @@ export const nl = {
   "fallback.firstView": "De kaart start met de eerste beschikbare weergave.",
   "fallback.defaults": "De standaardwaarden worden gebruikt.",
   "value.empty": "(leeg)",
+  "warning.profileUnavailable": (v) => `${v.profile} is geen classificatieprofiel voor ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} past niet bij ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Het eigen profiel kan niet in ${v.unit} worden weergegeven. ${v.instead}`,
+  "error.renderFailed": "De kaart kon niet worden getekend. Details in de browserconsole.",
 
 };

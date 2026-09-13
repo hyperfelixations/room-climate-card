@@ -1,4 +1,4 @@
-// Rejects a profile that becomes degenerate when projected into a display unit.
+// Where a profile becomes degenerate when projected into a display unit.
 //
 // Two ways a projection breaks what held in the canonical unit. A scaling unit can overflow a
 // finite boundary ((v * 9) / 5 + 32 beyond Number.MAX_VALUE), which no axis or tier can use.
@@ -42,43 +42,31 @@ function boundaryPairs(canonical, projected) {
   return pairs;
 }
 
-export function assertProjectedGeometry(canonical, projected, metricKind, displayProfile) {
-  const unitLabel = displayProfile.displayUnit || displayProfile.key;
+// The first threshold of a descending list that rounding pulled level with its predecessor.
+function collapsedThreshold(canonicalTiers, projectedTiers, path) {
+  for (let i = 1; i < canonicalTiers.length; i++) {
+    const wasDescending = Number.isFinite(canonicalTiers[i - 1].min) && Number.isFinite(canonicalTiers[i].min)
+      && canonicalTiers[i].min < canonicalTiers[i - 1].min;
+    if (wasDescending && !(projectedTiers[i].min < projectedTiers[i - 1].min)) return `${path}[${i}].min`;
+  }
+  return null;
+}
+
+// The first fault the projection introduced, as { kind: "overflow" | "collapse", field }, or
+// null. `field` is the YAML path of the boundary, band or scale concerned.
+export function findProjectedGeometryFault(canonical, projected) {
   // Only a boundary finite in the canonical unit can overflow; open tier ends, an absent
   // headroom and an absent valid_range edge are not numbers to begin with.
   for (const [field, canonicalValue, projectedValue] of boundaryPairs(canonical, projected)) {
-    if (Number.isFinite(canonicalValue) && !Number.isFinite(projectedValue)) {
-      throw new Error(
-        `Invalid configuration: classification profile for "${metricKind}" cannot be expressed in ${unitLabel} (${field} lies beyond the largest number ${unitLabel} can hold) — keep every classification boundary within the range a sensor can report.`
-      );
-    }
+    if (Number.isFinite(canonicalValue) && !Number.isFinite(projectedValue)) return { kind: "overflow", field };
   }
-  const fail = (detail) => {
-    throw new Error(
-      `Invalid configuration: classification profile for "${metricKind}" becomes degenerate when rounded to ${unitLabel} (${detail}) — configure wider gaps, or set classification.unit to "${unitLabel}" directly to avoid rounding.`
-    );
-  };
-  if (!(projected.comfort.min < projected.comfort.max)) fail("comfort band collapses");
-  if (!(projected.optimal.min < projected.optimal.max)) fail("optimal band collapses");
+  if (!(projected.comfort.min < projected.comfort.max)) return { kind: "collapse", field: "classification.bands.comfort" };
+  if (!(projected.optimal.min < projected.optimal.max)) return { kind: "collapse", field: "classification.bands.optimal" };
   // Only a declared reference range can collapse; a profile whose axis follows the data
   // has none to round in the first place.
-  if (projected.scale && !(projected.scale.min < projected.scale.max)) fail("scale collapses");
-  for (let i = 1; i < canonical.tiers.length; i++) {
-    const wasDescending = Number.isFinite(canonical.tiers[i - 1].min) && Number.isFinite(canonical.tiers[i].min)
-      && canonical.tiers[i].min < canonical.tiers[i - 1].min;
-    if (!wasDescending) continue;
-    if (!(projected.tiers[i].min < projected.tiers[i - 1].min)) {
-      fail(`tier thresholds collapse near ${projected.tiers[i].min}${unitLabel}`);
-    }
-  }
-  if (projected.iconTiers) {
-    for (let i = 1; i < canonical.iconTiers.length; i++) {
-      const wasDescending = Number.isFinite(canonical.iconTiers[i - 1].min) && Number.isFinite(canonical.iconTiers[i].min)
-        && canonical.iconTiers[i].min < canonical.iconTiers[i - 1].min;
-      if (!wasDescending) continue;
-      if (!(projected.iconTiers[i].min < projected.iconTiers[i - 1].min)) {
-        fail(`icon tiers collapse near ${projected.iconTiers[i].min}${unitLabel}`);
-      }
-    }
-  }
+  if (projected.scale && !(projected.scale.min < projected.scale.max)) return { kind: "collapse", field: "classification.scale" };
+  const tier = collapsedThreshold(canonical.tiers, projected.tiers, "classification.tiers");
+  if (tier) return { kind: "collapse", field: tier };
+  const icon = projected.iconTiers ? collapsedThreshold(canonical.iconTiers, projected.iconTiers, "classification.icons") : null;
+  return icon ? { kind: "collapse", field: icon } : null;
 }

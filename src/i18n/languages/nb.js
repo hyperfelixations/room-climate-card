@@ -131,5 +131,9 @@ export const nb = {
   "fallback.firstView": "Kortet starter på den første tilgjengelige visningen.",
   "fallback.defaults": "Standardverdiene brukes.",
   "value.empty": "(tom)",
+  "warning.profileUnavailable": (v) => `${v.profile} er ikke en klassifiseringsprofil for ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passer ikke til ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Den egne profilen kan ikke vises i ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Kortet kunne ikke tegnes. Detaljer i nettleserkonsollen.",
 
 };

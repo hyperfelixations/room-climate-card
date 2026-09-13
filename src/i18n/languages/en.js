@@ -124,5 +124,9 @@ export const en = {
   "fallback.firstView": "Starting on the first available view.",
   "fallback.defaults": "Using the defaults.",
   "value.empty": "(empty)",
+  "warning.profileUnavailable": (v) => `${v.profile} is not a classification profile for ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} does not fit ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `The custom profile cannot be shown in ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "The card could not be drawn. Details in the browser console.",
 
 };

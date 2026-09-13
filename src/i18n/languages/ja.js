@@ -123,5 +123,9 @@ export const ja = {
   "fallback.firstView": "最初に利用可能な表示から始めます。",
   "fallback.defaults": "既定値を使用します。",
   "value.empty": "（空）",
+  "warning.profileUnavailable": (v) => `${v.profile} は ${v.measurement} の分類プロファイルではありません。${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} は ${v.measurement} に合いません。${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `カスタムプロファイルは ${v.unit} で表示できません。${v.instead}`,
+  "error.renderFailed": "カードを描画できませんでした。詳細はブラウザーのコンソールを参照してください。",
 
 };

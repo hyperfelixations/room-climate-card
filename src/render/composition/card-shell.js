@@ -174,6 +174,16 @@ function mainPanelMarkup(context, viewModel, viewRenderers) {
           `;
 }
 
+// What the card shows when rendering itself failed: one line, in the card's language, inside
+// the same root that stays the last-resort focus target.
+export function renderFailureBody(message) {
+  return `
+        <div class="rtc-root" data-state="error" tabindex="-1">
+          <div class="rtc-render-failed">${escapeHtml(message)}</div>
+        </div>
+      `;
+}
+
 // Patch dynamic content in place so routine updates never restart the slide animation.
 function patchShell(context, root, viewModel) {
   if (!root) return;

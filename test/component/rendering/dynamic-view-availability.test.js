@@ -229,16 +229,19 @@ test("setConfig() leaves a structural rebuild frozen until its phase-aware resum
   env.cleanup(el);
 });
 
-// ---- The pre-config visual snapshot is released in a finally; if _render() threw and
-// the release were not, the stash would leak into a later hass-driven rebuild. ----
+// ---- The pre-config visual snapshot is released in a finally; if the render inside
+// setConfig() failed and the release were not, the stash would leak into a later
+// hass-driven rebuild. ----
 
-test("the pre-config visual snapshot is released even if _render() throws mid-setConfig()", () => {
+test("the pre-config visual snapshot is released even when the render inside setConfig() fails", () => {
   const el = threeViewCard();
   const originalRender = el._render;
   el._render = () => {
     throw new Error("simulated render failure");
   };
-  assert.throws(() => el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range" }), /simulated render failure/, "setConfig() must still propagate the error -- HA's config-validation contract must not be swallowed");
+  // A render failure is the card's to show, not a refused configuration.
+  assert.doesNotThrow(() => el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range" }));
+  assert.ok(el.shadowRoot.querySelector(".rtc-render-failed"), "the card says it could not be drawn");
   el._render = originalRender;
 
   // The snapshot is private, so the leak is proven by effect: a later rebuild must resolve

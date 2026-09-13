@@ -123,5 +123,9 @@ export const de = {
   "fallback.firstView": "Die Karte startet mit der ersten verfügbaren Ansicht.",
   "fallback.defaults": "Es gelten die Standardwerte.",
   "value.empty": "(leer)",
+  "warning.profileUnavailable": (v) => `${v.profile} ist kein Klassifizierungsprofil für ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passt nicht zu ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Das eigene Profil lässt sich nicht in ${v.unit} darstellen. ${v.instead}`,
+  "error.renderFailed": "Die Karte konnte nicht gezeichnet werden. Details in der Browserkonsole.",
 
 };

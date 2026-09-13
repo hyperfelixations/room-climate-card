@@ -191,6 +191,17 @@ test("the shell patches the warning text and its accessible name in place", () =
   assert.equal(realm.root.querySelector(".rtc-warning-icon").getAttribute("aria-label"), "Warnung");
 });
 
+test("a failed render is shown as one escaped line in an error-state root", () => {
+  const realm = makeRealm();
+  const payload = '<img src=x onerror=alert(1)> The card could not be drawn.';
+  realm.root.innerHTML = cardShell.renderFailureBody(payload);
+  const root = realm.root.querySelector(".rtc-root");
+  assert.equal(root.getAttribute("data-state"), "error");
+  assert.equal(root.getAttribute("tabindex"), "-1", "still a last-resort focus target");
+  assert.equal(realm.root.querySelector(".rtc-render-failed").textContent, payload);
+  assert.equal(realm.root.querySelectorAll("img").length, 0);
+});
+
 test("the shell resolves the layout of every view that declares one, and skips those that do not", () => {
   const realm = makeRealm();
   const calls = [];

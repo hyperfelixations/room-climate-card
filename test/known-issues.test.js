@@ -200,14 +200,14 @@ test("a step wider than the number line leaves the marker where it belongs", () 
   assertHeadlineDrawnAt(buildScenario({ metric: "temperature", primary: { state: 21 }, config: { classification: profile } }), 50);
 });
 
-test("an axis the display unit cannot hold is refused when the card is configured", () => {
+test("an axis the display unit cannot hold falls back to the default profile, with a warning", () => {
   // ±5e307 °C is a double; its Fahrenheit projection is not.
   const profile = { ...BUG_06_PROFILE, scale: { min: -5e307, max: 5e307, step: 5 } };
   const built = buildScenario({ metric: "temperature", primary: { state: 70, unit: { value: "°F" } }, config: { classification: profile } });
-  assert.throws(
-    () => env.withCard(built.config, built.hass, () => {}),
-    /cannot be expressed in °F \(classification\.scale\.min lies beyond the largest number °F can hold\)/
-  );
+  env.withCard(built.config, built.hass, (card) => {
+    assert.match(card.shadowRoot.querySelector(".rtc-warning-text").textContent, /cannot be shown in °F/);
+    for (const position of Object.values(card._computeViewModel().scale.markerPositions)) assert.ok(Number.isFinite(position));
+  });
 });
 
 // The neighbouring span that fits in a double: records the boundary, must keep passing.

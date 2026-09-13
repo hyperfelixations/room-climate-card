@@ -135,6 +135,8 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   return {
     id: "custom",
     metricKind,
+    // As written, for a message that has to name it.
+    unit,
     comparison,
     tiers,
     comfort,

@@ -132,5 +132,9 @@ export const pl = {
   "fallback.firstView": "Karta zaczyna od pierwszego dostępnego widoku.",
   "fallback.defaults": "Używane są wartości domyślne.",
   "value.empty": "(puste)",
+  "warning.profileUnavailable": (v) => `${v.profile} nie jest profilem klasyfikacji dla pomiaru „${v.measurement}”. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} nie pasuje do pomiaru „${v.measurement}”. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Własnego profilu nie można wyświetlić w ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Nie udało się narysować karty. Szczegóły w konsoli przeglądarki.",
 
 };

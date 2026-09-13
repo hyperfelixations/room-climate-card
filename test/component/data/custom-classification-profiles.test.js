@@ -256,17 +256,19 @@ test("a reference axis narrower than the comfort band is accepted and clipped", 
   env.cleanup(card);
 });
 
-test("a built-in profile cannot be applied to the wrong metric kind", () => {
+test("a built-in profile for another measurement falls back to the default profile, with a warning", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 50, {
       device_class: "humidity",
       unit_of_measurement: "%",
     }),
   });
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", classification: "outdoor" }, hass),
-    /profile "outdoor".*humidity/
+  const card = env.createCard({ entity: "sensor.avg", classification: "outdoor" }, hass);
+  assert.equal(
+    card.shadowRoot.querySelector(".rtc-warning-text").textContent,
+    '"outdoor" is not a classification profile for Humidity. Using default: indoor.'
   );
+  env.cleanup(card);
 });
 
 // A card-wide profile is enforced only against the resolved kind and its same-kind
@@ -323,7 +325,9 @@ function fahrenheitHass(value = 68) {
   });
 }
 
-test("custom profile with a comfort band narrower than Fahrenheit's rounding grid throws a clear, specific error", () => {
+const NOT_REPRESENTABLE = "The custom profile cannot be shown in °F. Using default: indoor.";
+
+test("custom profile with a comfort band narrower than Fahrenheit's rounding grid falls back to the default profile, with a warning", () => {
   const collapsingProfile = {
     source: "custom",
     unit: "°C",
@@ -338,13 +342,13 @@ test("custom profile with a comfort band narrower than Fahrenheit's rounding gri
       { default: true, score: 1, level: "Low", color: "#0000AA", zone: "outside" },
     ],
   };
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", classification: collapsingProfile }, fahrenheitHass()),
-    /becomes degenerate when rounded to °F \(comfort band collapses\)/
-  );
+  const card = env.createCard({ entity: "sensor.avg", classification: collapsingProfile }, fahrenheitHass());
+  assert.equal(card.shadowRoot.querySelector(".rtc-warning-text").textContent, NOT_REPRESENTABLE);
+  assert.equal(card._computeViewModel().empty, false, "the card still shows its value");
+  env.cleanup(card);
 });
 
-test("custom profile with two tier thresholds narrower than Fahrenheit's rounding grid throws a clear, specific error", () => {
+test("custom profile with two tier thresholds narrower than Fahrenheit's rounding grid falls back to the default profile, with a warning", () => {
   const collapsingTierProfile = {
     source: "custom",
     unit: "°C",
@@ -360,13 +364,12 @@ test("custom profile with two tier thresholds narrower than Fahrenheit's roundin
       { default: true, score: 1, level: "Low", color: "#0000AA", zone: "outside" },
     ],
   };
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", classification: collapsingTierProfile }, fahrenheitHass()),
-    /becomes degenerate when rounded to °F \(tier thresholds collapse/
-  );
+  const card = env.createCard({ entity: "sensor.avg", classification: collapsingTierProfile }, fahrenheitHass());
+  assert.equal(card.shadowRoot.querySelector(".rtc-warning-text").textContent, NOT_REPRESENTABLE);
+  env.cleanup(card);
 });
 
-test("custom profile with gaps just wide enough to survive Fahrenheit rounding does not throw (no false positive)", () => {
+test("custom profile with gaps just wide enough to survive Fahrenheit rounding applies as written (no false positive)", () => {
   const safeProfile = {
     source: "custom",
     unit: "°C",
@@ -383,6 +386,7 @@ test("custom profile with gaps just wide enough to survive Fahrenheit rounding d
   };
   const card = env.createCard({ entity: "sensor.avg", classification: safeProfile }, fahrenheitHass());
   assert.equal(card._computeViewModel().empty, false);
+  assert.equal(card.shadowRoot.querySelector(".rtc-warning"), null, "no warning for a profile that holds");
   env.cleanup(card);
 });
 

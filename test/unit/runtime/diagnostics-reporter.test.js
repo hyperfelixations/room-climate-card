@@ -38,6 +38,19 @@ test("an unchanged set is not written again, a changed one is written in full", 
   assert.deepEqual(lines().slice(1), ["warn Room Climate Card: Warning: a", "warn Room Climate Card: Warning: b"]);
 });
 
+test("a render that keeps failing for one cause is reported once, and again after a success", () => {
+  const { reporter, lines } = setup();
+  const failure = () => new Error("induced");
+  reporter.reportRenderFailure(failure());
+  reporter.reportRenderFailure(failure());
+  assert.deepEqual(lines(), ["error Room Climate Card: render failed Error: induced"], "one cause, one line, whatever the call site");
+  reporter.reportRenderFailure(new Error("another"));
+  assert.equal(lines().length, 2, "a different cause is reported");
+  reporter.reportRenderSuccess();
+  reporter.reportRenderFailure(new Error("another"));
+  assert.equal(lines().length, 3, "after a success the same cause is news again");
+});
+
 test("invalid, then valid, then the same invalid configuration warns again", () => {
   const { reporter, lines } = setup();
   reporter.reportWarnings([{ key: "a" }]);

@@ -1,4 +1,28 @@
 {
+  "classification-unknown-profile-for-metric-kind": {
+    "block": "\"greenhouse\" is not a classification profile for Temperature. Using default: indoor.",
+    "console": [
+      "Room Climate Card: \"greenhouse\" is not a classification profile for Temperature. Using default: indoor."
+    ]
+  },
+  "custom-profile-cannot-be-expressed-in-fahrenheit": {
+    "block": "The custom profile cannot be shown in °F. Using default: indoor.",
+    "console": [
+      "Room Climate Card: The custom profile cannot be shown in °F. Using default: indoor."
+    ]
+  },
+  "custom-profile-collapses-when-projected-to-fahrenheit": {
+    "block": "The custom profile cannot be shown in °F. Using default: indoor.",
+    "console": [
+      "Room Climate Card: The custom profile cannot be shown in °F. Using default: indoor."
+    ]
+  },
+  "custom-unit-belongs-to-another-metric-kind": {
+    "block": "classification.unit \"%\" does not fit Temperature. Using default: indoor.",
+    "console": [
+      "Room Climate Card: classification.unit \"%\" does not fit Temperature. Using default: indoor."
+    ]
+  },
   "start-view-unknown": {
     "block": "\"sclae\" is not a valid value for start_view. Starting on the first available view.",
     "console": [

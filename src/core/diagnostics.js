@@ -9,6 +9,9 @@ export const DIAGNOSTIC_SEVERITY = Object.freeze({
   "value.invalid": SEVERITY.WARNING,
   "config.foreign_key": SEVERITY.WARNING,
   "sources.mixed": SEVERITY.WARNING,
+  "classification.profile_unavailable": SEVERITY.WARNING,
+  "classification.unit_mismatch": SEVERITY.WARNING,
+  "classification.not_representable": SEVERITY.WARNING,
 });
 
 // What the card does instead of an invalid value, where that is not a value of its own.

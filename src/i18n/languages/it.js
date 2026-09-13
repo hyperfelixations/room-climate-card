@@ -127,5 +127,9 @@ export const it = {
   "fallback.firstView": "Si parte dalla prima vista disponibile.",
   "fallback.defaults": "Si usano i valori predefiniti.",
   "value.empty": "(vuoto)",
+  "warning.profileUnavailable": (v) => `${v.profile} non è un profilo di classificazione per ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} non corrisponde a ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Il profilo personalizzato non può essere mostrato in ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Impossibile disegnare la scheda. Dettagli nella console del browser.",
 
 };

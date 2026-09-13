@@ -18,10 +18,11 @@ export const CARD_CSS = `        .rtc-card {
           gap: 11px;
         }
 
-        /* What is left when the show: block has hidden every part. An empty card looks
-           broken; this says which switches produced it, in the same centred, muted voice
-           the card uses for its other "nothing here" line (.rtc-no-views). */
-        .rtc-nothing-shown {
+        /* What is left when the show: block has hidden every part, and what a failed render
+           shows. An empty card looks broken; each line says why, in the same centred, muted
+           voice the card uses for its other "nothing here" line (.rtc-no-views). */
+        .rtc-nothing-shown,
+        .rtc-render-failed {
           text-align: center;
           padding: 6px 0;
           font-size: 13px;

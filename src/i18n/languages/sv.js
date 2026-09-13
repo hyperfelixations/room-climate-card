@@ -131,5 +131,9 @@ export const sv = {
   "fallback.firstView": "Kortet startar på den första tillgängliga vyn.",
   "fallback.defaults": "Standardvärdena används.",
   "value.empty": "(tomt)",
+  "warning.profileUnavailable": (v) => `${v.profile} är ingen klassificeringsprofil för ${v.measurement}. ${v.instead}`,
+  "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passar inte till ${v.measurement}. ${v.instead}`,
+  "warning.profileNotRepresentable": (v) => `Den egna profilen kan inte visas i ${v.unit}. ${v.instead}`,
+  "error.renderFailed": "Kortet kunde inte ritas. Detaljer i webbläsarens konsol.",
 
 };
