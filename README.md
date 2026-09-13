@@ -163,7 +163,8 @@ Ideas and bug reports are welcome as
 ## Configuration
 
 Everything except a source is optional — leave an option out and you get the
-default.
+default. A value the card cannot use gets the default too, and a warning names
+it — see [Warnings and errors](#warnings-and-errors).
 
 ### Top-level options
 
@@ -211,6 +212,7 @@ show:
 | `subtitle` | `true` | The line under the title. |
 | `entity_label` | `true` | The small caption above the large value. |
 | `pill` | `true` | The status label in the top right — “Optimal”, “Warm”, and so on. |
+| `warnings` | `true` | The block under the header that names a problem with the configuration or a sensor. See [Warnings and errors](#warnings-and-errors). |
 | `panel` | `true` | The middle block: the large value and the views beside it. |
 | `rooms` | `auto` | The room chips. `auto` hides the one chip that would just repeat the large value on a single-room card and shows chips otherwise; `true` always shows them; `false` never does. |
 | `unavailable_rooms` | `true` | Shows a neutral `--` chip for an unavailable or non-numeric room sensor. Set it to `false` to omit these chips. |
@@ -257,8 +259,8 @@ Each item under `rooms:` supports:
 | `entity` | yes | Unique room sensor entity ID. |
 | `name` | no | Full room name used in tooltips, extrema, and when `room_label: name` is selected. Falls back to `short`, then to the entity ID. |
 | `short` | no | Short chip label. Falls back to `name`, then to the entity ID. |
-| `tap_action` | no | Action for this room only. Inherits the card-level `tap_action` when omitted or invalid. |
-| `hold_action` | no | Hold action for this room only. Inherits the card-level `hold_action` when omitted or invalid. |
+| `tap_action` | no | Action for this room only. Inherits the card-level `tap_action` when omitted. |
+| `hold_action` | no | Hold action for this room only. Inherits the card-level `hold_action` when omitted. |
 
 Example:
 
@@ -432,7 +434,9 @@ classification:
 
 `auto` and `profile` use the metric's default profile when `profile` is
 omitted. `outdoor`, `fridge`, and `freezer` exist for temperature only;
-`indoor` is the default profile for temperature, humidity, CO₂, and PM2.5.
+`indoor` is the default profile for temperature, humidity, CO₂, and PM2.5. A
+profile named for a measurement it does not exist for shows a warning, and the
+card uses that measurement's default profile.
 
 A custom profile defines its tiers, bands, scale, and icons together.
 
@@ -521,8 +525,8 @@ Custom-profile rules:
     step: 1
     anchor_scale: false
   ```
-  The two are alternatives: a `min` or `max` alongside `anchor_scale: false`
-  is an error.
+  The two are alternatives: with `anchor_scale: false`, leave out `min` and
+  `max`.
 - Optional `scale.headroom` must be non-negative and applies to both shapes.
   `scale.one_sided` is a boolean for measurements with no "too little" end,
   such as CO₂; it holds the axis at `scale.min` and therefore needs the
@@ -543,6 +547,12 @@ Custom-profile rules:
   every reading.
 - Optional `valid_range` accepts `min`, `max`, `min_inclusive`, and
   `max_inclusive`.
+
+A value that breaks one of these rules is named in a warning with its place in
+the profile, for example `classification.scale.min`, and the card uses its
+built-in classification until it is fixed. The same happens when the profile's
+`unit` belongs to another measurement, or the profile cannot be converted to
+your sensors' unit.
 
 ### Palettes
 
@@ -619,6 +629,10 @@ A value the entity classifies itself uses its own `value_color`, and shows the
 neutral color when it supplies none. The palette applies to the card's own
 classification, not to one an integration provided.
 
+A palette the card cannot read is named in a warning, down to the color at
+fault — `palette.above[2]` is the second color above optimal — and the card uses
+`pastel` until it is fixed.
+
 ### The two header lines
 
 The title names the measurement — “Temperature”, say — and under it the card
@@ -657,6 +671,11 @@ An empty string removes the line entirely, and so does `show: {title: false}`.
 
 When the card has no usable data, the subtitle shows the reason even with
 `show: {subtitle: false}`. For usable data, the configured subtitle applies.
+
+While a source is briefly out — a room sensor that is `unavailable`, say — the
+subtitle adds a short note such as “1 room is currently unavailable.” and wraps
+onto as many lines as it needs. The note follows your own subtitle as well; a
+line you removed stays removed.
 
 ### Full example
 
@@ -718,6 +737,42 @@ views:
       show_value: true
 ```
 
+## Warnings and errors
+
+**An error takes the card's place** when its configuration cannot be used at
+all. Home Assistant shows its error card with one sentence, in your language:
+
+- a key that a block of the card does not have — in `show:`, a room entry, a
+  `views:` entry or its `options:`, the block form of `title` or `subtitle`,
+  `classification`, or a written-out `palette`;
+- a top-level key that looks like a typo of an option;
+- no `entity` and no `rooms`, a room without an `entity`, or two rooms with the
+  same `entity`.
+
+```text
+Invalid configuration: show.ikon is not an option of this card. Did you mean show.icon?
+```
+
+The error names the full path of the key, so a key indented under the wrong
+block shows up here too.
+
+**A warning appears under the header** when the card can carry on. It names the
+value, where it is written, and what the card uses until you fix it:
+
+```text
+"neon" is not a valid value for palette. Using default: pastel.
+```
+
+The same block names a sensor the card cannot use: an entity id Home Assistant
+does not know, a sensor measuring something else, or one whose unit the card
+cannot read. With two or more problems, the block counts them and the browser
+console lists each one. A top-level key that resembles none of the card's
+options is ignored with a warning; the keys Home Assistant and card-mod add,
+such as `visibility`, `grid_options`, and `card_mod`, are left alone.
+
+`show: {warnings: false}` hides the block; the browser console still lists
+every warning.
+
 ## Known limitations
 
 - There is no visual editor — everything is YAML. Start with the
@@ -726,8 +781,9 @@ views:
 - Daily minimum/maximum and trend use dedicated entities, usually template
   sensors, that provide the current range and rate.
 - One card shows one kind of measurement. Rooms measuring something else, or
-  using an incompatible unit, are excluded. Mixed room measurements without a
-  main entity produce a “No data” explanation.
+  using a unit that does not fit, are left out with a warning. Rooms that
+  measure different things with no main `entity` give no value until you set
+  `entity` or give them matching `device_class` values.
 
 ## Troubleshooting
 
@@ -766,26 +822,26 @@ without a console error.
 
 **The card shows “No data” and `--` as its large value.**
 None of your sources has a usable number right now, or the card cannot tell
-what they measure. The line under the title says which. Four different
-situations:
+what they measure. A warning under the header names what needs fixing; when a
+sensor is only out for the moment, the line under the title says so. Four
+different situations:
 
 - **A typo, or an entity that no longer exists.** Home Assistant does not know
-  the id at all, so the card does not treat it as a source: no chip, and the id
-  is named under the title. A card with one working room and one mistyped one
-  is a one-room card.
+  the id at all, so the card does not treat it as a source: no chip, and a
+  warning names the id. A card with one working room and one mistyped one is a
+  one-room card.
 - **A sensor that is `unavailable`, `unknown`, or reporting something that is
   not a number.** The entity exists, so it holds its place on the card as a `--`
-  chip. Set `show.unavailable_rooms: false` to leave those chips out.
+  chip, and the line under the title says so. Set
+  `show.unavailable_rooms: false` to leave those chips out.
 - **A reading that cannot be real**, such as 800 % humidity or a temperature
   below absolute zero. The card reports it as an impossible reading and leaves it
   out of every calculation.
 - **A sensor measuring something else, or using a unit that does not fit.** It
-  is left out of this card.
+  is left out of this card, and a warning names it.
 
 If everything looks right, check that your sensors have a `device_class` of
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`. The line under the title
-names the sensor whenever the fix is on the sensor rather than in the card; if it
-is long, `subtitle: wrap` shows all of it.
+`temperature`, `humidity`, `carbon_dioxide`, or `pm25`.
 
 **"… needs a device_class", and the sensor reads ppm or µg/m³.**
 Those two units belong to several measurements in Home Assistant — `ppm` to CO₂
@@ -797,8 +853,9 @@ their units belong to one measurement each.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the
-most common cause). If the problem persists, open your browser's developer
-console and check for an error message before reporting it.
+most common cause). If the problem persists, or the card says “The card could
+not be drawn.”, open your browser's developer console and check for an error
+message before reporting it.
 
 If none of this helps, please open a
 [GitHub issue](https://github.com/hyperfelixations/room-climate-card/issues) and include:
