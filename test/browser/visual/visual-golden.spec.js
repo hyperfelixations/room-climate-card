@@ -327,8 +327,8 @@ test.describe("visual golden: the warnings block", () => {
   });
 });
 
-// A hint rides on the subtitle the card shows anyway: after the line's own words, in the line's
-// own overflow — so the automatic sentence clips it like any other long subtitle.
+// A hint rides on the subtitle the card shows anyway, after the line's own words. While it is
+// there the line wraps, whatever overflow it asks for, so the hint is read in full.
 test.describe("visual golden: hints in the subtitle", () => {
   const ROOMS = [{ entity: "sensor.r1" }, { entity: "sensor.r2" }];
 
