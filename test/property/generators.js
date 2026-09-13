@@ -414,8 +414,8 @@ function generatePalette(rng) {
         { optimal: "#000000", above: ["#0C0C0C"], below: ["#111111"] },
       ]);
     case "broken":
-      // Deliberately invalid: setConfig must refuse it atomically, leaving the previous
-      // configuration intact.
+      // Deliberately invalid: each falls back to the default palette with a warning, except a
+      // key a written-out palette does not have (`nonsense`), which refuses the configuration.
       return rng.pick([
         { optimal: "not-a-colour" },
         { above: ["#FFF"] },
@@ -469,7 +469,7 @@ function generateViewOptions(rng, type) {
     if (!rng.bool(0.6)) continue;
     options[domain === "bool" ? name : name] = domain === "bool" ? boolValue(rng) : enumValue(rng, domain);
   }
-  // An option the view does not have; the card diagnoses and drops it rather than failing.
+  // An option the view does not have, which refuses the configuration.
   if (rng.bool(0.15)) options[V.typo(rng, Object.keys(schema)[0] || "option")] = true;
   return options;
 }
@@ -585,8 +585,8 @@ function generateClassification(rng, metric) {
     case 2:
       return validCustom;
     case 3:
-      // A ramp whose scores do not descend; the card must refuse it rather than paint an
-      // optimal reading in the palette's most extreme colour.
+      // A ramp whose scores do not descend; the card falls back to the automatic classification
+      // rather than paint an optimal reading in the palette's most extreme colour.
       return { ...validCustom, tiers: validCustom.tiers.map((tier, index) => index === 1 ? { ...tier, score: 5 } : tier) };
     default:
       return { source: "custom", unit: METRICS[metric].canonicalUnit, tiers: [] };

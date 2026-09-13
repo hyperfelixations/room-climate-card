@@ -2,13 +2,13 @@
 // here iff leaving it out changes the card's LAYOUT; what a view draws inside itself
 // is that view's own option).
 //
-// Non-destructive and never throws: a value that is not an object, an invalid value of a
-// part and an unknown key each record a diagnostic, and the defaults apply. Returns only
-// the keys the user wrote, not the finished answer — normalize-config.js layers the
-// defaults and the older spellings underneath. See internal dev doc §3 "Der show:-Block".
+// A key the block does not have refuses the configuration. A value that is not an object, and
+// an invalid value of a part, each record a diagnostic and take the default. Returns only the
+// keys the user wrote, not the finished answer — normalize-config.js layers the defaults and the
+// older spellings underneath. See internal dev doc §3 "Der show:-Block".
 
 import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
-import { booleanOption, isPlainObject } from "./primitives.js";
+import { assertKnownKeys, isPlainObject, isUnwritten, readBoolean } from "./primitives.js";
 
 // The on/off parts. Every default is `true` — the card without a `show:` block is
 // the card with everything visible. This is the ONE place these defaults are written.
@@ -38,44 +38,31 @@ export function resolveShowConfig(requested) {
   return { ...SHOW_SWITCHES, rooms: SHOW_ROOMS_DEFAULT, ...requested };
 }
 
-export function normalizeShowConfig(value) {
-  if (value === undefined || value === null) return { show: {}, diagnostics: [] };
+// A written rooms decision. Shared with the older `show_rooms`, so a value means the same
+// under both keys.
+export function readRoomsState(value, path, diagnostics) {
+  const word = value === true || value === false ? String(value) : typeof value === "string" ? value.trim().toLowerCase() : null;
+  if (word !== null && Object.hasOwn(SHOW_ROOMS_STATES, word)) return SHOW_ROOMS_STATES[word];
+  diagnostics.push(createDiagnostic("value.invalid", { path, value, fallback: fallbackValue(SHOW_ROOMS_DEFAULT) }));
+  return SHOW_ROOMS_DEFAULT;
+}
+
+export function normalizeShowConfig(value, diagnostics) {
+  if (isUnwritten(value)) return {};
   if (!isPlainObject(value)) {
-    return { show: {}, diagnostics: [createDiagnostic("value.invalid", { path: "show", value, fallback: FALLBACK.DEFAULTS })] };
+    diagnostics.push(createDiagnostic("value.invalid", { path: "show", value, fallback: FALLBACK.DEFAULTS }));
+    return {};
   }
+  assertKnownKeys(value, SHOW_KEYS, "show");
 
   const show = {};
-  const diagnostics = [];
-
-  for (const key of Object.keys(value)) {
-    if (!SHOW_KEYS.includes(key)) {
-      diagnostics.push(createDiagnostic("config.foreign_key", { path: `show.${key}` }));
-      continue;
-    }
-    const raw = value[key];
+  for (const [key, raw] of Object.entries(value)) {
     // An explicitly absent value is the same as not writing the key at all. YAML produces
     // this for `icon:` with nothing after it, which is what a half-typed block looks like.
-    if (raw === undefined || raw === null) continue;
-
-    if (key === "rooms") {
-      const word = raw === true || raw === false ? String(raw) : typeof raw === "string" ? raw.trim().toLowerCase() : null;
-      const state = word === null ? undefined : SHOW_ROOMS_STATES[word];
-      if (state === undefined) {
-        diagnostics.push(
-          createDiagnostic("value.invalid", { path: "show.rooms", value: raw, fallback: fallbackValue(SHOW_ROOMS_DEFAULT) })
-        );
-        continue;
-      }
-      show.rooms = state;
-      continue;
-    }
-
-    // The shared reader, so that a boolean means the same thing here and at the top
-    // level. It answers `undefined` both for a value it rejected and for one that was
-    // never written; neither is a request, so neither is recorded.
-    const parsed = booleanOption(raw, `show.${key}`, diagnostics, SHOW_SWITCHES[key]);
-    if (parsed !== undefined) show[key] = parsed;
+    if (isUnwritten(raw)) continue;
+    // A rejected value is recorded at the default its warning names, so that is what the card
+    // shows, whatever an older spelling asks for.
+    show[key] = key === "rooms" ? readRoomsState(raw, "show.rooms", diagnostics) : readBoolean(raw, `show.${key}`, diagnostics, SHOW_SWITCHES[key]);
   }
-
-  return { show, diagnostics };
+  return show;
 }

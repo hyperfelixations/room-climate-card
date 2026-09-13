@@ -1,13 +1,13 @@
 "use strict";
 
-// Direct unit tests for the `show:` block and the two header lines — pure normalization,
-// no rendering. Two rules run through every case: `show:` decides whether a part is drawn
-// and the part's own key decides what it says (so `title: ""` and `show.title: false` both
-// remove the line, neither replacing the other), and the block is cosmetic and never
-// throws.
+// Direct unit tests for the `show:` block and the two header lines — pure normalization, no
+// rendering. Two rules run through every case: `show:` decides whether a part is drawn and the
+// part's own key decides what it says (so `title: ""` and `show.title: false` both remove the
+// line, neither replacing the other); and an invalid value falls back to the default it names,
+// while a key the block does not have refuses the configuration.
 // Boundary: config-normalize-modules.test.js owns whole-configuration assembly and its
-// rejection messages; this file owns one block and two keys, including their precedence
-// over the older spellings they replace.
+// rejection messages; this file owns one block and two keys, including their precedence over
+// the older spellings they replace.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -26,8 +26,6 @@ const COLLABORATORS = {
   paletteForName: () => TINY_PALETTE,
   paletteForColor: () => null,
   paletteForGradient: () => null,
-  paletteGradientLimit: 3,
-  paletteKeys: () => ["tiny"],
   assertPalette: (palette) => palette,
   completePalette: (palette) => palette,
   isSupportedLanguage: (code) => SUPPORTED.has(code),
@@ -39,6 +37,14 @@ const COLLABORATORS = {
 
 const configure = (overrides) => normalizeConfigModule.normalizeConfig({ entity: "sensor.a", ...overrides }, COLLABORATORS);
 
+// The block on its own, with the diagnostics it records.
+function showOf(value) {
+  const diagnostics = [];
+  return { show: showModule.normalizeShowConfig(value, diagnostics), diagnostics };
+}
+
+const invalid = (path, value, fallback) => core.createDiagnostic("value.invalid", { path, value, fallback });
+
 test.before(async () => {
   showModule = await import("../../../src/config/show.js");
   normalizeConfigModule = await import("../../../src/config/normalize-config.js");
@@ -49,12 +55,9 @@ test.before(async () => {
 
 test("an absent block asks for nothing, and every part is drawn", () => {
   for (const absent of [undefined, null]) {
-    const { show, diagnostics } = showModule.normalizeShowConfig(absent);
-    assert.deepEqual(show, {}, "nothing was requested, so nothing is claimed");
-    assert.deepEqual(diagnostics, [], "an omitted block is the normal case and not a mistake");
+    assert.deepEqual(showOf(absent), { show: {}, diagnostics: [] }, "an omitted block is the normal case and not a mistake");
   }
-  const config = configure({});
-  assert.deepEqual(config.show, {
+  assert.deepEqual(configure({}).show, {
     accent_line: true,
     icon: true,
     title: true,
@@ -69,22 +72,19 @@ test("an absent block asks for nothing, and every part is drawn", () => {
 });
 
 test("show.warnings is a switch like every other part", () => {
-  assert.deepEqual(showModule.normalizeShowConfig({ warnings: false }), { show: { warnings: false }, diagnostics: [] });
+  assert.deepEqual(showOf({ warnings: false }), { show: { warnings: false }, diagnostics: [] });
   assert.equal(configure({ show: { warnings: false } }).show.warnings, false);
-  const { show, diagnostics } = showModule.normalizeShowConfig({ warnings: "no" });
-  assert.deepEqual(show, {});
-  assert.deepEqual(diagnostics, [
-    core.createDiagnostic("value.invalid", { path: "show.warnings", value: "no", fallback: core.fallbackValue(true) }),
-  ]);
+  assert.deepEqual(showOf({ warnings: "no" }), {
+    show: { warnings: true },
+    diagnostics: [invalid("show.warnings", "no", core.fallbackValue(true))],
+  });
 });
 
 test("a block that is not an object is diagnosed and changes nothing", () => {
   for (const wrong of ["yes", 42, true, []]) {
-    const { show, diagnostics } = showModule.normalizeShowConfig(wrong);
-    assert.deepEqual(show, {}, JSON.stringify(wrong));
     assert.deepEqual(
-      diagnostics,
-      [core.createDiagnostic("value.invalid", { path: "show", value: wrong, fallback: core.FALLBACK.DEFAULTS })],
+      showOf(wrong),
+      { show: {}, diagnostics: [invalid("show", wrong, core.FALLBACK.DEFAULTS)] },
       JSON.stringify(wrong)
     );
   }
@@ -100,37 +100,37 @@ test("one part named turns off exactly that part", () => {
   assert.equal(config.show.unavailable_rooms, true);
 });
 
-test("each unknown key inside the block is ignored and named on its own", () => {
-  const { show, diagnostics } = showModule.normalizeShowConfig({ icon: false, ikon: false, footer: false });
-  assert.deepEqual(show, { icon: false });
-  assert.deepEqual(diagnostics, [
-    core.createDiagnostic("config.foreign_key", { path: "show.ikon" }),
-    core.createDiagnostic("config.foreign_key", { path: "show.footer" }),
-  ]);
+test("a key the block does not have refuses the configuration, naming the part meant", () => {
+  assert.throws(() => showOf({ icon: false, ikon: false }), {
+    name: "ConfigError",
+    message: "Invalid configuration: show.ikon is not an option of this card. Did you mean show.icon?",
+  });
+  assert.throws(() => showOf({ footer: false }), {
+    name: "ConfigError",
+    message: "Invalid configuration: show.footer is not an option of this card.",
+  });
+  assert.throws(() => configure({ show: { pill: "no", ikon: false } }), { name: "ConfigError" }, "whatever else the block says");
 });
 
-test("a part that is not a boolean falls back to its default and is said out loud", () => {
-  const { show, diagnostics } = showModule.normalizeShowConfig({ pill: "no", panel: 0 });
-  assert.deepEqual(show, {}, "neither survives, so both fall back to the default");
-  assert.deepEqual(diagnostics, [
-    core.createDiagnostic("value.invalid", { path: "show.pill", value: "no", fallback: core.fallbackValue(true) }),
-    core.createDiagnostic("value.invalid", { path: "show.panel", value: 0, fallback: core.fallbackValue(true) }),
-  ]);
+test("a part that is not a boolean takes the default it names", () => {
+  assert.deepEqual(showOf({ pill: "no", panel: 0 }), {
+    show: { pill: true, panel: true },
+    diagnostics: [invalid("show.pill", "no", core.fallbackValue(true)), invalid("show.panel", 0, core.fallbackValue(true))],
+  });
 });
 
 test("rooms keeps its three states while every other part is a switch", () => {
   // `true | false | "auto"`, the same shape views[].enabled uses; both YAML spellings of a
   // boolean arrive here and both mean the boolean.
-  for (const written of [true, "true"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, true);
-  for (const written of [false, "false"]) assert.equal(showModule.normalizeShowConfig({ rooms: written }).show.rooms, false);
-  assert.equal(showModule.normalizeShowConfig({ rooms: "auto" }).show.rooms, "auto");
+  for (const written of [true, "true"]) assert.equal(showOf({ rooms: written }).show.rooms, true);
+  for (const written of [false, "false"]) assert.equal(showOf({ rooms: written }).show.rooms, false);
+  assert.equal(showOf({ rooms: "auto" }).show.rooms, "auto");
 
   // A typo here is not silently defaulted: "auto" and "true" are different answers.
-  const { show, diagnostics } = showModule.normalizeShowConfig({ rooms: "alway" });
-  assert.deepEqual(show, {});
-  assert.deepEqual(diagnostics, [
-    core.createDiagnostic("value.invalid", { path: "show.rooms", value: "alway", fallback: core.fallbackValue("auto") }),
-  ]);
+  assert.deepEqual(showOf({ rooms: "alway" }), {
+    show: { rooms: "auto" },
+    diagnostics: [invalid("show.rooms", "alway", core.fallbackValue("auto"))],
+  });
 });
 
 // ============================================ precedence over the older spellings =
@@ -145,15 +145,22 @@ test("the block wins over the older spelling of the same decision", () => {
   assert.equal(both.show.unavailable_rooms, false);
 });
 
+test("an invalid value in the block takes the default it names, whatever the older spelling says", () => {
+  const config = configure({ show: { rooms: "alway" }, show_rooms: false });
+  assert.equal(config.show.rooms, "auto", "the warning says auto, so the card shows auto");
+});
+
 test("the older spelling still decides on its own", () => {
   assert.equal(configure({ show_rooms: false }).show.rooms, false);
   assert.equal(configure({ show_rooms: true }).show.rooms, true);
+  assert.equal(configure({ show_rooms: "false" }).show.rooms, false, "read the way show.rooms reads it");
   assert.equal(configure({ unavailable_values: "hide" }).show.unavailable_rooms, false);
 });
 
-test("the top-level accent_line is gone, and only the block decides", () => {
-  // An unrecognized top-level key like any other; the block is the one spelling.
-  assert.equal(configure({ accent_line: false }).show.accent_line, true);
+test("the top-level accent_line is gone: a foreign key, and only the block decides", () => {
+  const config = configure({ accent_line: false });
+  assert.equal(config.show.accent_line, true);
+  assert.deepEqual(config._configDiagnostics, [core.createDiagnostic("config.foreign_key", { path: "accent_line" })]);
   assert.equal(configure({ show: { accent_line: false } }).show.accent_line, false);
 });
 
@@ -166,34 +173,35 @@ test("a block that mentions other parts does not silence the older spelling", ()
   assert.equal(config.show.unavailable_rooms, false);
 });
 
-test("an older spelling nobody recognised carries no default of its own", () => {
-  // Each older key speaks only where it says something; answering for an unrecognised value
-  // would be a second statement of a default SHOW_SWITCHES already owns.
-  for (const nonsense of ["auto", "alway", "", null, 0, 1]) {
-    assert.equal(configure({ show_rooms: nonsense }).show.rooms, "auto", JSON.stringify(nonsense));
+test("an older spelling with a value it never had falls back to its default, with a warning", () => {
+  const { fallbackValue } = core;
+  for (const nonsense of ["alway", "", 0, 1]) {
+    const config = configure({ show_rooms: nonsense });
+    assert.equal(config.show.rooms, "auto", JSON.stringify(nonsense));
+    assert.deepEqual(config._configDiagnostics, [invalid("show_rooms", nonsense, fallbackValue("auto"))], JSON.stringify(nonsense));
   }
-  for (const nonsense of ["show", "HIDE", "hidden", "", null, false]) {
-    assert.equal(configure({ unavailable_values: nonsense }).show.unavailable_rooms, true, JSON.stringify(nonsense));
+  for (const nonsense of ["HIDE", "hidden", "", false]) {
+    const config = configure({ unavailable_values: nonsense });
+    assert.equal(config.show.unavailable_rooms, true, JSON.stringify(nonsense));
+    assert.deepEqual(config._configDiagnostics, [invalid("unavailable_values", nonsense, fallbackValue("show"))], JSON.stringify(nonsense));
   }
-  assert.deepEqual(configure({ show_rooms: "alway", unavailable_values: "hidden" })._configDiagnostics, []);
+  assert.deepEqual(configure({ show_rooms: null, unavailable_values: null })._configDiagnostics, [], "not written");
 });
 
 test("legacyShowRequests() reports only what was actually asked for", () => {
-  const { legacyShowRequests } = normalizeConfigModule;
-  assert.deepEqual(legacyShowRequests({}), {});
-  assert.deepEqual(legacyShowRequests({ show_rooms: true }), { rooms: true });
-  assert.deepEqual(legacyShowRequests({ show_rooms: false }), { rooms: false });
-  assert.deepEqual(legacyShowRequests({ unavailable_values: "hide" }), { unavailable_rooms: false });
-  assert.deepEqual(legacyShowRequests({ unavailable_values: "show" }), {}, "the default is not this key's to state");
-  assert.deepEqual(legacyShowRequests({ show_rooms: false, unavailable_values: "hide" }), {
-    rooms: false,
-    unavailable_rooms: false,
-  });
+  const requests = (userConfig) => normalizeConfigModule.legacyShowRequests(userConfig, []);
+  assert.deepEqual(requests({}), {});
+  assert.deepEqual(requests({ show_rooms: true }), { rooms: true });
+  assert.deepEqual(requests({ show_rooms: false }), { rooms: false });
+  assert.deepEqual(requests({ show_rooms: "auto" }), {}, "the default is not this key's to state");
+  assert.deepEqual(requests({ unavailable_values: "hide" }), { unavailable_rooms: false });
+  assert.deepEqual(requests({ unavailable_values: "show" }), {});
+  assert.deepEqual(requests({ show_rooms: false, unavailable_values: "hide" }), { rooms: false, unavailable_rooms: false });
 });
 
 test("the diagnostics of the block travel on the same channel as the views diagnostics", () => {
-  const config = configure({ show: { nonsense: true }, views: "not-an-array" });
-  assert.deepEqual(config._configDiagnostics.map((entry) => entry.path), ["show.nonsense", "views"]);
+  const config = configure({ show: { pill: "no" }, views: "not-an-array" });
+  assert.deepEqual(config._configDiagnostics.map((entry) => entry.path), ["show.pill", "views"]);
 });
 
 // ============================================ the two header lines ===============
@@ -216,12 +224,32 @@ test("each line keeps the overflow it has always had as its default", () => {
   assert.equal(configure({ subtitle: "Downstairs" }).subtitle.overflow, "clip");
 });
 
-test("a malformed line falls back rather than throwing", () => {
+test("a malformed line falls back and says which part of it", () => {
+  const { FALLBACK, fallbackValue } = core;
   for (const wrong of [42, [], true]) {
-    assert.deepEqual(configure({ title: wrong }).title, { text: null, overflow: "wrap" }, JSON.stringify(wrong));
-    assert.deepEqual(configure({ subtitle: wrong }).subtitle, { text: null, overflow: "clip" }, JSON.stringify(wrong));
+    const config = configure({ title: wrong, subtitle: wrong });
+    assert.deepEqual(config.title, { text: null, overflow: "wrap" }, JSON.stringify(wrong));
+    assert.deepEqual(config.subtitle, { text: null, overflow: "clip" }, JSON.stringify(wrong));
+    assert.deepEqual(config._configDiagnostics, [invalid("title", wrong, FALLBACK.AUTOMATIC), invalid("subtitle", wrong, FALLBACK.AUTOMATIC)]);
   }
-  assert.deepEqual(configure({ title: { overflow: "sideways" } }).title, { text: null, overflow: "wrap" });
+  const sideways = configure({ title: { overflow: "sideways" }, subtitle: { text: 1, overflow: "WRAP" } });
+  assert.deepEqual(sideways.title, { text: null, overflow: "wrap" });
+  assert.deepEqual(sideways.subtitle, { text: null, overflow: "wrap" });
+  assert.deepEqual(sideways._configDiagnostics, [
+    invalid("title.overflow", "sideways", fallbackValue("wrap")),
+    invalid("subtitle.text", 1, FALLBACK.AUTOMATIC),
+  ]);
+});
+
+test("a key a line does not have refuses the configuration", () => {
+  assert.throws(() => configure({ subtitle: { text: "x", overflw: "wrap" } }), {
+    name: "ConfigError",
+    message: "Invalid configuration: subtitle.overflw is not an option of this card. Did you mean subtitle.overflow?",
+  });
+  assert.throws(() => configure({ title: { text: "x", nope: 1 } }), {
+    name: "ConfigError",
+    message: "Invalid configuration: title.nope is not an option of this card.",
+  });
 });
 
 test("emptying a line and hiding it are two roads to the same node, and both stay open", () => {
@@ -247,11 +275,10 @@ test("the block does not mutate the configuration it was handed", () => {
   assert.equal(JSON.stringify(raw), frozen);
 });
 
-test("nothing in the block can throw", () => {
-  // Every half-typed shape a YAML editor produces on the way to a valid block comes back
-  // with a value.
-  const shapes = [undefined, null, {}, { icon: undefined }, { icon: null }, { rooms: {} }, { "": true }, "sh", 0, [1, 2]];
+test("every half-typed value a YAML editor produces comes back with an answer", () => {
+  // Only a key the block does not have refuses; every value, finished or not, is answered.
+  const shapes = [undefined, null, {}, { icon: undefined }, { icon: null }, { rooms: {} }, { rooms: "" }, "sh", 0, [1, 2]];
   for (const shape of shapes) {
-    assert.doesNotThrow(() => showModule.normalizeShowConfig(shape), JSON.stringify(shape));
+    assert.doesNotThrow(() => showOf(shape), JSON.stringify(shape));
   }
 });

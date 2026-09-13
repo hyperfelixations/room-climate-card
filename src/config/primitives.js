@@ -1,120 +1,104 @@
-// The value-level building blocks every configuration field is built from.
+// The readers every configuration value is read with, and the check every object's keys pass.
 //
-// Two failure modes, fixed per field by the public contract (see each function):
-// a structurally invalid required value throws; a malformed OPTIONAL value falls
-// back to the built-in default. See internal dev doc §4 "Config-Normalisierungsvertrag".
+// Three answers, fixed per option by the contract (internal dev doc §3 "Konfigurationsvertrag"):
+//   refuse     a key the object does not have, a source entity that is not an entity id:
+//              setConfig() throws a ConfigError
+//   fall back  an invalid value of any other option: the reader returns what the card uses
+//              instead and records one diagnostic naming it
+//   reject     an invalid value inside a definition object (custom profile, written-out
+//              palette): a ConfigValueError, answered by the option that holds it
+// Not written (the key missing, or its value null) is always silent and means the default.
 
-import { createDiagnostic, fallbackValue } from "../core/diagnostics.js";
+import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
 import { parseConfigNumber } from "../core/numbers.js";
-import { pathError } from "./errors.js";
+import { rejectConfiguration, rejectValue } from "./errors.js";
+import { nearestKey } from "./suggest.js";
 
 // Strict object check: arrays don't count as a config object.
 export function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-// Required entity id (currently used by rooms[i].entity).
-export function requiredEntity(value, name) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`Invalid configuration: ${name} must be a non-empty entity id.`);
+export function isUnwritten(value) {
+  return value === undefined || value === null;
+}
+
+// Records what the card uses instead of `value`, and returns it.
+function fallBack(diagnostics, path, value, instead, answer) {
+  diagnostics.push(createDiagnostic("value.invalid", { path, value, fallback: instead }));
+  return answer;
+}
+
+// Refuses the first key `object` does not have, naming the option it was probably meant to be.
+export function assertKnownKeys(object, allowed, path) {
+  const known = allowed instanceof Set ? allowed : new Set(allowed);
+  for (const key of Object.keys(object)) {
+    if (known.has(key)) continue;
+    const nearest = nearestKey(key, known);
+    rejectConfiguration("config.unknown_key", { key: `${path}.${key}`, suggestion: nearest === null ? null : `${path}.${nearest}` });
   }
+}
+
+// A room's entity: the one value a room cannot do without.
+export function requiredEntity(value, path) {
+  if (typeof value !== "string" || !value.trim()) rejectConfiguration("config.must_be_entity_id", { key: path });
   return value.trim();
 }
 
-// Optional entity id with a fixed fallback (range_entity/trend_entity use null).
-export function optionalEntity(value, fallback, name) {
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`Invalid configuration: ${name} must be an entity id string.`);
-  }
-  return value.trim();
+// The card's own `entity`: may be left empty when rooms carry the card, but not malformed.
+export function readSourceEntity(value, path) {
+  if (isUnwritten(value) || value === "") return null;
+  return requiredEntity(value, path);
 }
 
-// Optional free-text override (title/icon); a non-string or empty value means "use the
-// built-in default" rather than throwing.
-export function optionalString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-// Optional label text where an explicit "" is a real answer ("show no label here"),
-// distinct from null ("not configured, use the default"). Unlike optionalString(),
-// every string including "" is kept as written.
-export function optionalLabel(value) {
-  return typeof value === "string" ? value.trim() : null;
-}
-
-// String helper for optional display names.
-export function stringOrDefault(value, fallback) {
-  if (value === undefined || value === null || value === "") {
-    return String(fallback ?? "");
-  }
-  return String(value);
-}
-
-// ONE reader for every boolean option: strict (only true/false pass), any other
-// value is diagnosed with `defaultValue` as what the card uses instead. Returns
-// `undefined` for a rejected or unwritten value; the caller applies the default. See
-// internal dev doc §3 "Konfigurationsvertrag".
-export function booleanOption(value, path, diagnostics, defaultValue) {
-  if (value === undefined || value === null) return undefined;
+export function readBoolean(value, path, diagnostics, fallback) {
+  if (isUnwritten(value)) return fallback;
   if (value === true || value === false) return value;
-  diagnostics.push(createDiagnostic("value.invalid", { path, value, fallback: fallbackValue(defaultValue) }));
-  return undefined;
+  return fallBack(diagnostics, path, value, fallbackValue(fallback), fallback);
 }
 
-// Generic closed-set config value: an unrecognized value silently falls back to
-// defaultValue, the same non-warning convention every other optional top-level
-// field uses — a typo degrades to "use the default" rather than breaking the
-// card.
-export function normalizeEnum(value, allowedValues, defaultValue) {
-  return allowedValues.includes(value) ? value : defaultValue;
+// A closed set of words, matched as written.
+export function readEnum(value, path, diagnostics, allowed, fallback) {
+  if (isUnwritten(value)) return fallback;
+  if (allowed.includes(value)) return value;
+  return fallBack(diagnostics, path, value, fallbackValue(fallback), fallback);
 }
 
-// Optional decimals override (0-2); anything else means "use the mode's
-// default".
-export function decimalsOverride(value) {
-  if (value === undefined || value === null || value === "") return null;
-  const num = parseConfigNumber(value);
-  return num !== null && Number.isInteger(num) && num >= 0 && num <= 2 ? num : null;
+// A number, from YAML or quoted, within [min, max]. Outside them the card uses `fallback`, not
+// the nearer bound: an extreme value is a mistake, not a request for the limit. `instead` names
+// the fallback when it is not a value of its own (null: decided automatically).
+export function readNumber(value, path, diagnostics, { min, max, integer = false, fallback, instead = fallbackValue(fallback) }) {
+  if (isUnwritten(value)) return fallback;
+  const number = parseConfigNumber(value);
+  if (number !== null && number >= min && number <= max && (!integer || Number.isInteger(number))) return number;
+  return fallBack(diagnostics, path, value, instead, fallback);
 }
 
-// Optional room_columns/room_rows override; anything invalid — not a positive
-// integer, or an unreasonably large value that couldn't possibly be a
-// deliberate layout choice — means "decide the grid automatically" rather than
-// throwing or building an absurdly large grid.
-export function positiveInteger(value) {
-  if (value === undefined || value === null || value === "") return null;
-  const num = parseConfigNumber(value);
-  return num !== null && Number.isInteger(num) && num >= 1 && num <= 20 ? num : null;
+// A text that replaces an automatic one (`icon`); empty is not a text.
+export function readText(value, path, diagnostics) {
+  if (isUnwritten(value)) return null;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return fallBack(diagnostics, path, value, FALLBACK.AUTOMATIC, null);
 }
 
-// rotation_seconds/slide_seconds: an invalid, missing, or out-of-range value
-// falls back to the built-in default instead of throwing — this only affects
-// cosmetic timing, not correctness. min/max are practical per-field bounds:
-// without an upper bound, an extreme value could overflow the
-// animation-duration/setTimeout millisecond math it feeds into.
-export function positiveSeconds(value, fallback, min, max) {
-  const num = parseConfigNumber(value);
-  return num !== null && num >= min && num <= max ? num : fallback;
+// A caption where "" is a real answer, "no caption here", distinct from null, "not written".
+export function readLabel(value, path, diagnostics) {
+  if (isUnwritten(value)) return null;
+  if (typeof value === "string") return value.trim();
+  return fallBack(diagnostics, path, value, FALLBACK.AUTOMATIC, null);
 }
 
-// A number at a named config path. Unlike the optional fields above, a
-// malformed value here throws: it appears inside classification blocks, where
-// silently substituting a default would produce a profile the user never asked
-// for and cannot see.
-export function numberAtPath(value, path) {
-  const parsed = parseConfigNumber(value);
-  if (parsed === null) pathError(path, "must be a finite number");
-  return parsed;
+// range_entity/trend_entity: "" turns one off like leaving it out; a value that is not an entity
+// id is ignored.
+export function readOptionalEntity(value, path, diagnostics) {
+  if (isUnwritten(value) || value === "") return null;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return fallBack(diagnostics, path, value, FALLBACK.IGNORED, null);
 }
 
-// Rejects any key the schema does not know. Unknown keys are an error rather
-// than being ignored, because a typo'd classification key would otherwise
-// silently produce a different profile than intended.
-export function assertAllowedKeys(value, allowed, path) {
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) pathError(`${path}.${key}`, "is not a supported option");
-  }
+// A number inside a definition object.
+export function readNumberAtPath(value, path) {
+  const number = parseConfigNumber(value);
+  if (number === null) rejectValue(path, value);
+  return number;
 }

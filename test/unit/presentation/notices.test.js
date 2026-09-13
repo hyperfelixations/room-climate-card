@@ -53,15 +53,57 @@ test("a foreign key and rooms of different measurements have sentences of their 
   );
 });
 
+test("each way of falling back has a clause of its own", () => {
+  const { FALLBACK, fallbackOption } = core;
+  assert.equal(
+    words("en", invalid("rooms[0].tap_action.action", "explode", FALLBACK.CARD_ACTION)),
+    '"explode" is not a valid value for rooms[0].tap_action.action. Using the card\'s action.'
+  );
+  assert.equal(
+    words("en", invalid("classification.tiers[1].min", 24, fallbackOption("classification", "auto"))),
+    "24 is not a valid value for classification.tiers[1].min. Using classification: auto.",
+    "a whole object fell back, so the clause names the object"
+  );
+  assert.equal(
+    words("de", invalid("palette.above[2]", "nope", fallbackOption("palette", "pastel"))),
+    '"nope" ist kein gültiger Wert für palette.above[2]. Es gilt palette: pastel.'
+  );
+});
+
+test("decimals fall back to the precision of the card's measurement", () => {
+  const diagnostic = invalid("decimals", 3, core.FALLBACK.METRIC_DECIMALS);
+  const render = (metricKind) => notices.renderMessage(notices.messageForDiagnostic(diagnostic, { metricKind }), t("en"));
+  assert.equal(render("temperature"), "3 is not a valid value for decimals. Using default: 1.");
+  assert.equal(render("co2"), "3 is not a valid value for decimals. Using default: 0.");
+  assert.equal(render(null), "3 is not a valid value for decimals. Using default: 1.", "the precision the card formats with");
+  const built = notices.buildNotices({ configDiagnostics: [diagnostic], domainDiagnostics: { warnings: [], hints: [] }, metricKind: "co2" });
+  assert.equal(notices.renderMessage(built.warnings[0], t("en")), "3 is not a valid value for decimals. Using default: 0.");
+});
+
+test("an older spelling names what replaces it", () => {
+  const deprecated = core.createDiagnostic("config.deprecated", {
+    path: "views[1].options.footer",
+    params: { written: "views[1].options.footer: false", replacement: "views[1].options.show_footer: false" },
+  });
+  assert.equal(
+    words("en", deprecated),
+    "views[1].options.footer: false is outdated and will be removed. Use views[1].options.show_footer: false."
+  );
+});
+
 test("every warning stays one short sentence in English", () => {
-  // A single warning is read in the subtitle, so it has to stay short.
+  // A single warning is read in full, so it has to stay short.
   const samples = [
     invalid("views[0].options.show_comfort_band", "a fairly long value", core.fallbackValue("extremes")),
     invalid("rotation_seconds", "fourteen", core.FALLBACK.AUTOMATIC),
     invalid("start_view", "sclae", core.FALLBACK.FIRST_VIEW),
     invalid("show", "yes", core.FALLBACK.DEFAULTS),
     invalid("views[3]", "extremes", core.FALLBACK.IGNORED),
+    invalid("rooms[11].hold_action.action", "explode", core.FALLBACK.CARD_ACTION),
+    invalid("decimals", 3, core.FALLBACK.METRIC_DECIMALS),
+    invalid("classification.bands.optimal.min", 19, core.fallbackOption("classification", "auto")),
     core.createDiagnostic("config.foreign_key", { path: "avg_label" }),
+    core.createDiagnostic("config.deprecated", { path: "unavailable_values", params: { written: "unavailable_values", replacement: "show.unavailable_rooms" } }),
     core.createDiagnostic("sources.mixed"),
   ];
   for (const diagnostic of samples) {

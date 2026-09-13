@@ -1,7 +1,7 @@
 "use strict";
 
-// Config primitives and their wiring into setConfig(): _parseConfigNumber,
-// _normalizeDecimalsOverride, _normalizePositiveInteger, _normalizePositiveSeconds, plus
+// Config number parsing and its wiring into setConfig(): parseConfigNumber() and readNumber()
+// with the bounds of decimals, room_columns/room_rows and rotation_seconds/slide_seconds, plus
 // end-to-end checks that setConfig() actually calls them. Number(true) === 1, so a naive
 // parser would accept `decimals: true` as 1; rotation_seconds/slide_seconds need upper
 // bounds so an extreme value cannot overflow the timer millisecond math.
@@ -71,57 +71,60 @@ test("_parseConfigNumber: non-numeric or partially-numeric strings are rejected"
   }
 });
 
-// ---- _normalizeDecimalsOverride() ----
+// ---- readNumber() with the bounds normalizeConfig() gives it ----
+// What it reports for a rejected value is config-primitives.test.js's to pin; here only the
+// number the card ends up with.
 
-test("_normalizeDecimalsOverride: booleans rejected (the CFG-01 bug case)", () => {
-  assert.equal(primitives.decimalsOverride(true), null);
-  assert.equal(primitives.decimalsOverride(false), null);
+const readWith = (value, bounds) => primitives.readNumber(value, "option", [], bounds);
+const DECIMALS = { min: 0, max: 2, integer: true, fallback: null };
+const ROOM_GRID = { min: 1, max: 20, integer: true, fallback: null };
+const ROTATION = { min: 1, max: 3600, fallback: 14 };
+
+test("decimals: booleans rejected (the CFG-01 bug case)", () => {
+  assert.equal(readWith(true, DECIMALS), null);
+  assert.equal(readWith(false, DECIMALS), null);
 });
 
-test("_normalizeDecimalsOverride: 0, 1, 2 are valid; out-of-range and non-integers are not", () => {
-  assert.equal(primitives.decimalsOverride(0), 0);
-  assert.equal(primitives.decimalsOverride(1), 1);
-  assert.equal(primitives.decimalsOverride(2), 2);
-  assert.equal(primitives.decimalsOverride(3), null);
-  assert.equal(primitives.decimalsOverride(-1), null);
-  assert.equal(primitives.decimalsOverride(1.5), null);
+test("decimals: 0, 1, 2 are valid; out-of-range and non-integers are not", () => {
+  assert.equal(readWith(0, DECIMALS), 0);
+  assert.equal(readWith(1, DECIMALS), 1);
+  assert.equal(readWith(2, DECIMALS), 2);
+  assert.equal(readWith(3, DECIMALS), null);
+  assert.equal(readWith(-1, DECIMALS), null);
+  assert.equal(readWith(1.5, DECIMALS), null);
 });
 
-test("_normalizeDecimalsOverride: undefined/null/empty-string all mean 'use mode default'", () => {
-  assert.equal(primitives.decimalsOverride(undefined), null);
-  assert.equal(primitives.decimalsOverride(null), null);
-  assert.equal(primitives.decimalsOverride(""), null);
+test("decimals: undefined/null/empty-string all end in the measurement's own precision", () => {
+  assert.equal(readWith(undefined, DECIMALS), null);
+  assert.equal(readWith(null, DECIMALS), null);
+  assert.equal(readWith("", DECIMALS), null);
 });
 
-// ---- _normalizePositiveInteger() (room_columns/room_rows) ----
-
-test("_normalizePositiveInteger: booleans rejected", () => {
-  assert.equal(primitives.positiveInteger(true), null);
+test("room_columns/room_rows: booleans rejected", () => {
+  assert.equal(readWith(true, ROOM_GRID), null);
 });
 
-test("_normalizePositiveInteger: 1-20 valid, 0/negative/>20/non-integer invalid", () => {
-  assert.equal(primitives.positiveInteger(1), 1);
-  assert.equal(primitives.positiveInteger(20), 20);
-  assert.equal(primitives.positiveInteger(0), null);
-  assert.equal(primitives.positiveInteger(-5), null);
-  assert.equal(primitives.positiveInteger(21), null);
-  assert.equal(primitives.positiveInteger(3.5), null);
+test("room_columns/room_rows: 1-20 valid, 0/negative/>20/non-integer invalid", () => {
+  assert.equal(readWith(1, ROOM_GRID), 1);
+  assert.equal(readWith(20, ROOM_GRID), 20);
+  assert.equal(readWith(0, ROOM_GRID), null);
+  assert.equal(readWith(-5, ROOM_GRID), null);
+  assert.equal(readWith(21, ROOM_GRID), null);
+  assert.equal(readWith(3.5, ROOM_GRID), null);
 });
 
-// ---- _normalizePositiveSeconds() ----
-
-test("_normalizePositiveSeconds: within [min,max] is accepted, outside falls back to the default", () => {
-  assert.equal(primitives.positiveSeconds(30, 14, 1, 3600), 30);
-  assert.equal(primitives.positiveSeconds(1, 14, 1, 3600), 1);
-  assert.equal(primitives.positiveSeconds(3600, 14, 1, 3600), 3600);
-  assert.equal(primitives.positiveSeconds(0, 14, 1, 3600), 14, "below min falls back");
-  assert.equal(primitives.positiveSeconds(3601, 14, 1, 3600), 14, "above max falls back");
-  assert.equal(primitives.positiveSeconds(999999, 14, 1, 3600), 14, "an extreme value falls back, protecting the timer math");
+test("rotation_seconds: within [min,max] is accepted, outside falls back to the default", () => {
+  assert.equal(readWith(30, ROTATION), 30);
+  assert.equal(readWith(1, ROTATION), 1);
+  assert.equal(readWith(3600, ROTATION), 3600);
+  assert.equal(readWith(0, ROTATION), 14, "below min falls back");
+  assert.equal(readWith(3601, ROTATION), 14, "above max falls back");
+  assert.equal(readWith(999999, ROTATION), 14, "an extreme value falls back, protecting the timer math");
 });
 
-test("_normalizePositiveSeconds: booleans/junk fall back to the default", () => {
-  assert.equal(primitives.positiveSeconds(true, 14, 1, 3600), 14);
-  assert.equal(primitives.positiveSeconds("abc", 14, 1, 3600), 14);
+test("rotation_seconds: booleans/junk fall back to the default", () => {
+  assert.equal(readWith(true, ROTATION), 14);
+  assert.equal(readWith("abc", ROTATION), 14);
 });
 
 // ---- Full setConfig() integration: confirms the parsers are actually wired up ----
@@ -175,7 +178,7 @@ test("integration: duplicate rooms[].entity throws with the offending entity nam
         },
         hass
       ),
-    /duplicate rooms\[\]\.entity "sensor\.r1"/
+    { name: "ConfigError", message: "Invalid configuration: sensor.r1 is used by more than one room." }
   );
 });
 

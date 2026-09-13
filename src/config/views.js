@@ -1,109 +1,98 @@
-// Normalizing the `views:` list. Non-destructive and never throws: a malformed entry degrades
-// to "ignored" or "auto" and records a diagnostic. The view types and their option schemas are
-// INJECTED, because the registry that owns them also owns render callbacks and config/ may not
-// import it.
+// Normalizing the `views:` list. A key an entry or its options do not have refuses the
+// configuration; any other malformed entry degrades to "ignored" or "auto" and records a
+// diagnostic. The view types and their option schemas are INJECTED, because the registry that
+// owns them also owns render callbacks and config/ may not import it.
 
 import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
-import { isPlainObject, optionalString } from "./primitives.js";
+import { assertKnownKeys, isPlainObject, isUnwritten } from "./primitives.js";
 
-function invalid(path, value, fallback) {
-  return createDiagnostic("value.invalid", { path, value, fallback });
+export const VIEW_ENTRY_KEYS = Object.freeze(["type", "enabled", "options"]);
+
+function invalid(diagnostics, path, value, fallback) {
+  diagnostics.push(createDiagnostic("value.invalid", { path, value, fallback }));
 }
 
 // `undefined`/`null` is the normal "not configured" case (resolves to one auto entry per
 // registered view) and is not diagnosed; any other non-array value is diagnosed and
 // normalizes to the same null sentinel. An unknown or repeated view type is dropped here, so
 // the list that leaves this file names each registered type at most once.
-export function normalizeViewsConfig(value, { optionSchemaForView, viewTypes }) {
+export function normalizeViewsConfig(value, { optionSchemaForView, viewTypes }, diagnostics) {
+  if (isUnwritten(value)) return null;
   if (!Array.isArray(value)) {
-    if (value === undefined || value === null) return { views: null, diagnostics: [] };
-    return { views: null, diagnostics: [invalid("views", value, FALLBACK.AUTOMATIC)] };
+    invalid(diagnostics, "views", value, FALLBACK.AUTOMATIC);
+    return null;
   }
   const views = [];
-  const diagnostics = [];
   const seen = new Set();
   value.forEach((entry, index) => {
-    const { request, typePath, diagnostics: entryDiagnostics } = normalizeViewRequest(entry, index, {
-      optionSchemaForView,
-      viewTypes,
-    });
+    const entryPath = `views[${index}]`;
+    const named = readViewType(entry, entryPath, viewTypes, diagnostics);
+    if (!named) return;
     // A repeated type is reported once, as a repetition; its own options are never read.
-    if (request && seen.has(request.type)) {
-      diagnostics.push(invalid(typePath, request.type, FALLBACK.IGNORED));
+    if (seen.has(named.type)) {
+      invalid(diagnostics, named.path, named.type, FALLBACK.IGNORED);
       return;
     }
-    diagnostics.push(...entryDiagnostics);
-    if (!request) return;
-    seen.add(request.type);
-    views.push(request);
+    seen.add(named.type);
+    views.push(normalizeViewRequest(entry, named.type, entryPath, optionSchemaForView(named.type) || {}, diagnostics));
   });
-  return { views, diagnostics };
+  return views;
 }
 
-// One views: list entry. A string naming a registered view type is shorthand for {type,
-// enabled: true}; an object needs such a `type`, else it is ignored with a diagnostic.
-// `enabled`: not written means true (listing a view is itself a request), "auto" delegates
-// to the view's own default, and any other value is diagnosed and falls back to "auto".
-// `typePath` is where the type was written, for the caller's repetition check.
-export function normalizeViewRequest(entry, index, { optionSchemaForView, viewTypes }) {
-  const entryPath = `views[${index}]`;
+// The registered type one entry names, with the path it was written at, or null (diagnosed).
+// A string is shorthand for {type, enabled: true}; an object's own keys are checked first.
+function readViewType(entry, entryPath, viewTypes, diagnostics) {
   if (typeof entry === "string") {
     const type = entry.trim();
-    if (!viewTypes.includes(type)) return { request: null, typePath: entryPath, diagnostics: [invalid(entryPath, entry, FALLBACK.IGNORED)] };
-    return { request: { type, enabled: true, options: {} }, typePath: entryPath, diagnostics: [] };
+    if (viewTypes.includes(type)) return { type, path: entryPath };
+    invalid(diagnostics, entryPath, entry, FALLBACK.IGNORED);
+    return null;
   }
   if (!isPlainObject(entry)) {
-    return { request: null, typePath: entryPath, diagnostics: [invalid(entryPath, entry, FALLBACK.IGNORED)] };
+    invalid(diagnostics, entryPath, entry, FALLBACK.IGNORED);
+    return null;
   }
-  const typePath = `${entryPath}.type`;
-  const type = optionalString(entry.type);
-  if (!type || !viewTypes.includes(type)) {
-    return { request: null, typePath, diagnostics: [invalid(typePath, entry.type, FALLBACK.IGNORED)] };
-  }
-  const diagnostics = [];
-  let enabled;
-  if (entry.enabled === true || entry.enabled === false) {
-    enabled = entry.enabled;
-  } else if (entry.enabled === undefined || entry.enabled === null) {
-    enabled = true;
-  } else if (entry.enabled === "auto") {
-    enabled = "auto";
-  } else {
-    enabled = "auto";
-    diagnostics.push(invalid(`${entryPath}.enabled`, entry.enabled, fallbackValue("auto")));
-  }
-  const { options, diagnostics: optionsDiagnostics } = normalizeViewOptions(type, entry.options, index, { optionSchemaForView });
-  diagnostics.push(...optionsDiagnostics);
-  return { request: { type, enabled, options }, typePath, diagnostics };
+  assertKnownKeys(entry, VIEW_ENTRY_KEYS, entryPath);
+  const type = typeof entry.type === "string" ? entry.type.trim() : "";
+  if (viewTypes.includes(type)) return { type, path: `${entryPath}.type` };
+  invalid(diagnostics, `${entryPath}.type`, entry.type, FALLBACK.IGNORED);
+  return null;
 }
 
-// views:[i].options against the requested view's own schema. Only keys the view implements
-// survive — a renderer must never trust an arbitrary user key. A known key's value is
-// validated when its schema entry declares a validate(); an invalid value is diagnosed and
-// dropped, so the schema default applies. A key with nothing after it is not a request.
-export function normalizeViewOptions(type, rawOptions, index, { optionSchemaForView }) {
-  const schema = optionSchemaForView(type) || {};
-  if (rawOptions === undefined || rawOptions === null) return { options: {}, diagnostics: [] };
-  const optionsPath = `views[${index}].options`;
+// `enabled`: not written means true (listing a view is itself a request), "auto" delegates
+// to the view's own default, and any other value is diagnosed and falls back to "auto".
+function normalizeViewRequest(entry, type, entryPath, schema, diagnostics) {
+  if (typeof entry === "string") return { type, enabled: true, options: {} };
+  let enabled = true;
+  if (entry.enabled === true || entry.enabled === false || entry.enabled === "auto") {
+    enabled = entry.enabled;
+  } else if (!isUnwritten(entry.enabled)) {
+    enabled = "auto";
+    invalid(diagnostics, `${entryPath}.enabled`, entry.enabled, fallbackValue("auto"));
+  }
+  return { type, enabled, options: normalizeViewOptions(entry.options, `${entryPath}.options`, schema, diagnostics) };
+}
+
+// views[i].options against the view's own schema: only keys the view implements are accepted —
+// a renderer must never trust an arbitrary user key. A known key's value is validated when its
+// schema entry declares a validate(); an invalid value is diagnosed and dropped, so the schema
+// default applies. A key with nothing after it is not a request.
+function normalizeViewOptions(rawOptions, path, schema, diagnostics) {
+  if (isUnwritten(rawOptions)) return {};
   if (!isPlainObject(rawOptions)) {
-    return { options: {}, diagnostics: [invalid(optionsPath, rawOptions, FALLBACK.DEFAULTS)] };
+    invalid(diagnostics, path, rawOptions, FALLBACK.DEFAULTS);
+    return {};
   }
-  const result = {};
-  const diagnostics = [];
-  for (const key of Object.keys(rawOptions)) {
-    const path = `${optionsPath}.${key}`;
-    if (!Object.prototype.hasOwnProperty.call(schema, key)) {
-      diagnostics.push(createDiagnostic("config.foreign_key", { path }));
-      continue;
-    }
-    const value = rawOptions[key];
-    if (value === undefined || value === null) continue;
-    const validate = schema[key].validate;
+  assertKnownKeys(rawOptions, Object.keys(schema), path);
+  const options = {};
+  for (const [key, value] of Object.entries(rawOptions)) {
+    if (isUnwritten(value)) continue;
+    const { validate, default: defaultValue } = schema[key];
     if (typeof validate === "function" && !validate(value)) {
-      diagnostics.push(invalid(path, value, fallbackValue(schema[key].default)));
+      invalid(diagnostics, `${path}.${key}`, value, fallbackValue(defaultValue));
       continue;
     }
-    result[key] = value;
+    options[key] = value;
   }
-  return { options: result, diagnostics };
+  return options;
 }

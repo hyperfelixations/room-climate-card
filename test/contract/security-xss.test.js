@@ -134,32 +134,31 @@ test("XSS payload in an icon config value produces no extra DOM nodes (icon is s
 
 // ---- Action allowlist ----
 
+// The reader as normalizeConfig() calls it; what it reports is config-primitives.test.js's to pin.
+const readAction = (value, fallback) => actions.normalizeAction(value, "tap_action", [], fallback);
+
 test("_normalizeAction: all 7 allowlisted action types are accepted verbatim", () => {
-  const el = env.document.createElement("room-climate-card");
   for (const action of ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"]) {
-    assert.deepEqual(normalize(actions.normalizeAction({ action }, null)), { action });
+    assert.deepEqual(normalize(readAction({ action }, null)), { action });
   }
 });
 
 test("_normalizeAction: an unknown action type falls back to the fallback, not passed through raw", () => {
-  const el = env.document.createElement("room-climate-card");
   const fallback = { action: "more-info" };
-  assert.deepEqual(normalize(actions.normalizeAction({ action: "javascript:alert(1)" }, fallback)), fallback);
-  assert.deepEqual(normalize(actions.normalizeAction({ action: "eval" }, fallback)), fallback);
+  assert.deepEqual(normalize(readAction({ action: "javascript:alert(1)" }, fallback)), fallback);
+  assert.deepEqual(normalize(readAction({ action: "eval" }, fallback)), fallback);
 });
 
 test("_normalizeAction: a non-object value falls back safely", () => {
-  const el = env.document.createElement("room-climate-card");
   const fallback = { action: "more-info" };
-  assert.deepEqual(normalize(actions.normalizeAction("more-info", fallback)), fallback, "a bare string is not a valid action object");
-  assert.deepEqual(normalize(actions.normalizeAction(null, fallback)), fallback);
-  assert.deepEqual(normalize(actions.normalizeAction([], fallback)), fallback, "an array is not a plain object");
+  assert.deepEqual(normalize(readAction("more-info", fallback)), fallback, "a bare string is not a valid action object");
+  assert.deepEqual(normalize(readAction(null, fallback)), fallback);
+  assert.deepEqual(normalize(readAction([], fallback)), fallback, "an array is not a plain object");
 });
 
 test("_normalizeAction: a per-room override with no fallback (null) inherits nothing, stays null", () => {
-  const el = env.document.createElement("room-climate-card");
-  assert.equal(actions.normalizeAction(undefined, null), null);
-  assert.equal(actions.normalizeAction({ action: "bogus" }, null), null);
+  assert.equal(readAction(undefined, null), null);
+  assert.equal(readAction({ action: "bogus" }, null), null);
 });
 
 test("integration: config-level and per-room tap_action/hold_action are both wired through the allowlist", () => {

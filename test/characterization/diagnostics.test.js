@@ -1,12 +1,13 @@
 "use strict";
 
-// Characterization of error and warning behaviour, verbatim. The card has two failure
-// modes, and the boundary is a product decision: structurally invalid config throws (HA's
-// setConfig() contract requires it to propagate); an invalid value or a foreign key degrades,
-// is shown in the warnings block and is written to the console once per change. Changes must move
-// neither the boundary nor the wording without a deliberate baseline update — the messages are
-// what a user has to act on, and the once-per-change dedup keeps a misconfigured dashboard from
-// flooding the console.
+// Characterization of error and warning behaviour, verbatim. The card has two failure modes,
+// and the boundary is a product decision: a configuration setConfig() cannot use at all — a key
+// the card does not have, a missing or malformed source — throws (HA's setConfig() contract
+// requires it to propagate); every invalid value and every foreign key degrades to its default,
+// is shown in the warnings block and is written to the console once per change. Changes must
+// move neither the boundary nor the wording without a deliberate baseline update — the messages
+// are what a user has to act on, and the once-per-change dedup keeps a misconfigured dashboard
+// from flooding the console.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -54,6 +55,7 @@ function validCustom() {
   };
 }
 
+// The closed catalog of refusals, and an unknown key in every object the card owns.
 const INVALID_CONFIGS = [
   ["config-not-an-object", VALID_HASS, "not a config"],
   ["config-is-an-array", VALID_HASS, []],
@@ -69,80 +71,96 @@ const INVALID_CONFIGS = [
     VALID_HASS,
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r1" }] },
   ],
-  ["range-entity-not-a-string", VALID_HASS, { entity: "sensor.avg", range_entity: 7 }],
-  ["trend-entity-not-a-string", VALID_HASS, { entity: "sensor.avg", trend_entity: 7 }],
-  ["classification-shorthand-profile", VALID_HASS, { entity: "sensor.avg", classification: "profile" }],
-  ["classification-shorthand-custom", VALID_HASS, { entity: "sensor.avg", classification: "custom" }],
-  ["classification-not-string-or-object", VALID_HASS, { entity: "sensor.avg", classification: 5 }],
+  ["top-level-misspelled-key", VALID_HASS, { entity: "sensor.avg", pallete: "vivid" }],
+  ["room-unknown-key", VALID_HASS, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1", nmae: "Kitchen" }] }],
+  ["show-unknown-key", VALID_HASS, { entity: "sensor.avg", show: { ikon: false } }],
+  ["title-unknown-key", VALID_HASS, { entity: "sensor.avg", title: { text: "Hall", overflw: "wrap" } }],
+  ["views-entry-unknown-key", VALID_HASS, { entity: "sensor.avg", views: [{ type: "scale", enable: true }] }],
+  ["views-options-unknown-key", VALID_HASS, { entity: "sensor.avg", views: [{ type: "scale", options: { bogus: true, also_bogus: 1 } }] }],
   [
     "classification-unknown-key",
     VALID_HASS,
     { entity: "sensor.avg", classification: { source: "auto", bogus: true } },
   ],
-  ["classification-unknown-source", VALID_HASS, { entity: "sensor.avg", classification: { source: "nope" } }],
   [
-    "classification-entity-source-with-profile",
+    "custom-profile-unknown-nested-key",
     VALID_HASS,
-    { entity: "sensor.avg", classification: { source: "entity", profile: "indoor" } },
+    { entity: "sensor.avg", classification: { ...validCustom(), unit: "hPa", scale: { min: 16, max: 28, step: 2, anchorScale: false } } },
   ],
-  [
-    "classification-blank-profile",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { source: "profile", profile: "   " } },
-  ],
-  [
-    "custom-unit-missing",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), unit: undefined } },
-  ],
-  ["custom-unit-unknown", VALID_HASS, { entity: "sensor.avg", classification: { ...validCustom(), unit: "hPa" } }],
-  ["custom-bands-missing", VALID_HASS, { entity: "sensor.avg", classification: { ...validCustom(), bands: undefined } }],
+  ["palette-unknown-key", VALID_HASS, { entity: "sensor.avg", palette: { optimal: "1DB85D", abve: "FD9808" } }],
+];
+
+// [name, config, hass]; hass defaults to VALID_HASS.
+const WARNING_CONFIGS = [
+  ["top-level-foreign-key", { entity: "sensor.avg", wibble_wobble: 1 }],
+  ["range-entity-not-a-string", { entity: "sensor.avg", range_entity: 7 }],
+  ["trend-entity-not-a-string", { entity: "sensor.avg", trend_entity: 7 }],
+  ["room-name-not-text", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1", name: true }] }],
+  ["room-action-unknown", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1", hold_action: { action: "explode" } }] }],
+  ["tap-action-not-an-object", { entity: "sensor.avg", tap_action: "toggle" }],
+  ["title-not-text", { entity: "sensor.avg", title: 42 }],
+  ["subtitle-overflow-unknown", { entity: "sensor.avg", subtitle: { text: "Downstairs", overflow: "sideways" } }],
+  ["entity-label-not-text", { entity: "sensor.avg", entity_label: 5 }],
+  ["icon-empty", { entity: "sensor.avg", icon: "" }],
+  ["decimals-out-of-range", { entity: "sensor.avg", decimals: 3 }],
+  ["language-unsupported", { entity: "sensor.avg", language: "xx" }],
+  ["show-not-an-object", { entity: "sensor.avg", show: "yes" }],
+  ["show-part-not-a-boolean", { entity: "sensor.avg", show: { pill: "no" } }],
+  ["show-rooms-unknown", { entity: "sensor.avg", show: { rooms: "alway" } }],
+  ["room-sort-unknown", { entity: "sensor.avg", room_sort: "names" }],
+  ["room-label-unknown", { entity: "sensor.avg", room_label: "long" }],
+  ["room-columns-out-of-range", { entity: "sensor.avg", room_columns: 0 }],
+  ["auto-slide-not-a-boolean", { entity: "sensor.avg", auto_slide: "yes" }],
+  ["rotation-seconds-out-of-range", { entity: "sensor.avg", rotation_seconds: 0 }],
+  ["slide-seconds-not-a-number", { entity: "sensor.avg", slide_seconds: "NaN" }],
+  ["views-not-an-array", { entity: "sensor.avg", views: "scale" }],
+  ["views-unknown-type", { entity: "sensor.avg", views: ["scale", "bogus"] }],
+  ["views-duplicate-type", { entity: "sensor.avg", views: ["scale", "scale"] }],
+  ["views-invalid-enabled", { entity: "sensor.avg", views: [{ type: "scale", enabled: "yes" }] }],
+  ["views-entry-wrong-shape", { entity: "sensor.avg", views: [42] }],
+  ["views-entry-missing-type", { entity: "sensor.avg", views: [{ enabled: true }] }],
+  ["views-entry-empty-string", { entity: "sensor.avg", views: ["   "] }],
+  ["views-options-not-an-object", { entity: "sensor.avg", views: [{ type: "scale", options: "all" }] }],
+  ["views-options-invalid-boolean", { entity: "sensor.avg", views: [{ type: "scale", options: { show_comfort_band: "yes" } }] }],
+  ["views-options-invalid-enum", { entity: "sensor.avg", views: [{ type: "scale", options: { markers: "some" } }] }],
+  ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
+  ["show-rooms-legacy-unknown", { entity: "sensor.avg", show_rooms: "alway" }],
+  ["unavailable-values-legacy-unknown", { entity: "sensor.avg", unavailable_values: "hidden" }],
+  ["palette-unknown-name", { entity: "sensor.avg", palette: "neon" }],
+  ["palette-gradient-with-an-empty-part", { entity: "sensor.avg", palette: "teal--black" }],
+  ["palette-written-color-invalid", { entity: "sensor.avg", palette: { optimal: "1DB85D", above: "FD9808, nope" } }],
+  // What `optimal: #1DB85D` reaches the card as: a YAML comment left the value empty.
+  ["palette-written-color-swallowed-by-a-comment", { entity: "sensor.avg", palette: { optimal: null } }],
+  ["classification-shorthand-profile", { entity: "sensor.avg", classification: "profile" }],
+  ["classification-shorthand-custom", { entity: "sensor.avg", classification: "custom" }],
+  ["classification-not-string-or-object", { entity: "sensor.avg", classification: 5 }],
+  ["classification-unknown-source", { entity: "sensor.avg", classification: { source: "nope" } }],
+  ["classification-entity-source-with-profile", { entity: "sensor.avg", classification: { source: "entity", profile: "indoor" } }],
+  ["classification-blank-profile", { entity: "sensor.avg", classification: { source: "profile", profile: "   " } }],
+  ["custom-unit-missing", { entity: "sensor.avg", classification: { ...validCustom(), unit: undefined } }],
+  ["custom-unit-unknown", { entity: "sensor.avg", classification: { ...validCustom(), unit: "hPa" } }],
+  ["custom-bands-missing", { entity: "sensor.avg", classification: { ...validCustom(), bands: undefined } }],
   [
     "custom-optimal-not-contained-in-comfort",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: { ...validCustom(), bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } },
-    },
+    { entity: "sensor.avg", classification: { ...validCustom(), bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } } },
   ],
-  // The two shapes of `scale`, and the two ways of asking for neither.
   [
-    "custom-scale-without-a-range",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2 } } },
+    "custom-band-min-not-below-max",
+    { entity: "sensor.avg", classification: { ...validCustom(), bands: { comfort: { min: 25, max: 25 }, optimal: { min: 21, max: 23 } } } },
   ],
+  // The two shapes of `scale`, and the ways of asking for neither.
+  ["custom-scale-without-a-range", { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2 } } }],
   [
     "custom-scale-range-with-anchor-scale-false",
-    VALID_HASS,
     { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 16, max: 28, step: 2, anchor_scale: false } } },
   ],
   [
     "custom-one-sided-without-an-anchor",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: {
-        ...validCustom(),
-        scale: { step: 2, anchor_scale: false, one_sided: true },
-      },
-    },
+    { entity: "sensor.avg", classification: { ...validCustom(), scale: { step: 2, anchor_scale: false, one_sided: true } } },
   ],
-  [
-    "custom-scale-step-not-positive",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 16, max: 28, step: 0 } } },
-  ],
-  [
-    "custom-band-min-not-below-max",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: { ...validCustom(), bands: { comfort: { min: 25, max: 25 }, optimal: { min: 21, max: 23 } } },
-    },
-  ],
+  ["custom-scale-step-not-positive", { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: 16, max: 28, step: 0 } } }],
   [
     "custom-tiers-not-strictly-descending",
-    VALID_HASS,
     {
       entity: "sensor.avg",
       classification: {
@@ -157,7 +175,6 @@ const INVALID_CONFIGS = [
   ],
   [
     "custom-default-tier-not-last",
-    VALID_HASS,
     {
       entity: "sensor.avg",
       classification: {
@@ -171,18 +188,10 @@ const INVALID_CONFIGS = [
   ],
   [
     "custom-no-default-tier",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: {
-        ...validCustom(),
-        tiers: [{ min: 20, score: 1, level: "B", color: "#4488cc", zone: "outside" }],
-      },
-    },
+    { entity: "sensor.avg", classification: { ...validCustom(), tiers: [{ min: 20, score: 1, level: "B", color: "#4488cc", zone: "outside" }] } },
   ],
   [
     "custom-tier-unknown-zone",
-    VALID_HASS,
     {
       entity: "sensor.avg",
       classification: {
@@ -196,7 +205,6 @@ const INVALID_CONFIGS = [
   ],
   [
     "custom-tier-invalid-color",
-    VALID_HASS,
     {
       entity: "sensor.avg",
       classification: {
@@ -208,27 +216,14 @@ const INVALID_CONFIGS = [
       },
     },
   ],
-  [
-    "custom-valid-range-without-bounds",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), valid_range: {} } },
-  ],
+  ["custom-valid-range-without-bounds", { entity: "sensor.avg", classification: { ...validCustom(), valid_range: {} } }],
   [
     "custom-icons-threshold-object-not-descending",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: { ...validCustom(), icons: { fire: 20, high: 26, normal: 19, low: 15 } },
-    },
+    { entity: "sensor.avg", classification: { ...validCustom(), icons: { fire: 20, high: 26, normal: 19, low: 15 } } },
   ],
-  [
-    "custom-icons-not-a-list",
-    VALID_HASS,
-    { entity: "sensor.avg", classification: { ...validCustom(), icons: "mdi:thermometer" } },
-  ],
+  ["custom-icons-not-a-list", { entity: "sensor.avg", classification: { ...validCustom(), icons: "mdi:thermometer" } }],
   [
     "custom-icons-threshold-object-on-a-non-temperature-profile",
-    VALID_HASS_HUMIDITY,
     {
       entity: "sensor.avg",
       classification: {
@@ -243,18 +238,14 @@ const INVALID_CONFIGS = [
         icons: { fire: 90, high: 75, normal: 40, low: 20 },
       },
     },
+    VALID_HASS_HUMIDITY,
   ],
   [
     "custom-icons-list-without-a-default-tier",
-    VALID_HASS,
-    {
-      entity: "sensor.avg",
-      classification: { ...validCustom(), icons: [{ min: 28, icon: "mdi:fire-alert" }] },
-    },
+    { entity: "sensor.avg", classification: { ...validCustom(), icons: [{ min: 28, icon: "mdi:fire-alert" }] } },
   ],
   [
     "custom-value-cannot-be-converted-to-the-canonical-unit",
-    VALID_HASS,
     {
       entity: "sensor.avg",
       classification: {
@@ -265,11 +256,6 @@ const INVALID_CONFIGS = [
       },
     },
   ],
-  ["top-level-misspelled-key", VALID_HASS, { entity: "sensor.avg", pallete: "vivid" }],
-];
-
-// [name, config, hass]; hass defaults to VALID_HASS.
-const WARNING_CONFIGS = [
   // Decidable only with the sensors: the card applies the measurement's default profile.
   ["classification-unknown-profile-for-metric-kind", { entity: "sensor.avg", classification: { source: "profile", profile: "greenhouse" } }],
   [
@@ -305,19 +291,6 @@ const WARNING_CONFIGS = [
     { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: -5e307, max: 5e307, step: 2 } } },
     FAHRENHEIT_HASS,
   ],
-  ["top-level-foreign-key", { entity: "sensor.avg", wibble_wobble: 1 }],
-  ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
-  ["views-not-an-array", { entity: "sensor.avg", views: "scale" }],
-  ["views-unknown-type", { entity: "sensor.avg", views: ["scale", "bogus"] }],
-  ["views-duplicate-type", { entity: "sensor.avg", views: ["scale", "scale"] }],
-  ["views-invalid-enabled", { entity: "sensor.avg", views: [{ type: "scale", enabled: "yes" }] }],
-  ["views-entry-wrong-shape", { entity: "sensor.avg", views: [42] }],
-  ["views-entry-missing-type", { entity: "sensor.avg", views: [{ enabled: true }] }],
-  ["views-entry-empty-string", { entity: "sensor.avg", views: ["   "] }],
-  ["views-options-not-an-object", { entity: "sensor.avg", views: [{ type: "scale", options: "all" }] }],
-  ["views-options-unknown-key", { entity: "sensor.avg", views: [{ type: "scale", options: { bogus: true, also_bogus: 1 } }] }],
-  ["views-options-invalid-boolean", { entity: "sensor.avg", views: [{ type: "scale", options: { show_comfort_band: "yes" } }] }],
-  ["views-options-invalid-enum", { entity: "sensor.avg", views: [{ type: "scale", options: { markers: "some" } }] }],
 ];
 
 let env;
@@ -346,6 +319,7 @@ test("every rejected configuration throws its documented message", () => {
     try {
       el.setConfig(config);
     } catch (err) {
+      assert.equal(err.name, "ConfigError", `${name}: a refusal from the catalog, not a programming error`);
       message = err.message;
     }
     assert.notEqual(message, null, `${name}: must throw`);

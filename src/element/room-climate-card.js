@@ -25,11 +25,9 @@ import {
   DEFAULT_PALETTE,
   assertPalette,
   completePalette,
-  MAX_GRADIENT_COLORS,
   paletteForColor,
   paletteForGradient,
   paletteForName,
-  paletteKeys,
 } from "../domain/classification/palettes/registry.js";
 import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { surfaceOf } from "../domain/classification/paint-roles.js";
@@ -88,10 +86,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
     paletteForColor,
     paletteForGradient,
-    // Handed over rather than restated in the error message, so the number the user is
-    // told cannot drift from the one the generator enforces (as with paletteKeys()).
-    paletteGradientLimit: MAX_GRADIENT_COLORS,
-    paletteKeys,
     assertPalette,
     completePalette,
   };

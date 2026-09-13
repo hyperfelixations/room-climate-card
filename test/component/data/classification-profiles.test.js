@@ -569,17 +569,24 @@ test("a custom profile without icons shows the metric's static icon, for every m
 
 test("custom non-temperature icons: validation reuses the shared tiers list contract", () => {
   const cases = [
-    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:water-percent-alert" }] }, /default tier/],
-    [{ ...customHumidityWithIcons, icons: [{ min: 30, icon: "mdi:a" }, { min: 60, icon: "mdi:b" }, { default: true, icon: "mdi:c" }] }, /descending/],
-    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: 42 }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.icon/],
-    [{ ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:a", bogus: true }, { default: true, icon: "mdi:c" }] }, /classification\.icons\[0\]\.bogus/],
+    [[{ min: 60, icon: "mdi:water-percent-alert" }], "[…] is not a valid value for classification.icons."],
+    [[{ min: 30, icon: "mdi:a" }, { min: 60, icon: "mdi:b" }, { default: true, icon: "mdi:c" }], "60 is not a valid value for classification.icons[1].min."],
+    [[{ min: 60, icon: 42 }, { default: true, icon: "mdi:c" }], "42 is not a valid value for classification.icons[0].icon."],
     // The threshold object is a temperature-only input spelling; every other metric has
     // only the shared list.
-    [{ ...customHumidityWithIcons, icons: { fire: 90, high: 75, normal: 40, low: 20 } }, /classification\.icons must be a list/],
+    [{ fire: 90, high: 75, normal: 40, low: 20 }, "{…} is not a valid value for classification.icons."],
   ];
-  for (const [classification, expected] of cases) {
-    assert.throws(() => humidityCardWithIcons(65, classification), expected);
+  for (const [icons, sentence] of cases) {
+    const card = humidityCardWithIcons(65, { ...customHumidityWithIcons, icons });
+    assert.equal(card._config.classification.source, "auto", `${sentence} The profile falls back whole.`);
+    assert.equal(card.shadowRoot.querySelector(".rtc-warning-text").textContent, `${sentence} Using classification: auto.`);
+    env.cleanup(card);
   }
+  // A key an icon tier does not have refuses the configuration.
+  assert.throws(
+    () => humidityCardWithIcons(65, { ...customHumidityWithIcons, icons: [{ min: 60, icon: "mdi:a", bogus: true }, { default: true, icon: "mdi:c" }] }),
+    { name: "ConfigError", message: "Invalid configuration: classification.icons[0].bogus is not an option of this card." }
+  );
 });
 
 test("outdoor profile is projected atomically into Fahrenheit", () => {

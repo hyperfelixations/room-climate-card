@@ -79,7 +79,7 @@ function configCollaborators() {
     // stub would still pass every (palette-name) baseline while hiding a colour-road regression.
     paletteForName: (name) => (name === null ? palettes.DEFAULT_PALETTE : palettes.paletteForName(name)),
     paletteForColor: palettes.paletteForColor,
-    paletteKeys: palettes.paletteKeys,
+    paletteForGradient: palettes.paletteForGradient,
     assertPalette: palettes.assertPalette,
     completePalette: palettes.completePalette,
   };

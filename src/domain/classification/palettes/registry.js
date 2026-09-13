@@ -9,9 +9,6 @@
 import { isHexColor, parseColorToken } from "../../../core/color.js";
 import { colorVision } from "./color-vision.js";
 import { MAX_GRADIENT_COLORS, gradientPalette } from "./gradient.js";
-
-// Re-exported so the composition root has one door to the palette vocabulary.
-export { MAX_GRADIENT_COLORS };
 import { monochromePalette } from "./monochrome.js";
 import { pastel } from "./pastel.js";
 import { signal } from "./signal.js";
@@ -36,7 +33,7 @@ const DEFAULT_ORIGIN = "custom";
 
 function assertColor(value, path) {
   if (typeof value !== "string" || !isHexColor(value.trim())) {
-    throw new Error(`Invalid configuration: ${path} must be a 3/4/6/8-digit hex color.`);
+    throw new Error(`${path} must be a 3/4/6/8-digit hex color.`);
   }
 }
 
@@ -45,7 +42,7 @@ function assertColor(value, path) {
 function assertWing(wing, path) {
   if (wing === undefined || wing === null) return;
   if (!Array.isArray(wing)) {
-    throw new Error(`Invalid configuration: ${path} must be a list of colors, running outwards from the middle.`);
+    throw new Error(`${path} must be a list of colors, running outwards from the middle.`);
   }
   // 1-based, because a wing is addressed by "steps from optimal" everywhere else.
   wing.forEach((color, index) => assertColor(color, `${path}[${index + 1}]`));
@@ -55,7 +52,7 @@ function assertWing(wing, path) {
 // the user wrote rather than an internal id they have never seen.
 export function assertPalette(palette, path = "palette") {
   if (!palette || typeof palette !== "object" || Array.isArray(palette)) {
-    throw new Error(`Invalid configuration: ${path} must be an object.`);
+    throw new Error(`${path} must be an object.`);
   }
   assertColor(palette.optimal, `${path}.optimal`);
   assertWing(palette.above, `${path}.above`);
@@ -104,7 +101,7 @@ export const DEFAULT_PALETTE = CLASSIFICATION_PALETTE_REGISTRY[DEFAULT_PALETTE_I
 // A palette DERIVED from a single colour, named or hex. A second lookup rather than 148 more
 // registry entries: a registered name is a design, a monochrome ramp a calculation, and a
 // registered name always wins. Returns null for anything that is neither, so the configuration
-// layer can produce one error message naming both roads.
+// layer can try the next spelling.
 export function paletteForColor(value) {
   const hex = parseColorToken(value);
   if (!hex) return null;
@@ -120,7 +117,7 @@ export function paletteForColor(value) {
 // after the registered-name and single-colour lookups, so a name that is also a hyphen
 // spelling (`orange-red`, `color-vision`, `protan-deutan`) keeps its meaning and only a
 // spelling that is neither reaches here. Returns null for anything that is not two or three
-// hyphen-joined colours, so the configuration layer can name every road and the part at fault.
+// hyphen-joined colours, which the configuration layer answers with the default palette.
 export function paletteForGradient(value) {
   if (typeof value !== "string") return null;
   const parts = value.trim().split("-");
@@ -138,9 +135,8 @@ export function paletteForGradient(value) {
 // Whether a palette suits its background is not decided here: it is measured in
 // ../palette-fit.js and acted on in ./adaptation.js (called by buildCardDomainModel()).
 
-// Every word a `palette:` option may be, aliases included, for the message a user sees when
-// theirs was none of them. The 148 colour names stay out — the message names that road
-// separately.
+// Every word that names a shipped palette, aliases included. The 148 colour names stay out:
+// they reach a derived palette, not a registered one.
 export function paletteKeys() {
   return Object.keys(CLASSIFICATION_PALETTE_REGISTRY);
 }

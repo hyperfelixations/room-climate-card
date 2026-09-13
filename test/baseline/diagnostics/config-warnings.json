@@ -1,8 +1,110 @@
 {
+  "auto-slide-not-a-boolean": {
+    "block": "\"yes\" is not a valid value for auto_slide. Using default: true.",
+    "console": [
+      "Room Climate Card: \"yes\" is not a valid value for auto_slide. Using default: true."
+    ]
+  },
+  "classification-blank-profile": {
+    "block": "(empty) is not a valid value for classification.profile. Using default: auto.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for classification.profile. Using default: auto."
+    ]
+  },
+  "classification-entity-source-with-profile": {
+    "block": "\"indoor\" is not a valid value for classification.profile. It is ignored.",
+    "console": [
+      "Room Climate Card: \"indoor\" is not a valid value for classification.profile. It is ignored."
+    ]
+  },
+  "classification-not-string-or-object": {
+    "block": "5 is not a valid value for classification. Using default: auto.",
+    "console": [
+      "Room Climate Card: 5 is not a valid value for classification. Using default: auto."
+    ]
+  },
+  "classification-shorthand-custom": {
+    "block": "\"custom\" is not a valid value for classification. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"custom\" is not a valid value for classification. Using default: auto."
+    ]
+  },
+  "classification-shorthand-profile": {
+    "block": "\"profile\" is not a valid value for classification. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"profile\" is not a valid value for classification. Using default: auto."
+    ]
+  },
   "classification-unknown-profile-for-metric-kind": {
     "block": "\"greenhouse\" is not a classification profile for Temperature. Using default: indoor.",
     "console": [
       "Room Climate Card: \"greenhouse\" is not a classification profile for Temperature. Using default: indoor."
+    ]
+  },
+  "classification-unknown-source": {
+    "block": "\"nope\" is not a valid value for classification.source. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"nope\" is not a valid value for classification.source. Using default: auto."
+    ]
+  },
+  "custom-band-min-not-below-max": {
+    "block": "25 is not a valid value for classification.bands.comfort.max. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 25 is not a valid value for classification.bands.comfort.max. Using classification: auto."
+    ]
+  },
+  "custom-bands-missing": {
+    "block": "(empty) is not a valid value for classification.bands. Using classification: auto.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for classification.bands. Using classification: auto."
+    ]
+  },
+  "custom-default-tier-not-last": {
+    "block": "true is not a valid value for classification.tiers[0].default. Using classification: auto.",
+    "console": [
+      "Room Climate Card: true is not a valid value for classification.tiers[0].default. Using classification: auto."
+    ]
+  },
+  "custom-icons-list-without-a-default-tier": {
+    "block": "[…] is not a valid value for classification.icons. Using classification: auto.",
+    "console": [
+      "Room Climate Card: […] is not a valid value for classification.icons. Using classification: auto."
+    ]
+  },
+  "custom-icons-not-a-list": {
+    "block": "\"mdi:thermometer\" is not a valid value for classification.icons. Using classification: auto.",
+    "console": [
+      "Room Climate Card: \"mdi:thermometer\" is not a valid value for classification.icons. Using classification: auto."
+    ]
+  },
+  "custom-icons-threshold-object-not-descending": {
+    "block": "26 is not a valid value for classification.icons.high. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 26 is not a valid value for classification.icons.high. Using classification: auto."
+    ]
+  },
+  "custom-icons-threshold-object-on-a-non-temperature-profile": {
+    "block": "{…} is not a valid value for classification.icons. Using classification: auto.",
+    "console": [
+      "Room Climate Card: {…} is not a valid value for classification.icons. Using classification: auto."
+    ]
+  },
+  "custom-no-default-tier": {
+    "block": "[…] is not a valid value for classification.tiers. Using classification: auto.",
+    "console": [
+      "Room Climate Card: […] is not a valid value for classification.tiers. Using classification: auto."
+    ]
+  },
+  "custom-one-sided-without-an-anchor": {
+    "block": "true is not a valid value for classification.scale.one_sided. Using classification: auto.",
+    "console": [
+      "Room Climate Card: true is not a valid value for classification.scale.one_sided. Using classification: auto."
+    ]
+  },
+  "custom-optimal-not-contained-in-comfort": {
+    "block": "19 is not a valid value for classification.bands.optimal.min. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 19 is not a valid value for classification.bands.optimal.min. Using classification: auto."
     ]
   },
   "custom-profile-cannot-be-expressed-in-fahrenheit": {
@@ -17,10 +119,190 @@
       "Room Climate Card: The custom profile cannot be shown in °F. Using default: indoor."
     ]
   },
+  "custom-scale-range-with-anchor-scale-false": {
+    "block": "16 is not a valid value for classification.scale.min. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 16 is not a valid value for classification.scale.min. Using classification: auto."
+    ]
+  },
+  "custom-scale-step-not-positive": {
+    "block": "0 is not a valid value for classification.scale.step. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 0 is not a valid value for classification.scale.step. Using classification: auto."
+    ]
+  },
+  "custom-scale-without-a-range": {
+    "block": "(empty) is not a valid value for classification.scale.min. Using classification: auto.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for classification.scale.min. Using classification: auto."
+    ]
+  },
+  "custom-tier-invalid-color": {
+    "block": "\"red\" is not a valid value for classification.tiers[0].color. Using classification: auto.",
+    "console": [
+      "Room Climate Card: \"red\" is not a valid value for classification.tiers[0].color. Using classification: auto."
+    ]
+  },
+  "custom-tier-unknown-zone": {
+    "block": "\"elsewhere\" is not a valid value for classification.tiers[0].zone. Using classification: auto.",
+    "console": [
+      "Room Climate Card: \"elsewhere\" is not a valid value for classification.tiers[0].zone. Using classification: auto."
+    ]
+  },
+  "custom-tiers-not-strictly-descending": {
+    "block": "24 is not a valid value for classification.tiers[1].min. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 24 is not a valid value for classification.tiers[1].min. Using classification: auto."
+    ]
+  },
   "custom-unit-belongs-to-another-metric-kind": {
     "block": "classification.unit \"%\" does not fit Temperature. Using default: indoor.",
     "console": [
       "Room Climate Card: classification.unit \"%\" does not fit Temperature. Using default: indoor."
+    ]
+  },
+  "custom-unit-missing": {
+    "block": "(empty) is not a valid value for classification.unit. Using classification: auto.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for classification.unit. Using classification: auto."
+    ]
+  },
+  "custom-unit-unknown": {
+    "block": "\"hPa\" is not a valid value for classification.unit. Using classification: auto.",
+    "console": [
+      "Room Climate Card: \"hPa\" is not a valid value for classification.unit. Using classification: auto."
+    ]
+  },
+  "custom-valid-range-without-bounds": {
+    "block": "{} is not a valid value for classification.valid_range. Using classification: auto.",
+    "console": [
+      "Room Climate Card: {} is not a valid value for classification.valid_range. Using classification: auto."
+    ]
+  },
+  "custom-value-cannot-be-converted-to-the-canonical-unit": {
+    "block": "1e+308 is not a valid value for classification.scale.max. Using classification: auto.",
+    "console": [
+      "Room Climate Card: 1e+308 is not a valid value for classification.scale.max. Using classification: auto."
+    ]
+  },
+  "decimals-out-of-range": {
+    "block": "3 is not a valid value for decimals. Using default: 1.",
+    "console": [
+      "Room Climate Card: 3 is not a valid value for decimals. Using default: 1."
+    ]
+  },
+  "entity-label-not-text": {
+    "block": "5 is not a valid value for entity_label. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: 5 is not a valid value for entity_label. Using the automatic setting."
+    ]
+  },
+  "icon-empty": {
+    "block": "(empty) is not a valid value for icon. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for icon. Using the automatic setting."
+    ]
+  },
+  "language-unsupported": {
+    "block": "\"xx\" is not a valid value for language. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"xx\" is not a valid value for language. Using default: auto."
+    ]
+  },
+  "palette-gradient-with-an-empty-part": {
+    "block": "\"teal--black\" is not a valid value for palette. Using default: pastel.",
+    "console": [
+      "Room Climate Card: \"teal--black\" is not a valid value for palette. Using default: pastel."
+    ]
+  },
+  "palette-unknown-name": {
+    "block": "\"neon\" is not a valid value for palette. Using default: pastel.",
+    "console": [
+      "Room Climate Card: \"neon\" is not a valid value for palette. Using default: pastel."
+    ]
+  },
+  "palette-written-color-invalid": {
+    "block": "\"nope\" is not a valid value for palette.above[2]. Using palette: pastel.",
+    "console": [
+      "Room Climate Card: \"nope\" is not a valid value for palette.above[2]. Using palette: pastel."
+    ]
+  },
+  "palette-written-color-swallowed-by-a-comment": {
+    "block": "(empty) is not a valid value for palette.optimal. Using palette: pastel.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for palette.optimal. Using palette: pastel."
+    ]
+  },
+  "range-entity-not-a-string": {
+    "block": "7 is not a valid value for range_entity. It is ignored.",
+    "console": [
+      "Room Climate Card: 7 is not a valid value for range_entity. It is ignored."
+    ]
+  },
+  "room-action-unknown": {
+    "block": "\"explode\" is not a valid value for rooms[0].hold_action.action. Using the card's action.",
+    "console": [
+      "Room Climate Card: \"explode\" is not a valid value for rooms[0].hold_action.action. Using the card's action."
+    ]
+  },
+  "room-columns-out-of-range": {
+    "block": "0 is not a valid value for room_columns. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: 0 is not a valid value for room_columns. Using the automatic setting."
+    ]
+  },
+  "room-label-unknown": {
+    "block": "\"long\" is not a valid value for room_label. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"long\" is not a valid value for room_label. Using default: auto."
+    ]
+  },
+  "room-name-not-text": {
+    "block": "true is not a valid value for rooms[0].name. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: true is not a valid value for rooms[0].name. Using the automatic setting."
+    ]
+  },
+  "room-sort-unknown": {
+    "block": "\"names\" is not a valid value for room_sort. Using default: value_asc.",
+    "console": [
+      "Room Climate Card: \"names\" is not a valid value for room_sort. Using default: value_asc."
+    ]
+  },
+  "rotation-seconds-out-of-range": {
+    "block": "0 is not a valid value for rotation_seconds. Using default: 14.",
+    "console": [
+      "Room Climate Card: 0 is not a valid value for rotation_seconds. Using default: 14."
+    ]
+  },
+  "show-not-an-object": {
+    "block": "\"yes\" is not a valid value for show. Using the defaults.",
+    "console": [
+      "Room Climate Card: \"yes\" is not a valid value for show. Using the defaults."
+    ]
+  },
+  "show-part-not-a-boolean": {
+    "block": "\"no\" is not a valid value for show.pill. Using default: true.",
+    "console": [
+      "Room Climate Card: \"no\" is not a valid value for show.pill. Using default: true."
+    ]
+  },
+  "show-rooms-legacy-unknown": {
+    "block": "\"alway\" is not a valid value for show_rooms. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"alway\" is not a valid value for show_rooms. Using default: auto."
+    ]
+  },
+  "show-rooms-unknown": {
+    "block": "\"alway\" is not a valid value for show.rooms. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"alway\" is not a valid value for show.rooms. Using default: auto."
+    ]
+  },
+  "slide-seconds-not-a-number": {
+    "block": "\"NaN\" is not a valid value for slide_seconds. Using default: 1.",
+    "console": [
+      "Room Climate Card: \"NaN\" is not a valid value for slide_seconds. Using default: 1."
     ]
   },
   "start-view-unknown": {
@@ -29,10 +311,40 @@
       "Room Climate Card: \"sclae\" is not a valid value for start_view. Starting on the first available view."
     ]
   },
+  "subtitle-overflow-unknown": {
+    "block": "\"sideways\" is not a valid value for subtitle.overflow. Using default: clip.",
+    "console": [
+      "Room Climate Card: \"sideways\" is not a valid value for subtitle.overflow. Using default: clip."
+    ]
+  },
+  "tap-action-not-an-object": {
+    "block": "\"toggle\" is not a valid value for tap_action. Using default: more-info.",
+    "console": [
+      "Room Climate Card: \"toggle\" is not a valid value for tap_action. Using default: more-info."
+    ]
+  },
+  "title-not-text": {
+    "block": "42 is not a valid value for title. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: 42 is not a valid value for title. Using the automatic setting."
+    ]
+  },
   "top-level-foreign-key": {
     "block": "wibble_wobble is not an option of this card. It is ignored.",
     "console": [
       "Room Climate Card: wibble_wobble is not an option of this card. It is ignored."
+    ]
+  },
+  "trend-entity-not-a-string": {
+    "block": "7 is not a valid value for trend_entity. It is ignored.",
+    "console": [
+      "Room Climate Card: 7 is not a valid value for trend_entity. It is ignored."
+    ]
+  },
+  "unavailable-values-legacy-unknown": {
+    "block": "\"hidden\" is not a valid value for unavailable_values. Using default: show.",
+    "console": [
+      "Room Climate Card: \"hidden\" is not a valid value for unavailable_values. Using default: show."
     ]
   },
   "views-duplicate-type": {
@@ -87,13 +399,6 @@
     "block": "\"all\" is not a valid value for views[0].options. Using the defaults.",
     "console": [
       "Room Climate Card: \"all\" is not a valid value for views[0].options. Using the defaults."
-    ]
-  },
-  "views-options-unknown-key": {
-    "block": "2 problems with this card. Details in the browser console.",
-    "console": [
-      "Room Climate Card: views[0].options.bogus is not an option of this card. It is ignored.",
-      "Room Climate Card: views[0].options.also_bogus is not an option of this card. It is ignored."
     ]
   },
   "views-unknown-type": {

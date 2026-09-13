@@ -8,6 +8,7 @@ export const SEVERITY = Object.freeze({ WARNING: "warning", HINT: "hint" });
 export const DIAGNOSTIC_SEVERITY = Object.freeze({
   "value.invalid": SEVERITY.WARNING,
   "config.foreign_key": SEVERITY.WARNING,
+  "config.deprecated": SEVERITY.WARNING,
   "sources.mixed": SEVERITY.WARNING,
   "classification.profile_unavailable": SEVERITY.WARNING,
   "classification.unit_mismatch": SEVERITY.WARNING,
@@ -15,15 +16,24 @@ export const DIAGNOSTIC_SEVERITY = Object.freeze({
 });
 
 // What the card does instead of an invalid value, where that is not a value of its own.
+// METRIC_DECIMALS is the measurement's own precision, which only the view model knows.
 export const FALLBACK = Object.freeze({
   AUTOMATIC: Object.freeze({ phrase: "automatic" }),
   IGNORED: Object.freeze({ phrase: "ignored" }),
   FIRST_VIEW: Object.freeze({ phrase: "firstView" }),
+  CARD_ACTION: Object.freeze({ phrase: "cardAction" }),
   DEFAULTS: Object.freeze({ phrase: "defaults" }),
+  METRIC_DECIMALS: Object.freeze({ phrase: "metricDecimals" }),
 });
 
 export function fallbackValue(value) {
   return Object.freeze({ value });
+}
+
+// The value a whole option falls back to when one value inside it is invalid: `palette.above[2]`
+// is named, `palette` is what changes.
+export function fallbackOption(key, value) {
+  return Object.freeze({ key, value });
 }
 
 export function createDiagnostic(code, { path = null, entity = null, value = undefined, fallback = null, params = null } = {}) {

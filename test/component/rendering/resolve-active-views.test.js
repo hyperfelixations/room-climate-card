@@ -277,27 +277,29 @@ test("an invalid enabled value is diagnosed and falls back to auto", () => {
   env.cleanup(el);
 });
 
-test("options are filtered through each view's optionsSchema", () => {
-  const el = env.createCard(
-    { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { bogus: true, another: 1 } }] },
-    fourViewHass()
+test("a key a view's options do not have refuses the configuration", () => {
+  assert.throws(
+    () =>
+      env.createCard(
+        { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { bogus: true, another: 1 } }] },
+        fourViewHass()
+      ),
+    { name: "ConfigError", message: "Invalid configuration: views[0].options.bogus is not an option of this card." }
   );
-  assert.deepEqual(normalize(el._config.views[0].options), {}, "no view currently declares any optionsSchema field, so every raw option key must be stripped");
-  env.cleanup(el);
 });
 
-// ==== normalizeViewOptions() diagnoses unknown keys and non-object values through
+// ==== normalizeViewOptions() diagnoses invalid values and non-object values through
 // _configDiagnostics, non-destructively (the entry and its filtered options are kept). ====
 
-test("an unknown options key is diagnosed once and stripped", () => {
+test("an invalid options value is diagnosed once and replaced by the schema default", () => {
   const el = env.createCard(
-    { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { bogus: true } }] },
+    { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: [{ type: "scale", options: { markers: "some" } }] },
     fourViewHass()
   );
-  assert.deepEqual(normalize(el._config.views[0].options), {}, "the unknown key must still be stripped, exactly as before");
-  assert.ok(
-    el._config._configDiagnostics.some((d) => d.code === "config.foreign_key" && d.path === "views[0].options.bogus"),
-    "the unknown options key must now be diagnosed"
+  assert.deepEqual(normalize(el._config.views[0].options), {}, "the invalid value is dropped, so the default applies");
+  assert.deepEqual(
+    normalize(el._config._configDiagnostics.map((d) => [d.code, d.path])),
+    [["value.invalid", "views[0].options.markers"]]
   );
   env.cleanup(el);
 });

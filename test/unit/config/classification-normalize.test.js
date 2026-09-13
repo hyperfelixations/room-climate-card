@@ -1,19 +1,22 @@
 "use strict";
 
-// Direct unit tests for classification and custom-profile normalization. The error messages
-// are a user-facing contract — Home Assistant shows what setConfig() throws, and the README
-// quotes it — so they, and the order validation runs in, are asserted literally.
-// Collaborators are stubbed, which is the point of injecting them.
+// Direct unit tests for classification and custom-profile normalization. Every value rule of a
+// custom profile answers with the path and the value it refuses, and the classification object
+// turns that into one warning and the automatic policy; a key the profile does not have refuses
+// the configuration at any depth. Collaborators are stubbed, which is the point of injecting them.
 // Boundary: this file owns the classification sub-tree (built-in profiles, a YAML custom
 // profile, the parts a profile is assembled from); how the result fits into the finished
-// config is config-normalize-modules.test.js. See internal dev doc §4 "Config-Normalisierungsvertrag".
+// config is config-normalize-modules.test.js. See internal dev doc §5 "Custom-Profile-Vertrag".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { isDeepStrictEqual } = require("node:util");
 const { VIEWS } = require("../../manifests/product-surface.js");
 
 let classification;
 let profileParts;
+let core;
+let errors;
 
 // Minimal stand-ins for the injected registries — not the real ones, so a test that needs
 // the production registry proves the injection boundary is not doing its job.
@@ -30,46 +33,18 @@ const FAHRENHEIT = {
   deltaToCanonical: (v) => (v * 5) / 9,
 };
 
-// Tiny palette collaborators: one colour per wing proves the layer never assumes the
-// shipped palette's reach.
 const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
-const PALETTES = { tiny: TINY_PALETTE, other: { id: "other", below: ["#abcdef"], optimal: "#fedcba", above: ["#123456"] } };
 
 const COLLABORATORS = {
   classificationZones: ZONES,
-  paletteForName: (name) => (name === null ? TINY_PALETTE : PALETTES[name] ?? null),
-  // Colour lookup stand-in: one name resolves, exercising precedence and the error message
-  // without the 148-entry table.
-  paletteForColor: (name) =>
-    name === "teal" ? { id: "teal", below: ["#003333"], optimal: "#006666", above: ["#009999"] } : null,
-  // Gradient lookup stand-in with the real contract: two or three recognised colours, null
-  // otherwise so the layer owns every message.
-  paletteForGradient: (value) => {
-    const parts = String(value).trim().split("-").map((part) => part.trim().toLowerCase());
-    if (parts.length < 2 || parts.length > 3) return null;
-    if (!parts.every((part) => part === "teal" || part === "black")) return null;
-    return { id: parts.join("-"), below: ["#001111"], optimal: "#006666", above: ["#00BBBB"] };
-  },
-  paletteGradientLimit: 3,
-  paletteKeys: () => Object.keys(PALETTES),
-  assertPalette: (palette, path) => {
-    if (typeof palette.optimal !== "string") throw new Error(`Invalid configuration: ${path}.optimal must be a color.`);
-    for (const wing of ["below", "above"]) {
-      if (!Array.isArray(palette[wing])) throw new Error(`Invalid configuration: ${path}.${wing} must be a list of colors.`);
-    }
-    return palette;
-  },
-  completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#7D7D7D" }),
+  paletteForName: () => TINY_PALETTE,
+  paletteForColor: () => null,
+  paletteForGradient: () => null,
+  assertPalette: (palette) => palette,
+  completePalette: (palette) => palette,
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   viewTypes: VIEWS,
-  optionSchemaForView: (type) =>
-    type === "scale"
-      ? {
-          show_comfort_band: { default: true, validate: (v) => typeof v === "boolean" },
-          markers: { default: "extremes", validate: (v) => ["average", "extremes", "all"].includes(v) },
-          legacy: { default: null },
-        }
-      : undefined,
+  optionSchemaForView: () => undefined,
   metricKindForUnit: (unit) => ({ "°C": "temperature", "°F": "temperature", "%": "humidity" })[unit],
   unitProfileForUnit: (kind, unit) => {
     if (kind !== "temperature") return unit === "%" ? CELSIUS : null;
@@ -94,62 +69,120 @@ function validCustom(overrides = {}) {
   };
 }
 
+// A Fahrenheit profile with one part replaced; everything it starts with converts finitely.
+function fahrenheitCustom(overrides = {}) {
+  return validCustom({
+    unit: "°F",
+    bands: { comfort: { min: 66, max: 77 }, optimal: { min: 70, max: 73 } },
+    scale: { min: 60, max: 82, step: 2 },
+    tiers: [
+      { min: 75, score: 3, level: "Warm", color: "#cc4444", zone: "outside" },
+      { min: 68, score: 2, level: "Ok", color: "#44cc66", zone: "optimal" },
+      { default: true, score: 1, level: "Cold", color: "#4488cc", zone: "outside" },
+    ],
+    ...overrides,
+  });
+}
+
+// Temperature thresholds for a profile whose axis follows the data.
+const ICON_THRESHOLDS = { fire: 30, high: 26, normal: 19, low: 14 };
+
 test.before(async () => {
   classification = await import("../../../src/config/classification/normalize.js");
   profileParts = await import("../../../src/config/classification/profile-parts.js");
+  core = await import("../../../src/core/diagnostics.js");
+  errors = await import("../../../src/config/errors.js");
 });
+
+const AUTO = { source: "auto", profile: null, custom: null };
+const invalid = (path, value, fallback) => core.createDiagnostic("value.invalid", { path, value, fallback });
+
+// The classification object read the way normalizeConfig() reads it.
+function policyOf(value) {
+  const diagnostics = [];
+  return { policy: classification.normalizeClassificationConfig(value, COLLABORATORS, diagnostics), diagnostics };
+}
+
+// A custom-profile rule refuses the value it found at the path it found it.
+function refusedAt(profile, path, value) {
+  assert.throws(
+    () => classification.normalizeCustomClassification(profile, COLLABORATORS),
+    (error) => error instanceof errors.ConfigValueError && error.path === path && isDeepStrictEqual(error.value, value),
+    `${path} = ${JSON.stringify(value)}`
+  );
+}
 
 // --------------------------------------------------------- classification --
 
 test("the classification shorthands map to the documented policies", () => {
-  const n = (value) => classification.normalizeClassificationConfig(value, COLLABORATORS);
-  const auto = { source: "auto", profile: null, custom: null };
-  for (const absent of [undefined, null, "", "   "]) assert.deepEqual(n(absent), auto, JSON.stringify(absent));
-  assert.deepEqual(n("auto"), auto);
-  assert.deepEqual(n("entity"), { source: "entity", profile: null, custom: null });
-  assert.deepEqual(n("outdoor"), { source: "auto", profile: "outdoor", custom: null }, "a bare name is a profile request");
-  assert.deepEqual(n("OUTDOOR"), { source: "auto", profile: "outdoor", custom: null }, "case-insensitive");
+  for (const absent of [undefined, null]) assert.deepEqual(policyOf(absent), { policy: AUTO, diagnostics: [] }, JSON.stringify(absent));
+  assert.deepEqual(policyOf("auto").policy, AUTO);
+  assert.deepEqual(policyOf("entity").policy, { source: "entity", profile: null, custom: null });
+  assert.deepEqual(policyOf("outdoor").policy, { source: "auto", profile: "outdoor", custom: null }, "a bare name is a profile request");
+  assert.deepEqual(policyOf("OUTDOOR").policy, { source: "auto", profile: "outdoor", custom: null }, "case-insensitive");
 });
 
-test("the source-only shorthands that need the object form are rejected", () => {
-  for (const shorthand of ["profile", "custom"]) {
-    assert.throws(
-      () => classification.normalizeClassificationConfig(shorthand, COLLABORATORS),
-      { message: `Invalid configuration: classification "${shorthand}" requires the object form.` }
+test("an empty shorthand, or one that needs the object form, falls back to auto with a warning", () => {
+  for (const value of ["", "   ", "profile", "custom", "Custom"]) {
+    assert.deepEqual(
+      policyOf(value),
+      { policy: AUTO, diagnostics: [invalid("classification", value, core.fallbackValue("auto"))] },
+      JSON.stringify(value)
     );
   }
 });
 
-test("the object form validates source, profile and their combination", () => {
-  const n = (value) => classification.normalizeClassificationConfig(value, COLLABORATORS);
-  assert.deepEqual(n({ source: "profile", profile: "Fridge" }), { source: "profile", profile: "fridge", custom: null });
-  assert.throws(() => n(5), { message: "Invalid configuration: classification must be a string or object." });
-  assert.throws(() => n({ source: "nope" }), {
-    message: 'Invalid configuration: classification.source must be "auto", "entity", "profile", or "custom".',
+test("the object form checks source, profile and their combination, and falls back where they fail", () => {
+  const { FALLBACK, fallbackValue } = core;
+  assert.deepEqual(policyOf({ source: "profile", profile: "Fridge" }), {
+    policy: { source: "profile", profile: "fridge", custom: null },
+    diagnostics: [],
   });
-  assert.throws(() => n({ source: "entity", profile: "indoor" }), {
-    message: "Invalid configuration: classification.profile cannot be combined with source entity.",
+  assert.deepEqual(policyOf(5), { policy: AUTO, diagnostics: [invalid("classification", 5, fallbackValue("auto"))] });
+  assert.deepEqual(policyOf({ source: "nope" }), { policy: AUTO, diagnostics: [invalid("classification.source", "nope", fallbackValue("auto"))] });
+  assert.deepEqual(policyOf({ source: "entity", profile: "indoor" }), {
+    policy: { source: "entity", profile: null, custom: null },
+    diagnostics: [invalid("classification.profile", "indoor", FALLBACK.IGNORED)],
   });
-  assert.throws(() => n({ source: "profile", profile: "  " }), {
-    message: "Invalid configuration: classification.profile must be a non-empty string.",
+  for (const profile of ["  ", 42]) {
+    assert.deepEqual(
+      policyOf({ source: "profile", profile }),
+      { policy: AUTO, diagnostics: [invalid("classification.profile", profile, fallbackValue("auto"))] },
+      JSON.stringify(profile)
+    );
+  }
+  assert.deepEqual(policyOf({ source: "entity", profile: null }), { policy: { source: "entity", profile: null, custom: null }, diagnostics: [] });
+});
+
+test("a key the classification object does not have refuses the configuration, before its values are read", () => {
+  assert.throws(() => policyOf({ source: "auto", bogus: true }), {
+    name: "ConfigError",
+    message: "Invalid configuration: classification.bogus is not an option of this card.",
   });
-  assert.throws(() => n({ source: "auto", bogus: true }), {
-    message: "Invalid configuration: classification.bogus is not a supported option.",
+  assert.throws(() => policyOf({ source: "profile", profle: "indoor" }), {
+    name: "ConfigError",
+    message: "Invalid configuration: classification.profle is not an option of this card. Did you mean classification.profile?",
   });
+  assert.throws(() => policyOf({ source: "nope", bogus: 1 }), { name: "ConfigError" }, "an unknown source does not hide an unknown key");
 });
 
 test("a block carrying tiers is inferred as custom even without an explicit source", () => {
-  const result = classification.normalizeClassificationConfig(
-    { ...validCustom(), source: undefined },
-    COLLABORATORS
-  );
-  assert.equal(result.source, "custom");
-  assert.equal(result.custom.id, "custom");
+  const { policy, diagnostics } = policyOf({ ...validCustom(), source: undefined });
+  assert.equal(policy.source, "custom");
+  assert.equal(policy.custom.id, "custom");
+  assert.deepEqual(diagnostics, []);
+  // `tiers:` with nothing after it is a custom profile being typed: it falls back and names the
+  // first value it still misses, rather than calling `tiers` foreign to the policy form.
+  assert.deepEqual(policyOf({ tiers: null }), {
+    policy: AUTO,
+    diagnostics: [invalid("classification.unit", undefined, core.fallbackOption("classification", "auto"))],
+  });
 });
 
 test("a valid custom profile is converted into the canonical unit", () => {
   const result = classification.normalizeCustomClassification(validCustom(), COLLABORATORS);
   assert.equal(result.metricKind, "temperature");
+  assert.equal(result.unit, "°C", "as written, for a message that has to name it");
   assert.equal(result.comparison, ">=");
   assert.deepEqual(result.comfort, { min: 19, max: 25 }, "Celsius input needs no conversion");
   assert.deepEqual(result.tiers.map((t) => t.min), [24, 20, -Infinity]);
@@ -168,51 +201,25 @@ test("a valid custom profile is converted into the canonical unit", () => {
 });
 
 test("a Fahrenheit custom profile converts absolutes and deltas differently", () => {
-  const result = classification.normalizeCustomClassification(
-    validCustom({
-      unit: "°F",
-      bands: { comfort: { min: 66, max: 77 }, optimal: { min: 70, max: 73 } },
-      scale: { min: 60, max: 82, step: 2 },
-      tiers: [
-        { min: 75, score: 3, level: "Warm", color: "#cc4444", zone: "outside" },
-        { min: 68, score: 2, level: "Ok", color: "#44cc66", zone: "optimal" },
-        { default: true, score: 1, level: "Cold", color: "#4488cc", zone: "outside" },
-      ],
-    }),
-    COLLABORATORS
-  );
+  const result = classification.normalizeCustomClassification(fahrenheitCustom(), COLLABORATORS);
   // 68 °F = 20 °C absolute; a 2 °F step is 1.11 °C, NOT -16.67 °C.
   assert.ok(Math.abs(result.tiers[1].min - 20) < 1e-9, `got ${result.tiers[1].min}`);
   assert.ok(Math.abs(result.step - (2 * 5) / 9) < 1e-9, `got ${result.step}`);
   assert.equal(result.tiers[2].min, -Infinity, "the open-ended tier survives conversion");
 });
 
-// A Fahrenheit profile with one part replaced; everything it starts with converts finitely.
-function fahrenheitCustom(overrides = {}) {
-  return validCustom({
-    unit: "°F",
-    bands: { comfort: { min: 66, max: 77 }, optimal: { min: 70, max: 73 } },
-    scale: { min: 60, max: 82, step: 2 },
-    tiers: [
-      { min: 75, score: 3, level: "Warm", color: "#cc4444", zone: "outside" },
-      { min: 68, score: 2, level: "Ok", color: "#44cc66", zone: "optimal" },
-      { default: true, score: 1, level: "Cold", color: "#4488cc", zone: "outside" },
-    ],
-    ...overrides,
-  });
-}
-
 test("a custom value its unit cannot convert into the canonical unit is refused at its path", () => {
   // 1e308 °F is a finite YAML number; (v - 32) * 5 / 9 is not, and a delta overflows alike.
   const huge = 1e308;
   const cases = [
-    ["classification.bands.comfort.max", { bands: { comfort: { min: 66, max: huge }, optimal: { min: 70, max: 73 } } }],
-    ["classification.bands.comfort.min", { bands: { comfort: { min: -huge, max: 77 }, optimal: { min: 70, max: 73 } } }],
-    ["classification.scale.max", { scale: { min: 60, max: huge, step: 2 } }],
-    ["classification.scale.step", { scale: { min: 60, max: 82, step: huge } }],
-    ["classification.scale.headroom", { scale: { min: 60, max: 82, step: 2, headroom: huge } }],
+    ["classification.bands.comfort.max", huge, { bands: { comfort: { min: 66, max: huge }, optimal: { min: 70, max: 73 } } }],
+    ["classification.bands.comfort.min", -huge, { bands: { comfort: { min: -huge, max: 77 }, optimal: { min: 70, max: 73 } } }],
+    ["classification.scale.max", huge, { scale: { min: 60, max: huge, step: 2 } }],
+    ["classification.scale.step", huge, { scale: { min: 60, max: 82, step: huge } }],
+    ["classification.scale.headroom", huge, { scale: { min: 60, max: 82, step: 2, headroom: huge } }],
     [
       "classification.tiers[0].min",
+      huge,
       {
         tiers: [
           { min: huge, score: 3, level: "Hot", color: "#cc4444", zone: "outside" },
@@ -220,19 +227,11 @@ test("a custom value its unit cannot convert into the canonical unit is refused 
         ],
       },
     ],
-    ["classification.valid_range.max", { valid_range: { min: -459.67, max: huge } }],
-    ["classification.icons[0].min", { icons: [{ min: huge, icon: "mdi:fire-alert" }, { default: true, icon: "mdi:snowflake" }] }],
-    ["classification.icons.fire", { icons: { fire: huge, high: 80, normal: 70, low: 60 } }],
+    ["classification.valid_range.max", huge, { valid_range: { min: -459.67, max: huge } }],
+    ["classification.icons[0].min", huge, { icons: [{ min: huge, icon: "mdi:fire-alert" }, { default: true, icon: "mdi:snowflake" }] }],
+    ["classification.icons.fire", huge, { icons: { fire: huge, high: 80, normal: 70, low: 60 } }],
   ];
-  for (const [path, overrides] of cases) {
-    assert.throws(
-      () => classification.normalizeCustomClassification(fahrenheitCustom(overrides), COLLABORATORS),
-      (error) =>
-        error.message ===
-        `Invalid configuration: ${path} cannot be converted from °F into the canonical unit, because the result exceeds the largest representable number.`,
-      path
-    );
-  }
+  for (const [path, value, overrides] of cases) refusedAt(fahrenheitCustom(overrides), path, value);
   assert.doesNotThrow(() => classification.normalizeCustomClassification(fahrenheitCustom(), COLLABORATORS));
   // The same magnitude written in the canonical unit converts to itself and is accepted.
   assert.doesNotThrow(() =>
@@ -254,11 +253,7 @@ test("custom scale switches and headroom are carried through", () => {
 // so declaring both is refused.
 test("a custom profile can hand the axis to the data by declaring no range at all", () => {
   const following = classification.normalizeCustomClassification(
-    validCustom({
-      scale: { step: 2, anchor_scale: false },
-      // With no reference range, a temperature profile has to state its icon thresholds.
-      icons: { fire: 30, high: 26, normal: 19, low: 14 },
-    }),
+    validCustom({ scale: { step: 2, anchor_scale: false }, icons: ICON_THRESHOLDS }),
     COLLABORATORS
   );
   assert.equal(following.anchorScale, false);
@@ -274,8 +269,7 @@ test("a custom profile can hand the axis to the data by declaring no range at al
 });
 
 test("an omitted anchor_scale keeps the anchored axis every other built-in profile uses", () => {
-  const result = classification.normalizeCustomClassification(validCustom(), COLLABORATORS);
-  assert.equal(result.anchorScale, true);
+  assert.equal(classification.normalizeCustomClassification(validCustom(), COLLABORATORS).anchorScale, true);
 });
 
 // A band reaching past the declared range is drawn as far as the axis goes and no further,
@@ -296,25 +290,31 @@ test("a scale narrower than the comfort band is accepted and carried through unc
 // normalizeScale() is the only reader of the scale block; every switch leaves it validated
 // and camel-cased, so no caller reaches back into the raw YAML.
 test("normalizeScale returns the range and every switch in its resolved form", () => {
-  assert.deepEqual(
-    profileParts.normalizeScale({ min: 16, max: 28, step: 2 }),
-    { scale: { min: 16, max: 28 }, step: 2, headroom: null, oneSided: false, anchorScale: true }
-  );
-  assert.deepEqual(
-    profileParts.normalizeScale({ min: 16, max: 28, step: 2, headroom: 4, one_sided: true }),
-    { scale: { min: 16, max: 28 }, step: 2, headroom: 4, oneSided: true, anchorScale: true }
-  );
-  assert.deepEqual(
-    profileParts.normalizeScale({ step: 2, headroom: 4, anchor_scale: false }),
-    { scale: null, step: 2, headroom: 4, oneSided: false, anchorScale: false }
-  );
+  assert.deepEqual(profileParts.normalizeScale({ min: 16, max: 28, step: 2 }), {
+    scale: { min: 16, max: 28 },
+    step: 2,
+    headroom: null,
+    oneSided: false,
+    anchorScale: true,
+  });
+  assert.deepEqual(profileParts.normalizeScale({ min: 16, max: 28, step: 2, headroom: 4, one_sided: true }), {
+    scale: { min: 16, max: 28 },
+    step: 2,
+    headroom: 4,
+    oneSided: true,
+    anchorScale: true,
+  });
+  assert.deepEqual(profileParts.normalizeScale({ step: 2, headroom: 4, anchor_scale: false }), {
+    scale: null,
+    step: 2,
+    headroom: 4,
+    oneSided: false,
+    anchorScale: false,
+  });
 });
 
 test("a custom valid_range becomes a predicate honouring both inclusivity flags", () => {
-  const inclusive = classification.normalizeCustomClassification(
-    validCustom({ valid_range: { min: 0, max: 50 } }),
-    COLLABORATORS
-  );
+  const inclusive = classification.normalizeCustomClassification(validCustom({ valid_range: { min: 0, max: 50 } }), COLLABORATORS);
   assert.equal(inclusive.invalidWhen(0), false, "inclusive by default");
   assert.equal(inclusive.invalidWhen(50), false);
   assert.equal(inclusive.invalidWhen(-0.1), true);
@@ -328,10 +328,7 @@ test("a custom valid_range becomes a predicate honouring both inclusivity flags"
   assert.equal(exclusive.invalidWhen(50), true);
   assert.equal(exclusive.invalidWhen(0.1), false);
 
-  const onlyMin = classification.normalizeCustomClassification(
-    validCustom({ valid_range: { min: 0 } }),
-    COLLABORATORS
-  );
+  const onlyMin = classification.normalizeCustomClassification(validCustom({ valid_range: { min: 0 } }), COLLABORATORS);
   assert.equal(onlyMin.invalidWhen(1e9), false, "an omitted bound is unbounded");
   assert.equal(onlyMin.invalidWhen(-1), true);
 });
@@ -342,18 +339,14 @@ test("omitting icons declares none, whatever the profile measures", () => {
     {},
     { unit: "%", bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } }, scale: { min: 30, max: 70, step: 5 } },
   ]) {
-    const result = classification.normalizeCustomClassification(validCustom(overrides), COLLABORATORS);
-    assert.equal(result.iconTiers, null, JSON.stringify(overrides));
+    assert.equal(classification.normalizeCustomClassification(validCustom(overrides), COLLABORATORS).iconTiers, null, JSON.stringify(overrides));
   }
 });
 
 // The fire/high/normal/low object is an input spelling only; it normalizes into the same
 // {min, icon} list every profile carries, with the five icons it implies.
 test("the temperature threshold object normalizes into the shared icon list", () => {
-  const result = classification.normalizeCustomClassification(
-    validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
-    COLLABORATORS
-  );
+  const result = classification.normalizeCustomClassification(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
   assert.deepEqual(result.iconTiers, [
     { min: 30, icon: "mdi:fire-alert" },
     { min: 26, icon: "mdi:thermometer-high" },
@@ -365,10 +358,7 @@ test("the temperature threshold object normalizes into the shared icon list", ()
 
 // The same icons written in list form come out identical.
 test("both spellings of the same temperature icons produce the same profile", () => {
-  const asObject = classification.normalizeCustomClassification(
-    validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }),
-    COLLABORATORS
-  );
+  const asObject = classification.normalizeCustomClassification(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
   const asList = classification.normalizeCustomClassification(
     validCustom({
       icons: [
@@ -387,12 +377,7 @@ test("both spellings of the same temperature icons produce the same profile", ()
 // A temperature profile may choose its own icons, in the list form.
 test("a temperature profile can choose icons of its own", () => {
   const result = classification.normalizeCustomClassification(
-    validCustom({
-      icons: [
-        { min: 30, icon: "mdi:sun-thermometer" },
-        { default: true, icon: "mdi:home-thermometer" },
-      ],
-    }),
+    validCustom({ icons: [{ min: 30, icon: "mdi:sun-thermometer" }, { default: true, icon: "mdi:home-thermometer" }] }),
     COLLABORATORS
   );
   assert.deepEqual(result.iconTiers, [
@@ -407,10 +392,7 @@ test("a non-temperature custom profile uses the shared icon list", () => {
       unit: "%",
       bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
       scale: { min: 30, max: 70, step: 5 },
-      icons: [
-        { min: 60, icon: "mdi:water-plus" },
-        { default: true, icon: "mdi:water-minus" },
-      ],
+      icons: [{ min: 60, icon: "mdi:water-plus" }, { default: true, icon: "mdi:water-minus" }],
     }),
     COLLABORATORS
   );
@@ -421,83 +403,104 @@ test("a non-temperature custom profile uses the shared icon list", () => {
   ]);
 });
 
-test("every custom-classification rejection keeps its exact message", () => {
+// ------------------------------------------------ what a custom profile refuses --
+
+const tier = (fields) => ({ score: 1, level: "A", color: "#cc4444", zone: "outside", ...fields });
+const defaultTier = (fields = {}) => ({ default: true, score: 0, level: "C", color: "#4488cc", zone: "outside", ...fields });
+
+test("every custom-profile value rule names the path and the value written there", () => {
+  const noDefault = [tier({ min: 20 })];
+  const iconsWithoutDefault = [{ min: 28, icon: "mdi:fire-alert" }];
   const cases = [
-    [validCustom({ unit: undefined }), "Invalid configuration: classification.unit must be a recognized unit string."],
-    [validCustom({ unit: "hPa" }), 'Invalid configuration: classification.unit "hPa" is not recognized.'],
-    [validCustom({ comparison: ">>" }), 'Invalid configuration: classification.comparison must be ">=" or ">".'],
-    [validCustom({ bands: undefined }), "Invalid configuration: classification.bands must be an object."],
-    [validCustom({ bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 }, bogus: 1 } }), "Invalid configuration: classification.bands.bogus is not a supported option."],
-    [validCustom({ bands: { comfort: { min: 25, max: 25 }, optimal: { min: 21, max: 23 } } }), "Invalid configuration: classification.bands.comfort must have min < max."],
-    [validCustom({ bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } }), "Invalid configuration: classification.bands.optimal must be fully contained in classification.bands.comfort."],
-    [validCustom({ scale: undefined }), "Invalid configuration: classification.scale must be an object."],
-    [validCustom({ scale: { min: 16, max: 28, step: 0 } }), "Invalid configuration: classification.scale.step must be greater than zero."],
-    [validCustom({ scale: { min: 16, max: 28, step: 2, headroom: -1 } }), "Invalid configuration: classification.scale.headroom must be zero or greater."],
-    [validCustom({ scale: { min: 16, max: 28, step: 2, one_sided: "yes" } }), "Invalid configuration: classification.scale.one_sided must be a boolean."],
-    [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: "no" } }), "Invalid configuration: classification.scale.anchor_scale must be a boolean."],
-    [validCustom({ scale: { min: 16, max: 28, step: 2, anchorScale: false } }), "Invalid configuration: classification.scale.anchorScale is not a supported option."],
-    // The two shapes of `scale`, and the four ways of asking for neither of them.
-    [validCustom({ scale: { step: 2 } }), "Invalid configuration: classification.scale must define min and max, or set anchor_scale: false to let the axis follow the data."],
-    [validCustom({ scale: { min: 16, step: 2 } }), "Invalid configuration: classification.scale.max must be a finite number."],
-    [validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
-    [validCustom({ scale: { max: 28, step: 2, anchor_scale: false } }), "Invalid configuration: classification.scale must not define min or max when anchor_scale is false, because an axis either covers a declared range or follows the data."],
-    [validCustom({ scale: { step: 2, anchor_scale: false, one_sided: true }, icons: { fire: 30, high: 26, normal: 19, low: 14 } }), "Invalid configuration: classification.scale.one_sided requires an anchored axis, because it keeps the lower bound at classification.scale.min."],
-    [validCustom({ tiers: [] }), "Invalid configuration: classification.tiers must be a non-empty array."],
-    [validCustom({ tiers: ["x"] }), "Invalid configuration: classification.tiers[0] must be an object."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside", bogus: 1 }] }), "Invalid configuration: classification.tiers[0].bogus is not a supported option."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside", default: "yes" }] }), "Invalid configuration: classification.tiers[0].default must be true when present."],
-    [validCustom({ tiers: [{ default: true, min: 5, score: 1, level: "A", color: "#cc4444", zone: "outside" }] }), "Invalid configuration: classification.tiers[0].min must be omitted on the default tier."],
-    [validCustom({ tiers: [{ score: 1, level: "A", color: "#cc4444", zone: "outside" }] }), "Invalid configuration: classification.tiers[0].min is required for every non-default tier."],
-    [validCustom({ tiers: [{ min: 20, score: 2, level: "A", color: "#cc4444", zone: "outside" }, { min: 24, score: 1, level: "B", color: "#4488cc", zone: "outside" }, { default: true, score: 0, level: "C", color: "#4488cc", zone: "outside" }] }), "Invalid configuration: classification.tiers must use unique min values in strictly descending order."],
-    [validCustom({ tiers: [{ default: true, score: 2, level: "A", color: "#cc4444", zone: "outside" }, { min: 20, score: 1, level: "B", color: "#4488cc", zone: "outside" }] }), "Invalid configuration: classification.tiers[0] default tier must be the final tier."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "outside" }] }), "Invalid configuration: classification.tiers must contain exactly one final default tier."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "  ", color: "#cc4444", zone: "outside" }, { default: true, score: 0, level: "C", color: "#4488cc", zone: "outside" }] }), "Invalid configuration: classification.tiers[0].level must be a non-empty string."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "red", zone: "outside" }, { default: true, score: 0, level: "C", color: "#4488cc", zone: "outside" }] }), "Invalid configuration: classification.tiers[0].color must be a 3/4/6/8-digit hex color."],
-    [validCustom({ tiers: [{ min: 20, score: 1, level: "A", color: "#cc4444", zone: "elsewhere" }, { default: true, score: 0, level: "C", color: "#4488cc", zone: "outside" }] }), 'Invalid configuration: classification.tiers[0].zone must be one of "optimal", "comfort", "outside", or "invalid".'],
-    [validCustom({ valid_range: {} }), "Invalid configuration: classification.valid_range must define min and/or max."],
-    [validCustom({ valid_range: { min: 0, max: 50, min_inclusive: "yes" } }), "Invalid configuration: classification.valid_range.min_inclusive must be a boolean."],
-    [validCustom({ valid_range: { min: 50, max: 0 } }), "Invalid configuration: classification.valid_range must have min < max."],
-    [validCustom({ valid_range: 5 }), "Invalid configuration: classification.valid_range must be an object."],
-    [validCustom({ icons: 5 }), "Invalid configuration: classification.icons must be a list of {min, icon} tiers with a final {default: true, icon} entry."],
-    [validCustom({ icons: { fire: 20, high: 26, normal: 19, low: 15 } }), "Invalid configuration: classification.icons must descend from fire to low."],
-    [validCustom({ bogus: 1 }), "Invalid configuration: classification.bogus is not a supported option."],
+    [{ unit: undefined }, "classification.unit", undefined],
+    [{ unit: "hPa" }, "classification.unit", "hPa"],
+    [{ comparison: ">>" }, "classification.comparison", ">>"],
+    [{ bands: undefined }, "classification.bands", undefined],
+    [{ bands: { comfort: { min: 25, max: 25 }, optimal: { min: 21, max: 23 } } }, "classification.bands.comfort.max", 25],
+    [{ bands: { comfort: { min: 21, max: 23 }, optimal: { min: 19, max: 25 } } }, "classification.bands.optimal.min", 19],
+    [{ bands: { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 26 } } }, "classification.bands.optimal.max", 26],
+    [{ scale: undefined }, "classification.scale", undefined],
+    [{ scale: { min: 16, max: 28, step: 0 } }, "classification.scale.step", 0],
+    [{ scale: { min: 16, max: 28, step: 2, headroom: -1 } }, "classification.scale.headroom", -1],
+    [{ scale: { min: 16, max: 28, step: 2, one_sided: "yes" } }, "classification.scale.one_sided", "yes"],
+    [{ scale: { min: 16, max: 28, step: 2, anchor_scale: "no" } }, "classification.scale.anchor_scale", "no"],
+    // The two shapes of `scale`, and the ways of asking for neither.
+    [{ scale: { step: 2 } }, "classification.scale.min", undefined],
+    [{ scale: { min: 16, step: 2 } }, "classification.scale.max", undefined],
+    [{ scale: { min: 16, max: 28, step: 2, anchor_scale: false } }, "classification.scale.min", 16],
+    [{ scale: { max: 28, step: 2, anchor_scale: false } }, "classification.scale.max", 28],
+    [{ scale: { step: 2, anchor_scale: false, one_sided: true }, icons: ICON_THRESHOLDS }, "classification.scale.one_sided", true],
+    [{ tiers: [] }, "classification.tiers", []],
+    [{ tiers: ["x"] }, "classification.tiers[0]", "x"],
+    [{ tiers: [tier({ min: 20, default: "yes" })] }, "classification.tiers[0].default", "yes"],
+    [{ tiers: [defaultTier({ min: 5 })] }, "classification.tiers[0].min", 5],
+    [{ tiers: [tier({}), defaultTier()] }, "classification.tiers[0].min", undefined],
+    [{ tiers: [tier({ min: 20, score: 2 }), tier({ min: 24 }), defaultTier()] }, "classification.tiers[1].min", 24],
+    [{ tiers: [defaultTier({ score: 2 }), tier({ min: 20 })] }, "classification.tiers[0].default", true],
+    [{ tiers: noDefault }, "classification.tiers", noDefault],
+    [{ tiers: [tier({ min: 20, level: "  " }), defaultTier()] }, "classification.tiers[0].level", "  "],
+    [{ tiers: [tier({ min: 20, color: "red" }), defaultTier()] }, "classification.tiers[0].color", "red"],
+    [{ tiers: [tier({ min: 20, zone: "elsewhere" }), defaultTier()] }, "classification.tiers[0].zone", "elsewhere"],
+    [{ tiers: [tier({ min: 20, score: "x" }), defaultTier()] }, "classification.tiers[0].score", "x"],
+    [{ valid_range: {} }, "classification.valid_range", {}],
+    [{ valid_range: { min: 0, max: 50, min_inclusive: "yes" } }, "classification.valid_range.min_inclusive", "yes"],
+    [{ valid_range: { min: 50, max: 0 } }, "classification.valid_range.max", 0],
+    [{ valid_range: 5 }, "classification.valid_range", 5],
+    [{ icons: 5 }, "classification.icons", 5],
+    [{ icons: { fire: 20, high: 26, normal: 19, low: 15 } }, "classification.icons.high", 26],
+    [{ icons: [{ min: 28, icon: "" }, { default: true, icon: "mdi:snowflake" }] }, "classification.icons[0].icon", ""],
+    [{ icons: iconsWithoutDefault }, "classification.icons", iconsWithoutDefault],
   ];
-  for (const [input, expected] of cases) {
-    assert.throws(
-      () => classification.normalizeCustomClassification(input, COLLABORATORS),
-      { message: expected },
-      `expected: ${expected}`
-    );
-  }
+  for (const [overrides, path, value] of cases) refusedAt(validCustom(overrides), path, value);
 });
 
 // The threshold object is a temperature-only spelling; other metrics use the list form.
 test("only a temperature profile may use the legacy threshold object", () => {
-  assert.throws(
-    () =>
-      classification.normalizeCustomClassification(
-        validCustom({
-          unit: "%",
-          bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
-          scale: { min: 30, max: 70, step: 5 },
-          icons: { fire: 80, high: 60, normal: 40, low: 20 },
-        }),
-        COLLABORATORS
-      ),
-    { message: "Invalid configuration: classification.icons must be a list of {min, icon} tiers with a final {default: true, icon} entry." }
+  const icons = { fire: 80, high: 60, normal: 40, low: 20 };
+  refusedAt(
+    validCustom({
+      unit: "%",
+      bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },
+      scale: { min: 30, max: 70, step: 5 },
+      icons,
+    }),
+    "classification.icons",
+    icons
   );
 });
 
-test("validation order is stable: the unit is checked before the bands", () => {
-  // Both are broken; the unit must still be the reported problem.
-  assert.throws(
-    () => classification.normalizeCustomClassification(validCustom({ unit: "hPa", bands: undefined }), COLLABORATORS),
-    /classification\.unit "hPa" is not recognized/
-  );
-  // Both bands and scale are broken; bands must win.
-  assert.throws(
-    () => classification.normalizeCustomClassification(validCustom({ bands: undefined, scale: undefined }), COLLABORATORS),
-    /classification\.bands must be an object/
-  );
+test("the rules run in a fixed order: the unit before the bands, the bands before the scale", () => {
+  refusedAt(validCustom({ unit: "hPa", bands: undefined }), "classification.unit", "hPa");
+  refusedAt(validCustom({ bands: undefined, scale: undefined }), "classification.bands", undefined);
 });
 
+test("a custom profile with a value it cannot use falls back to auto whole, and names that value", () => {
+  const instead = core.fallbackOption("classification", "auto");
+  assert.deepEqual(policyOf(validCustom({ comparison: ">>" })), {
+    policy: AUTO,
+    diagnostics: [invalid("classification.comparison", ">>", instead)],
+  });
+  assert.deepEqual(policyOf(fahrenheitCustom({ scale: { min: 60, max: 1e308, step: 2 } })), {
+    policy: AUTO,
+    diagnostics: [invalid("classification.scale.max", 1e308, instead)],
+  });
+});
+
+test("a key a custom profile does not have refuses the configuration at any depth, whatever else is wrong", () => {
+  const bands = { comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 } };
+  const cases = [
+    [{ bogus: 1 }, "classification.bogus is not an option of this card."],
+    [{ bands: { ...bands, bogus: 1 } }, "classification.bands.bogus is not an option of this card."],
+    [{ bands: { ...bands, comfort: { min: 19, max: 25, mid: 22 } } }, "classification.bands.comfort.mid is not an option of this card. Did you mean classification.bands.comfort.min?"],
+    [{ scale: { min: 16, max: 28, step: 2, anchorScale: false } }, "classification.scale.anchorScale is not an option of this card. Did you mean classification.scale.anchor_scale?"],
+    [{ tiers: [tier({ min: 20, bogus: 1 }), defaultTier()] }, "classification.tiers[0].bogus is not an option of this card."],
+    [{ valid_range: { min: 0, maks: 50 } }, "classification.valid_range.maks is not an option of this card. Did you mean classification.valid_range.max?"],
+    [{ icons: [{ min: 28, icn: "mdi:x" }, { default: true, icon: "mdi:y" }] }, "classification.icons[0].icn is not an option of this card. Did you mean classification.icons[0].icon?"],
+    [{ icons: { fire: 30, hihg: 26, normal: 20, low: 14 } }, "classification.icons.hihg is not an option of this card. Did you mean classification.icons.high?"],
+    // A value that is wrong as well does not hide the key: the keys are read first.
+    [{ unit: "hPa", bands: { ...bands, bogus: 1 } }, "classification.bands.bogus is not an option of this card."],
+  ];
+  for (const [overrides, message] of cases) {
+    assert.throws(() => policyOf(validCustom(overrides)), { name: "ConfigError", message: `Invalid configuration: ${message}` }, message);
+  }
+});

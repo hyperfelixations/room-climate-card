@@ -114,7 +114,7 @@ export const ja = {
 
   "warning.label": "警告",
   "warning.several": (v) => `このカードに ${v.count} 件の問題があります。詳細はブラウザーのコンソールを参照してください。`,
-  "warning.invalidValue": (v) => `${v.value} は ${v.key} の有効な値ではありません。${v.instead}`,
+  "warning.invalidValue": (v) => `${v.key} の値 ${v.value} は無効です。${v.instead}`,
   "warning.foreignKey": (v) => `${v.key} はこのカードのオプションではありません。このキーは無視されます。`,
   "warning.mixedMeasurements": "部屋ごとに測定対象が異なります。entity を設定するか、device_class を揃えてください。",
   "fallback.value": (v) => `既定値 ${v.value} を使用します。`,
@@ -122,6 +122,9 @@ export const ja = {
   "fallback.ignored": "無視されます。",
   "fallback.firstView": "最初に利用可能な表示から始めます。",
   "fallback.defaults": "既定値を使用します。",
+  "fallback.cardAction": "カードのアクションを使用します。",
+  "fallback.option": (v) => `${v.key} には ${v.value} を使用します。`,
+  "warning.deprecated": (v) => `${v.written} は廃止予定です。${v.replacement} を使用してください。`,
   "value.empty": "（空）",
   "warning.profileUnavailable": (v) => `${v.profile} は ${v.measurement} の分類プロファイルではありません。${v.instead}`,
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} は ${v.measurement} に合いません。${v.instead}`,

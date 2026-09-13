@@ -46,6 +46,18 @@ test("every code has one of the two levels", () => {
   for (const [code, severity] of Object.entries(diagnostics.DIAGNOSTIC_SEVERITY)) {
     assert.ok(Object.values(diagnostics.SEVERITY).includes(severity), `${code}: ${severity}`);
   }
+  assert.equal(diagnostics.DIAGNOSTIC_SEVERITY["config.deprecated"], diagnostics.SEVERITY.WARNING);
+});
+
+test("what the card uses instead is a phrase, a value, or the value of an option, each frozen", () => {
+  const { FALLBACK, fallbackValue, fallbackOption } = diagnostics;
+  for (const name of ["AUTOMATIC", "IGNORED", "FIRST_VIEW", "CARD_ACTION", "DEFAULTS", "METRIC_DECIMALS"]) {
+    assert.ok(Object.isFrozen(FALLBACK[name]), name);
+    assert.equal(typeof FALLBACK[name].phrase, "string", name);
+  }
+  assert.deepEqual(fallbackValue(14), { value: 14 });
+  assert.deepEqual(fallbackOption("palette", "pastel"), { key: "palette", value: "pastel" });
+  assert.ok(Object.isFrozen(fallbackOption("palette", "pastel")));
 });
 
 test("diagnosticKey() is the same for two diagnostics that read the same", () => {

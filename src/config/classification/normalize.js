@@ -8,12 +8,24 @@
 // A custom profile is written in the user's unit and converted to canonical here, once.
 // The unit lookup is INJECTED: mapping a unit string to a metric kind is domain
 // knowledge, and the config layer must not import the domain registry.
+//
+// A key the policy or a custom profile does not have refuses the configuration, at any depth
+// and before any value is read. An invalid value makes the whole option fall back to `auto`,
+// with one warning naming the first value at fault. See internal dev doc §5
+// "Custom-Profile-Vertrag".
 
+import { createDiagnostic, fallbackOption, fallbackValue, FALLBACK } from "../../core/diagnostics.js";
 import { isOutsideRange } from "../../core/numbers.js";
-import { assertAllowedKeys, isPlainObject, optionalString } from "../primitives.js";
-import { pathError } from "../errors.js";
+import { ConfigValueError, rejectValue } from "../errors.js";
+import { assertKnownKeys, isPlainObject, isUnwritten } from "../primitives.js";
 import {
+  BAND_KEYS,
+  BANDS_KEYS,
+  ICON_TIER_KEYS,
   LEGACY_TEMPERATURE_ICON_KEYS,
+  SCALE_KEYS,
+  TIER_KEYS,
+  VALID_RANGE_KEYS,
   normalizeBands,
   normalizeIcons,
   normalizeScale,
@@ -21,62 +33,84 @@ import {
   normalizeValidRange,
 } from "./profile-parts.js";
 
-const AUTO_POLICY = { source: "auto", profile: null, custom: null };
+const SOURCES = ["auto", "entity", "profile", "custom"];
+const POLICY_KEYS = ["source", "profile"];
+const CUSTOM_KEYS = ["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"];
 
-export function normalizeClassificationConfig(value, collaborators) {
-  if (value === undefined || value === null || value === "") {
-    return { ...AUTO_POLICY };
-  }
+const autoPolicy = () => ({ source: "auto", profile: null, custom: null });
+
+export function normalizeClassificationConfig(value, collaborators, diagnostics) {
+  const fallBack = (path, written, instead = fallbackValue("auto")) => {
+    diagnostics.push(createDiagnostic("value.invalid", { path, value: written, fallback: instead }));
+    return autoPolicy();
+  };
+  if (isUnwritten(value)) return autoPolicy();
   if (typeof value === "string") {
     const shorthand = value.trim().toLowerCase();
-    if (!shorthand) return { ...AUTO_POLICY };
-    if (shorthand === "auto" || shorthand === "entity") {
-      return { source: shorthand, profile: null, custom: null };
-    }
-    if (shorthand === "profile" || shorthand === "custom") {
-      pathError("classification", `"${shorthand}" requires the object form`);
-    }
+    if (shorthand === "auto" || shorthand === "entity") return { source: shorthand, profile: null, custom: null };
+    // `profile` and `custom` name a source whose content only the object form can carry.
+    if (!shorthand || shorthand === "profile" || shorthand === "custom") return fallBack("classification", value);
     return { source: "auto", profile: shorthand, custom: null };
   }
-  if (!isPlainObject(value)) pathError("classification", "must be a string or object");
+  if (!isPlainObject(value)) return fallBack("classification", value);
 
   // A block carrying `tiers` is a custom profile even without an explicit source — that
   // is the only form in which tiers can appear.
-  const inferredSource = value.source ?? (value.tiers !== undefined ? "custom" : "auto");
-  if (!["auto", "entity", "profile", "custom"].includes(inferredSource)) {
-    pathError("classification.source", 'must be "auto", "entity", "profile", or "custom"');
+  const source = value.source ?? (value.tiers !== undefined ? "custom" : "auto");
+  if (!SOURCES.includes(source)) {
+    // Without a usable source no one key set applies, so the keys of every form are allowed.
+    assertKnownKeys(value, new Set([...POLICY_KEYS, ...CUSTOM_KEYS]), "classification");
+    return fallBack("classification.source", value.source);
   }
-  if (inferredSource === "custom") {
-    return { source: "custom", profile: null, custom: normalizeCustomClassification(value, collaborators) };
+  if (source === "custom") {
+    assertCustomProfileKeys(value);
+    try {
+      return { source: "custom", profile: null, custom: normalizeCustomClassification(value, collaborators) };
+    } catch (error) {
+      if (!(error instanceof ConfigValueError)) throw error;
+      return fallBack(error.path, error.value, fallbackOption("classification", "auto"));
+    }
   }
 
-  assertAllowedKeys(value, new Set(["source", "profile"]), "classification");
-  if (inferredSource === "entity" && value.profile !== undefined) {
-    pathError("classification.profile", "cannot be combined with source entity");
+  assertKnownKeys(value, POLICY_KEYS, "classification");
+  if (isUnwritten(value.profile)) return { source, profile: null, custom: null };
+  if (source === "entity") {
+    diagnostics.push(createDiagnostic("value.invalid", { path: "classification.profile", value: value.profile, fallback: FALLBACK.IGNORED }));
+    return { source, profile: null, custom: null };
   }
-  const profile = value.profile === undefined ? null : optionalString(value.profile);
-  if (value.profile !== undefined && !profile) {
-    pathError("classification.profile", "must be a non-empty string");
+  const profile = typeof value.profile === "string" ? value.profile.trim().toLowerCase() : "";
+  if (!profile) return fallBack("classification.profile", value.profile);
+  return { source, profile, custom: null };
+}
+
+// Every key of a custom profile, at every depth, before any value: an unknown key refuses the
+// configuration however broken the values around it are. A part of the wrong shape has no keys
+// to check; its value rule refuses it.
+function assertCustomProfileKeys(value) {
+  const keysOf = (part, allowed, path) => {
+    if (isPlainObject(part)) assertKnownKeys(part, allowed, path);
+  };
+  keysOf(value, CUSTOM_KEYS, "classification");
+  keysOf(value.bands, BANDS_KEYS, "classification.bands");
+  if (isPlainObject(value.bands)) {
+    keysOf(value.bands.comfort, BAND_KEYS, "classification.bands.comfort");
+    keysOf(value.bands.optimal, BAND_KEYS, "classification.bands.optimal");
   }
-  return { source: inferredSource, profile: profile?.toLowerCase() ?? null, custom: null };
+  keysOf(value.scale, SCALE_KEYS, "classification.scale");
+  keysOf(value.valid_range, VALID_RANGE_KEYS, "classification.valid_range");
+  if (Array.isArray(value.tiers)) value.tiers.forEach((tier, index) => keysOf(tier, TIER_KEYS, `classification.tiers[${index}]`));
+  if (Array.isArray(value.icons)) value.icons.forEach((item, index) => keysOf(item, ICON_TIER_KEYS, `classification.icons[${index}]`));
+  else keysOf(value.icons, LEGACY_TEMPERATURE_ICON_KEYS, "classification.icons");
 }
 
 export function normalizeCustomClassification(value, { metricKindForUnit, unitProfileForUnit, classificationZones }) {
-  const allowed = new Set(["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"]);
-  assertAllowedKeys(value, allowed, "classification");
-
-  if (typeof value.unit !== "string" || !value.unit.trim()) {
-    pathError("classification.unit", "must be a recognized unit string");
-  }
+  if (typeof value.unit !== "string" || !value.unit.trim()) rejectValue("classification.unit", value.unit);
   const metricKind = metricKindForUnit(value.unit);
-  if (!metricKind) pathError("classification.unit", `"${value.unit}" is not recognized`);
-  const sourceUnitProfile = unitProfileForUnit(metricKind, value.unit);
-  if (!sourceUnitProfile) pathError("classification.unit", `"${value.unit}" has no registered UnitProfile`);
+  const sourceUnitProfile = metricKind ? unitProfileForUnit(metricKind, value.unit) : null;
+  if (!sourceUnitProfile) rejectValue("classification.unit", value.unit);
 
   const comparison = value.comparison ?? ">=";
-  if (comparison !== ">=" && comparison !== ">") {
-    pathError("classification.comparison", 'must be ">=" or ">"');
-  }
+  if (comparison !== ">=" && comparison !== ">") rejectValue("classification.comparison", value.comparison);
 
   const { comfort: sourceComfort, optimal: sourceOptimal } = normalizeBands(value.bands);
   const {
@@ -97,9 +131,7 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   const unit = value.unit.trim();
   const converting = (convert) => (written, path) => {
     const converted = convert(written);
-    if (!Number.isFinite(converted)) {
-      pathError(path, `cannot be converted from ${unit} into the canonical unit, because the result exceeds the largest representable number`);
-    }
+    if (!Number.isFinite(converted)) rejectValue(path, written);
     return converted;
   };
   const toCanonical = converting(sourceUnitProfile.toCanonical);

@@ -31,6 +31,21 @@ const MIXED = {
 const CASES = [
   { name: "a value replaced by its default", config: { show: { unavailable_rooms: VALUE } } },
   { name: "a view option replaced by its default", config: { views: [{ type: "scale", options: { markers: VALUE } }] } },
+  { name: "the measurement's own decimals", config: { decimals: VALUE } },
+  { name: "the card's action for a room", config: { rooms: [{ entity: "sensor.r1", hold_action: { action: VALUE } }, { entity: "sensor.r2" }] } },
+  { name: "a whole option replaced by its default", config: { palette: { optimal: VALUE } } },
+  {
+    name: "the longest path in a custom profile",
+    config: {
+      classification: {
+        source: "custom",
+        unit: "°C",
+        bands: { comfort: { min: 19, max: 25 }, optimal: { min: VALUE, max: 23 } },
+        scale: { min: 16, max: 28, step: 2 },
+        tiers: [{ min: 24, score: 1, level: "Warm", zone: "outside" }, { default: true, score: 0, level: "Ok", zone: "optimal" }],
+      },
+    },
+  },
   { name: "the automatic setting", config: { views: VALUE } },
   { name: "an ignored entry", config: { views: [VALUE] } },
   { name: "the first available view", config: { start_view: VALUE } },

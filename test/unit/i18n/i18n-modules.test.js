@@ -110,6 +110,8 @@ const INTERPOLATION_VARS = Object.freeze({
   profile: '"outdoor"',
   measurement: "Humidity",
   unit: "°F",
+  written: "show_rooms",
+  replacement: "show.rooms",
 });
 
 test("every function-valued translation reads exactly the documented variables, in every language", () => {

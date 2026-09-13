@@ -1,11 +1,43 @@
-// Configuration errors that name the offending path. Every rejected configuration
-// throws a message starting with "Invalid configuration: " — Home Assistant shows it
-// verbatim in the dashboard, so the wording is a user-facing contract. Path-less
-// full-sentence messages are thrown at
-// their own call site instead.
+// Why a configuration cannot be used at all, as data: a code and its parameters, carried by the
+// error setConfig() throws. Its message is the English sentence Home Assistant shows. The
+// catalog is closed; every other invalid value is a warning (core/diagnostics.js). See internal
+// dev doc §3 "Konfigurationsvertrag".
 
-const PREFIX = "Invalid configuration: ";
+const MESSAGES = {
+  "config.not_object": () => "the card configuration must be a YAML object.",
+  "config.unknown_key": ({ key, suggestion }) => `${key} is not an option of this card.${suggestion ? ` Did you mean ${suggestion}?` : ""}`,
+  "config.no_source": () => "set entity, or add at least one entry under rooms.",
+  "config.must_be_entity_id": ({ key }) => `${key} must be an entity id.`,
+  "config.must_be_list": ({ key }) => `${key} must be a list.`,
+  "config.must_be_object": ({ key }) => `${key} must be an object.`,
+  "config.duplicate_room": ({ entity }) => `${entity} is used by more than one room.`,
+};
 
-export function pathError(path, message) {
-  throw new Error(`${PREFIX}${path} ${message}.`);
+export class ConfigError extends Error {
+  constructor(code, params = {}) {
+    super(`Invalid configuration: ${MESSAGES[code](params)}`);
+    this.name = "ConfigError";
+    this.code = code;
+    this.params = params;
+  }
+}
+
+// A value that one rule of a definition object refuses (a custom profile, a written-out
+// palette). It never leaves config/: the option that holds the value answers with a warning and
+// its default.
+export class ConfigValueError extends Error {
+  constructor(path, value) {
+    super(`${path}: invalid value`);
+    this.name = "ConfigValueError";
+    this.path = path;
+    this.value = value;
+  }
+}
+
+export function rejectConfiguration(code, params = {}) {
+  throw new ConfigError(code, params);
+}
+
+export function rejectValue(path, value) {
+  throw new ConfigValueError(path, value);
 }

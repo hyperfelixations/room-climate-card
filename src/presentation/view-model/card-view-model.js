@@ -327,7 +327,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const meta = metricKind ? metricMetaFor(metricKind) : null;
   const headerTitle = buildHeaderTitle(config, meta ? texts.t(meta.titleKey) : CARD_NAME);
   const title = headerTitle.title;
-  const notices = buildNotices({ configDiagnostics: config._configDiagnostics, domainDiagnostics: domainModel.diagnostics });
+  const notices = buildNotices({ configDiagnostics: config._configDiagnostics, domainDiagnostics: domainModel.diagnostics, metricKind });
   const warning = buildWarningBlock({ config, warnings: notices.warnings, t: texts.t });
 
   if (domainModel.empty) {

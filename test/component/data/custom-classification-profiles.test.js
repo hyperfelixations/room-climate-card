@@ -217,32 +217,41 @@ test("custom Fahrenheit thresholds are canonicalized and project back coherently
   env.cleanup(outsideRange);
 });
 
-test("custom profile validation fails fast with path-specific errors", () => {
+test("an invalid custom profile falls back to auto whole, naming the first value at fault", () => {
   const cases = [
-    [{ ...customProfile, unexpected: true }, /classification\.unexpected/],
-    [{ ...customProfile, unit: "hPa" }, /classification\.unit/],
-    [{ ...customProfile, bands: { ...customProfile.bands, optimal: { min: 5, max: 22 } } }, /classification\.bands\.optimal/],
-    [{ ...customProfile, scale: { min: 40, max: 0, step: 2 } }, /classification\.scale/],
-    [{ ...customProfile, tiers: customProfile.tiers.slice(0, 2) }, /default tier/],
-    [{ ...customProfile, tiers: [customProfile.tiers[1], customProfile.tiers[0], customProfile.tiers[2]] }, /descending/],
+    [{ ...customProfile, unit: "hPa" }, '"hPa" is not a valid value for classification.unit.'],
+    [{ ...customProfile, bands: { ...customProfile.bands, optimal: { min: 5, max: 22 } } }, "5 is not a valid value for classification.bands.optimal.min."],
+    [{ ...customProfile, scale: { min: 40, max: 0, step: 2 } }, "0 is not a valid value for classification.scale.max."],
+    [{ ...customProfile, tiers: customProfile.tiers.slice(0, 2) }, "[…] is not a valid value for classification.tiers."],
+    [{ ...customProfile, tiers: [customProfile.tiers[1], customProfile.tiers[0], customProfile.tiers[2]] }, "30 is not a valid value for classification.tiers[1].min."],
     [{
       ...customProfile,
       tiers: [
         { ...customProfile.tiers[0], color: "red; background:black" },
         ...customProfile.tiers.slice(1),
       ],
-    }, /classification\.tiers\[0\]\.color/],
+    }, '"red; background:black" is not a valid value for classification.tiers[0].color.'],
     [{
       ...customProfile,
       unit: "%",
       icons: { fire: 90, high: 75, normal: 40, low: 20 },
-    }, /classification\.icons must be a list/],
-    [{ ...customProfile, icons: { fire: 30, high: 26, normal: 20, low: 24 } }, /classification\.icons.*descend/],
+    }, "{…} is not a valid value for classification.icons."],
+    [{ ...customProfile, icons: { fire: 30, high: 26, normal: 20, low: 24 } }, "24 is not a valid value for classification.icons.low."],
   ];
 
-  for (const [classification, expected] of cases) {
-    assert.throws(() => createTemperatureCard(classification), expected);
+  for (const [classification, sentence] of cases) {
+    const card = createTemperatureCard(classification);
+    assert.equal(card._config.classification.source, "auto", sentence);
+    assert.equal(card.shadowRoot.querySelector(".rtc-warning-text").textContent, `${sentence} Using classification: auto.`);
+    env.cleanup(card);
   }
+});
+
+test("a key a custom profile does not have refuses the configuration", () => {
+  assert.throws(() => createTemperatureCard({ ...customProfile, unexpected: true }), {
+    name: "ConfigError",
+    message: "Invalid configuration: classification.unexpected is not an option of this card.",
+  });
 });
 
 // The reference axis is a window, not an outer bound: bands are clipped into it, so a

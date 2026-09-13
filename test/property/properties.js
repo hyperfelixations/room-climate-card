@@ -288,12 +288,16 @@ function domIsSafe(root) {
   return violations;
 }
 
-// The numeric half stays textual: the card never echoes a raw entity state, so "NaN" or
-// "Infinity" anywhere in the markup came from arithmetic, not from what a user typed.
+// The numeric half stays textual: the card never echoes a raw entity state, and echoes what a
+// user typed only as the written value in the warnings block — so "NaN" or "Infinity" anywhere
+// else in the markup came from arithmetic.
+const WARNING_TEXT = /<div class="rtc-warning-text">[^<]*<\/div>/g;
+
 function markupIsNumeric(html) {
+  const computed = html.replace(WARNING_TEXT, "");
   const violations = [];
-  if (/\bNaN\b/.test(html)) violations.push("rendered markup contains the text NaN");
-  if (/\bInfinity\b/.test(html)) violations.push("rendered markup contains the text Infinity");
+  if (/\bNaN\b/.test(computed)) violations.push("rendered markup contains the text NaN");
+  if (/\bInfinity\b/.test(computed)) violations.push("rendered markup contains the text Infinity");
   return violations;
 }
 

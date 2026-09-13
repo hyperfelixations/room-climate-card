@@ -41,22 +41,19 @@ function baseConfig(extra) {
 
 // ==== optionsSchema whitelist + validation (regression + new) ====
 
-test("optionsSchema: show_comfort_band/show_optimal_band pass the whitelist for scale and range_scale, unrelated keys are still stripped and diagnosed", () => {
-  // The console reporter does not repeat an unchanged set of warnings, so the spy is attached
-  // before the "bogus" config is first applied.
-  const el = env.createCard(baseConfig(), twoRoomStates());
-  const warnings = [];
-  const originalWarn = el.ownerDocument.defaultView.console.warn;
-  el.ownerDocument.defaultView.console.warn = (...args) => warnings.push(args.join(" "));
-  el.setConfig(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false, bogus: true } }] }));
-
-  assert.deepEqual(normalize(el._config.views[0].options), { show_comfort_band: false });
-  assert.ok(
-    warnings.some((w) => w.includes("views[0].options.bogus is not an option of this card")),
-    "unrelated unknown key must still be diagnosed"
+test("optionsSchema: show_comfort_band/show_optimal_band pass for scale and range_scale, and an unrelated key refuses the configuration", () => {
+  const el = env.createCard(
+    baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false } }, { type: "range_scale", options: { show_optimal_band: false } }] }),
+    twoRoomStates()
   );
+  assert.deepEqual(normalize(el._config.views[0].options), { show_comfort_band: false });
+  assert.deepEqual(normalize(el._config.views[1].options), { show_optimal_band: false });
 
-  el.ownerDocument.defaultView.console.warn = originalWarn;
+  assert.throws(() => el.setConfig(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false, bogus: true } }] })), {
+    name: "ConfigError",
+    message: "Invalid configuration: views[0].options.bogus is not an option of this card.",
+  });
+  assert.deepEqual(normalize(el._config.views[1].options), { show_optimal_band: false }, "a refused configuration leaves the card as it was");
   env.cleanup(el);
 });
 

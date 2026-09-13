@@ -8,7 +8,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { MODEL_INVARIANTS, walk } = require("./properties.js");
+const { MODEL_INVARIANTS, markupIsNumeric, walk } = require("./properties.js");
+
+test("NaN or Infinity is an arithmetic accident everywhere but in the value a warning quotes", () => {
+  const warning = '<div class="rtc-warning"><div class="rtc-warning-text">"NaN" is not a valid value for slide_seconds. Using default: 1.</div></div>';
+  assert.deepEqual(markupIsNumeric(warning), [], "the user's own words, quoted back");
+  assert.deepEqual(markupIsNumeric(`${warning}<div class="rtc-value">NaN °C</div>`), ["rendered markup contains the text NaN"]);
+  assert.deepEqual(markupIsNumeric('<span class="rtc-scale-label">Infinity</span>'), ["rendered markup contains the text Infinity"]);
+});
 
 test("comfort counts must partition every comparable room exactly", () => {
   const model = {

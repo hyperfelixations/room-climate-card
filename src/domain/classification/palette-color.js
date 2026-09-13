@@ -22,9 +22,7 @@ import { NEUTRAL_COLOR } from "./palettes/registry.js";
 export function rampColorFor(deviation, span, palette, describe = "classification") {
   if (deviation === 0) return palette.optimal;
   if (!Number.isInteger(deviation)) {
-    throw new Error(
-      `Invalid configuration: ${describe} needs a whole number of steps from optimal to take a color from the palette, but got ${deviation}.`
-    );
+    throw new Error(`${describe} needs a whole number of steps from optimal to take a color from the palette, but got ${deviation}.`);
   }
   const towardsTooMuch = deviation > 0;
   const wing = towardsTooMuch ? palette.above : palette.below;
@@ -38,7 +36,7 @@ export function rampColorFor(deviation, span, palette, describe = "classificatio
   // anyway: reading past a wing would produce `undefined` as a colour.
   if (!Number.isInteger(reach) || reach < steps) {
     throw new Error(
-      `Invalid configuration: ${describe} is ${steps} step${steps === 1 ? "" : "s"} ${towardsTooMuch ? "above" : "below"} optimal, which is outside the profile's own range.`
+      `${describe} is ${steps} step${steps === 1 ? "" : "s"} ${towardsTooMuch ? "above" : "below"} optimal, which is outside the profile's own range.`
     );
   }
   return wing[Math.ceil((steps / reach) * wing.length) - 1];

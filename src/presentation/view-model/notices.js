@@ -4,6 +4,7 @@
 // See internal dev doc §4 "Diagnosevertrag".
 
 import { SEVERITY, formatConfigValue } from "../../core/diagnostics.js";
+import { metricMetaFor } from "./metric-meta.js";
 
 function message(key, vars = null) {
   return vars ? { key, vars } : { key };
@@ -14,10 +15,12 @@ function writtenValue(value) {
   return shown === null ? message("value.empty") : shown;
 }
 
-function instead(fallback) {
-  if (Object.prototype.hasOwnProperty.call(fallback, "value")) {
-    return message("fallback.value", { value: String(fallback.value) });
-  }
+// What the card uses instead: another option's value, a value, or a phrase. The decimals of
+// the measurement are the precision the card formats with, so they follow `metricKind`.
+function instead(fallback, { metricKind }) {
+  if (Object.hasOwn(fallback, "key")) return message("fallback.option", { key: fallback.key, value: String(fallback.value) });
+  if (Object.hasOwn(fallback, "value")) return message("fallback.value", { value: String(fallback.value) });
+  if (fallback.phrase === "metricDecimals") return message("fallback.value", { value: String(metricMetaFor(metricKind).decimals) });
   return message(`fallback.${fallback.phrase}`);
 }
 
@@ -27,13 +30,15 @@ function defaultProfile(diagnostic) {
 }
 
 const MESSAGE_FOR_CODE = {
-  "value.invalid": (diagnostic) =>
+  "value.invalid": (diagnostic, context) =>
     message("warning.invalidValue", {
       value: writtenValue(diagnostic.value),
       key: diagnostic.path,
-      instead: instead(diagnostic.fallback),
+      instead: instead(diagnostic.fallback, context),
     }),
   "config.foreign_key": (diagnostic) => message("warning.foreignKey", { key: diagnostic.path }),
+  "config.deprecated": (diagnostic) =>
+    message("warning.deprecated", { written: diagnostic.params.written, replacement: diagnostic.params.replacement }),
   "sources.mixed": () => message("warning.mixedMeasurements"),
   "classification.profile_unavailable": (diagnostic) =>
     message("warning.profileUnavailable", {
@@ -51,10 +56,11 @@ const MESSAGE_FOR_CODE = {
     message("warning.profileNotRepresentable", { unit: diagnostic.params.unit, instead: defaultProfile(diagnostic) }),
 };
 
-export function messageForDiagnostic(diagnostic) {
+// `context.metricKind` is the card's measurement, where the wording depends on it.
+export function messageForDiagnostic(diagnostic, context = {}) {
   const build = MESSAGE_FOR_CODE[diagnostic.code];
   if (!build) throw new Error(`notices: no message for "${diagnostic.code}"`);
-  return build(diagnostic);
+  return build(diagnostic, { metricKind: context.metricKind ?? null });
 }
 
 // A variable that is itself a message is rendered first, in the same language.
@@ -68,12 +74,11 @@ export function renderMessage(entry, t) {
 }
 
 // Configuration first, in the order the YAML writes it, then the sources.
-export function buildNotices({ configDiagnostics, domainDiagnostics }) {
+export function buildNotices({ configDiagnostics, domainDiagnostics, metricKind = null }) {
   const all = [...configDiagnostics, ...domainDiagnostics.warnings, ...domainDiagnostics.hints];
-  return {
-    warnings: all.filter((diagnostic) => diagnostic.severity === SEVERITY.WARNING).map(messageForDiagnostic),
-    hints: all.filter((diagnostic) => diagnostic.severity === SEVERITY.HINT).map(messageForDiagnostic),
-  };
+  const worded = (severity) =>
+    all.filter((diagnostic) => diagnostic.severity === severity).map((diagnostic) => messageForDiagnostic(diagnostic, { metricKind }));
+  return { warnings: worded(SEVERITY.WARNING), hints: worded(SEVERITY.HINT) };
 }
 
 // One warning is shown in full; several are counted, and the console lists them.

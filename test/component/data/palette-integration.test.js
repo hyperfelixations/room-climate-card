@@ -77,11 +77,12 @@ test("a palette shorter than the profile collapses onto what it has", () => {
   }
 });
 
-test("an unknown palette name stops the card with a message naming the known ones", () => {
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", palette: "neon" }, temperatureHass()),
-    /palette "neon" is neither a palette nor a color — the palettes are "pastel", "vivid", "color-vision", "protan-deutan", "protan", "deutan", "tritan", "signal"/
-  );
+test("an unknown palette name falls back to the default palette, with a warning", () => {
+  const card = paletteCard("neon");
+  assert.equal(card._config.palette.id, "pastel");
+  assert.equal(card._computeViewModel().tone.color, "#79A86C", "the default palette's colour for the same reading");
+  assert.equal(card.shadowRoot.querySelector(".rtc-warning-text").textContent, '"neon" is not a valid value for palette. Using default: pastel.');
+  env.cleanup(card);
 });
 
 // A single word: colour name vs palette name.
@@ -181,9 +182,9 @@ test("a profile reaching further than the palette is spread across it", () => {
   }
 });
 
-// A semantically broken ramp stops the card rather than rendering a misleading colour —
-// a setConfig() error with the exact path, like any meaning-changing classification mistake.
-test("a profile whose scores contradict its thresholds is refused by the card", () => {
+// A semantically broken ramp is never painted: the card falls back to the automatic
+// classification and names the score at fault, like any invalid value in a custom profile.
+test("a profile whose scores contradict its thresholds falls back to auto, naming the score", () => {
   const broken = {
     source: "custom",
     unit: "°C",
@@ -195,10 +196,13 @@ test("a profile whose scores contradict its thresholds is refused by the card", 
       { default: true, score: -1, level: "Cold", zone: "outside" },
     ],
   };
-  assert.throws(
-    () => env.createCard({ entity: "sensor.avg", classification: broken }, temperatureHass(22)),
-    /classification\.tiers\[1\]\.score is 5, which is not below the 1 of classification\.tiers\[0\]/
+  const refused = env.createCard({ entity: "sensor.avg", classification: broken }, temperatureHass(22));
+  assert.equal(refused._config.classification.source, "auto");
+  assert.equal(
+    refused.shadowRoot.querySelector(".rtc-warning-text").textContent,
+    "5 is not a valid value for classification.tiers[1].score. Using classification: auto."
   );
+  env.cleanup(refused);
 
   // The same profile with a coherent ramp renders, and renders the middle colour.
   const fixed = { ...broken, tiers: [{ ...broken.tiers[0] }, { ...broken.tiers[1], score: 0 }, { ...broken.tiers[2] }] };
