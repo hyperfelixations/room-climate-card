@@ -136,5 +136,13 @@ export const es = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} no corresponde a ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `El perfil personalizado no se puede mostrar en ${v.unit}. ${v.instead}`,
   "error.renderFailed": "No se pudo dibujar la tarjeta. Detalles en la consola del navegador.",
+  "error.notObject": "Configuración no válida: la configuración de la tarjeta debe ser un objeto YAML.",
+  "error.unknownKey": (v) => `Configuración no válida: ${v.key} no es una opción de esta tarjeta.`,
+  "error.unknownKeySuggestion": (v) => `Configuración no válida: ${v.key} no es una opción de esta tarjeta. ¿Quisiste decir ${v.suggestion}?`,
+  "error.noSource": "Configuración no válida: define entity o añade al menos una entrada en rooms.",
+  "error.mustBeEntityId": (v) => `Configuración no válida: ${v.key} debe ser un ID de entidad.`,
+  "error.mustBeList": (v) => `Configuración no válida: ${v.key} debe ser una lista.`,
+  "error.mustBeObject": (v) => `Configuración no válida: ${v.key} debe ser un objeto.`,
+  "error.duplicateRoom": (v) => `Configuración no válida: ${v.entity} se usa en más de una habitación.`,
 
 };

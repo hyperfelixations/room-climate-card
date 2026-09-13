@@ -141,5 +141,13 @@ export const nb = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passer ikke til ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Den egne profilen kan ikke vises i ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Kortet kunne ikke tegnes. Detaljer i nettleserkonsollen.",
+  "error.notObject": "Ugyldig konfigurasjon: kortkonfigurasjonen må være et YAML-objekt.",
+  "error.unknownKey": (v) => `Ugyldig konfigurasjon: ${v.key} er ikke et alternativ for dette kortet.`,
+  "error.unknownKeySuggestion": (v) => `Ugyldig konfigurasjon: ${v.key} er ikke et alternativ for dette kortet. Mente du ${v.suggestion}?`,
+  "error.noSource": "Ugyldig konfigurasjon: angi entity, eller legg til minst én oppføring under rooms.",
+  "error.mustBeEntityId": (v) => `Ugyldig konfigurasjon: ${v.key} må være en entitets-ID.`,
+  "error.mustBeList": (v) => `Ugyldig konfigurasjon: ${v.key} må være en liste.`,
+  "error.mustBeObject": (v) => `Ugyldig konfigurasjon: ${v.key} må være et objekt.`,
+  "error.duplicateRoom": (v) => `Ugyldig konfigurasjon: ${v.entity} brukes av mer enn ett rom.`,
 
 };

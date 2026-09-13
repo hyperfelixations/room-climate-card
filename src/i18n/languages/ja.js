@@ -133,5 +133,13 @@ export const ja = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} は ${v.measurement} に合いません。${v.instead}`,
   "warning.profileNotRepresentable": (v) => `カスタムプロファイルは ${v.unit} で表示できません。${v.instead}`,
   "error.renderFailed": "カードを描画できませんでした。詳細はブラウザーのコンソールを参照してください。",
+  "error.notObject": "無効な設定: カードの設定は YAML オブジェクトである必要があります。",
+  "error.unknownKey": (v) => `無効な設定: ${v.key} はこのカードのオプションではありません。`,
+  "error.unknownKeySuggestion": (v) => `無効な設定: ${v.key} はこのカードのオプションではありません。${v.suggestion} のことですか？`,
+  "error.noSource": "無効な設定: entity を設定するか、rooms に少なくとも 1 件のエントリを追加してください。",
+  "error.mustBeEntityId": (v) => `無効な設定: ${v.key} はエンティティ ID である必要があります。`,
+  "error.mustBeList": (v) => `無効な設定: ${v.key} はリストである必要があります。`,
+  "error.mustBeObject": (v) => `無効な設定: ${v.key} はオブジェクトである必要があります。`,
+  "error.duplicateRoom": (v) => `無効な設定: ${v.entity} が複数の部屋で使われています。`,
 
 };

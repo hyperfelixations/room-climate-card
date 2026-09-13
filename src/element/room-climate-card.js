@@ -16,9 +16,10 @@
 // controllers/render decides WHETHER and HOW MUCH, controllers/runtime decides WHEN.
 
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
-import { isSupportedLanguage, resolveLanguage, translate } from "../i18n/translate.js";
+import { isSupportedLanguage, resolveLanguage, resolveMessageLanguage, translate } from "../i18n/translate.js";
 import { DEFAULT_LANGUAGE } from "../i18n/locales.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
+import { ConfigError } from "../config/errors.js";
 import { normalizeConfig } from "../config/normalize-config.js";
 import { CLASSIFICATION_ZONES } from "../domain/classification/zones.js";
 import {
@@ -46,7 +47,7 @@ import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/me
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
 import { VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
-import { renderMessage } from "../presentation/view-model/notices.js";
+import { messageForConfigError, renderMessage } from "../presentation/view-model/notices.js";
 import { createRenderContext } from "../render/primitives/render-context.js";
 import { applyFocusFallback } from "../render/primitives/focus.js";
 import {
@@ -390,8 +391,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // ==== Configuration ====
     _normalizeConfig(config) {
       // Normalization is pure functions in config/; this is only the wiring of the
-      // registries that layer may not import.
-      return normalizeConfig(config, CONFIG_COLLABORATORS);
+      // registries that layer may not import, and the wording of a refusal, which config/
+      // may not translate: Home Assistant shows it before any hass exists.
+      try {
+        return normalizeConfig(config, CONFIG_COLLABORATORS);
+      } catch (error) {
+        if (!(error instanceof ConfigError)) throw error;
+        const language = resolveMessageLanguage(config?.language, this.ownerDocument?.documentElement?.getAttribute("lang"));
+        const text = renderMessage(messageForConfigError(error), (key, vars) => translate(language, key, vars));
+        throw new ConfigError(error.code, error.params, text);
+      }
     }
 
     // ==== Auto-slide, track and accessibility controller boundary ====

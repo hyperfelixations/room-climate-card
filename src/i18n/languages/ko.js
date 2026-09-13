@@ -133,5 +133,13 @@ export const ko = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit}은(는) ${v.measurement}에 맞지 않습니다. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `사용자 지정 프로필은 ${v.unit}(으)로 표시할 수 없습니다. ${v.instead}`,
   "error.renderFailed": "카드를 그릴 수 없습니다. 자세한 내용은 브라우저 콘솔을 확인하세요.",
+  "error.notObject": "잘못된 구성: 카드 구성은 YAML 객체여야 합니다.",
+  "error.unknownKey": (v) => `잘못된 구성: ${v.key}은(는) 이 카드의 옵션이 아닙니다.`,
+  "error.unknownKeySuggestion": (v) => `잘못된 구성: ${v.key}은(는) 이 카드의 옵션이 아닙니다. ${v.suggestion}을(를) 의미했나요?`,
+  "error.noSource": "잘못된 구성: entity를 설정하거나 rooms에 항목을 하나 이상 추가하세요.",
+  "error.mustBeEntityId": (v) => `잘못된 구성: ${v.key}은(는) 엔티티 ID여야 합니다.`,
+  "error.mustBeList": (v) => `잘못된 구성: ${v.key}은(는) 목록이어야 합니다.`,
+  "error.mustBeObject": (v) => `잘못된 구성: ${v.key}은(는) 객체여야 합니다.`,
+  "error.duplicateRoom": (v) => `잘못된 구성: ${v.entity}이(가) 둘 이상의 방에서 사용됩니다.`,
 
 };

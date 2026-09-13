@@ -28,6 +28,23 @@ test.before(async () => {
   translateModule = await import("../../../src/i18n/translate.js");
 });
 
+// -------------------------------------------------------- message language --
+
+// A refused configuration is worded before any hass exists, so its language comes from what
+// setConfig() can see: the card's own `language`, read exactly as that option is read, then the
+// base code of the page's <html lang>, then English.
+test("a refusal is worded in the card's own valid language, else the page's, else English", () => {
+  const { resolveMessageLanguage } = translateModule;
+  assert.equal(resolveMessageLanguage("de", "fr"), "de");
+  assert.equal(resolveMessageLanguage(" FR ", null), "fr", "trimmed and lowercased, as the option is");
+  assert.equal(resolveMessageLanguage("auto", "de-AT"), "de", "auto leaves it to the page");
+  assert.equal(resolveMessageLanguage("xx", "ja"), "ja", "a language the card does not have leaves it to the page");
+  assert.equal(resolveMessageLanguage("de-AT", null), "en", "the option accepts no region, so neither does this");
+  assert.equal(resolveMessageLanguage(42, "zh-Hans"), "zh");
+  assert.equal(resolveMessageLanguage(undefined, "pt-BR"), "en", "a page language without words falls back to English");
+  assert.equal(resolveMessageLanguage(undefined, null), "en");
+});
+
 // --------------------------------------------------------------- registry --
 
 // This module's own business: the reference language it key-checks everything else against
@@ -111,6 +128,7 @@ const INTERPOLATION_VARS = Object.freeze({
   unit: "°F",
   written: "show_rooms",
   replacement: "show.rooms",
+  suggestion: "show.icon",
 });
 
 test("every function-valued translation reads exactly the documented variables, in every language", () => {

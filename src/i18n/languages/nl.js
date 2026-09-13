@@ -136,5 +136,13 @@ export const nl = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} past niet bij ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Het eigen profiel kan niet in ${v.unit} worden weergegeven. ${v.instead}`,
   "error.renderFailed": "De kaart kon niet worden getekend. Details in de browserconsole.",
+  "error.notObject": "Ongeldige configuratie: de kaartconfiguratie moet een YAML-object zijn.",
+  "error.unknownKey": (v) => `Ongeldige configuratie: ${v.key} is geen optie van deze kaart.`,
+  "error.unknownKeySuggestion": (v) => `Ongeldige configuratie: ${v.key} is geen optie van deze kaart. Bedoelde je ${v.suggestion}?`,
+  "error.noSource": "Ongeldige configuratie: stel entity in of voeg minstens één item toe onder rooms.",
+  "error.mustBeEntityId": (v) => `Ongeldige configuratie: ${v.key} moet een entiteit-ID zijn.`,
+  "error.mustBeList": (v) => `Ongeldige configuratie: ${v.key} moet een lijst zijn.`,
+  "error.mustBeObject": (v) => `Ongeldige configuratie: ${v.key} moet een object zijn.`,
+  "error.duplicateRoom": (v) => `Ongeldige configuratie: ${v.entity} wordt door meer dan één kamer gebruikt.`,
 
 };

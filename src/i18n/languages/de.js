@@ -133,5 +133,13 @@ export const de = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passt nicht zu ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Das eigene Profil lässt sich nicht in ${v.unit} darstellen. ${v.instead}`,
   "error.renderFailed": "Die Karte konnte nicht gezeichnet werden. Details in der Browserkonsole.",
+  "error.notObject": "Ungültige Konfiguration: Die Kartenkonfiguration muss ein YAML-Objekt sein.",
+  "error.unknownKey": (v) => `Ungültige Konfiguration: ${v.key} ist keine Option dieser Karte.`,
+  "error.unknownKeySuggestion": (v) => `Ungültige Konfiguration: ${v.key} ist keine Option dieser Karte. Meintest du ${v.suggestion}?`,
+  "error.noSource": "Ungültige Konfiguration: Setze entity oder füge unter rooms mindestens einen Eintrag hinzu.",
+  "error.mustBeEntityId": (v) => `Ungültige Konfiguration: ${v.key} muss eine Entity-ID sein.`,
+  "error.mustBeList": (v) => `Ungültige Konfiguration: ${v.key} muss eine Liste sein.`,
+  "error.mustBeObject": (v) => `Ungültige Konfiguration: ${v.key} muss ein Objekt sein.`,
+  "error.duplicateRoom": (v) => `Ungültige Konfiguration: ${v.entity} wird von mehr als einem Raum verwendet.`,
 
 };

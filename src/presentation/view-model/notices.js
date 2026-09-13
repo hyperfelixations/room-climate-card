@@ -68,6 +68,25 @@ const MESSAGE_FOR_CODE = {
     message("warning.profileNotRepresentable", { unit: diagnostic.params.unit, instead: defaultProfile(diagnostic) }),
 };
 
+const MESSAGE_FOR_CONFIG_ERROR = {
+  "config.not_object": () => message("error.notObject"),
+  "config.unknown_key": ({ key, suggestion }) =>
+    suggestion ? message("error.unknownKeySuggestion", { key, suggestion }) : message("error.unknownKey", { key }),
+  "config.no_source": () => message("error.noSource"),
+  "config.must_be_entity_id": ({ key }) => message("error.mustBeEntityId", { key }),
+  "config.must_be_list": ({ key }) => message("error.mustBeList", { key }),
+  "config.must_be_object": ({ key }) => message("error.mustBeObject", { key }),
+  "config.duplicate_room": ({ entity }) => message("error.duplicateRoom", { entity }),
+};
+
+// A refused configuration (a ConfigError's code and parameters) as a message, for the element
+// to word in the card's language.
+export function messageForConfigError({ code, params }) {
+  const build = MESSAGE_FOR_CONFIG_ERROR[code];
+  if (!build) throw new Error(`notices: no message for "${code}"`);
+  return build(params);
+}
+
 // `context.metricKind` is the card's measurement, where the wording depends on it.
 export function messageForDiagnostic(diagnostic, context = {}) {
   const build = MESSAGE_FOR_CODE[diagnostic.code];

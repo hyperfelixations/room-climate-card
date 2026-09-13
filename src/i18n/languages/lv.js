@@ -150,5 +150,13 @@ export const lv = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} neatbilst mērījumam „${v.measurement}”. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Pielāgoto profilu nevar attēlot vienībā ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Karti neizdevās uzzīmēt. Sīkāk pārlūka konsolē.",
+  "error.notObject": "Nederīga konfigurācija: kartes konfigurācijai jābūt YAML objektam.",
+  "error.unknownKey": (v) => `Nederīga konfigurācija: ${v.key} nav šīs kartes opcija.`,
+  "error.unknownKeySuggestion": (v) => `Nederīga konfigurācija: ${v.key} nav šīs kartes opcija. Vai domāji ${v.suggestion}?`,
+  "error.noSource": "Nederīga konfigurācija: iestati entity vai pievieno vismaz vienu ierakstu sadaļā rooms.",
+  "error.mustBeEntityId": (v) => `Nederīga konfigurācija: ${v.key} jābūt entītijas ID.`,
+  "error.mustBeList": (v) => `Nederīga konfigurācija: ${v.key} jābūt sarakstam.`,
+  "error.mustBeObject": (v) => `Nederīga konfigurācija: ${v.key} jābūt objektam.`,
+  "error.duplicateRoom": (v) => `Nederīga konfigurācija: ${v.entity} izmanto vairāk nekā viena telpa.`,
 
 };

@@ -140,5 +140,13 @@ export const ru = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} не подходит для измерения «${v.measurement}». ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Собственный профиль нельзя отобразить в ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Не удалось отрисовать карточку. Подробности в консоли браузера.",
+  "error.notObject": "Недопустимая конфигурация: конфигурация карточки должна быть объектом YAML.",
+  "error.unknownKey": (v) => `Недопустимая конфигурация: ${v.key} не является параметром этой карточки.`,
+  "error.unknownKeySuggestion": (v) => `Недопустимая конфигурация: ${v.key} не является параметром этой карточки. Возможно, имелось в виду ${v.suggestion}?`,
+  "error.noSource": "Недопустимая конфигурация: задайте entity или добавьте хотя бы одну запись в rooms.",
+  "error.mustBeEntityId": (v) => `Недопустимая конфигурация: ${v.key} должен быть идентификатором сущности.`,
+  "error.mustBeList": (v) => `Недопустимая конфигурация: ${v.key} должен быть списком.`,
+  "error.mustBeObject": (v) => `Недопустимая конфигурация: ${v.key} должен быть объектом.`,
+  "error.duplicateRoom": (v) => `Недопустимая конфигурация: ${v.entity} используется более чем одной комнатой.`,
 
 };

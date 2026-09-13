@@ -135,6 +135,29 @@ test("a card without data and without a reason of its own has no line unless it 
   });
 });
 
+test("a refused configuration is worded from its code, and its English is what config/ throws", async () => {
+  const { ConfigError, CONFIG_ERROR_CODES } = await import("../../../src/config/errors.js");
+  const cases = [
+    ["config.not_object", {}],
+    ["config.unknown_key", { key: "show.ikon", suggestion: "show.icon" }],
+    ["config.unknown_key", { key: "show.footer", suggestion: null }],
+    ["config.no_source", {}],
+    ["config.must_be_entity_id", { key: "rooms[0].entity" }],
+    ["config.must_be_list", { key: "rooms" }],
+    ["config.must_be_object", { key: "rooms[2]" }],
+    ["config.duplicate_room", { entity: "sensor.a" }],
+  ];
+  assert.deepEqual([...new Set(cases.map(([code]) => code))].sort(), [...CONFIG_ERROR_CODES].sort(), "every code of the catalog");
+  for (const [code, params] of cases) {
+    const error = new ConfigError(code, params);
+    assert.equal(notices.renderMessage(notices.messageForConfigError(error), t("en")), error.message, code);
+  }
+  assert.equal(
+    notices.renderMessage(notices.messageForConfigError(new ConfigError("config.unknown_key", { key: "show.ikon", suggestion: "show.icon" })), t("de")),
+    "Ungültige Konfiguration: show.ikon ist keine Option dieser Karte. Meintest du show.icon?"
+  );
+});
+
 test("an older spelling names what replaces it", () => {
   const deprecated = core.createDiagnostic("config.deprecated", {
     path: "views[1].options.footer",

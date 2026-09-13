@@ -21,6 +21,16 @@ export function resolveLanguage(configLanguage, hass) {
   return TRANSLATIONS[base] ? base : DEFAULT_LANGUAGE;
 }
 
+// The language a refused configuration is worded in, before any hass exists: the card's own
+// `language` when it names a language the card has (read exactly as that option is read),
+// else the base code of the page's <html lang>, which Home Assistant sets, else English.
+export function resolveMessageLanguage(configLanguage, documentLanguage) {
+  const own = typeof configLanguage === "string" ? configLanguage.trim().toLowerCase() : "";
+  if (own !== "auto" && isSupportedLanguage(own)) return own;
+  const page = typeof documentLanguage === "string" ? documentLanguage.trim().toLowerCase().split("-")[0] : "";
+  return isSupportedLanguage(page) ? page : DEFAULT_LANGUAGE;
+}
+
 // Translates key in the given language, falling back to DEFAULT_LANGUAGE and
 // finally the key itself; values may be functions (interpolation, plurals) or
 // plain strings.

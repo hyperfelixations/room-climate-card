@@ -134,5 +134,13 @@ export const en = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} does not fit ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `The custom profile cannot be shown in ${v.unit}. ${v.instead}`,
   "error.renderFailed": "The card could not be drawn. Details in the browser console.",
+  "error.notObject": "Invalid configuration: the card configuration must be a YAML object.",
+  "error.unknownKey": (v) => `Invalid configuration: ${v.key} is not an option of this card.`,
+  "error.unknownKeySuggestion": (v) => `Invalid configuration: ${v.key} is not an option of this card. Did you mean ${v.suggestion}?`,
+  "error.noSource": "Invalid configuration: set entity, or add at least one entry under rooms.",
+  "error.mustBeEntityId": (v) => `Invalid configuration: ${v.key} must be an entity id.`,
+  "error.mustBeList": (v) => `Invalid configuration: ${v.key} must be a list.`,
+  "error.mustBeObject": (v) => `Invalid configuration: ${v.key} must be an object.`,
+  "error.duplicateRoom": (v) => `Invalid configuration: ${v.entity} is used by more than one room.`,
 
 };

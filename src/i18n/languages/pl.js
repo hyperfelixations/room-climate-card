@@ -143,5 +143,13 @@ export const pl = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} nie pasuje do pomiaru „${v.measurement}”. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Własnego profilu nie można wyświetlić w ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Nie udało się narysować karty. Szczegóły w konsoli przeglądarki.",
+  "error.notObject": "Nieprawidłowa konfiguracja: konfiguracja karty musi być obiektem YAML.",
+  "error.unknownKey": (v) => `Nieprawidłowa konfiguracja: ${v.key} nie jest opcją tej karty.`,
+  "error.unknownKeySuggestion": (v) => `Nieprawidłowa konfiguracja: ${v.key} nie jest opcją tej karty. Czy chodziło o ${v.suggestion}?`,
+  "error.noSource": "Nieprawidłowa konfiguracja: ustaw entity lub dodaj co najmniej jeden wpis w rooms.",
+  "error.mustBeEntityId": (v) => `Nieprawidłowa konfiguracja: ${v.key} musi być identyfikatorem encji.`,
+  "error.mustBeList": (v) => `Nieprawidłowa konfiguracja: ${v.key} musi być listą.`,
+  "error.mustBeObject": (v) => `Nieprawidłowa konfiguracja: ${v.key} musi być obiektem.`,
+  "error.duplicateRoom": (v) => `Nieprawidłowa konfiguracja: ${v.entity} jest używana przez więcej niż jeden pokój.`,
 
 };

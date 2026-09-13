@@ -1,7 +1,7 @@
 // Why a configuration cannot be used at all, as data: a code and its parameters, carried by the
-// error setConfig() throws. Its message is the English sentence Home Assistant shows. The
-// catalog is closed; every other invalid value is a warning (core/diagnostics.js). See internal
-// dev doc §3 "Konfigurationsvertrag".
+// error setConfig() throws. Its message is the English sentence; the element words it in the
+// card's language before Home Assistant shows it. The catalog is closed; every other invalid
+// value is a warning (core/diagnostics.js). See internal dev doc §3 "Konfigurationsvertrag".
 
 const MESSAGES = {
   "config.not_object": () => "the card configuration must be a YAML object.",
@@ -13,9 +13,12 @@ const MESSAGES = {
   "config.duplicate_room": ({ entity }) => `${entity} is used by more than one room.`,
 };
 
+export const CONFIG_ERROR_CODES = Object.freeze(Object.keys(MESSAGES));
+
+// `message` replaces the English sentence with the same refusal worded in another language.
 export class ConfigError extends Error {
-  constructor(code, params = {}) {
-    super(`Invalid configuration: ${MESSAGES[code](params)}`);
+  constructor(code, params = {}, message = `Invalid configuration: ${MESSAGES[code](params)}`) {
+    super(message);
     this.name = "ConfigError";
     this.code = code;
     this.params = params;

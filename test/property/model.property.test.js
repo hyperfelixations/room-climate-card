@@ -67,15 +67,16 @@ function runCase(description) {
   try {
     card = env.createCard(scenario.config, scenario.hass);
   } catch (error) {
-    // setConfig refused — correct for a broken palette or malformed views list. Not
+    // setConfig refused — correct for a key the card does not know or a missing source. Not
     // `instanceof Error`: the card runs in its own V8 realm (load-card.jsdom.js), so
-    // instanceof is false for an ordinary error; what matters is a readable message.
+    // instanceof is false for an ordinary error; what matters is that it is a refusal from the
+    // catalog, worded in whatever language the case asked for, with a readable message.
     const message = error && typeof error.message === "string" ? error.message.trim() : "";
     const violations = [];
     if (!message) {
       violations.push(`setConfig refused with something that carries no message: ${String(error)}`);
-    } else if (!/^Invalid configuration:|^Room Climate Card/.test(message)) {
-      violations.push(`setConfig refused with a message that does not identify itself: ${message}`);
+    } else if (error.name !== "ConfigError") {
+      violations.push(`setConfig refused with an error that is not a refusal of the catalog: ${message}`);
     }
     return { outcome: "refused", violations, message };
   }

@@ -133,5 +133,13 @@ export const zh = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} 与 ${v.measurement} 不匹配。${v.instead}`,
   "warning.profileNotRepresentable": (v) => `自定义配置无法以 ${v.unit} 显示。${v.instead}`,
   "error.renderFailed": "无法绘制此卡片。详情请查看浏览器控制台。",
+  "error.notObject": "配置无效：卡片配置必须是 YAML 对象。",
+  "error.unknownKey": (v) => `配置无效：${v.key} 不是此卡片的选项。`,
+  "error.unknownKeySuggestion": (v) => `配置无效：${v.key} 不是此卡片的选项。您是指 ${v.suggestion} 吗？`,
+  "error.noSource": "配置无效：请设置 entity，或在 rooms 下至少添加一个条目。",
+  "error.mustBeEntityId": (v) => `配置无效：${v.key} 必须是实体 ID。`,
+  "error.mustBeList": (v) => `配置无效：${v.key} 必须是列表。`,
+  "error.mustBeObject": (v) => `配置无效：${v.key} 必须是对象。`,
+  "error.duplicateRoom": (v) => `配置无效：${v.entity} 被多个房间使用。`,
 
 };

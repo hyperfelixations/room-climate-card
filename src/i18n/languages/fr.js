@@ -139,5 +139,13 @@ export const fr = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} ne correspond pas à ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Le profil personnalisé ne peut pas être affiché en ${v.unit}. ${v.instead}`,
   "error.renderFailed": "La carte n’a pas pu être affichée. Détails dans la console du navigateur.",
+  "error.notObject": "Configuration invalide : la configuration de la carte doit être un objet YAML.",
+  "error.unknownKey": (v) => `Configuration invalide : ${v.key} n’est pas une option de cette carte.`,
+  "error.unknownKeySuggestion": (v) => `Configuration invalide : ${v.key} n’est pas une option de cette carte. Vouliez-vous dire ${v.suggestion} ?`,
+  "error.noSource": "Configuration invalide : définissez entity ou ajoutez au moins une entrée sous rooms.",
+  "error.mustBeEntityId": (v) => `Configuration invalide : ${v.key} doit être un identifiant d’entité.`,
+  "error.mustBeList": (v) => `Configuration invalide : ${v.key} doit être une liste.`,
+  "error.mustBeObject": (v) => `Configuration invalide : ${v.key} doit être un objet.`,
+  "error.duplicateRoom": (v) => `Configuration invalide : ${v.entity} est utilisée par plusieurs pièces.`,
 
 };

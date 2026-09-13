@@ -137,5 +137,13 @@ export const it = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} non corrisponde a ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Il profilo personalizzato non può essere mostrato in ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Impossibile disegnare la scheda. Dettagli nella console del browser.",
+  "error.notObject": "Configurazione non valida: la configurazione della scheda deve essere un oggetto YAML.",
+  "error.unknownKey": (v) => `Configurazione non valida: ${v.key} non è un’opzione di questa scheda.`,
+  "error.unknownKeySuggestion": (v) => `Configurazione non valida: ${v.key} non è un’opzione di questa scheda. Intendevi ${v.suggestion}?`,
+  "error.noSource": "Configurazione non valida: imposta entity o aggiungi almeno una voce sotto rooms.",
+  "error.mustBeEntityId": (v) => `Configurazione non valida: ${v.key} deve essere un ID entità.`,
+  "error.mustBeList": (v) => `Configurazione non valida: ${v.key} deve essere un elenco.`,
+  "error.mustBeObject": (v) => `Configurazione non valida: ${v.key} deve essere un oggetto.`,
+  "error.duplicateRoom": (v) => `Configurazione non valida: ${v.entity} è usata da più di una stanza.`,
 
 };

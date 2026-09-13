@@ -141,5 +141,13 @@ export const sv = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} passar inte till ${v.measurement}. ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Den egna profilen kan inte visas i ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Kortet kunde inte ritas. Detaljer i webbläsarens konsol.",
+  "error.notObject": "Ogiltig konfiguration: kortkonfigurationen måste vara ett YAML-objekt.",
+  "error.unknownKey": (v) => `Ogiltig konfiguration: ${v.key} är inte ett alternativ för det här kortet.`,
+  "error.unknownKeySuggestion": (v) => `Ogiltig konfiguration: ${v.key} är inte ett alternativ för det här kortet. Menade du ${v.suggestion}?`,
+  "error.noSource": "Ogiltig konfiguration: ange entity eller lägg till minst en post under rooms.",
+  "error.mustBeEntityId": (v) => `Ogiltig konfiguration: ${v.key} måste vara ett entitets-ID.`,
+  "error.mustBeList": (v) => `Ogiltig konfiguration: ${v.key} måste vara en lista.`,
+  "error.mustBeObject": (v) => `Ogiltig konfiguration: ${v.key} måste vara ett objekt.`,
+  "error.duplicateRoom": (v) => `Ogiltig konfiguration: ${v.entity} används av mer än ett rum.`,
 
 };

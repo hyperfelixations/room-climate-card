@@ -140,4 +140,12 @@ export const uk = {
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} не підходить для вимірювання «${v.measurement}». ${v.instead}`,
   "warning.profileNotRepresentable": (v) => `Власний профіль не можна показати в ${v.unit}. ${v.instead}`,
   "error.renderFailed": "Не вдалося намалювати картку. Подробиці в консолі браузера.",
+  "error.notObject": "Недійсна конфігурація: конфігурація картки має бути об’єктом YAML.",
+  "error.unknownKey": (v) => `Недійсна конфігурація: ${v.key} не є параметром цієї картки.`,
+  "error.unknownKeySuggestion": (v) => `Недійсна конфігурація: ${v.key} не є параметром цієї картки. Можливо, мали на увазі ${v.suggestion}?`,
+  "error.noSource": "Недійсна конфігурація: задайте entity або додайте хоча б один запис у rooms.",
+  "error.mustBeEntityId": (v) => `Недійсна конфігурація: ${v.key} має бути ідентифікатором сутності.`,
+  "error.mustBeList": (v) => `Недійсна конфігурація: ${v.key} має бути списком.`,
+  "error.mustBeObject": (v) => `Недійсна конфігурація: ${v.key} має бути об’єктом.`,
+  "error.duplicateRoom": (v) => `Недійсна конфігурація: ${v.entity} використовується більш ніж однією кімнатою.`,
 };
