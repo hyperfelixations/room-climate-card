@@ -156,7 +156,7 @@ test("a mistyped room does not turn a one-room card into a two-room card", async
   expect(await headline.evaluate((node) => node.tagName)).toBe("BUTTON");
 
   // The typo is still reported — hidden from the layout is not hidden from the user.
-  await expect(card.locator(".rtc-subtitle")).toContainText("not found");
+  await expect(card.locator(".rtc-warning-text")).toHaveText("sensor.bedroom_temperature does not exist in Home Assistant.");
 
   // And the counter-case, in the same browser: an entity that EXISTS but is
   // unavailable keeps the two-room card it was configured as, with its `--` chip.

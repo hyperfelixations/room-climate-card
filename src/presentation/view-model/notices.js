@@ -29,6 +29,9 @@ function defaultProfile(diagnostic) {
   return message("fallback.value", { value: diagnostic.params.fallback });
 }
 
+// A source that stays unusable is named by its entity.
+const entityWarning = (key) => (diagnostic) => message(key, { entity: diagnostic.entity });
+
 const MESSAGE_FOR_CODE = {
   "value.invalid": (diagnostic, context) =>
     message("warning.invalidValue", {
@@ -40,6 +43,15 @@ const MESSAGE_FOR_CODE = {
   "config.deprecated": (diagnostic) =>
     message("warning.deprecated", { written: diagnostic.params.written, replacement: diagnostic.params.replacement }),
   "sources.mixed": () => message("warning.mixedMeasurements"),
+  "entity.not_found": entityWarning("warning.entityNotFound"),
+  "entity.unit_ambiguous": entityWarning("warning.unitAmbiguous"),
+  "entity.unidentified": entityWarning("warning.unidentified"),
+  "entity.unit_unreadable": entityWarning("warning.unitUnreadable"),
+  "entity.other_measurement": entityWarning("warning.otherMeasurement"),
+  "hint.rooms_unavailable": (diagnostic) => message("hint.roomsUnavailable", { count: diagnostic.params.count }),
+  "hint.primary_unavailable": () => message("hint.primaryUnavailable"),
+  "hint.range_unavailable": () => message("hint.rangeUnavailable"),
+  "hint.trend_unavailable": () => message("hint.trendUnavailable"),
   "classification.profile_unavailable": (diagnostic) =>
     message("warning.profileUnavailable", {
       profile: writtenValue(diagnostic.value),
@@ -94,12 +106,31 @@ export function buildWarningBlock({ config, warnings, t }) {
   return { visible: text !== null && config.show.warnings, text: text ?? "", label: t("warning.label") };
 }
 
-// Subtitle precedence: the no-data reason, then the card's own text, then the automatic
-// sentence. A no-data reason is shown whatever show.subtitle and `subtitle: ""` ask for.
-export function composeSubtitle({ config, automatic, noDataReason = null }) {
+// One hint is shown in full; several are counted by the sources behind them.
+export function hintText(hints, t) {
+  if (hints.length === 0) return null;
+  if (hints.length === 1) return renderMessage(hints[0], t);
+  return t("hint.several", { count: hints.reduce((sum, hint) => sum + (hint.vars?.count ?? 1), 0) });
+}
+
+// A hint follows the line's own sentence: after a stop with a space, after a full-width stop
+// without one, and after a separator where the line has no sentence end.
+function appendHint(line, hint) {
+  if (/[.!?]$/.test(line)) return `${line} ${hint}`;
+  if (/[。！？]$/.test(line)) return `${line}${hint}`;
+  return `${line} · ${hint}`;
+}
+
+// Subtitle precedence: the no-data reason, then the card's own text or the automatic sentence,
+// with a hint appended. A no-data reason is shown whatever show.subtitle and `subtitle: ""` ask
+// for; a hint never brings back a line that is switched off or empty, and wraps the line while
+// it is there, so it is read in full.
+export function composeSubtitle({ config, automatic, noDataReason = null, hintText: hint = null }) {
   const overflow = config.subtitle?.overflow || "clip";
   if (noDataReason !== null) return { subtitle: noDataReason, hasSubtitle: true, subtitleOverflow: overflow };
   const own = config.subtitle?.text;
-  const text = own === null || own === undefined ? automatic : own;
-  return { subtitle: text, hasSubtitle: text !== "" && config.show.subtitle, subtitleOverflow: overflow };
+  const line = (own === null || own === undefined ? automatic : own) ?? "";
+  const hasSubtitle = line !== "" && config.show.subtitle;
+  if (!hasSubtitle || !hint) return { subtitle: line, hasSubtitle, subtitleOverflow: overflow };
+  return { subtitle: appendHint(line, hint), hasSubtitle, subtitleOverflow: "wrap" };
 }

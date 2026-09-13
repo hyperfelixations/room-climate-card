@@ -232,7 +232,9 @@ test("the no-data shell resolves title, status, views and source clickability ho
 
     assert.equal(missing.shadowRoot.querySelector(".rtc-title").textContent, "Room Climate Card");
     assert.equal(missing.shadowRoot.querySelector(".rtc-avg-button").tagName, "DIV");
-    assert.match(missing.shadowRoot.querySelector(".rtc-subtitle").textContent, /sensor\.missing/);
+    // Not found is a configuration fault: named in the warnings block, not as a no-data reason.
+    assert.equal(missing.shadowRoot.querySelector(".rtc-subtitle"), null);
+    assert.equal(missing.shadowRoot.querySelector(".rtc-warning-text").textContent, `${missingId} does not exist in Home Assistant.`);
     assert.equal(missing.shadowRoot.querySelectorAll("img[onerror]").length, 0);
   } finally {
     env.cleanup(unavailable);
@@ -240,7 +242,7 @@ test("the no-data shell resolves title, status, views and source clickability ho
   }
 });
 
-test("a missing room remains named when the no-data headline has its own outage", () => {
+test("a missing room is named in the warnings block while the headline's own outage stays in the subtitle", () => {
   const el = env.createCard({
     entity: "sensor.primary",
     rooms: [room("sensor.unavailable", "Unavailable"), room("sensor.missing", "Missing")],
@@ -249,9 +251,8 @@ test("a missing room remains named when the no-data headline has its own outage"
     "sensor.unavailable": state("sensor.unavailable", "unknown"),
   }));
   try {
-    const subtitle = el.shadowRoot.querySelector(".rtc-subtitle").textContent;
-    assert.match(subtitle, /currently unavailable/i);
-    assert.match(subtitle, /sensor\.missing/);
+    assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The value is currently unavailable.");
+    assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.missing does not exist in Home Assistant.");
     assert.equal(el.shadowRoot.querySelector('[data-entity="sensor.missing"]'), null);
   } finally {
     env.cleanup(el);
@@ -354,25 +355,50 @@ test("a room measuring something else is a mismatch, and an unavailable one stil
   assert.equal(context.rooms[1].unusableReason, UNUSABLE_REASON.UNAVAILABLE);
 });
 
-// And what a reader actually sees, through a real card.
-test("the card says which of the five things went wrong", () => {
-  const cases = [
+// And what a reader actually sees, through a real card: what passes by itself is the no-data
+// reason in the subtitle, what someone has to fix is a warning naming the entity.
+test("the card says which of the things went wrong, and where it says it", () => {
+  const passing = [
     [state("sensor.primary", "heating"), "The entity does not report a number."],
     [state("sensor.primary", 800, HUMIDITY), "The entity reports a physically impossible value."],
-    [
-      mkState("sensor.primary", 700, { unit_of_measurement: "ppm" }),
-      "sensor.primary needs a device_class: several measurements use its unit, so the card will not guess.",
-    ],
-    [mkState("sensor.primary", 7, {}), "sensor.primary does not say what it measures. Add a device_class, or a unit the card knows."],
-    [
-      mkState("sensor.primary", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }),
-      "sensor.primary reports a unit the card cannot read for this measurement.",
-    ],
     [state("sensor.primary", "unavailable"), "The value is currently unavailable."],
   ];
-  for (const [stateObject, expected] of cases) {
+  for (const [stateObject, expected] of passing) {
     const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": stateObject }));
     assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, expected, JSON.stringify(stateObject.state));
+    assert.equal(el.shadowRoot.querySelector(".rtc-warning"), null);
     env.cleanup(el);
+  }
+  const lasting = [
+    [mkState("sensor.primary", 700, { unit_of_measurement: "ppm" }), "sensor.primary needs a device_class; its unit fits several measurements."],
+    [mkState("sensor.primary", 7, {}), "sensor.primary has no device_class and no unit the card knows."],
+    [
+      mkState("sensor.primary", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }),
+      "sensor.primary reports a unit the card cannot read here.",
+    ],
+  ];
+  for (const [stateObject, expected] of lasting) {
+    const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": stateObject }));
+    assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, expected, JSON.stringify(stateObject.attributes));
+    assert.equal(el.shadowRoot.querySelector(".rtc-subtitle"), null, "the warning is the explanation");
+    env.cleanup(el);
+  }
+});
+
+test("a room measuring something else is named, unless every room disagrees", () => {
+  const foreign = env.createCard(
+    { entity: "sensor.primary", rooms: [room("sensor.humid", "Humid")] },
+    mkHass({ "sensor.primary": state("sensor.primary", 22), "sensor.humid": state("sensor.humid", 45, HUMIDITY) })
+  );
+  const mixed = env.createCard(
+    { rooms: [room("sensor.t", "T"), room("sensor.h", "H")] },
+    mkHass({ "sensor.t": state("sensor.t", 21), "sensor.h": state("sensor.h", 45, HUMIDITY) })
+  );
+  try {
+    assert.equal(foreign.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.humid measures something else and is ignored.");
+    assert.equal(mixed.shadowRoot.querySelector(".rtc-warning-text").textContent, "The rooms measure different things. Set entity or align device_class.");
+  } finally {
+    env.cleanup(foreign);
+    env.cleanup(mixed);
   }
 });

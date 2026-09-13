@@ -14,6 +14,28 @@ import {
   resolveAuxiliaryUnitProfileKey,
 } from "./entity-model.js";
 
+// What an auxiliary sensor gave, for the diagnostics that name it: nothing configured, no such
+// entity, a momentary gap (no number, or none that can be shown), a unit the card cannot read
+// for this measurement, or a value. The unit is judged only for a number, in the order
+// resolveAvailability() uses, so an `unavailable` state without attributes is a gap.
+export const AUXILIARY_STATUS = Object.freeze({
+  NONE: "none",
+  MISSING: "missing",
+  TRANSIENT: "transient",
+  UNREADABLE: "unreadable",
+  USABLE: "usable",
+});
+
+function auxiliarySource(states, entity, reading, profileKey, value) {
+  let status = AUXILIARY_STATUS.USABLE;
+  if (!entity) status = AUXILIARY_STATUS.NONE;
+  else if (!states?.[entity]) status = AUXILIARY_STATUS.MISSING;
+  else if (reading === null) status = AUXILIARY_STATUS.TRANSIENT;
+  else if (!profileKey) status = AUXILIARY_STATUS.UNREADABLE;
+  else if (value === null) status = AUXILIARY_STATUS.TRANSIENT;
+  return { entity: entity || null, status };
+}
+
 // Keep trend-policy lookup behind one seam.
 export function resolveTrendPolicy(metricKind) {
   return TREND_POLICY_REGISTRY[metricKind] || null;
@@ -40,7 +62,8 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
 
   // Each conversion below can overflow a finite reading, into the canonical or into the display
   // unit; a non-finite result is no value.
-  let state = profileKey ? readNumericState(states, config.range_entity) : null;
+  const reading = readNumericState(states, config.range_entity);
+  let state = profileKey ? reading : null;
   if (state !== null) {
     state = finiteOrNull(
       toDisplayDelta(
@@ -95,13 +118,15 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
     maxColor,
     // Availability requires valid ordered extrema; view composition decides activation.
     rangeScaleAvailable: hasRange && min !== null && max !== null && min <= max,
+    source: auxiliarySource(states, config.range_entity, reading, profileKey, hasRange ? state : null),
   };
 }
 
 export function buildTrendContext({ states, config, metricKind, unit, toDisplayDelta }) {
   const definition = METRIC_DEFINITIONS[metricKind];
   const profileKey = resolveAuxiliaryUnitProfileKey(states, config.trend_entity, metricKind, { rateSuffix: true });
-  const rawValue = profileKey ? readNumericState(states, config.trend_entity) : null;
+  const reading = readNumericState(states, config.trend_entity);
+  const rawValue = profileKey ? reading : null;
 
   let canonicalValue = null;
   let value = null;
@@ -124,5 +149,6 @@ export function buildTrendContext({ states, config, metricKind, unit, toDisplayD
     value,
     unit: displayUnit,
     model: buildTrendModel(metricKind, canonicalValue, value, displayUnit),
+    source: auxiliarySource(states, config.trend_entity, reading, profileKey, value),
   };
 }

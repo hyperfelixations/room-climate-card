@@ -127,7 +127,7 @@
   ],
   "showRoomChips": true,
   "spread": 0.8888888888888893,
-  "subtitle": "Avg. in comfort · all rooms are within target range.",
+  "subtitle": "Avg. in comfort · all rooms are within target range. Main sensor currently unavailable; average from the rooms.",
   "title": "Temperature",
   "tone": {
     "color": "#79A86C",

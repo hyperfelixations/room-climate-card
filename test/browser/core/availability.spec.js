@@ -116,7 +116,9 @@ test("a missing primary stays non-clickable and names the configured entity safe
 
   await expect(card.locator('.rtc-root[data-state="no-data"]')).toBeVisible();
   await expect(card.locator(".rtc-title")).toHaveText("Room Climate Card");
-  await expect(card.locator(".rtc-subtitle")).toContainText("sensor.missing_primary");
+  // Not found is a configuration fault: named in the warnings block, not as a no-data reason.
+  await expect(card.locator(".rtc-subtitle")).toHaveCount(0);
+  await expect(card.locator(".rtc-warning-text")).toHaveText("sensor.missing_primary does not exist in Home Assistant.");
   await expect(card.locator(".rtc-avg-button-disabled")).toHaveCount(1);
   await expect(card.locator(".rtc-avg-button[data-entity]")).toHaveCount(0);
   await expect(card.locator(".rtc-room-chip")).toHaveCount(0);

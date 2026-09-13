@@ -287,14 +287,21 @@ test.describe("visual golden: the warnings block", () => {
   });
 
   test("a card without data keeps its reason in the subtitle", async ({ page }) => {
-    const mixed = {
-      "sensor.avg": mkStateObj("sensor.avg", "unavailable", {}),
-      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
-      "sensor.r2": mkStateObj("sensor.r2", 55, HUMIDITY),
+    const unavailable = {
+      "sensor.avg": mkStateObj("sensor.avg", "unavailable", TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", "unavailable", TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", "unavailable", TEMPERATURE_C),
     };
-    const cardId = await warnedCard(page, BASE, mixed);
+    const cardId = await warnedCard(page, { ...BASE, show: INVALID }, unavailable);
     await expect(page.locator(`#${cardId} .rtc-root`)).toHaveAttribute("data-state", "no-data");
+    await expect(page.locator(`#${cardId} .rtc-subtitle`)).toHaveText("The value is currently unavailable.");
     await shot(page, cardId, "warning-no-data.png");
+  });
+
+  test("a long entity id wraps inside the block on a narrow card", async ({ page }) => {
+    const cardId = await warnedCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.living_room_temperature" }] });
+    await expect(page.locator(`#${cardId} .rtc-warning-text`)).toHaveText("sensor.living_room_temperature does not exist in Home Assistant.");
+    await shot(page, cardId, "warning-long-entity-320.png", 320);
   });
 
   test("without a header the block comes first", async ({ page }) => {
@@ -317,6 +324,34 @@ test.describe("visual golden: the warnings block", () => {
   test("German", async ({ page }) => {
     const cardId = await warnedCard(page, { ...BASE, show: INVALID }, STATES, "de");
     await shot(page, cardId, "warning-german.png");
+  });
+});
+
+// A hint rides on the subtitle the card shows anyway: after the line's own words, in the line's
+// own overflow — so the automatic sentence clips it like any other long subtitle.
+test.describe("visual golden: hints in the subtitle", () => {
+  const ROOMS = [{ entity: "sensor.r1" }, { entity: "sensor.r2" }];
+
+  test("after the card's own subtitle", async ({ page }) => {
+    await gotoHarness(page);
+    const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS, subtitle: "Ground floor" }, {
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", "unavailable", TEMPERATURE_C),
+    });
+    await expect(page.locator(`#${cardId} .rtc-subtitle`)).toHaveText("Ground floor · 1 room is currently unavailable.");
+    await shot(page, cardId, "hint-custom-subtitle.png");
+  });
+
+  test("after the automatic sentence", async ({ page }) => {
+    await gotoHarness(page);
+    const cardId = await createCard(page, { entity: "sensor.avg", rooms: ROOMS }, {
+      "sensor.avg": mkStateObj("sensor.avg", "unavailable", TEMPERATURE_C),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
+    });
+    await expect(page.locator(`#${cardId} .rtc-subtitle`)).toHaveText(/\. Main sensor currently unavailable; average from the rooms\.$/);
+    await shot(page, cardId, "hint-automatic-subtitle.png");
   });
 });
 

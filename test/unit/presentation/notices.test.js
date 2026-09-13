@@ -80,6 +80,61 @@ test("decimals fall back to the precision of the card's measurement", () => {
   assert.equal(notices.renderMessage(built.warnings[0], t("en")), "3 is not a valid value for decimals. Using default: 0.");
 });
 
+test("a source that stays unusable is named by its entity", () => {
+  const entity = (code) => words("en", core.createDiagnostic(code, { entity: "sensor.hall" }));
+  assert.equal(entity("entity.not_found"), "sensor.hall does not exist in Home Assistant.");
+  assert.equal(entity("entity.unit_ambiguous"), "sensor.hall needs a device_class; its unit fits several measurements.");
+  assert.equal(entity("entity.unidentified"), "sensor.hall has no device_class and no unit the card knows.");
+  assert.equal(entity("entity.unit_unreadable"), "sensor.hall reports a unit the card cannot read here.");
+  assert.equal(entity("entity.other_measurement"), "sensor.hall measures something else and is ignored.");
+  assert.equal(
+    words("de", core.createDiagnostic("entity.not_found", { entity: "sensor.hall" })),
+    "sensor.hall existiert in Home Assistant nicht."
+  );
+});
+
+test("a source that is momentarily out is a hint, and several are counted by source", () => {
+  const hint = (code, params) => notices.messageForDiagnostic(core.createDiagnostic(code, { entity: "sensor.x", params }));
+  const text = (hints, language = "en") => notices.hintText(hints, t(language));
+  assert.equal(text([]), null);
+  assert.equal(text([hint("hint.rooms_unavailable", { count: 1 })]), "1 room is currently unavailable.");
+  assert.equal(text([hint("hint.rooms_unavailable", { count: 3 })]), "3 rooms are currently unavailable.");
+  assert.equal(text([hint("hint.primary_unavailable")]), "Main sensor currently unavailable; average from the rooms.");
+  assert.equal(text([hint("hint.range_unavailable")]), "Today's span currently unavailable.");
+  assert.equal(text([hint("hint.trend_unavailable")]), "Trend currently unavailable.");
+  assert.equal(text([hint("hint.rooms_unavailable", { count: 2 }), hint("hint.trend_unavailable")]), "3 sources are currently unavailable.");
+  assert.equal(text([hint("hint.primary_unavailable"), hint("hint.range_unavailable")], "de"), "2 Quellen sind derzeit nicht verfügbar.");
+});
+
+test("a hint joins the line after its sentence, or after a separator when the line has no sentence end", () => {
+  const { composeSubtitle } = notices;
+  const hint = "Trend currently unavailable.";
+  const line = (config, automatic = "Avg. in comfort.") => composeSubtitle({ config: cfg(config), automatic, hintText: hint });
+  // While a hint is there the line wraps, so the hint is read in full; the card's own
+  // overflow applies again once the source is back.
+  assert.deepEqual(line({}), { subtitle: "Avg. in comfort. Trend currently unavailable.", hasSubtitle: true, subtitleOverflow: "wrap" });
+  assert.equal(composeSubtitle({ config: cfg(), automatic: "Avg. in comfort." }).subtitleOverflow, "clip");
+  assert.equal(line({ subtitle: { text: "Ground floor", overflow: "clip" } }).subtitle, "Ground floor · Trend currently unavailable.");
+  assert.equal(line({ subtitle: { text: "Ground floor!", overflow: "clip" } }).subtitle, "Ground floor! Trend currently unavailable.");
+  assert.equal(line({ subtitle: { text: "一階です。", overflow: "clip" } }).subtitle, "一階です。Trend currently unavailable.", "no space after a full-width stop");
+  // A hint never brings back a line nobody wants, nor changes how an absent line behaves.
+  assert.deepEqual(line({ subtitle: { text: "", overflow: "clip" } }), { subtitle: "", hasSubtitle: false, subtitleOverflow: "clip" });
+  assert.equal(line({ show: { subtitle: false } }).hasSubtitle, false);
+  assert.equal(line({ show: { subtitle: false } }).subtitleOverflow, "clip");
+  // A no-data reason is the whole line.
+  assert.equal(composeSubtitle({ config: cfg(), automatic: null, noDataReason: "No value.", hintText: hint }).subtitle, "No value.");
+});
+
+test("a card without data and without a reason of its own has no line unless it wrote one", () => {
+  const { composeSubtitle } = notices;
+  assert.deepEqual(composeSubtitle({ config: cfg(), automatic: null, noDataReason: null }), { subtitle: "", hasSubtitle: false, subtitleOverflow: "clip" });
+  assert.deepEqual(composeSubtitle({ config: cfg({ subtitle: { text: "Hall", overflow: "wrap" } }), automatic: null, noDataReason: null }), {
+    subtitle: "Hall",
+    hasSubtitle: true,
+    subtitleOverflow: "wrap",
+  });
+});
+
 test("an older spelling names what replaces it", () => {
   const deprecated = core.createDiagnostic("config.deprecated", {
     path: "views[1].options.footer",

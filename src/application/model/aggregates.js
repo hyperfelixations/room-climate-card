@@ -54,7 +54,7 @@ export function computeSpread({ attributeValue, roomsComparable, coolest, warmes
 
 // The largest deviation from the average is always one of the two extrema.
 // Reusing them preserves the shared equal-value tie-break.
-export function buildSubtitleModel({ avg, comfort, roomsComparable, counts, roomCount, coolest, warmest, missingRooms }) {
+export function buildSubtitleModel({ avg, comfort, roomsComparable, counts, roomCount, coolest, warmest }) {
   let sentence;
   if (avg > comfort.max) {
     sentence = roomsComparable
@@ -76,5 +76,5 @@ export function buildSubtitleModel({ avg, comfort, roomsComparable, counts, room
   } else {
     sentence = { kind: "inComfort" };
   }
-  return { ...sentence, missingRooms };
+  return sentence;
 }

@@ -16,6 +16,7 @@ let roomLayout;
 let scaleViewModel;
 let cardViewModel;
 let legacyData;
+let core;
 
 function roomModel(index, name, short, value) {
   return { name, short, entity: `sensor.r${index}`, tap_action: null, hold_action: null, index, value };
@@ -27,6 +28,7 @@ test.before(async () => {
   scaleViewModel = await import("../../../src/presentation/view-model/scale-view-model.js");
   cardViewModel = await import("../../../src/presentation/view-model/card-view-model.js");
   legacyData = require("../../helpers/legacy-dto.js");
+  core = await import("../../../src/core/diagnostics.js");
 });
 
 // ------------------------------------------------------------ metric meta --
@@ -308,23 +310,25 @@ test("every subtitle branch produces its own key and variables", () => {
   const build = (subtitle) =>
     cardViewModel.buildCardViewModel({ domainModel: minimalDomainModel({ subtitle }), config: cfg(), texts }).subtitle;
 
-  assert.match(build({ kind: "aboveComfort", diff: 1, count: 2, total: 4, adjective: "above", missingRooms: 0 }), /^subtitle\.aboveComfort\(/);
-  assert.match(build({ kind: "aboveComfort", diff: 1, count: 2, total: 4, adjective: "above", missingRooms: 0 }), /adjective\.warm/);
-  assert.match(build({ kind: "aboveComfortNoRooms", diff: 1, missingRooms: 0 }), /^subtitle\.aboveComfortNoRooms\(/);
-  assert.match(build({ kind: "belowComfort", diff: 1, count: 1, total: 4, adjective: "below", missingRooms: 0 }), /adjective\.cool/);
-  assert.match(build({ kind: "belowComfortNoRooms", diff: 1, missingRooms: 0 }), /^subtitle\.belowComfortNoRooms\(/);
-  assert.match(build({ kind: "inComfortIssue", name: "Küche", missingRooms: 0 }), /^subtitle\.inComfortIssue\(.*Küche/);
-  assert.equal(build({ kind: "inComfortAllGood", missingRooms: 0 }), "subtitle.inComfortAllGood");
-  assert.equal(build({ kind: "inComfort", missingRooms: 0 }), "subtitle.inComfort");
+  assert.match(build({ kind: "aboveComfort", diff: 1, count: 2, total: 4, adjective: "above" }), /^subtitle\.aboveComfort\(/);
+  assert.match(build({ kind: "aboveComfort", diff: 1, count: 2, total: 4, adjective: "above" }), /adjective\.warm/);
+  assert.match(build({ kind: "aboveComfortNoRooms", diff: 1 }), /^subtitle\.aboveComfortNoRooms\(/);
+  assert.match(build({ kind: "belowComfort", diff: 1, count: 1, total: 4, adjective: "below" }), /adjective\.cool/);
+  assert.match(build({ kind: "belowComfortNoRooms", diff: 1 }), /^subtitle\.belowComfortNoRooms\(/);
+  assert.match(build({ kind: "inComfortIssue", name: "Küche" }), /^subtitle\.inComfortIssue\(.*Küche/);
+  assert.equal(build({ kind: "inComfortAllGood" }), "subtitle.inComfortAllGood");
+  assert.equal(build({ kind: "inComfort" }), "subtitle.inComfort");
 });
 
-test("missing rooms are appended as their own clause", () => {
+test("a hint is appended to the sentence, and only while the card has a value", () => {
+  const hints = [core.createDiagnostic("hint.trend_unavailable", { entity: "sensor.trend" })];
   const result = cardViewModel.buildCardViewModel({
-    domainModel: minimalDomainModel({ subtitle: { kind: "inComfort", missingRooms: 2 } }),
+    domainModel: minimalDomainModel({ diagnostics: { warnings: [], hints } }),
     config: cfg(),
     texts: stubTexts(),
   });
-  assert.equal(result.subtitle, 'subtitle.inComfortsubtitle.missingRooms({"count":2})');
+  assert.equal(result.subtitle, "subtitle.inComfort · hint.trendUnavailable");
+  assert.equal(result.header.subtitleOverflow, "wrap", "a hint is read in full");
 });
 
 test("the metric-specific adjective is used, not a generic one", () => {
@@ -332,7 +336,7 @@ test("the metric-specific adjective is used, not a generic one", () => {
   const humidity = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel({
       metric: { kind: "humidity", canonicalUnit: "%", unit: "%", displayUnitProfile: { key: "percent" } },
-      subtitle: { kind: "aboveComfort", diff: 5, count: 1, total: 3, adjective: "above", missingRooms: 0 },
+      subtitle: { kind: "aboveComfort", diff: 5, count: 1, total: 3, adjective: "above" },
     }),
     config: cfg(),
     texts,
@@ -437,6 +441,7 @@ test("range timestamps are formatted here, from the raw values", () => {
 function noDataDomain({
   kind = "temperature",
   primaryStatus = "missing",
+  primaryReason = primaryStatus,
   rooms = [],
   configurationState = null,
   topology = { kind: "primaryWithRooms", headlineEntity: "sensor.avg", roomIndex: null },
@@ -454,7 +459,7 @@ function noDataDomain({
       sourceKind: "primary",
       sourceEntity: "sensor.avg",
       availability: {
-        primary: { entity: "sensor.avg", status: primaryStatus, metricKind: kind },
+        primary: { entity: "sensor.avg", status: primaryStatus, reason: primaryReason, metricKind: kind },
         rooms,
       },
     },
@@ -490,20 +495,30 @@ test("the no-data view model carries the normal shell contract", () => {
   assert.equal(result.carousel.noActiveViewsHint, "", "views.none is not part of no-data presentation");
 });
 
-test("the no-data hint distinguishes missing, unavailable and incompatible sources", () => {
-  const build = (domainModel, config) =>
-    cardViewModel.buildCardViewModel({
-      domainModel,
-      config,
-      texts: stubTexts(),
-    }).header.subtitle;
+test("the no-data subtitle gives only a reason that passes by itself; a configuration fault is a warning", () => {
+  const build = (domainModel, config = cfg()) => {
+    const result = cardViewModel.buildCardViewModel({ domainModel, config, texts: stubTexts() });
+    return { text: result.header.subtitle, shown: result.header.hasSubtitle, kind: result.noData.hintKind };
+  };
+  assert.deepEqual(build(noDataDomain({ primaryStatus: "unavailable" })), { text: "availability.valueUnavailable", shown: true, kind: "value-unavailable" });
+  assert.deepEqual(build(noDataDomain({ primaryStatus: "invalid_value", primaryReason: "not_numeric" })), {
+    text: "availability.valueNotNumeric",
+    shown: true,
+    kind: "value-not-numeric",
+  });
+  assert.deepEqual(build(noDataDomain({ primaryStatus: "missing" })), { text: "", shown: false, kind: "none" });
+  assert.deepEqual(build(noDataDomain({ primaryStatus: "incompatible_unit", primaryReason: "unit_unreadable" })), { text: "", shown: false, kind: "none" });
+  // Without a reason of its own the line says what it says with data: the card's own text.
+  assert.deepEqual(build(noDataDomain({ primaryStatus: "missing" }), cfg({ subtitle: { text: "Ground floor", overflow: "clip" } })), {
+    text: "Ground floor",
+    shown: true,
+    kind: "none",
+  });
 
-  assert.match(build(noDataDomain({ primaryStatus: "missing" }), cfg()), /availability\.entityMissing/);
-  assert.match(build(noDataDomain({ primaryStatus: "unavailable" }), cfg()), /availability\.valueUnavailable/);
-  assert.match(
-    build(noDataDomain({ primaryStatus: "incompatible_unit" }), cfg()),
-    /availability\.incompatible/
-  );
+  const calculated = (rooms) =>
+    noDataDomain({ topology: { kind: "roomConsensus", headlineEntity: null, roomIndex: null }, primaryStatus: null, rooms });
+  assert.equal(build(calculated([{ index: 0, entity: "sensor.a", status: "unavailable", reason: "unavailable" }])).text, "availability.noUsableRooms");
+  assert.deepEqual(build(calculated([{ index: 0, entity: "sensor.a", status: "missing", reason: "missing" }])), { text: "", shown: false, kind: "none" });
 });
 
 // ---------------------------------------------------------- legacy adapter --

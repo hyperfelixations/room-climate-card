@@ -85,7 +85,7 @@
   "scaleRoomMarkers": [],
   "showRoomChips": true,
   "spread": 0,
-  "subtitle": "Avg. in comfort.",
+  "subtitle": "Avg. in comfort. Main sensor currently unavailable; average from the rooms.",
   "title": "Temperature",
   "tone": {
     "color": "#79A86C",

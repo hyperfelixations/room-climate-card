@@ -10,7 +10,7 @@ import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration, NO_DATA_COLOR } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
-import { buildNotices, buildWarningBlock, composeSubtitle } from "./notices.js";
+import { buildNotices, buildWarningBlock, composeSubtitle, hintText } from "./notices.js";
 import { AVAILABILITY, UNUSABLE_REASON } from "../../application/model/entity-model.js";
 import { CARD_NAME } from "../../core/card-metadata.js";
 import { UNAVAILABLE_TEXT } from "../../core/text.js";
@@ -86,10 +86,6 @@ function buildSubtitleText(subtitle, texts, metricKind) {
   } else {
     text = texts.t("subtitle.inComfort");
   }
-  // Missing rooms form an independent localized clause.
-  if (subtitle.missingRooms > 0) {
-    text += texts.t("subtitle.missingRooms", { count: subtitle.missingRooms });
-  }
   return text;
 }
 
@@ -161,16 +157,12 @@ function noDataHeadlineSource(domainModel, config, topology) {
   return { entity: null, status: null, source: "calculated", roomIndex: null };
 }
 
-// One text mapping per unusable reason. `entity: true` marks actionable messages that must
-// name what the reader should fix. Details: see internal dev doc §4 "No-Data-Vertrag".
+// The reasons that pass by themselves, one text each. A fault someone has to fix is a warning
+// (application/model/source-diagnostics.js). Details: see internal dev doc §4 "No-Data-Vertrag".
 const REASON_TEXTS = {
   [UNUSABLE_REASON.UNAVAILABLE]: { kind: "value-unavailable", key: "availability.valueUnavailable" },
   [UNUSABLE_REASON.NOT_NUMERIC]: { kind: "value-not-numeric", key: "availability.valueNotNumeric" },
   [UNUSABLE_REASON.OUT_OF_RANGE]: { kind: "value-impossible", key: "availability.valueImpossible" },
-  [UNUSABLE_REASON.UNIT_AMBIGUOUS]: { kind: "unit-ambiguous", key: "availability.unitAmbiguous", entity: true },
-  [UNUSABLE_REASON.UNIDENTIFIED]: { kind: "unidentified", key: "availability.unidentified", entity: true },
-  [UNUSABLE_REASON.UNIT_UNREADABLE]: { kind: "unit-unreadable", key: "availability.unitUnreadable", entity: true },
-  [UNUSABLE_REASON.KIND_MISMATCH]: { kind: "incompatible", key: "availability.incompatible" },
 };
 
 // Unwritten title uses the metric; empty text and show.title:false both remove the node.
@@ -180,60 +172,14 @@ function buildHeaderTitle(config, automatic) {
   return { title: text, hasTitle: text !== "" && config.show.title, titleOverflow: config.title?.overflow || "wrap" };
 }
 
+// The reason a card without data gives in its subtitle — only one that passes by itself. With
+// none, the line says what it says with data, and a warning names what to fix.
 function buildNoDataSubtitle({ domainModel, headline, texts }) {
-  const missingRooms = domainModel.context.availability.rooms.filter(
-    (room) => room.status === AVAILABILITY.MISSING && room.entity !== headline.entity
-  );
-  const incompatible = [
-    domainModel.context.availability.primary,
-    ...domainModel.context.availability.rooms,
-  ].some((source) => [AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(source.status));
-
-  const missingRoomText = () => texts.t("availability.entitiesMissing", {
-    count: missingRooms.length,
-    entities: missingRooms.map((room) => room.entity).join(", "),
-  });
-  // Missing rooms remain visible beside any headline-specific reason.
-  const appendMissingRooms = (result) => missingRooms.length === 0
-    ? result
-    : {
-        kind: `${result.kind}+rooms-missing`,
-        text: `${result.text} ${missingRoomText()}`,
-      };
-
-  if (headline.status === AVAILABILITY.MISSING) {
-    return appendMissingRooms({
-      kind: "entity-missing",
-      text: texts.t("availability.entityMissing", { entity: headline.entity }),
-    });
-  }
   const explained = REASON_TEXTS[headline.reason];
-  if (explained) {
-    return appendMissingRooms({
-      kind: explained.kind,
-      text: texts.t(explained.key, explained.entity ? { entity: headline.entity } : undefined),
-    });
-  }
-  // Fallback for calculated headlines without a reason; modeled entities always have one.
-  if ([AVAILABILITY.UNAVAILABLE, AVAILABILITY.INVALID_VALUE].includes(headline.status)) {
-    return appendMissingRooms({ kind: "value-unavailable", text: texts.t("availability.valueUnavailable") });
-  }
-  if ([AVAILABILITY.INCOMPATIBLE_KIND, AVAILABILITY.INCOMPATIBLE_UNIT].includes(headline.status)) {
-    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
-  }
-  if (domainModel.configurationState === "mixed_metric_kinds" || incompatible) {
-    return appendMissingRooms({ kind: "incompatible", text: texts.t("availability.incompatible") });
-  }
-  if (missingRooms.length > 0) {
-    return {
-      kind: "rooms-missing",
-      text: missingRoomText(),
-    };
-  }
-  if (domainModel.context.availability.rooms.length > 0) {
-    return { kind: "rooms-unavailable", text: texts.t("availability.noUsableRooms") };
-  }
-  return { kind: "source-unavailable", text: texts.t("availability.valueUnavailable") };
+  if (explained) return { kind: explained.kind, text: texts.t(explained.key) };
+  // A calculated headline has no reason of its own; its rooms may be momentarily out.
+  const roomsOut = headline.source === "calculated" && domainModel.context.availability.rooms.some((room) => REASON_TEXTS[room.reason]);
+  return roomsOut ? { kind: "rooms-unavailable", text: texts.t("availability.noUsableRooms") } : { kind: "none", text: null };
 }
 
 // No-data keeps the normal shell contracts, neutral paint and a collapsed view area.
@@ -474,7 +420,11 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   };
 
   const byKey = buildViewContent({ shared, viewState });
-  const headerSubtitle = composeSubtitle({ config, automatic: buildSubtitleText(domainModel.subtitle, texts, metricKind) });
+  const headerSubtitle = composeSubtitle({
+    config,
+    automatic: buildSubtitleText(domainModel.subtitle, texts, metricKind),
+    hintText: hintText(notices.hints, texts.t),
+  });
 
   const chips = layout.visible.map((room) =>
     buildRoomChipModel({

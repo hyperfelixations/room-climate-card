@@ -55,17 +55,10 @@ export const uk = {
   "value.ariaOpen": "Відкрити середнє значення",
   "status.noData": "Немає даних",
 
-  "availability.entityMissing": (v) => `Сутність ${v.entity} не знайдена.`,
-  "availability.entitiesMissing": (v) =>
-    `${selectPlural("uk", v.count, { one: "Налаштовану сутність кімнати не знайдено", few: "Налаштовані сутності кімнат не знайдено", many: "Налаштовані сутності кімнат не знайдено", other: "Налаштованої сутності кімнати не знайдено" })} (${v.count}): ${v.entities}.`,
   "availability.valueUnavailable": "Значення наразі недоступне.",
   "availability.noUsableRooms": "Наразі немає доступних значень для налаштованих кімнат.",
-  "availability.incompatible": "Налаштовані джерела використовують несумісні типи вимірювань або одиниці.",
   "availability.valueNotNumeric": "Сутність не передає число.",
   "availability.valueImpossible": "Сутність передає фізично неможливе значення.",
-  "availability.unitAmbiguous": (v) => `Для ${v.entity} потрібен device_class: цю одиницю використовують кілька типів вимірювань, і картка не вгадує.`,
-  "availability.unidentified": (v) => `${v.entity} не повідомляє, що вимірює. Додайте device_class або одиницю, відому картці.`,
-  "availability.unitUnreadable": (v) => `${v.entity} передає одиницю, яку картка не може прочитати для цього типу вимірювання.`,
   "availability.roomNoData": (v) => `${v.name}: немає даних. Відкрийте деталі.`,
   "availability.valueNoData": (v) => `${v.label}: немає даних`,
 
@@ -76,8 +69,6 @@ export const uk = {
   "subtitle.inComfortIssue": (v) => `Середнє в межах комфорту · найбільше вирізняється: ${v.name}.`,
   "subtitle.inComfortAllGood": "Середнє в межах комфорту · у всіх кімнатах показники в цільовому діапазоні.",
   "subtitle.inComfort": "Середнє в межах комфорту.",
-  "subtitle.missingRooms": (v) =>
-    ` ${v.count} ${selectPlural("uk", v.count, { one: "налаштована кімната не знайдена", few: "налаштовані кімнати не знайдені", many: "налаштованих кімнат не знайдено", other: "налаштованої кімнати не знайдено" })}.`,
 
   "footer.comfort": (v) => `Комфорт ${v.count}/${v.total}`,
   "footer.spread": (v) => `Розкид ${v.value}`,
@@ -132,6 +123,18 @@ export const uk = {
   "fallback.cardAction": "Використовується дія картки.",
   "fallback.option": (v) => `Для ${v.key} використовується ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} застарів і буде вилучений. Використовуйте ${v.replacement}.`,
+  "warning.entityNotFound": (v) => `${v.entity} не існує в Home Assistant.`,
+  "warning.unitAmbiguous": (v) => `Для ${v.entity} потрібен device_class; одиниця підходить до кількох величин.`,
+  "warning.unidentified": (v) => `${v.entity} не має ні device_class, ні одиниці, відомої картці.`,
+  "warning.unitUnreadable": (v) => `${v.entity} передає одиницю, яку картка тут не може прочитати.`,
+  "warning.otherMeasurement": (v) => `${v.entity} вимірює іншу величину й ігнорується.`,
+  "hint.roomsUnavailable": (v) =>
+    `${v.count} ${selectPlural("uk", v.count, { one: "кімната зараз недоступна", few: "кімнати зараз недоступні", many: "кімнат зараз недоступно", other: "кімнати зараз недоступні" })}.`,
+  "hint.primaryUnavailable": "Основний датчик зараз недоступний; середнє за кімнатами.",
+  "hint.rangeUnavailable": "Діапазон за сьогодні зараз недоступний.",
+  "hint.trendUnavailable": "Тренд зараз недоступний.",
+  "hint.several": (v) =>
+    `${v.count} ${selectPlural("uk", v.count, { one: "джерело зараз недоступне", few: "джерела зараз недоступні", many: "джерел зараз недоступно", other: "джерела зараз недоступні" })}.`,
   "value.empty": "(порожньо)",
   "warning.profileUnavailable": (v) => `${v.profile} — не профіль класифікації для вимірювання «${v.measurement}». ${v.instead}`,
   "warning.profileUnitMismatch": (v) => `classification.unit ${v.unit} не підходить для вимірювання «${v.measurement}». ${v.instead}`,

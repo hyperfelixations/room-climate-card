@@ -83,7 +83,7 @@ function minimalDomainModel(overrides = {}) {
       average: { color: "#79A86C", level: null, levelKey: "level.optimal", score: 6, zone: "optimal", source: "builtin", profileId: "indoor" },
       profileIcon: "mdi:thermometer",
     },
-    subtitle: { kind: "inComfort", missingRooms: 0 },
+    subtitle: { kind: "inComfort" },
     diagnostics: { warnings: [], hints: [] },
     ...overrides,
   };

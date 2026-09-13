@@ -10,9 +10,18 @@ export const DIAGNOSTIC_SEVERITY = Object.freeze({
   "config.foreign_key": SEVERITY.WARNING,
   "config.deprecated": SEVERITY.WARNING,
   "sources.mixed": SEVERITY.WARNING,
+  "entity.not_found": SEVERITY.WARNING,
+  "entity.unit_ambiguous": SEVERITY.WARNING,
+  "entity.unidentified": SEVERITY.WARNING,
+  "entity.unit_unreadable": SEVERITY.WARNING,
+  "entity.other_measurement": SEVERITY.WARNING,
   "classification.profile_unavailable": SEVERITY.WARNING,
   "classification.unit_mismatch": SEVERITY.WARNING,
   "classification.not_representable": SEVERITY.WARNING,
+  "hint.rooms_unavailable": SEVERITY.HINT,
+  "hint.primary_unavailable": SEVERITY.HINT,
+  "hint.range_unavailable": SEVERITY.HINT,
+  "hint.trend_unavailable": SEVERITY.HINT,
 });
 
 // What the card does instead of an invalid value, where that is not a value of its own.

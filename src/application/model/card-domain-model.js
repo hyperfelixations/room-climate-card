@@ -56,7 +56,6 @@ export function buildCardDomainModel({ states, config, context, language, surfac
     })),
   };
   const missingRooms = sourceAvailability.rooms.filter((room) => room.status === AVAILABILITY.MISSING).length;
-  const diagnostics = collectSourceDiagnostics({ context });
 
   // No source or no metric-kind arbiter yields no-data, never a cross-metric average.
   if (context.averageSource === null) {
@@ -87,7 +86,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       },
       missingRooms,
       configurationState: context.diagnostics[0]?.code ?? null,
-      diagnostics,
+      diagnostics: collectSourceDiagnostics({ context, config, states }),
     };
   }
 
@@ -125,6 +124,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
 
   const range = buildRangeModel({ states, config, policy, palette, metricKind, displayUnitProfile: displayProfile, toDisplay, toDisplayDelta });
   const trend = buildTrendContext({ states, config, metricKind, unit: context.unit, toDisplayDelta });
+  const sourceDiagnostics = collectSourceDiagnostics({ context, config, states, range, trend });
 
   const counts = computeComfortCounts(roomsByValue, comfort, roomsComparable);
 
@@ -228,8 +228,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       roomCount: roomsByValue.length,
       coolest,
       warmest,
-      missingRooms,
     }),
-    diagnostics: { warnings: [...policyDiagnostics, ...diagnostics.warnings], hints: diagnostics.hints },
+    diagnostics: { warnings: [...policyDiagnostics, ...sourceDiagnostics.warnings], hints: sourceDiagnostics.hints },
   };
 }

@@ -360,6 +360,60 @@ test("a tolerated misconfiguration still renders a working card (degrade, never 
   }
 });
 
+// What the sensors get wrong while the configuration is fine: a warning for a fault that stays,
+// a hint in the subtitle for a source that is momentarily out. [name, config, states].
+const RUNTIME_SCENARIOS = [
+  ["rooms-measure-different-things", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, {
+    "sensor.avg": st("sensor.avg", "unavailable", {}),
+    "sensor.r1": st("sensor.r1", 21.5, C),
+    "sensor.r2": st("sensor.r2", 55.0, HUMIDITY),
+  }],
+  ["room-entity-not-found", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.gone" }] }, VALID_HASS.states],
+  ["entity-unit-fits-several-measurements", { entity: "sensor.air" }, { "sensor.air": st("sensor.air", 700, { unit_of_measurement: "ppm" }) }],
+  ["entity-unidentified", { entity: "sensor.mute" }, { "sensor.mute": st("sensor.mute", 7, {}) }],
+  ["entity-unit-unreadable", { entity: "sensor.odd" }, { "sensor.odd": st("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }) }],
+  ["room-measures-something-else", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.h" }] }, {
+    ...VALID_HASS.states,
+    "sensor.h": st("sensor.h", 45, HUMIDITY),
+  }],
+  ["range-entity-unit-unreadable", { entity: "sensor.avg", range_entity: "sensor.range" }, {
+    ...VALID_HASS.states,
+    "sensor.range": st("sensor.range", 4, { unit_of_measurement: "hPa", minimum: 18, maximum: 22 }),
+  }],
+  ["hint-room-unavailable", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, {
+    ...VALID_HASS.states,
+    "sensor.r2": st("sensor.r2", "unavailable", C),
+  }],
+  ["hint-main-sensor-unavailable", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, {
+    ...VALID_HASS.states,
+    "sensor.avg": st("sensor.avg", "unavailable", C),
+  }],
+  ["hint-range-and-trend-unavailable", { entity: "sensor.avg", range_entity: "sensor.range", trend_entity: "sensor.trend" }, {
+    ...VALID_HASS.states,
+    "sensor.range": st("sensor.range", "unavailable", C),
+    "sensor.trend": st("sensor.trend", "unknown", {}),
+  }],
+];
+
+test("every runtime warning names its entity in the block and the console, and every hint rides on the subtitle", () => {
+  const catalog = {};
+  for (const [name, config, states] of RUNTIME_SCENARIOS) {
+    const el = newCard(hassWith(states));
+    const recorder = recordConsole(env);
+    el.setConfig(config);
+    recorder.restore();
+    catalog[name] = {
+      console: recorder.warnings,
+      block: el.shadowRoot.querySelector(".rtc-warning-text")?.textContent ?? null,
+      subtitle: el.shadowRoot.querySelector(".rtc-subtitle")?.textContent ?? null,
+    };
+    assert.equal(recorder.errors.length, 0, `${name}: must not escalate to console.error`);
+    assert.equal(catalog[name].console.length, catalog[name].block === null ? 0 : 1, `${name}: the console reports exactly what the block shows`);
+    el.remove();
+  }
+  expectBaseline("diagnostics/runtime-notices.json", stableStringify(catalog));
+});
+
 test("incompatible room metric kinds warn once and are exposed as a defined configuration state", () => {
   // The primary declares neither a device_class nor a unit, so nothing settles the room
   // disagreement — the mixed state. A primary that declares a kind arbitrates instead.
@@ -380,7 +434,6 @@ test("incompatible room metric kinds warn once and are exposed as a defined conf
   assert.equal(afterFirst, 1, "exactly one warning for the first occurrence");
   assert.equal(recorder.warnings.length, 1, "an unchanged diagnosis must not re-warn");
   assert.equal(el._computeViewModel().configurationState, "mixed_metric_kinds");
-  expectBaseline("diagnostics/mixed-metric-kinds.json", stableStringify(recorder.warnings));
   el.remove();
 });
 

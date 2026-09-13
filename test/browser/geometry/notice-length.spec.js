@@ -27,6 +27,10 @@ const MIXED = {
   "sensor.r2": mkStateObj("sensor.r2", 55, HUMIDITY),
 };
 
+// An entity id of typical length (30 characters), for the warnings that name one.
+const LONG_ENTITY = "sensor.living_room_temperature";
+const withLong = (state, attributes) => ({ ...DATA, [LONG_ENTITY]: mkStateObj(LONG_ENTITY, state, attributes) });
+
 // One configuration per sentence the card can show as a warning, each fallback clause once.
 const CASES = [
   { name: "a value replaced by its default", config: { show: { unavailable_rooms: VALUE } } },
@@ -52,6 +56,11 @@ const CASES = [
   { name: "the defaults", config: { views: [{ type: "scale", options: VALUE }] } },
   { name: "a foreign key", config: { grid_layout_mode: 1 } },
   { name: "rooms that measure different things", config: {}, states: MIXED },
+  { name: "an entity that does not exist", config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] } },
+  { name: "a unit that fits several measurements", config: { entity: LONG_ENTITY }, states: withLong(700, { unit_of_measurement: "ppm" }) },
+  { name: "no device_class and no known unit", config: { entity: LONG_ENTITY }, states: withLong(7, {}) },
+  { name: "a unit the card cannot read", config: { entity: LONG_ENTITY }, states: withLong(22, { device_class: "temperature", unit_of_measurement: "furlongs" }) },
+  { name: "a room measuring something else", config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] }, states: withLong(45, HUMIDITY) },
   { name: "several problems", config: { auto_slide: VALUE, swipe: VALUE } },
 ];
 

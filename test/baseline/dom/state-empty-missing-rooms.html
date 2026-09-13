@@ -12,10 +12,15 @@
 
             <div class="rtc-title-block">
               <div class="rtc-title">Temperature</div>
-              <div class="rtc-subtitle">The value is currently unavailable. 1 configured room entity was not found: sensor.missing.</div>
+              <div class="rtc-subtitle">The value is currently unavailable.</div>
             </div>
 
             <div class="rtc-status-pill">No data</div>
+          </div>
+
+          <div class="rtc-warning">
+            <svg class="rtc-warning-icon" viewBox="0 0 24 24" role="img" aria-label="Warning"><path fill-rule="evenodd" d="M12 2.5 1.5 21h21zM11 9.5h2v5.5h-2zm0 7h2v2h-2z"></path></svg>
+            <div class="rtc-warning-text">sensor.missing does not exist in Home Assistant.</div>
           </div>
 
           <div class="rtc-main-panel">

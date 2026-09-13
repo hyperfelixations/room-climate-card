@@ -433,7 +433,7 @@ test("room consensus canonicalizes mixed units of the same metric before aggrega
   env.cleanup(el);
 });
 
-test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () => {
+test("a mixed_metric_kinds warning is written once until the warnings change", () => {
   // Benign start (no rooms, so no mixed diagnosis yet) lets the warn spy install before the
   // mixed-kind state is first resolved.
   const initialHass = mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", {}) });
@@ -460,16 +460,16 @@ test("mixed_metric_kinds warnings deduplicate until the diagnosis changes", () =
   el.hass = hassB;
   assert.equal(warnings.length, 1, "an unchanged mixed_metric_kinds diagnosis must not spam the console on every hass update");
 
-  // A genuinely changed diagnosis (different disagreeing pair) must warn again.
-  const hassC = mkHass({
+  // Once the rooms agree there is nothing to say; disagreeing again is said again.
+  el.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", "unavailable", {}),
-    "sensor.co2a": mkState("sensor.co2a", "unavailable", CO2),
-    "sensor.hum1": mkState("sensor.hum1", 56, HUMIDITY),
-    "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
+    "sensor.co2a": mkState("sensor.co2a", 705, CO2),
+    "sensor.hum1": mkState("sensor.hum1", 710, CO2),
   });
-  el.hass = hassC;
-  el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.co2a" }, { entity: "sensor.hum1" }, { entity: "sensor.t1" }] });
-  assert.equal(warnings.length, 2, "a genuinely changed diagnosis (co2/humidity -> humidity/temperature) must warn again");
+  assert.equal(warnings.length, 1, "rooms that agree give nothing to write");
+  el.hass = hassB;
+  assert.equal(warnings.length, 2, "the disagreement returning is written again");
+  assert.match(warnings[1], /The rooms measure different things/);
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
   env.cleanup(el);

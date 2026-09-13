@@ -217,6 +217,49 @@ test("a warning leaves every form of subtitle exactly as configured", () => {
   env.cleanup(hidden);
 });
 
+// ------------------------------------------------- a source that is momentarily out ----
+
+// A hint rides on the line the card shows anyway: after its sentence, never in place of it,
+// never bringing back a line nobody wants, wrapped so it is read in full, and gone with the
+// outage.
+const TWO_ROOMS = [{ entity: "sensor.r1", name: "Kitchen" }, { entity: "sensor.r2", name: "Bedroom" }];
+const withOutage = (r2 = mkState("sensor.r2", "unavailable", TEMPERATURE_C), extra = {}) =>
+  mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C), "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C), "sensor.r2": r2, ...extra });
+const lineOf = (el) => el.shadowRoot.querySelector(".rtc-subtitle")?.textContent ?? null;
+
+test("a room that is momentarily out follows the automatic sentence, and leaves with its outage", () => {
+  const el = env.createCard({ entity: "sensor.avg", rooms: TWO_ROOMS }, withOutage());
+  assert.match(lineOf(el), /\. 1 room is currently unavailable\.$/);
+  assert.equal(el.shadowRoot.querySelector(".rtc-root").getAttribute("data-subtitle"), "wrap", "the line wraps while the hint is there");
+  el.hass = withOutage(mkState("sensor.r2", 23, TEMPERATURE_C));
+  assert.doesNotMatch(lineOf(el), /unavailable/);
+  assert.equal(el.shadowRoot.querySelector(".rtc-root").getAttribute("data-subtitle"), null, "and clips again without it");
+  env.cleanup(el);
+});
+
+test("a hint follows the card's own subtitle after a separator, and several are counted by source", () => {
+  const el = env.createCard(
+    { entity: "sensor.avg", rooms: TWO_ROOMS, trend_entity: "sensor.trend", subtitle: "Ground floor" },
+    withOutage(undefined, { "sensor.trend": mkState("sensor.trend", "unavailable", {}) })
+  );
+  assert.equal(lineOf(el), "Ground floor · 2 sources are currently unavailable.");
+  env.cleanup(el);
+});
+
+test("after a full-width stop the hint follows without a space", () => {
+  const el = env.createCard({ entity: "sensor.avg", rooms: TWO_ROOMS, language: "ja", subtitle: "一階です。" }, withOutage());
+  assert.equal(lineOf(el), "一階です。1 部屋が現在利用できません。");
+  env.cleanup(el);
+});
+
+test("a hint never brings back a line that was switched off or emptied", () => {
+  for (const config of [{ show: { subtitle: false } }, { subtitle: "" }]) {
+    const el = env.createCard({ entity: "sensor.avg", rooms: TWO_ROOMS, ...config }, withOutage());
+    assert.equal(el.shadowRoot.querySelector(".rtc-subtitle"), null, JSON.stringify(config));
+    env.cleanup(el);
+  }
+});
+
 // A subtitle-only setConfig() does not move the data signature; setConfig() invalidates it deliberately so a cosmetic edit is not skipped.
 test("editing only the subtitle updates a card that is already on screen", () => {
   const el = env.createCard({ entity: "sensor.avg", subtitle: "First" }, OK_HASS());

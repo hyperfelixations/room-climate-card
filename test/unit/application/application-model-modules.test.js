@@ -265,6 +265,42 @@ test("a trend rate that overflows on either conversion is no trend", () => {
   }
 });
 
+test("range and trend say what their sensor gave: nothing, no entity, a momentary gap, an unreadable unit, or a value", () => {
+  const identity = (v) => v;
+  const range = (states, entity = "sensor.range") =>
+    auxiliary.buildRangeModel({
+      states,
+      config: cfg({ range_entity: entity }),
+      policy: AUTO_POLICY,
+      palette: PASTEL,
+      metricKind: "temperature",
+      displayUnitProfile: null,
+      toDisplay: identity,
+      toDisplayDelta: identity,
+    }).source;
+  assert.deepEqual(range({}, null), { entity: null, status: "none" });
+  assert.deepEqual(range({}), { entity: "sensor.range", status: "missing" });
+  // The unit is judged only for a number, so an unavailable sensor without attributes is a gap.
+  assert.deepEqual(range({ "sensor.range": st("unavailable", {}) }), { entity: "sensor.range", status: "transient" });
+  assert.deepEqual(range({ "sensor.range": st("n/a", C) }), { entity: "sensor.range", status: "transient" });
+  assert.deepEqual(range({ "sensor.range": st(-1, C) }), { entity: "sensor.range", status: "transient" }, "a negative width is impossible");
+  assert.deepEqual(range({ "sensor.range": st(5, { unit_of_measurement: "hPa" }) }), { entity: "sensor.range", status: "unreadable" });
+  assert.deepEqual(range({ "sensor.range": st(5, {}) }), { entity: "sensor.range", status: "unreadable" });
+  assert.deepEqual(range({ "sensor.range": st(5, C) }), { entity: "sensor.range", status: "usable" });
+
+  const trend = (states, entity = "sensor.trend", toDisplayDelta = identity) =>
+    auxiliary.buildTrendContext({ states, config: cfg({ trend_entity: entity }), metricKind: "temperature", unit: "°C", toDisplayDelta }).source;
+  assert.deepEqual(trend({}, null), { entity: null, status: "none" });
+  assert.deepEqual(trend({}), { entity: "sensor.trend", status: "missing" });
+  assert.deepEqual(trend({ "sensor.trend": st("unknown", {}) }), { entity: "sensor.trend", status: "transient" });
+  assert.deepEqual(trend({ "sensor.trend": st(0.4, { unit_of_measurement: "hPa/h" }) }), { entity: "sensor.trend", status: "unreadable" });
+  assert.deepEqual(trend({ "sensor.trend": st(1e308, { unit_of_measurement: "°C/h" }) }, "sensor.trend", FAHRENHEIT.deltaFromCanonical), {
+    entity: "sensor.trend",
+    status: "transient",
+  });
+  assert.deepEqual(trend({ "sensor.trend": st(0.4, { unit_of_measurement: "°C/h" }) }), { entity: "sensor.trend", status: "usable" });
+});
+
 test("buildTrendModel() rejects a non-finite value and a missing unit", () => {
   assert.equal(auxiliary.buildTrendModel("temperature", 0.5, NaN, "°C/h"), null);
   assert.equal(auxiliary.buildTrendModel("temperature", 0.5, 0.5, null), null);
@@ -405,23 +441,23 @@ test("every subtitle branch is reachable and carries its own numbers", () => {
   const warmest = { name: "Küche", value: 26 };
   const counts = { inComfort: 1, tooWarm: 1, tooCool: 1 };
 
-  const above = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const above = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest });
   assert.equal(above.kind, "aboveComfort");
   assert.equal(above.diff, 1);
   assert.equal(above.count, 1);
   assert.equal(above.total, 3);
   assert.equal(above.adjective, "above");
 
-  const aboveNoRooms = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const aboveNoRooms = aggregates.buildSubtitleModel({ avg: 25, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null });
   assert.equal(aboveNoRooms.kind, "aboveComfortNoRooms");
   assert.equal(aboveNoRooms.diff, 1);
 
-  const below = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const below = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest });
   assert.equal(below.kind, "belowComfort");
   assert.equal(below.diff, 1);
   assert.equal(below.adjective, "below");
 
-  const belowNoRooms = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const belowNoRooms = aggregates.buildSubtitleModel({ avg: 19, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null });
   assert.equal(belowNoRooms.kind, "belowComfortNoRooms");
   assert.equal(belowNoRooms.diff, 1);
 
@@ -434,30 +470,29 @@ test("every subtitle branch is reachable and carries its own numbers", () => {
       roomCount: 0,
       coolest: null,
       warmest: null,
-      missingRooms: 0,
     });
     assert.equal(boundary.kind, "inComfort", `${avg} belongs to the inclusive comfort band`);
   }
 
-  const issue = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest, missingRooms: 0 });
+  const issue = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: true, counts, roomCount: 3, coolest, warmest });
   assert.equal(issue.kind, "inComfortIssue");
   assert.equal(issue.name, "Küche", "26 is 4 away from 22, 18 is 4 away — the warmest wins the tie");
 
   const allGood = aggregates.buildSubtitleModel({
     avg: 22, comfort, roomsComparable: true,
     counts: { inComfort: 3, tooWarm: 0, tooCool: 0 },
-    roomCount: 3, coolest: { name: "A", value: 21 }, warmest: { name: "B", value: 23 }, missingRooms: 0,
+    roomCount: 3, coolest: { name: "A", value: 21 }, warmest: { name: "B", value: 23 },
   });
   assert.equal(allGood.kind, "inComfortAllGood");
 
-  const plain = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null, missingRooms: 0 });
+  const plain = aggregates.buildSubtitleModel({ avg: 22, comfort, roomsComparable: false, counts, roomCount: 0, coolest: null, warmest: null });
   assert.equal(plain.kind, "inComfort");
 });
 
 test("the out-of-comfort room furthest from the average is the one named", () => {
   const comfort = { min: 20, max: 24 };
   const counts = { inComfort: 1, tooWarm: 1, tooCool: 1 };
-  const base = { avg: 22, comfort, roomsComparable: true, counts, roomCount: 3, missingRooms: 0 };
+  const base = { avg: 22, comfort, roomsComparable: true, counts, roomCount: 3 };
   // Only the warmest is out.
   assert.equal(
     aggregates.buildSubtitleModel({ ...base, coolest: { name: "Cool", value: 21 }, warmest: { name: "Warm", value: 30 } }).name,
@@ -495,11 +530,10 @@ test("the out-of-comfort room furthest from the average is the one named", () =>
   );
 });
 
-test("missing rooms are reported alongside whichever sentence applies", () => {
+test("the sentence says nothing about rooms that do not exist: those are warnings of their own", () => {
   const model = aggregates.buildSubtitleModel({
     avg: 22, comfort: { min: 20, max: 24 }, roomsComparable: false,
-    counts: { inComfort: 0, tooWarm: 0, tooCool: 0 }, roomCount: 0, coolest: null, warmest: null, missingRooms: 3,
+    counts: { inComfort: 0, tooWarm: 0, tooCool: 0 }, roomCount: 0, coolest: null, warmest: null,
   });
-  assert.equal(model.kind, "inComfort");
-  assert.equal(model.missingRooms, 3);
+  assert.deepEqual(model, { kind: "inComfort" });
 });

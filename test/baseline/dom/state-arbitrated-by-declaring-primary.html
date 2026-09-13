@@ -2,7 +2,7 @@
         <style>[[css sha256:44601ad05f4f3224bcfbe31487fb07ad6fc1b0898ee34e9482e4e01eb15739ca]]</style></style>
         <ha-card class="rtc-card">
           
-        <div class="rtc-root" data-state="data" data-metric="temperature" style="--tone-color:#79A86C;--tone-ink:#79A86C;--tone-soft:rgba(121,168,108,0.2);--tone-border:rgba(121,168,108,0.38);--tone-band:rgba(121,168,108,0.2);" tabindex="-1">
+        <div class="rtc-root" data-state="data" data-metric="temperature" data-subtitle="wrap" style="--tone-color:#79A86C;--tone-ink:#79A86C;--tone-soft:rgba(121,168,108,0.2);--tone-border:rgba(121,168,108,0.38);--tone-band:rgba(121,168,108,0.2);" tabindex="-1">
           <div class="rtc-top-line"></div>
 
           <div class="rtc-header">
@@ -12,10 +12,15 @@
 
             <div class="rtc-title-block">
               <div class="rtc-title">Temperature</div>
-              <div class="rtc-subtitle">Avg. in comfort.</div>
+              <div class="rtc-subtitle">Avg. in comfort. Main sensor currently unavailable; average from the rooms.</div>
             </div>
 
             <div class="rtc-status-pill">Optimal</div>
+          </div>
+
+          <div class="rtc-warning">
+            <svg class="rtc-warning-icon" viewBox="0 0 24 24" role="img" aria-label="Warning"><path fill-rule="evenodd" d="M12 2.5 1.5 21h21zM11 9.5h2v5.5h-2zm0 7h2v2h-2z"></path></svg>
+            <div class="rtc-warning-text">sensor.r2 measures something else and is ignored.</div>
           </div>
 
           <div class="rtc-main-panel">

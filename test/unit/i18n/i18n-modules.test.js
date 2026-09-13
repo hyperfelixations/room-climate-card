@@ -92,7 +92,6 @@ const INTERPOLATION_VARS = Object.freeze({
   value: "22.0 °C",
   diff: "2.0 °C",
   count: 2,
-  entities: "sensor.one, sensor.two",
   entity: "sensor.one",
   total: 4,
   adjective: "test adjective",

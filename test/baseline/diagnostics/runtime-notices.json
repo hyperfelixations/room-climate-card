@@ -1,0 +1,66 @@
+{
+  "entity-unidentified": {
+    "block": "sensor.mute has no device_class and no unit the card knows.",
+    "console": [
+      "Room Climate Card: sensor.mute has no device_class and no unit the card knows."
+    ],
+    "subtitle": null
+  },
+  "entity-unit-fits-several-measurements": {
+    "block": "sensor.air needs a device_class; its unit fits several measurements.",
+    "console": [
+      "Room Climate Card: sensor.air needs a device_class; its unit fits several measurements."
+    ],
+    "subtitle": null
+  },
+  "entity-unit-unreadable": {
+    "block": "sensor.odd reports a unit the card cannot read here.",
+    "console": [
+      "Room Climate Card: sensor.odd reports a unit the card cannot read here."
+    ],
+    "subtitle": null
+  },
+  "hint-main-sensor-unavailable": {
+    "block": null,
+    "console": [],
+    "subtitle": "Avg. in comfort · all rooms are within target range. Main sensor currently unavailable; average from the rooms."
+  },
+  "hint-range-and-trend-unavailable": {
+    "block": null,
+    "console": [],
+    "subtitle": "Avg. in comfort. 2 sources are currently unavailable."
+  },
+  "hint-room-unavailable": {
+    "block": null,
+    "console": [],
+    "subtitle": "Avg. in comfort. 1 room is currently unavailable."
+  },
+  "range-entity-unit-unreadable": {
+    "block": "sensor.range reports a unit the card cannot read here.",
+    "console": [
+      "Room Climate Card: sensor.range reports a unit the card cannot read here."
+    ],
+    "subtitle": "Avg. in comfort."
+  },
+  "room-entity-not-found": {
+    "block": "sensor.gone does not exist in Home Assistant.",
+    "console": [
+      "Room Climate Card: sensor.gone does not exist in Home Assistant."
+    ],
+    "subtitle": "Avg. in comfort."
+  },
+  "room-measures-something-else": {
+    "block": "sensor.h measures something else and is ignored.",
+    "console": [
+      "Room Climate Card: sensor.h measures something else and is ignored."
+    ],
+    "subtitle": "Avg. in comfort."
+  },
+  "rooms-measure-different-things": {
+    "block": "The rooms measure different things. Set entity or align device_class.",
+    "console": [
+      "Room Climate Card: The rooms measure different things. Set entity or align device_class."
+    ],
+    "subtitle": "The value is currently unavailable."
+  }
+}

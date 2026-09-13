@@ -176,15 +176,23 @@ test("I18N-02: JS-derived classification is localized, while HA-provided value_l
 test("I18N-02: Russian room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "ru" }, hassDe);
   const roomExpected = new Map([
-    [1, " 1 комната не найдена."],
-    [2, " 2 комнаты не найдены."],
-    [5, " 5 комнат не найдено."],
-    [21, " 21 комната не найдена."],
-    [22, " 22 комнаты не найдены."],
-    [25, " 25 комнат не найдено."],
+    [1, "1 комната сейчас недоступна."],
+    [2, "2 комнаты сейчас недоступны."],
+    [5, "5 комнат сейчас недоступно."],
+    [21, "21 комната сейчас недоступна."],
+    [22, "22 комнаты сейчас недоступны."],
+    [25, "25 комнат сейчас недоступно."],
   ]);
   for (const [count, expected] of roomExpected) {
-    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+    assert.equal(el._t("hint.roomsUnavailable", { count }), expected, `rooms=${count}`);
+  }
+  const sourceExpected = new Map([
+    [2, "2 источника сейчас недоступны."],
+    [5, "5 источников сейчас недоступно."],
+    [21, "21 источник сейчас недоступен."],
+  ]);
+  for (const [count, expected] of sourceExpected) {
+    assert.equal(el._t("hint.several", { count }), expected, `sources=${count}`);
   }
   assert.match(
     el._t("subtitle.aboveComfort", { diff: "1 °C", count: 21, total: 21, adjective: "тепло" }),
@@ -202,31 +210,33 @@ test("I18N-02: Russian room grammar follows one/few/many plural categories", () 
 test("I18N-02: Polish room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "pl" }, hassDe);
   const roomExpected = new Map([
-    [1, " 1 pokój nie został znaleziony."],
-    [2, " 2 pokoje nie zostały znalezione."],
-    [5, " 5 pokoi nie zostało znalezionych."],
-    [21, " 21 pokoi nie zostało znalezionych."],
-    [22, " 22 pokoje nie zostały znalezione."],
-    [25, " 25 pokoi nie zostało znalezionych."],
+    [1, "1 pokój jest obecnie niedostępny."],
+    [2, "2 pokoje są obecnie niedostępne."],
+    [5, "5 pokoi jest obecnie niedostępnych."],
+    [21, "21 pokoi jest obecnie niedostępnych."],
+    [22, "22 pokoje są obecnie niedostępne."],
+    [25, "25 pokoi jest obecnie niedostępnych."],
   ]);
   for (const [count, expected] of roomExpected) {
-    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+    assert.equal(el._t("hint.roomsUnavailable", { count }), expected, `rooms=${count}`);
   }
+  assert.equal(el._t("hint.several", { count: 2 }), "2 źródła są obecnie niedostępne.");
+  assert.equal(el._t("hint.several", { count: 5 }), "5 źródeł jest obecnie niedostępnych.");
   env.cleanup(el);
 });
 
 test("I18N-02: Ukrainian room grammar follows one/few/many plural categories", () => {
   const el = env.createCard({ entity: "sensor.avg", language: "uk" }, hassDe);
   const roomExpected = new Map([
-    [1, " 1 налаштована кімната не знайдена."],
-    [2, " 2 налаштовані кімнати не знайдені."],
-    [5, " 5 налаштованих кімнат не знайдено."],
-    [21, " 21 налаштована кімната не знайдена."],
-    [22, " 22 налаштовані кімнати не знайдені."],
-    [25, " 25 налаштованих кімнат не знайдено."],
+    [1, "1 кімната зараз недоступна."],
+    [2, "2 кімнати зараз недоступні."],
+    [5, "5 кімнат зараз недоступно."],
+    [21, "21 кімната зараз недоступна."],
+    [22, "22 кімнати зараз недоступні."],
+    [25, "25 кімнат зараз недоступно."],
   ]);
   for (const [count, expected] of roomExpected) {
-    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+    assert.equal(el._t("hint.roomsUnavailable", { count }), expected, `rooms=${count}`);
   }
   assert.match(
     el._t("subtitle.aboveComfort", { diff: "1 °C", count: 1, total: 21, adjective: "тепло" }),
@@ -238,24 +248,21 @@ test("I18N-02: Ukrainian room grammar follows one/few/many plural categories", (
     /2\/25 кімнат: прохолодно\.$/,
     "total=25 must use the many room form"
   );
-  assert.match(
-    el._t("availability.entitiesMissing", { count: 1, entities: "sensor.room" }),
-    /^Налаштовану сутність кімнати не знайдено \(1\):/,
-    "a single missing entity must use singular agreement"
-  );
+  assert.equal(el._t("hint.several", { count: 2 }), "2 джерела зараз недоступні.");
+  assert.equal(el._t("hint.several", { count: 5 }), "5 джерел зараз недоступно.");
   env.cleanup(el);
 });
 
 test("I18N-02: Korean, Japanese, and Chinese count phrases do not invent grammatical noun plurals", () => {
   const expected = {
-    ko: [" 구성된 방 1개를 찾을 수 없습니다.", " 구성된 방 5개를 찾을 수 없습니다."],
-    ja: [" 設定された部屋が 1 件見つかりません。", " 設定された部屋が 5 件見つかりません。"],
-    zh: [" 未找到 1 个已配置的房间。", " 未找到 5 个已配置的房间。"],
+    ko: ["방 1개를 현재 사용할 수 없습니다.", "방 5개를 현재 사용할 수 없습니다."],
+    ja: ["1 部屋が現在利用できません。", "5 部屋が現在利用できません。"],
+    zh: ["1 个房间当前不可用。", "5 个房间当前不可用。"],
   };
   for (const [lang, [one, many]] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
-    assert.equal(el._t("subtitle.missingRooms", { count: 1 }), one, `lang=${lang}, count=1`);
-    assert.equal(el._t("subtitle.missingRooms", { count: 5 }), many, `lang=${lang}, count=5`);
+    assert.equal(el._t("hint.roomsUnavailable", { count: 1 }), one, `lang=${lang}, count=1`);
+    assert.equal(el._t("hint.roomsUnavailable", { count: 5 }), many, `lang=${lang}, count=5`);
     env.cleanup(el);
   }
 });
@@ -266,16 +273,19 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
   // one: n%10=1 and n%100!=11 (nominative singular "telpa");
   // other: everything else (nominative plural "telpas").
   const roomExpected = new Map([
-    [0, " 0 telpu nav atrastas."],
-    [1, " 1 telpa nav atrasta."],
-    [2, " 2 telpas nav atrastas."],
-    [11, " 11 telpu nav atrastas."],
-    [20, " 20 telpu nav atrastas."],
-    [21, " 21 telpa nav atrasta."],
+    [1, "1 telpa pašlaik nav pieejama."],
+    [2, "2 telpas pašlaik nav pieejamas."],
+    [10, "10 telpu pašlaik nav pieejamas."],
+    [11, "11 telpu pašlaik nav pieejamas."],
+    [20, "20 telpu pašlaik nav pieejamas."],
+    [21, "21 telpa pašlaik nav pieejama."],
   ]);
   for (const [count, expected] of roomExpected) {
-    assert.equal(el._t("subtitle.missingRooms", { count }), expected, `rooms=${count}`);
+    assert.equal(el._t("hint.roomsUnavailable", { count }), expected, `rooms=${count}`);
   }
+  assert.equal(el._t("hint.several", { count: 2 }), "2 avoti pašlaik nav pieejami.");
+  assert.equal(el._t("hint.several", { count: 11 }), "11 avotu pašlaik nav pieejami.");
+  assert.equal(el._t("hint.several", { count: 21 }), "21 avots pašlaik nav pieejams.");
   // This sentence depends on v.total's own plural category, not count's: v.total >= 2 does
   // not collapse to one safe form for a zero/one/other language (10/11/20/21 differ).
   assert.match(
@@ -293,13 +303,13 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
 
 test("I18N-02: Norwegian and Swedish keep 'rom'/'rum' plural-invariant while still inflecting the predicative adjective", () => {
   const expected = {
-    nb: { one: " 1 konfigurerte rom ble ikke funnet.", many: " 5 konfigurerte rom ble ikke funnet.", adjectivePlural: "varme" },
-    sv: { one: " 1 konfigurerade rum hittades inte.", many: " 5 konfigurerade rum hittades inte.", adjectivePlural: "varma" },
+    nb: { one: "1 rom er for øyeblikket utilgjengelig.", many: "5 rom er for øyeblikket utilgjengelige.", adjectivePlural: "varme" },
+    sv: { one: "1 rum är för närvarande otillgängligt.", many: "5 rum är för närvarande otillgängliga.", adjectivePlural: "varma" },
   };
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
-    assert.equal(el._t("subtitle.missingRooms", { count: 1 }), text.one, `lang=${lang}, count=1`);
-    assert.equal(el._t("subtitle.missingRooms", { count: 5 }), text.many, `lang=${lang}, count=5`);
+    assert.equal(el._t("hint.roomsUnavailable", { count: 1 }), text.one, `lang=${lang}, count=1`);
+    assert.equal(el._t("hint.roomsUnavailable", { count: 5 }), text.many, `lang=${lang}, count=5`);
     assert.equal(el._t("adjective.warm"), text.adjectivePlural, `lang=${lang}: adjective must be the plural predicative form`);
     env.cleanup(el);
   }
@@ -326,7 +336,7 @@ test("_t(): unsupported hass.language falls back cleanly to English (2.9.1 defau
   env.cleanup(el);
 });
 
-test("pluralization: missingRooms uses singular/plural correctly for 1 vs N missing entities", () => {
+test("a room that does not exist is a warning naming it, not a count in the subtitle", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.r1": mkState("sensor.r1", 21, TEMPERATURE_C),
@@ -337,9 +347,9 @@ test("pluralization: missingRooms uses singular/plural correctly for 1 vs N miss
     { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.missing1" }] },
     hass
   );
-  const data = el._computeViewModel();
-  // "not found", not "without data": an unknown entity is a config problem, described
-  // differently from a room whose sensor is merely offline (that one keeps its `--` chip).
-  assert.match(data.subtitle, /1 configured room was not found/);
+  // "does not exist", not "without data": an unknown entity is a configuration problem, told
+  // apart from a room whose sensor is merely offline (that one keeps its `--` chip and a hint).
+  assert.doesNotMatch(el._computeViewModel().subtitle, /sensor\.missing1|unavailable/);
+  assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.missing1 does not exist in Home Assistant.");
   env.cleanup(el);
 });
