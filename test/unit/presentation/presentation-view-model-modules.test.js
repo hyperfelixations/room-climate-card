@@ -459,6 +459,7 @@ function noDataDomain({
       },
     },
     rooms: { declared: [], byValue: [], count: 0, comparable: false, missing: 0, availability: rooms },
+    diagnostics: { warnings: [], hints: [] },
   };
 }
 

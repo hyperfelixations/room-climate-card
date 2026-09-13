@@ -296,14 +296,16 @@ test("an explicitly disabled view is neither active nor a reason for a hint", ()
   assert.equal(state.collapsed, true);
 });
 
-test("unknown and duplicate view types are diagnosed, not thrown", () => {
-  const { keys, diagnostics } = viewState.resolveActiveViews(
+test("unknown and repeated view types are skipped, not thrown", () => {
+  // normalizeViewsConfig() reports and drops both; the resolver only stays safe against them.
+  const resolved = viewState.resolveActiveViews(
     viewState.VIEW_DEFINITIONS,
     { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
     { views: [{ type: "bogus", enabled: true, options: {} }, { type: "scale", enabled: true, options: {} }, { type: "scale", enabled: true, options: {} }] }
   );
-  assert.deepEqual(keys, ["scale"]);
-  assert.deepEqual(diagnostics, ['views: unknown view type "bogus"', 'views: duplicate view type "scale"']);
+  assert.deepEqual(resolved.keys, ["scale"]);
+  assert.deepEqual(resolved.entries.map((entry) => entry.type), ["scale"]);
+  assert.deepEqual(Object.keys(resolved).sort(), ["entries", "keys"], "diagnosis belongs to normalization, not to the resolver");
 });
 
 test("every view's options are resolved, active or not", () => {

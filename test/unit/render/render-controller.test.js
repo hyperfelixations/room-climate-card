@@ -33,6 +33,7 @@ function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavai
     // a node that either exists or does not, so the fixture carries it like the renderer does.
     average: { hasLabel: true, entity: headlineEntity },
     header: { hasSubtitle: true },
+    warning: { visible: false },
     rooms: { showChips: true },
     noData: { hintKind },
     views: empty

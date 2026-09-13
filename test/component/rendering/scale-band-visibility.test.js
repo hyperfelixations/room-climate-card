@@ -42,8 +42,8 @@ function baseConfig(extra) {
 // ==== optionsSchema whitelist + validation (regression + new) ====
 
 test("optionsSchema: show_comfort_band/show_optimal_band pass the whitelist for scale and range_scale, unrelated keys are still stripped and diagnosed", () => {
-  // _warnAboutViewConfigOnce() dedups identical configs, so attach the warn spy before the
-  // "bogus" config is first applied.
+  // The console reporter does not repeat an unchanged set of warnings, so the spy is attached
+  // before the "bogus" config is first applied.
   const el = env.createCard(baseConfig(), twoRoomStates());
   const warnings = [];
   const originalWarn = el.ownerDocument.defaultView.console.warn;
@@ -51,7 +51,10 @@ test("optionsSchema: show_comfort_band/show_optimal_band pass the whitelist for 
   el.setConfig(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: false, bogus: true } }] }));
 
   assert.deepEqual(normalize(el._config.views[0].options), { show_comfort_band: false });
-  assert.ok(warnings.some((w) => w.includes("unknown") && w.includes("bogus")), "unrelated unknown key must still be diagnosed");
+  assert.ok(
+    warnings.some((w) => w.includes("views[0].options.bogus is not an option of this card")),
+    "unrelated unknown key must still be diagnosed"
+  );
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
   env.cleanup(el);
@@ -63,15 +66,20 @@ test("optionsSchema: an invalid (non-boolean) show_comfort_band value is diagnos
   const originalWarn = el.ownerDocument.defaultView.console.warn;
   el.ownerDocument.defaultView.console.warn = (...args) => warnings.push(args.join(" "));
 
-  for (const invalid of ["yes", 1, null]) {
+  for (const invalid of ["yes", 1]) {
     warnings.length = 0;
     el.setConfig(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: invalid } }] }));
     assert.ok(
-      warnings.some((w) => w.includes("show_comfort_band") && w.includes("falling back")),
+      warnings.some((w) => w.includes("views[0].options.show_comfort_band.") && w.includes("Using default: true.")),
       `invalid value ${JSON.stringify(invalid)} must be diagnosed`
     );
     assert.equal(el._computeViewModel().views.options.scale.show_comfort_band, true, `invalid value ${JSON.stringify(invalid)} must fall back to the default (true)`);
   }
+  // A key with nothing after it is not a request: the default, and nothing to warn about.
+  warnings.length = 0;
+  el.setConfig(baseConfig({ views: [{ type: "scale", options: { show_comfort_band: null } }] }));
+  assert.deepEqual(warnings, []);
+  assert.equal(el._computeViewModel().views.options.scale.show_comfort_band, true);
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
   env.cleanup(el);

@@ -193,6 +193,30 @@ test("a removed subtitle still reappears to explain a card with no data", () => 
   env.cleanup(el);
 });
 
+// ------------------------------------------------- the subtitle beside a warning ----
+
+// A warning has its own block (rendering/warnings-block.test.js); the line keeps saying what
+// it would say without one, in the overflow it was given.
+test("a warning leaves every form of subtitle exactly as configured", () => {
+  for (const subtitle of [undefined, "Ground floor", "", "wrap", { text: "Ground floor", overflow: "clip" }]) {
+    const expected = headerOf(subtitle);
+    const el = env.createCard(
+      { entity: "sensor.avg", auto_slide: "yes", ...(subtitle === undefined ? {} : { subtitle }) },
+      OK_HASS()
+    );
+    const actual = {
+      text: el.shadowRoot.querySelector(".rtc-subtitle")?.textContent ?? null,
+      overflow: el.shadowRoot.querySelector(".rtc-root").getAttribute("data-subtitle"),
+    };
+    assert.deepEqual(actual, expected, JSON.stringify(subtitle));
+    assert.ok(el.shadowRoot.querySelector(".rtc-warning"), "while the warning is shown in its block");
+    env.cleanup(el);
+  }
+  const hidden = env.createCard({ entity: "sensor.avg", auto_slide: "yes", show: { subtitle: false } }, OK_HASS());
+  assert.equal(hidden.shadowRoot.querySelector(".rtc-subtitle"), null, "a switched-off line stays off");
+  env.cleanup(hidden);
+});
+
 // A subtitle-only setConfig() does not move the data signature; setConfig() invalidates it deliberately so a cosmetic edit is not skipped.
 test("editing only the subtitle updates a card that is already on screen", () => {
   const el = env.createCard({ entity: "sensor.avg", subtitle: "First" }, OK_HASS());

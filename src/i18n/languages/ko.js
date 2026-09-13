@@ -112,4 +112,16 @@ export const ko = {
   "layout.nothingShown": "이 카드의 모든 요소가 show: 옵션으로 숨겨져 있습니다.",
   "views.none": "사용 가능한 보기가 없습니다.",
 
+  "warning.label": "경고",
+  "warning.several": (v) => `이 카드에 문제가 ${v.count}개 있습니다. 자세한 내용은 브라우저 콘솔을 확인하세요.`,
+  "warning.invalidValue": (v) => `${v.value}은(는) ${v.key}에 유효한 값이 아닙니다. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key}은(는) 이 카드의 옵션이 아닙니다. 이 키는 무시됩니다.`,
+  "warning.mixedMeasurements": "방마다 측정 대상이 다릅니다. entity를 설정하거나 device_class를 통일하세요.",
+  "fallback.value": (v) => `기본값 ${v.value}을(를) 사용합니다.`,
+  "fallback.automatic": "자동 설정을 사용합니다.",
+  "fallback.ignored": "무시됩니다.",
+  "fallback.firstView": "사용 가능한 첫 번째 보기부터 시작합니다.",
+  "fallback.defaults": "기본값을 사용합니다.",
+  "value.empty": "(비어 있음)",
+
 };

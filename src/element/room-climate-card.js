@@ -1,6 +1,6 @@
 // The custom element: Home Assistant's lifecycle, the render pipeline, and the state
-// transitions between them. It owns config, hass, the shadow DOM, warning dedup and
-// lifecycle orchestration; the controllers own everything else and the element holds
+// transitions between them. It owns config, hass, the shadow DOM and lifecycle
+// orchestration; the controllers own everything else and the element holds
 // accessors onto them, never copies. Owner/runtime split: see internal dev doc §4
 // "Owner- und Runtime-Verträge".
 //
@@ -18,6 +18,7 @@
 import { CARD_NAME } from "../core/card-metadata.js";
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
 import { isSupportedLanguage, resolveLanguage, translate } from "../i18n/translate.js";
+import { DEFAULT_LANGUAGE } from "../i18n/locales.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
 import { normalizeConfig } from "../config/normalize-config.js";
 import { CLASSIFICATION_ZONES } from "../domain/classification/zones.js";
@@ -46,12 +47,9 @@ import {
 import { stubConfigFor } from "../application/model/card-suggestions.js";
 import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
-import {
-  VIEW_DEFINITIONS,
-  optionSchemaForView,
-  resolveActiveViews,
-} from "../presentation/view-model/view-state.js";
+import { VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
+import { renderMessage } from "../presentation/view-model/notices.js";
 import { createRenderContext } from "../render/primitives/render-context.js";
 import { applyFocusFallback } from "../render/primitives/focus.js";
 import {
@@ -68,7 +66,8 @@ import { createResizeRuntime } from "../controllers/runtime/resize-runtime.js";
 import { createSurfaceWatch } from "../controllers/runtime/surface-watch.js";
 import { createInteractionRuntime } from "../controllers/runtime/interaction-runtime.js";
 import { createActionRuntime } from "../controllers/runtime/action-runtime.js";
-import { createRenderController } from "../controllers/render/render-controller.js";
+import { createDiagnosticsReporter } from "../controllers/runtime/diagnostics-reporter.js";
+import { RENDER_PATH, createRenderController } from "../controllers/render/render-controller.js";
 import { entityDataSignature, structuralConfigSignature } from "../controllers/render/render-signatures.js";
 
 
@@ -111,15 +110,19 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // rendering, slider position, and pointer interaction.
       this._config = null;
       this._hass = null;
-      // True only for the duration of _assertRenderable(), which runs the real render
-      // path against a configuration that is not installed yet.
-      this._rehearsing = false;
 
       // The only route to browser runtime services (clock, timers, rAF, reduced-motion,
       // visibility, observers, fonts, event construction, transform read). The document
       // is resolved through a thunk on every call, so a card adopted into another
       // document keeps scheduling in the realm it now lives in.
       this._platform = createBrowserPlatform(() => this.ownerDocument);
+
+      // Writes the warnings the card shows to the console as well, in English. See
+      // internal dev doc §4 "Diagnosevertrag".
+      this._diagnostics = createDiagnosticsReporter({
+        platform: this._platform,
+        describe: (message) => renderMessage(message, (key, vars) => translate(DEFAULT_LANGUAGE, key, vars)),
+      });
 
       // Owns the active view index, both timers and every clock read. It is given a
       // platform, two narrow DOM ports and scalar timing values — never hass, the
@@ -227,8 +230,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._metricContextCacheHass = undefined; // _resolveMetricContext()
       this._metricContextCacheConfig = undefined;
       this._metricContextCacheValue = undefined;
-      this._lastViewConfigWarningKey = null; // _warnAboutViewConfigOnce() dedup
-      this._lastMetricContextWarningKey = null; // _warnMixedMetricKindsOnce() dedup
 
       // Bind handlers once so add/removeEventListener reference the same function.
       this._boundClick = this._handleClick.bind(this);
@@ -294,7 +295,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // dropped — the _render(false) below settles it.
         this._interaction.cancelForConfigChange();
         this._config = normalized;
-        this._warnAboutViewConfigOnce();
         // _activeView is left untouched: _renderAll() preserves it across a structural
         // change, else falls back to config.start_view then the first active view.
         this._renderController.invalidateDataSignature();
@@ -308,31 +308,6 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // would leak into a later rebuild.
         this._renderController.releasePreConfigVisualKey();
       }
-    }
-
-    _warnAboutViewConfigOnce() {
-      // Validates views: against the view definitions once per config change, not in
-      // _computeViewModel() (which runs on every hass update and would flood the
-      // console). Availability is "everything available" here: only the static shape
-      // (unknown/duplicate type) is checked. Combines resolveActiveViews()'s diagnostics
-      // with the normalizer's, carried on this._config._configDiagnostics.
-      //
-      // The dedup key is updated on every call, empty list included — only the
-      // console.warn() calls are skipped for an empty list. That reset is what lets the
-      // sequence invalid -> valid -> the same invalid config warn again on the third
-      // step. See internal dev doc §4 "Fehler- und Warnungs-Deduplizierung".
-      const configDiagnostics = this._config?._configDiagnostics || [];
-      const { diagnostics: resolveDiagnostics } = resolveActiveViews(
-        VIEW_DEFINITIONS,
-        { hasRange: true, roomsComparable: true, rangeScaleAvailable: true },
-        this._config
-      );
-      const diagnostics = [...configDiagnostics, ...resolveDiagnostics];
-      const key = JSON.stringify(diagnostics);
-      const isRepeat = key === this._lastViewConfigWarningKey;
-      this._lastViewConfigWarningKey = key;
-      if (!diagnostics.length || isRepeat) return;
-      diagnostics.forEach((w) => console.warn(`${CARD_NAME}: ${w}`));
     }
 
     set hass(hass) {
@@ -536,33 +511,13 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return formatTimeOfDay(this._language(), isoString);
     }
 
-    _warnMixedMetricKindsOnce(diagnostic) {
-      // Deduplicated like _warnAboutViewConfigOnce(), but keyed on the resolved
-      // diagnosis itself: _resolveMetricContext() re-resolves on every hass update, so
-      // a persistently misconfigured set of rooms would otherwise log every time, while
-      // a genuinely new diagnosis still needs surfacing.
-      const key = JSON.stringify(diagnostic);
-      if (key === this._lastMetricContextWarningKey) return;
-      this._lastMetricContextWarningKey = key;
-      console.warn(
-        `${CARD_NAME}: rooms report incompatible metric kinds (${diagnostic.metricKinds.join(", ")}) and no usable primary entity is configured to arbitrate — no average is computed (see the no-data hint) — configure a consistent device_class/unit_of_measurement across all room entities, or set a primary entity.`
-      );
-    }
-
     // Memoized by hass/config identity (HA reassigns hass on every real update, so
-    // identity is the right invalidation signal; a render asks many times). The
-    // mixed-kind warning is stateful, so it lives here rather than in the pure
-    // resolution and fires on a cache MISS only.
+    // identity is the right invalidation signal; a render asks many times).
     _resolveMetricContext() {
       if (this._metricContextCacheHass === this._hass && this._metricContextCacheConfig === this._config) {
         return this._metricContextCacheValue;
       }
       const value = resolveMeasurementContext(this._hass?.states, this._config);
-      const mixed = value.diagnostics.find((diagnostic) => diagnostic.code === 'mixed_metric_kinds');
-      // A rehearsal is not a render. Warnings describe what the user is looking at, and
-      // during _assertRenderable() they are not looking at this configuration yet — it
-      // may never be installed at all.
-      if (mixed && !this._rehearsing) this._warnMixedMetricKindsOnce(mixed);
       this._metricContextCacheHass = this._hass;
       this._metricContextCacheConfig = this._config;
       this._metricContextCacheValue = value;
@@ -610,9 +565,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // %, a sensor in °C) are only decidable once the entities are in hand, so the model
     // builders throw. To keep setConfig() all-or-nothing, the render is REHEARSED here:
     // the candidate is installed for one synchronous call and removed again (the real
-    // path, not a reconstruction), and everything it can write — memoization and one
-    // deduplicated warning — is restored. No hass, nothing to rehearse. See internal dev doc
-    // §5 "Atomare setConfig()-Probe für renderzeitige Fehler".
+    // path, not a reconstruction), and everything it can write — its memoization — is
+    // restored. No hass, nothing to rehearse. See internal dev doc §5 "Atomare
+    // setConfig()-Probe für renderzeitige Fehler".
     _assertRenderable(candidate) {
       if (!this._hass) return;
       const saved = {
@@ -621,11 +576,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         language: [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue],
       };
       this._config = candidate;
-      this._rehearsing = true;
       try {
         this._computeViewModel();
       } finally {
-        this._rehearsing = false;
         this._config = saved.config;
         [this._metricContextCacheHass, this._metricContextCacheConfig, this._metricContextCacheValue] = saved.metricContext;
         [this._languageCacheHass, this._languageCacheConfigLanguage, this._languageCacheValue] = saved.language;
@@ -703,7 +656,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // is the only place both config and hass are in hand.
     _render(allowSkip = true) {
       if (!this._config || !this._hass) return null;
-      return this._renderController.render({
+      const path = this._renderController.render({
         allowSkip,
         dataSignature: entityDataSignature({
           config: this._config,
@@ -716,6 +669,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         }),
         structuralConfigSignature: structuralConfigSignature(this._config),
       });
+      // The console reports what is on screen; a skipped or deferred render put nothing new there.
+      if (path === RENDER_PATH.FULL || path === RENDER_PATH.EMPTY || path === RENDER_PATH.CONTENT) {
+        this._diagnostics.reportWarnings(this._renderController.lastViewModel.notices.warnings);
+      }
+      return path;
     }
 
     _renderAll(viewModel, { isFirstRender = !this._renderController.hasRendered, preConfigVisualKey = undefined } = {}) {

@@ -59,6 +59,7 @@ const SHOW_KEYS = {
   subtitle: "bool",
   entity_label: "bool",
   pill: "bool",
+  warnings: "bool",
   panel: "bool",
   rooms: ["auto", true, false],
   unavailable_rooms: "bool",

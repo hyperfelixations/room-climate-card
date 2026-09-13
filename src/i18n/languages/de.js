@@ -112,4 +112,16 @@ export const de = {
   "layout.nothingShown": "Alle Teile dieser Karte sind über show: ausgeblendet.",
   "views.none": "Keine Ansicht verfügbar.",
 
+  "warning.label": "Warnung",
+  "warning.several": (v) => `${v.count} Probleme mit dieser Karte. Details in der Browserkonsole.`,
+  "warning.invalidValue": (v) => `${v.value} ist kein gültiger Wert für ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} ist keine Option dieser Karte. Wird ignoriert.`,
+  "warning.mixedMeasurements": "Die Räume messen Verschiedenes. Setze entity oder vereinheitliche device_class.",
+  "fallback.value": (v) => `Es gilt der Standard: ${v.value}.`,
+  "fallback.automatic": "Es gilt die automatische Einstellung.",
+  "fallback.ignored": "Wird ignoriert.",
+  "fallback.firstView": "Die Karte startet mit der ersten verfügbaren Ansicht.",
+  "fallback.defaults": "Es gelten die Standardwerte.",
+  "value.empty": "(leer)",
+
 };

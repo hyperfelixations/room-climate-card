@@ -72,6 +72,17 @@ test("XSS payload in a room name/short produces no extra DOM nodes, before AND a
   env.cleanup(el);
 });
 
+test("XSS payload in a written configuration value produces no extra DOM nodes in the warnings block", () => {
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) });
+  const el = env.createCard({ entity: "sensor.avg", show: { rooms: XSS_PAYLOAD } }, hass);
+  assert.ok(el.shadowRoot.querySelector(".rtc-warning"), "the written value is shown in a warning");
+  assert.equal(countInjectedNodes(el.shadowRoot), 0, "initial render");
+  // Another invalid value keeps the block and patches its text in place.
+  el.setConfig({ entity: "sensor.avg", show: { rooms: XSS_SCRIPT } });
+  assert.equal(countInjectedNodes(el.shadowRoot), 0, "after the warning text changes");
+  env.cleanup(el);
+});
+
 test("XSS payload in value_level (HA attribute) produces no extra DOM nodes", () => {
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, { device_class: "temperature", value_level: XSS_PAYLOAD, value_color: "#79A86C" }),

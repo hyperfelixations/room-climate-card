@@ -14,13 +14,64 @@ let text;
 let color;
 let easing;
 let metadata;
+let diagnostics;
 
 test.before(async () => {
+  diagnostics = await import("../../../src/core/diagnostics.js");
   color = await import("../../../src/core/color.js");
   numbers = await import("../../../src/core/numbers.js");
   text = await import("../../../src/core/text.js");
   easing = await import("../../../src/core/easing.js");
   metadata = await import("../../../src/core/card-metadata.js");
+});
+
+// ------------------------------------------------------------ diagnostics --
+
+test("createDiagnostic() takes its level from the code and freezes what it returns", () => {
+  const { createDiagnostic, fallbackValue, SEVERITY } = diagnostics;
+  const made = createDiagnostic("value.invalid", { path: "auto_slide", value: "yes", fallback: fallbackValue(true) });
+  assert.deepEqual(
+    { ...made },
+    { code: "value.invalid", severity: SEVERITY.WARNING, path: "auto_slide", entity: null, value: "yes", fallback: { value: true }, params: null }
+  );
+  assert.ok(Object.isFrozen(made));
+  assert.ok(Object.isFrozen(createDiagnostic("sources.mixed", { params: { count: 2 } }).params));
+});
+
+test("a code without a level is a programming error, not a diagnostic", () => {
+  assert.throws(() => diagnostics.createDiagnostic("value.misspelled"), /unknown code "value\.misspelled"/);
+});
+
+test("every code has one of the two levels", () => {
+  for (const [code, severity] of Object.entries(diagnostics.DIAGNOSTIC_SEVERITY)) {
+    assert.ok(Object.values(diagnostics.SEVERITY).includes(severity), `${code}: ${severity}`);
+  }
+});
+
+test("diagnosticKey() is the same for two diagnostics that read the same", () => {
+  const { createDiagnostic, diagnosticKey, fallbackValue } = diagnostics;
+  const make = (value) => createDiagnostic("value.invalid", { path: "swipe", value, fallback: fallbackValue(true) });
+  assert.equal(diagnosticKey(make("yes")), diagnosticKey(make("yes")));
+  assert.equal(diagnosticKey(make("  yes ")), diagnosticKey(make("yes")), "the value takes part as it is shown");
+  assert.notEqual(diagnosticKey(make("yes")), diagnosticKey(make("no")));
+});
+
+test("formatConfigValue() shows a written value on one short line", () => {
+  const { formatConfigValue } = diagnostics;
+  assert.equal(formatConfigValue("yes"), '"yes"');
+  assert.equal(formatConfigValue("  two\n  lines "), '"two lines"');
+  assert.equal(formatConfigValue("x".repeat(32)), `"${"x".repeat(32)}"`, "exactly the limit is not cut");
+  assert.equal(formatConfigValue("x".repeat(40)), `"${"x".repeat(31)}…"`);
+  assert.equal(Array.from(formatConfigValue("🌡".repeat(40))).length, 34, "characters are counted, not UTF-16 units");
+  assert.equal(formatConfigValue(3), "3");
+  assert.equal(formatConfigValue(false), "false");
+  assert.equal(formatConfigValue([1]), "[…]");
+  assert.equal(formatConfigValue([]), "[]");
+  assert.equal(formatConfigValue({ a: 1 }), "{…}");
+  assert.equal(formatConfigValue({}), "{}");
+  for (const nothing of [undefined, null, "", "   "]) {
+    assert.equal(formatConfigValue(nothing), null, JSON.stringify(nothing));
+  }
 });
 
 // ---------------------------------------------------------------- numbers --

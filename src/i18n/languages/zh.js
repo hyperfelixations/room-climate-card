@@ -112,4 +112,16 @@ export const zh = {
   "layout.nothingShown": "此卡片的所有部分都已通过 show: 隐藏。",
   "views.none": "暂无可用视图。",
 
+  "warning.label": "警告",
+  "warning.several": (v) => `此卡片有 ${v.count} 个问题。详情请查看浏览器控制台。`,
+  "warning.invalidValue": (v) => `${v.value} 不是 ${v.key} 的有效值。${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} 不是此卡片的选项。已忽略此键。`,
+  "warning.mixedMeasurements": "各房间测量的量不同。请设置 entity 或统一 device_class。",
+  "fallback.value": (v) => `将使用默认值：${v.value}。`,
+  "fallback.automatic": "将使用自动设置。",
+  "fallback.ignored": "已忽略。",
+  "fallback.firstView": "将从第一个可用视图开始。",
+  "fallback.defaults": "将使用默认值。",
+  "value.empty": "（空）",
+
 };

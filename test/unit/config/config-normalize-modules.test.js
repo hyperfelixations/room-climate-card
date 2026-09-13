@@ -2,8 +2,8 @@
 
 // Direct unit tests for top-level config normalization, palette resolution, and the tier
 // colour contract. The error messages are a user-facing contract — Home Assistant shows
-// what setConfig() throws, and the README quotes it — so they, and the order validation
-// runs in, are asserted literally. Collaborators are stubbed, which is the point of
+// what setConfig() throws — so they, and the order validation runs in, are asserted
+// literally. Collaborators are stubbed, which is the point of
 // injecting them.
 // Boundary: config-primitives.test.js owns the small readers, classification-normalize.test.js
 // the classification sub-tree; this file owns the assembly. See internal dev doc §4
@@ -16,6 +16,11 @@ const { VIEWS } = require("../../manifests/product-surface.js");
 let classification;
 let normalizeConfigModule;
 let paletteModule;
+let core;
+
+test.before(async () => {
+  core = await import("../../../src/core/diagnostics.js");
+});
 
 // Minimal stand-ins for the injected registries — not the real ones, so a test that needs
 // the production registry proves the injection boundary is not doing its job.
@@ -157,22 +162,35 @@ test("the three top-level switches read a boolean the way the show: block does",
   assert.equal(typo.auto_slide, true, "the default, exactly as before");
   assert.equal(typo.swipe, true);
   assert.equal(typo.hide_footer, false);
+  const { createDiagnostic, fallbackValue } = core;
   assert.deepEqual(typo._configDiagnostics, [
-    'auto_slide: expected true or false, got "yes", falling back to the default',
-    "swipe: expected true or false, got 1, falling back to the default",
-    'hide_footer: expected true or false, got "true", falling back to the default',
+    createDiagnostic("value.invalid", { path: "auto_slide", value: "yes", fallback: fallbackValue(true) }),
+    createDiagnostic("value.invalid", { path: "swipe", value: 1, fallback: fallbackValue(true) }),
+    createDiagnostic("value.invalid", { path: "hide_footer", value: "true", fallback: fallbackValue(false) }),
   ]);
 });
 
-test("the switch diagnostics share the one channel, ahead of the block and the views", () => {
-  // One diagnostics list, ordered top level before the nested blocks.
-  const result = normalizeConfigModule.normalizeConfig(
-    { entity: "sensor.avg", auto_slide: "yes", show: { pill: "no" }, views: "not-an-array" },
-    COLLABORATORS
+test("every diagnostic shares the one channel, in the order the YAML writes the keys", () => {
+  const paths = (config) =>
+    normalizeConfigModule
+      .normalizeConfig({ entity: "sensor.avg", ...config }, COLLABORATORS)
+      ._configDiagnostics.map((diagnostic) => diagnostic.path);
+  assert.deepEqual(
+    paths({ auto_slide: "yes", wibble: 1, show: { pill: "no" }, views: "not-an-array", start_view: "sclae" }),
+    ["auto_slide", "wibble", "show.pill", "views", "start_view"]
   );
   assert.deepEqual(
-    result._configDiagnostics.map((entry) => entry.split(":")[0]),
-    ["auto_slide", "show.pill", "views"]
+    paths({ start_view: "sclae", views: "not-an-array", show: { pill: "no" }, wibble: 1, auto_slide: "yes" }),
+    ["start_view", "views", "show.pill", "wibble", "auto_slide"]
+  );
+  // Within one key, the order the block is read in.
+  assert.deepEqual(paths({ show: { panel: 0, pill: "no" } }), ["show.panel", "show.pill"]);
+});
+
+test("a typo of an option is refused before any value is read", () => {
+  assert.throws(
+    () => normalizeConfigModule.normalizeConfig({ rooms: "not-a-list", pallete: "tiny" }, COLLABORATORS),
+    { message: "Invalid configuration: pallete is not an option of this card. Did you mean palette?" }
   );
 });
 
@@ -235,8 +253,9 @@ test("normalizeConfig() carries view diagnostics on the returned config", () => 
     { entity: "sensor.avg", views: [{ type: "scale", enabled: "yes" }] },
     COLLABORATORS
   );
-  assert.equal(result._configDiagnostics.length, 1);
-  assert.match(result._configDiagnostics[0], /invalid "enabled" value/);
+  assert.deepEqual(result._configDiagnostics, [
+    core.createDiagnostic("value.invalid", { path: "views[0].enabled", value: "yes", fallback: core.fallbackValue("auto") }),
+  ]);
 });
 
 test("normalizeConfig() never writes to the console", () => {

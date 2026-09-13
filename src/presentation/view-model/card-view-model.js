@@ -10,6 +10,7 @@ import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration, NO_DATA_COLOR } from "./tone.js";
 import { buildViewContent } from "./view-content/index.js";
+import { buildNotices, buildWarningBlock, composeSubtitle } from "./notices.js";
 import { AVAILABILITY, UNUSABLE_REASON } from "../../application/model/entity-model.js";
 import { CARD_NAME } from "../../core/card-metadata.js";
 import { UNAVAILABLE_TEXT } from "../../core/text.js";
@@ -172,16 +173,6 @@ const REASON_TEXTS = {
   [UNUSABLE_REASON.KIND_MISMATCH]: { kind: "incompatible", key: "availability.incompatible" },
 };
 
-// Subtitle priority: forced no-data explanation, configured text, automatic sentence.
-// Empty text removes the node; forced explanations temporarily outrank show.subtitle.
-function buildHeaderSubtitle(config, automatic, { forced = null } = {}) {
-  const own = config.subtitle?.text;
-  const text = forced !== null ? forced : own === null || own === undefined ? automatic : own;
-  // Collapse both absence requests; forced no-data explanation is the sole exception.
-  const hasSubtitle = text !== "" && (forced !== null || config.show.subtitle);
-  return { subtitle: text, hasSubtitle, subtitleOverflow: config.subtitle?.overflow || "clip" };
-}
-
 // Unwritten title uses the metric; empty text and show.title:false both remove the node.
 function buildHeaderTitle(config, automatic) {
   const own = config.title?.text;
@@ -246,7 +237,7 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
 }
 
 // No-data keeps the normal shell contracts, neutral paint and a collapsed view area.
-function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta }) {
+function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta, notices, warning }) {
   const title = headerTitle.title;
   const headline = noDataHeadlineSource(domainModel, config, topology);
   const label = resolveHeadlineLabel({ config, topology, roomIndex: headline.roomIndex, texts });
@@ -262,8 +253,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
   const icon = config.icon || meta?.emptyIcon || "mdi:home-thermometer-outline";
   const tone = buildNeutralTone(icon, texts);
   const noData = buildNoDataSubtitle({ domainModel, headline, texts });
-  // No-data always forces its explanation into the subtitle.
-  const headerSubtitle = buildHeaderSubtitle(config, noData.text, { forced: noData.text });
+  const headerSubtitle = composeSubtitle({ config, automatic: null, noDataReason: noData.text });
 
   const displayRooms = buildDisplayRooms(domainModel, config);
   const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
@@ -289,6 +279,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     hasPanel: config.show.panel,
     hiddenHint: texts.t("layout.nothingShown"),
     header: { icon, ...headerTitle, ...headerSubtitle, statusLabel, hasIcon: config.show.icon, hasPill: config.show.pill },
+    warning,
+    // What the card warns about, as language-neutral messages for the console.
+    notices: { warnings: notices.warnings },
     average: {
       value: null,
       valueText: UNAVAILABLE_TEXT,
@@ -334,9 +327,11 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const meta = metricKind ? metricMetaFor(metricKind) : null;
   const headerTitle = buildHeaderTitle(config, meta ? texts.t(meta.titleKey) : CARD_NAME);
   const title = headerTitle.title;
+  const notices = buildNotices({ configDiagnostics: config._configDiagnostics, domainDiagnostics: domainModel.diagnostics });
+  const warning = buildWarningBlock({ config, warnings: notices.warnings, t: texts.t });
 
   if (domainModel.empty) {
-    return buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta });
+    return buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta, notices, warning });
   }
 
   const unit = domainModel.metric.unit;
@@ -479,7 +474,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   };
 
   const byKey = buildViewContent({ shared, viewState });
-  const headerSubtitle = buildHeaderSubtitle(config, buildSubtitleText(domainModel.subtitle, texts, metricKind));
+  const headerSubtitle = composeSubtitle({ config, automatic: buildSubtitleText(domainModel.subtitle, texts, metricKind) });
 
   const chips = layout.visible.map((room) =>
     buildRoomChipModel({
@@ -510,6 +505,9 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     hiddenHint: texts.t("layout.nothingShown"),
     // Cohesive header slots share the already resolved strings.
     header: { icon: tone.icon, ...headerTitle, ...headerSubtitle, statusLabel: tone.label, hasIcon: config.show.icon, hasPill: config.show.pill },
+    warning,
+    // What the card warns about, as language-neutral messages for the console.
+    notices: { warnings: notices.warnings },
     average: averageModel,
     rooms: {
       visible: layout.visible,

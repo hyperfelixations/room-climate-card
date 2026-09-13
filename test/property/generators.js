@@ -62,7 +62,7 @@ const ENUMS = {
 
 // The parts of the show: block that are simple switches. `rooms` is generated separately,
 // because it is the one with a third answer.
-const SHOW_SWITCH_KEYS = ["accent_line", "icon", "title", "subtitle", "entity_label", "pill", "panel", "unavailable_rooms"];
+const SHOW_SWITCH_KEYS = ["accent_line", "icon", "title", "subtitle", "entity_label", "pill", "warnings", "panel", "unavailable_rooms"];
 
 // ---------------------------------------------------------------------- the weights --
 
@@ -226,8 +226,8 @@ const OPTION_PRESENCE = {
   classification: 0.08,
   range_entity: 0.1,
   trend_entity: 0.08,
-  // A key nobody meant to write; the card names it and suggests the intended option.
-  misspelledKey: 0.06,
+  // A typo of an option; the card refuses it and names the option meant.
+  misspelledKey: 0.03,
 };
 
 // ------------------------------------------------------------------------ machinery --

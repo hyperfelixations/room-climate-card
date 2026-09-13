@@ -115,4 +115,16 @@ export const es = {
   "layout.nothingShown": "Todas las partes de esta tarjeta están ocultas por show:.",
   "views.none": "No hay ninguna vista disponible.",
 
+  "warning.label": "Advertencia",
+  "warning.several": (v) => `${v.count} problemas con esta tarjeta. Detalles en la consola del navegador.`,
+  "warning.invalidValue": (v) => `${v.value} no es un valor válido para ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} no es una opción de esta tarjeta. Esta clave se ignora.`,
+  "warning.mixedMeasurements": "Las habitaciones miden magnitudes distintas. Define entity o unifica device_class.",
+  "fallback.value": (v) => `Se usa el valor predeterminado: ${v.value}.`,
+  "fallback.automatic": "Se usa el ajuste automático.",
+  "fallback.ignored": "Se ignora.",
+  "fallback.firstView": "Se empieza por la primera vista disponible.",
+  "fallback.defaults": "Se usan los valores predeterminados.",
+  "value.empty": "(vacío)",
+
 };

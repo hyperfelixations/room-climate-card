@@ -216,8 +216,8 @@ test("setConfig() warns when it's actually called with a newly-invalid views: co
   el.ownerDocument.defaultView.console.warn = (...args) => warnings.push(args.join(" "));
 
   el.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], views: ["not_a_real_view", "scale", "scale"] });
-  assert.ok(warnings.some((w) => w.includes("views:") && w.includes("unknown") && w.includes("not_a_real_view")), "unknown views: type must be warned about");
-  assert.ok(warnings.some((w) => w.includes("views:") && w.includes("duplicate") && w.includes("scale")), "duplicate views: type must be warned about");
+  assert.ok(warnings.some((w) => w.includes('"not_a_real_view" is not a valid value for views[0].')), "unknown views: type must be warned about");
+  assert.ok(warnings.some((w) => w.includes('"scale" is not a valid value for views[2].')), "duplicate views: type must be warned about");
 
   el.ownerDocument.defaultView.console.warn = originalWarn;
   env.cleanup(el);
@@ -231,7 +231,7 @@ test("start_view: a valid start_view is stored on config and used by _renderAll(
 
 // ==== View configuration validation: a non-array views:, invalid list entries and invalid
 // enabled: values must be diagnosed (not silently defaulted), and options filtered through
-// a registry whitelist. See _normalizeViewsConfig()/_normalizeViewRequest()/_normalizeViewOptions(). ====
+// a registry whitelist. See normalizeViewsConfig()/normalizeViewRequest()/normalizeViewOptions() in config/views.js. ====
 
 test("a non-array views value is diagnosed and falls back to registry defaults", () => {
   const el = env.createCard(
@@ -240,7 +240,7 @@ test("a non-array views value is diagnosed and falls back to registry defaults",
   );
   assert.equal(el._config.views, null, "an invalid views: value must normalize to the same null sentinel as 'not configured'");
   assert.ok(
-    el._config._configDiagnostics.some((d) => d.includes("views:") && d.includes("array")),
+    el._config._configDiagnostics.some((d) => d.code === "value.invalid" && d.path === "views"),
     "the non-array value must be diagnosed"
   );
   const data = el._computeViewModel();
@@ -269,7 +269,7 @@ test("an invalid enabled value is diagnosed and falls back to auto", () => {
   assert.equal(el._config.views.length, 1, "the entry itself must survive despite the bad enabled: value");
   assert.equal(el._config.views[0].enabled, "auto", "an unrecognized enabled: value falls back to 'auto', not true/false");
   assert.ok(
-    el._config._configDiagnostics.some((d) => d.includes("enabled") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.code === "value.invalid" && d.path === "views[0].enabled"),
     "the invalid enabled: value must be diagnosed"
   );
   const data = el._computeViewModel();
@@ -286,8 +286,8 @@ test("options are filtered through each view's optionsSchema", () => {
   env.cleanup(el);
 });
 
-// ==== _normalizeViewOptions() diagnoses unknown keys and non-object values through the
-// _viewsDiagnostics pipeline, non-destructively (the entry and its filtered options are kept). ====
+// ==== normalizeViewOptions() diagnoses unknown keys and non-object values through
+// _configDiagnostics, non-destructively (the entry and its filtered options are kept). ====
 
 test("an unknown options key is diagnosed once and stripped", () => {
   const el = env.createCard(
@@ -296,7 +296,7 @@ test("an unknown options key is diagnosed once and stripped", () => {
   );
   assert.deepEqual(normalize(el._config.views[0].options), {}, "the unknown key must still be stripped, exactly as before");
   assert.ok(
-    el._config._configDiagnostics.some((d) => d.includes("options") && d.includes("bogus") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.code === "config.foreign_key" && d.path === "views[0].options.bogus"),
     "the unknown options key must now be diagnosed"
   );
   env.cleanup(el);
@@ -309,7 +309,7 @@ test("a non-object options value is diagnosed and normalizes to an empty object"
   );
   assert.deepEqual(normalize(el._config.views[0].options), {}, "an invalid options: value must still normalize to {}, not drop the whole entry");
   assert.ok(
-    el._config._configDiagnostics.some((d) => d.includes("options") && d.includes("scale")),
+    el._config._configDiagnostics.some((d) => d.code === "value.invalid" && d.path === "views[0].options"),
     "the invalid options: value must be diagnosed"
   );
   env.cleanup(el);

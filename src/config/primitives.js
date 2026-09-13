@@ -4,6 +4,7 @@
 // a structurally invalid required value throws; a malformed OPTIONAL value falls
 // back to the built-in default. See internal dev doc §4 "Config-Normalisierungsvertrag".
 
+import { createDiagnostic, fallbackValue } from "../core/diagnostics.js";
 import { parseConfigNumber } from "../core/numbers.js";
 import { pathError } from "./errors.js";
 
@@ -53,13 +54,13 @@ export function stringOrDefault(value, fallback) {
 }
 
 // ONE reader for every boolean option: strict (only true/false pass), any other
-// value is diagnosed and the default applies. Returns `undefined` for a key that was
-// not written; the caller decides whether that means "default" (top-level) or
-// "stay silent" (the `show:` block). See internal dev doc §3 "Konfigurationsvertrag".
-export function booleanOption(value, path, diagnostics) {
+// value is diagnosed with `defaultValue` as what the card uses instead. Returns
+// `undefined` for a rejected or unwritten value; the caller applies the default. See
+// internal dev doc §3 "Konfigurationsvertrag".
+export function booleanOption(value, path, diagnostics, defaultValue) {
   if (value === undefined || value === null) return undefined;
   if (value === true || value === false) return value;
-  diagnostics.push(`${path}: expected true or false, got ${JSON.stringify(value)}, falling back to the default`);
+  diagnostics.push(createDiagnostic("value.invalid", { path, value, fallback: fallbackValue(defaultValue) }));
   return undefined;
 }
 

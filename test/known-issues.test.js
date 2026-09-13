@@ -378,9 +378,9 @@ test("a temperature below absolute zero is refused rather than drawn", () => {
   }
 });
 
-// BUG-09 regression: a misspelled top-level config key is named in a console warning (not
-// refused — an inapplicable option is cosmetic, a card that stops loading is not). The
-// stricter nested behaviour is asserted below.
+// BUG-09 regression: a misspelled top-level config key is named. A typo of one of the card's
+// options refuses the configuration with the option meant; any other unknown key is a
+// warning; what Home Assistant writes stays silent.
 function warningsFor(config, hass) {
   const messages = [];
   const original = { warn: console.warn, error: console.error };
@@ -394,14 +394,15 @@ function warningsFor(config, hass) {
   return messages;
 }
 
-test("a misspelled top-level key is named, with the option it was probably meant to be", () => {
+test("a misspelled top-level key is refused, naming the option it was probably meant to be", () => {
   const built = buildScenario({ rooms: [{}] });
   const meantToBe = { pallete: "palette", subtitel: "subtitle", roomz: "rooms", entiy: "entity" };
   for (const [written, intended] of Object.entries(meantToBe)) {
-    const messages = warningsFor({ ...built.config, [written]: "vivid" }, built.hass);
-    const named = messages.filter((message) => message.includes(written));
-    assert.equal(named.length, 1, `"${written}" produced ${messages.length} message(s): ${messages.join(" | ")}`);
-    assert.match(named[0], new RegExp(`did you mean "${intended}"`), named[0]);
+    assert.throws(
+      () => env.withCard({ ...built.config, [written]: "vivid" }, built.hass, () => {}),
+      { message: `Invalid configuration: ${written} is not an option of this card. Did you mean ${intended}?` },
+      written
+    );
   }
 });
 
@@ -409,7 +410,7 @@ test("a key that resembles nothing is still named, without inventing a suggestio
   const built = buildScenario({ rooms: [{}] });
   const messages = warningsFor({ ...built.config, wibble_wobble: 1 }, built.hass);
   assert.equal(messages.length, 1, messages.join(" | "));
-  assert.match(messages[0], /wibble_wobble: ignoring an unknown top-level option$/);
+  assert.match(messages[0], /^Room Climate Card: wibble_wobble is not an option of this card\. It is ignored\.$/);
 });
 
 test("what Home Assistant writes onto every card configuration is not a typo", () => {
@@ -434,7 +435,10 @@ test("a start_view naming no view says so and opens on the first one instead", (
   const built = buildScenario({ rooms: [{}, {}] });
   const messages = warningsFor({ ...built.config, start_view: "sclae" }, built.hass);
   assert.equal(messages.length, 1, messages.join(" | "));
-  assert.match(messages[0], /^Room Climate Card: start_view: expected one of range, range_scale, scale, extremes, got "sclae"/);
+  assert.match(
+    messages[0],
+    /^Room Climate Card: "sclae" is not a valid value for start_view\. Starting on the first available view\.$/
+  );
   // And a real one stays silent, so the check is about the value rather than about the key.
   assert.deepEqual(warningsFor({ ...built.config, start_view: "scale" }, built.hass), []);
 });
@@ -444,7 +448,7 @@ test("the same mistake one level down is still REFUSED by name, not warned about
   assert.throws(
     () => env.withCard({ ...built.config, palette: { optimal: "#3D9970", nonsense: 1 } }, built.hass, () => {}),
     /nonsense/,
-    "a nested unknown key is named in the error, which is what the top level should also do"
+    "a nested unknown key is named in the error, as a mistyped top-level option is"
   );
 });
 

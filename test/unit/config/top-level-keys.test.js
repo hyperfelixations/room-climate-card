@@ -11,10 +11,19 @@ const assert = require("node:assert/strict");
 const { MISSPELLED_CONFIG_KEYS } = require("../../property/vocabulary.js");
 
 let keys;
+let core;
 
 test.before(async () => {
   keys = await import("../../../src/config/top-level-keys.js");
+  core = await import("../../../src/core/diagnostics.js");
 });
+
+// Runs the check the way normalizeConfig() does and returns what it recorded.
+function check(config) {
+  const diagnostics = [];
+  keys.checkTopLevelKeys(config, diagnostics);
+  return diagnostics;
+}
 
 test("every misspelling the property generator writes is answered with the option meant", () => {
   // The generator's list is the population to cover, not examples chosen to pass.
@@ -73,24 +82,42 @@ test("the suggestion never reaches further than two edits", () => {
 
 test("a key the card owns produces no diagnostic", () => {
   for (const key of keys.TOP_LEVEL_KEYS) {
-    assert.deepEqual(keys.unknownTopLevelKeys({ [key]: "whatever" }), [], key);
+    assert.deepEqual(check({ [key]: "whatever" }), [], key);
   }
 });
 
 test("a key Home Assistant writes produces no diagnostic either", () => {
   for (const key of keys.FRAMEWORK_KEYS) {
-    assert.deepEqual(keys.unknownTopLevelKeys({ [key]: "whatever" }), [], key);
+    assert.deepEqual(check({ [key]: "whatever" }), [], key);
   }
 });
 
-test("each unknown key gets its own line, in the order it was written", () => {
-  assert.deepEqual(keys.unknownTopLevelKeys({ entity: "sensor.a", pallete: 1, wibble: 2 }), [
-    'pallete: ignoring an unknown top-level option; did you mean "palette"?',
-    "wibble: ignoring an unknown top-level option",
+test("a typo of an option stops the card and names the option meant", () => {
+  for (const written of MISSPELLED_CONFIG_KEYS) {
+    const intended = keys.nearestKey(written, keys.TOP_LEVEL_KEYS);
+    assert.throws(
+      () => check({ entity: "sensor.a", [written]: 1 }),
+      { message: `Invalid configuration: ${written} is not an option of this card. Did you mean ${intended}?` },
+      written
+    );
+  }
+});
+
+test("the first typo written is the one named", () => {
+  assert.throws(() => check({ titel: 1, pallete: 2 }), { message: /^Invalid configuration: titel is not an option/ });
+});
+
+test("a key close to no option, or closest to a Home Assistant key, is foreign: noted and ignored", () => {
+  // A near miss of a framework key is somebody else's option, not the card's to correct.
+  assert.deepEqual(check({ entity: "sensor.a", wibble: 1, avg_label: 2, "card-mod": 3, grid_option: 4 }), [
+    core.createDiagnostic("config.foreign_key", { path: "wibble" }),
+    core.createDiagnostic("config.foreign_key", { path: "avg_label" }),
+    core.createDiagnostic("config.foreign_key", { path: "card-mod" }),
+    core.createDiagnostic("config.foreign_key", { path: "grid_option" }),
   ]);
 });
 
 test("nothing unknown produces nothing to say", () => {
-  assert.deepEqual(keys.unknownTopLevelKeys({}), []);
-  assert.deepEqual(keys.unknownTopLevelKeys({ entity: "sensor.a", type: "custom:room-climate-card" }), []);
+  assert.deepEqual(check({}), []);
+  assert.deepEqual(check({ entity: "sensor.a", type: "custom:room-climate-card" }), []);
 });

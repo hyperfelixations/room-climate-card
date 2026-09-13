@@ -117,4 +117,17 @@ export const ru = {
   "layout.nothingShown": "Все элементы этой карточки скрыты параметрами show:.",
   "views.none": "Нет доступных представлений.",
 
+  "warning.label": "Предупреждение",
+  "warning.several": (v) =>
+    `${v.count} ${selectPlural("ru", v.count, { one: "проблема", few: "проблемы", many: "проблем", other: "проблемы" })} с этой карточкой. Подробности в консоли браузера.`,
+  "warning.invalidValue": (v) => `${v.value} — недопустимое значение для ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} не является параметром этой карточки. Этот ключ игнорируется.`,
+  "warning.mixedMeasurements": "Комнаты измеряют разные величины. Задайте entity или унифицируйте device_class.",
+  "fallback.value": (v) => `По умолчанию: ${v.value}.`,
+  "fallback.automatic": "Используется автоматическая настройка.",
+  "fallback.ignored": "Оно игнорируется.",
+  "fallback.firstView": "Карточка начнёт с первого доступного представления.",
+  "fallback.defaults": "Используются значения по умолчанию.",
+  "value.empty": "(пусто)",
+
 };

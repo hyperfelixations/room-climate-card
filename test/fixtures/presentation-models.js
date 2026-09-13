@@ -25,6 +25,7 @@ const SHOW_EVERYTHING = {
   subtitle: true,
   entity_label: true,
   pill: true,
+  warnings: true,
   panel: true,
   rooms: "auto",
   unavailable_rooms: true,
@@ -46,6 +47,7 @@ function cfg(overrides = {}) {
     room_columns: null,
     room_rows: null,
     views: null,
+    _configDiagnostics: [],
     ...rest,
     show: { ...SHOW_EVERYTHING, ...show },
   };
@@ -82,6 +84,7 @@ function minimalDomainModel(overrides = {}) {
       profileIcon: "mdi:thermometer",
     },
     subtitle: { kind: "inComfort", missingRooms: 0 },
+    diagnostics: { warnings: [], hints: [] },
     ...overrides,
   };
 }

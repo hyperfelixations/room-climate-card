@@ -127,4 +127,17 @@ export const lv = {
   "layout.nothingShown": "Visas šīs kartes daļas ir paslēptas ar show:.",
   "views.none": "Nav pieejams neviens skats.",
 
+  "warning.label": "Brīdinājums",
+  "warning.several": (v) =>
+    `${v.count} ${selectPlural("lv", v.count, { zero: "problēmu", one: "problēma", other: "problēmas" })} ar šo karti. Sīkāk pārlūka konsolē.`,
+  "warning.invalidValue": (v) => `${v.value} nav derīga ${v.key} vērtība. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} nav šīs kartes opcija. Šī atslēga tiek ignorēta.`,
+  "warning.mixedMeasurements": "Telpas mēra dažādus lielumus. Iestati entity vai saskaņo device_class.",
+  "fallback.value": (v) => `Tiek izmantota noklusējuma vērtība: ${v.value}.`,
+  "fallback.automatic": "Tiek izmantots automātiskais iestatījums.",
+  "fallback.ignored": "Tā tiek ignorēta.",
+  "fallback.firstView": "Karte sāk ar pirmo pieejamo skatu.",
+  "fallback.defaults": "Tiek izmantotas noklusējuma vērtības.",
+  "value.empty": "(tukšs)",
+
 };

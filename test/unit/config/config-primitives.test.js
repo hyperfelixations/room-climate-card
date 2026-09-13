@@ -1,8 +1,8 @@
 "use strict";
 
 // Direct unit tests for config primitives, actions, rooms, and views. The error messages
-// are a user-facing contract — Home Assistant shows what setConfig() throws, and the README
-// quotes it — so they, and the order validation runs in, are asserted literally.
+// are a user-facing contract — Home Assistant shows what setConfig() throws — so they, and
+// the order validation runs in, are asserted literally.
 // Collaborators are stubbed, which is the point of injecting them.
 // Boundary: this file owns the primitive readers (optional strings, enums, integers) and
 // the structured readers for actions, rooms and views; whole-configuration assembly is
@@ -16,6 +16,7 @@ let primitives;
 let actions;
 let rooms;
 let views;
+let core;
 
 const COLLABORATORS = {
   viewTypes: VIEWS,
@@ -34,7 +35,11 @@ test.before(async () => {
   actions = await import("../../../src/config/actions.js");
   rooms = await import("../../../src/config/rooms.js");
   views = await import("../../../src/config/views.js");
+  core = await import("../../../src/core/diagnostics.js");
 });
+
+// The diagnostic a reader records for an invalid value, built the way the reader builds it.
+const invalid = (path, value, fallback) => core.createDiagnostic("value.invalid", { path, value, fallback });
 
 // ------------------------------------------------------------- primitives --
 
@@ -95,18 +100,18 @@ test("stringOrDefault() coerces and honours the fallback chain", () => {
   assert.equal(stringOrDefault(undefined, undefined), "");
 });
 
-test("booleanOption() accepts exactly true and false, and says so when it does not", () => {
+test("booleanOption() accepts exactly true and false, and names the default when it does not", () => {
   const { booleanOption } = primitives;
   const diagnostics = [];
-  assert.equal(booleanOption(true, "auto_slide", diagnostics), true);
-  assert.equal(booleanOption(false, "auto_slide", diagnostics), false);
+  assert.equal(booleanOption(true, "auto_slide", diagnostics, true), true);
+  assert.equal(booleanOption(false, "auto_slide", diagnostics, true), false);
   assert.deepEqual(diagnostics, [], "a value it accepts is not worth mentioning");
 
   for (const rejected of ["true", "false", "yes", "on", 1, 0, {}]) {
-    assert.equal(booleanOption(rejected, "swipe", diagnostics), undefined, JSON.stringify(rejected));
+    assert.equal(booleanOption(rejected, "swipe", diagnostics, true), undefined, JSON.stringify(rejected));
   }
   assert.equal(diagnostics.length, 7, "each rejection is reported once");
-  assert.equal(diagnostics[0], 'swipe: expected true or false, got "true", falling back to the default');
+  assert.deepEqual(diagnostics[0], invalid("swipe", "true", core.fallbackValue(true)));
 });
 
 test("booleanOption() answers undefined for an unwritten key without a word about it", () => {
@@ -114,8 +119,8 @@ test("booleanOption() answers undefined for an unwritten key without a word abou
   // nobody touched. The reader reports absence, never diagnoses it, and lets each caller decide.
   const { booleanOption } = primitives;
   const diagnostics = [];
-  assert.equal(booleanOption(undefined, "auto_slide", diagnostics), undefined);
-  assert.equal(booleanOption(null, "auto_slide", diagnostics), undefined);
+  assert.equal(booleanOption(undefined, "auto_slide", diagnostics, true), undefined);
+  assert.equal(booleanOption(null, "auto_slide", diagnostics, true), undefined);
   assert.deepEqual(diagnostics, []);
 });
 
@@ -260,7 +265,7 @@ test("an omitted views: config is the not-configured sentinel and is not diagnos
 test("a non-array views: config is diagnosed and normalizes to the sentinel", () => {
   const result = views.normalizeViewsConfig("scale", COLLABORATORS);
   assert.equal(result.views, null);
-  assert.deepEqual(result.diagnostics, ['views: expected an array, got "scale"']);
+  assert.deepEqual(result.diagnostics, [invalid("views", "scale", core.FALLBACK.AUTOMATIC)]);
 });
 
 test("string and object entry forms both mean enabled", () => {
@@ -273,20 +278,33 @@ test("string and object entry forms both mean enabled", () => {
   ]);
 });
 
-test("every view-entry diagnosis keeps its exact wording", () => {
+test("every view-entry diagnosis names the path, the written value and what is used instead", () => {
+  const { FALLBACK, createDiagnostic, fallbackValue } = core;
   const cases = [
-    [["   "], 'views[0]: expected a non-empty string or an object'],
-    [[42], "views[0]: expected a string or an object, got 42"],
-    [[{ enabled: true }], 'views[0]: missing or invalid "type"'],
-    [[{ type: "scale", enabled: "yes" }], 'views[0] ("scale"): invalid "enabled" value "yes", falling back to "auto"'],
-    [[{ type: "scale", options: "all" }], 'views[0] ("scale"): invalid "options" value "all", expected an object'],
-    [[{ type: "scale", options: { bogus: 1, other: 2 } }], 'views[0] ("scale"): ignoring unknown "options" key(s) "bogus", "other"'],
-    [[{ type: "scale", options: { show_comfort_band: "yes" } }], 'views[0] ("scale"): invalid "show_comfort_band" value "yes", falling back to default'],
-    [[{ type: "scale", options: { markers: "some" } }], 'views[0] ("scale"): invalid "markers" value "some", falling back to default'],
+    [["   "], [invalid("views[0]", "   ", FALLBACK.IGNORED)]],
+    [[42], [invalid("views[0]", 42, FALLBACK.IGNORED)]],
+    [["bogus"], [invalid("views[0]", "bogus", FALLBACK.IGNORED)]],
+    [[{ enabled: true }], [invalid("views[0].type", undefined, FALLBACK.IGNORED)]],
+    [[{ type: "bogus", options: { anything: 1 } }], [invalid("views[0].type", "bogus", FALLBACK.IGNORED)]],
+    [["scale", "scale"], [invalid("views[1]", "scale", FALLBACK.IGNORED)]],
+    [["scale", { type: "scale" }], [invalid("views[1].type", "scale", FALLBACK.IGNORED)]],
+    [[{ type: "scale", enabled: "yes" }], [invalid("views[0].enabled", "yes", fallbackValue("auto"))]],
+    [[{ type: "scale", options: "all" }], [invalid("views[0].options", "all", FALLBACK.DEFAULTS)]],
+    [
+      [{ type: "scale", options: { bogus: 1, other: 2 } }],
+      [
+        createDiagnostic("config.foreign_key", { path: "views[0].options.bogus" }),
+        createDiagnostic("config.foreign_key", { path: "views[0].options.other" }),
+      ],
+    ],
+    [[{ type: "scale", options: { show_comfort_band: "yes" } }], [invalid("views[0].options.show_comfort_band", "yes", fallbackValue(true))]],
+    [[{ type: "scale", options: { markers: "some" } }], [invalid("views[0].options.markers", "some", fallbackValue("extremes"))]],
+    // A key with nothing after it is not a request.
+    [[{ type: "scale", options: { markers: null } }], []],
   ];
   for (const [input, expected] of cases) {
     const { diagnostics } = views.normalizeViewsConfig(input, COLLABORATORS);
-    assert.ok(diagnostics.includes(expected), `${JSON.stringify(input)}\n  got: ${JSON.stringify(diagnostics)}`);
+    assert.deepEqual(diagnostics, expected, JSON.stringify(input));
   }
 });
 
@@ -297,10 +315,10 @@ test("an invalid enabled: falls back to auto rather than dropping the view", () 
 
 test("an explicit auto delegates, an omitted enabled does not", () => {
   const { views: result } = views.normalizeViewsConfig(
-    [{ type: "scale", enabled: "auto" }, { type: "scale", enabled: false }],
+    [{ type: "scale", enabled: "auto" }, { type: "range", enabled: false }, { type: "extremes" }],
     COLLABORATORS
   );
-  assert.deepEqual(result.map((r) => r.enabled), ["auto", false]);
+  assert.deepEqual(result.map((r) => r.enabled), ["auto", false, true]);
 });
 
 test("an unresolvable entry is dropped while the rest survives", () => {
@@ -318,13 +336,30 @@ test("view options are filtered against the requested view's own schema", () => 
   assert.equal(diagnostics.length, 1, "only the unknown key is diagnosed");
 });
 
-test("an unknown view type has no schema, so all its options are stripped", () => {
+test("an unknown view type is dropped with its options, and named once", () => {
   const { views: result, diagnostics } = views.normalizeViewsConfig(
     [{ type: "bogus", options: { anything: 1 } }],
     COLLABORATORS
   );
-  assert.deepEqual(result, [{ type: "bogus", enabled: true, options: {} }], "the type itself survives for the resolver to reject");
-  assert.match(diagnostics[0], /ignoring unknown "options" key/);
+  assert.deepEqual(result, [], "no renderer exists for it, so nothing downstream sees it");
+  assert.deepEqual(
+    diagnostics,
+    [invalid("views[0].type", "bogus", core.FALLBACK.IGNORED)],
+    "its options belong to no schema and are not judged"
+  );
+});
+
+test("a repeated view type keeps its first entry and names the repetition", () => {
+  const { views: result, diagnostics } = views.normalizeViewsConfig(
+    [{ type: "scale", options: { markers: "all" } }, { type: "scale", options: { markers: "bogus" } }],
+    COLLABORATORS
+  );
+  assert.deepEqual(result, [{ type: "scale", enabled: true, options: { markers: "all" } }]);
+  assert.deepEqual(
+    diagnostics,
+    [invalid("views[1].type", "scale", core.FALLBACK.IGNORED)],
+    "the repeated entry's own options are never read"
+  );
 });
 
 test("a schema entry without validate() is whitelisted but not value-checked", () => {

@@ -113,4 +113,16 @@ export const en = {
   "layout.nothingShown": "Every part of this card is hidden by its show: options.",
   "views.none": "No view available.",
 
+  "warning.label": "Warning",
+  "warning.several": (v) => `${v.count} problems with this card. Details in the browser console.`,
+  "warning.invalidValue": (v) => `${v.value} is not a valid value for ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} is not an option of this card. It is ignored.`,
+  "warning.mixedMeasurements": "The rooms measure different things. Set entity or align device_class.",
+  "fallback.value": (v) => `Using default: ${v.value}.`,
+  "fallback.automatic": "Using the automatic setting.",
+  "fallback.ignored": "It is ignored.",
+  "fallback.firstView": "Starting on the first available view.",
+  "fallback.defaults": "Using the defaults.",
+  "value.empty": "(empty)",
+
 };

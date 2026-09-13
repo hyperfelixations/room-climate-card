@@ -104,6 +104,7 @@ function viewModel(overrides = {}) {
       hasIcon: true,
       hasPill: true,
     },
+    warning: { visible: false, text: "", label: "Warning" },
     average: {
       value: 22,
       valueText: "22.0",

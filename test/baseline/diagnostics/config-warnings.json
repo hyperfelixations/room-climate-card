@@ -1,44 +1,81 @@
 {
-  "start-view-unknown": [
-    "Room Climate Card: start_view: expected one of range, range_scale, scale, extremes, got \"sclae\", falling back to the first available view"
-  ],
-  "top-level-unknown-key": [
-    "Room Climate Card: pallete: ignoring an unknown top-level option; did you mean \"palette\"?"
-  ],
-  "top-level-unknown-key-without-a-near-option": [
-    "Room Climate Card: wibble_wobble: ignoring an unknown top-level option"
-  ],
-  "views-duplicate-type": [
-    "Room Climate Card: views: duplicate view type \"scale\""
-  ],
-  "views-entry-empty-string": [
-    "Room Climate Card: views[0]: expected a non-empty string or an object"
-  ],
-  "views-entry-missing-type": [
-    "Room Climate Card: views[0]: missing or invalid \"type\""
-  ],
-  "views-entry-wrong-shape": [
-    "Room Climate Card: views[0]: expected a string or an object, got 42"
-  ],
-  "views-invalid-enabled": [
-    "Room Climate Card: views[0] (\"scale\"): invalid \"enabled\" value \"yes\", falling back to \"auto\""
-  ],
-  "views-not-an-array": [
-    "Room Climate Card: views: expected an array, got \"scale\""
-  ],
-  "views-options-invalid-boolean": [
-    "Room Climate Card: views[0] (\"scale\"): invalid \"show_comfort_band\" value \"yes\", falling back to default"
-  ],
-  "views-options-invalid-enum": [
-    "Room Climate Card: views[0] (\"scale\"): invalid \"markers\" value \"some\", falling back to default"
-  ],
-  "views-options-not-an-object": [
-    "Room Climate Card: views[0] (\"scale\"): invalid \"options\" value \"all\", expected an object"
-  ],
-  "views-options-unknown-key": [
-    "Room Climate Card: views[0] (\"scale\"): ignoring unknown \"options\" key(s) \"bogus\", \"also_bogus\""
-  ],
-  "views-unknown-type": [
-    "Room Climate Card: views: unknown view type \"bogus\""
-  ]
+  "start-view-unknown": {
+    "block": "\"sclae\" is not a valid value for start_view. Starting on the first available view.",
+    "console": [
+      "Room Climate Card: \"sclae\" is not a valid value for start_view. Starting on the first available view."
+    ]
+  },
+  "top-level-foreign-key": {
+    "block": "wibble_wobble is not an option of this card. It is ignored.",
+    "console": [
+      "Room Climate Card: wibble_wobble is not an option of this card. It is ignored."
+    ]
+  },
+  "views-duplicate-type": {
+    "block": "\"scale\" is not a valid value for views[1]. It is ignored.",
+    "console": [
+      "Room Climate Card: \"scale\" is not a valid value for views[1]. It is ignored."
+    ]
+  },
+  "views-entry-empty-string": {
+    "block": "(empty) is not a valid value for views[0]. It is ignored.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for views[0]. It is ignored."
+    ]
+  },
+  "views-entry-missing-type": {
+    "block": "(empty) is not a valid value for views[0].type. It is ignored.",
+    "console": [
+      "Room Climate Card: (empty) is not a valid value for views[0].type. It is ignored."
+    ]
+  },
+  "views-entry-wrong-shape": {
+    "block": "42 is not a valid value for views[0]. It is ignored.",
+    "console": [
+      "Room Climate Card: 42 is not a valid value for views[0]. It is ignored."
+    ]
+  },
+  "views-invalid-enabled": {
+    "block": "\"yes\" is not a valid value for views[0].enabled. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"yes\" is not a valid value for views[0].enabled. Using default: auto."
+    ]
+  },
+  "views-not-an-array": {
+    "block": "\"scale\" is not a valid value for views. Using the automatic setting.",
+    "console": [
+      "Room Climate Card: \"scale\" is not a valid value for views. Using the automatic setting."
+    ]
+  },
+  "views-options-invalid-boolean": {
+    "block": "\"yes\" is not a valid value for views[0].options.show_comfort_band. Using default: true.",
+    "console": [
+      "Room Climate Card: \"yes\" is not a valid value for views[0].options.show_comfort_band. Using default: true."
+    ]
+  },
+  "views-options-invalid-enum": {
+    "block": "\"some\" is not a valid value for views[0].options.markers. Using default: extremes.",
+    "console": [
+      "Room Climate Card: \"some\" is not a valid value for views[0].options.markers. Using default: extremes."
+    ]
+  },
+  "views-options-not-an-object": {
+    "block": "\"all\" is not a valid value for views[0].options. Using the defaults.",
+    "console": [
+      "Room Climate Card: \"all\" is not a valid value for views[0].options. Using the defaults."
+    ]
+  },
+  "views-options-unknown-key": {
+    "block": "2 problems with this card. Details in the browser console.",
+    "console": [
+      "Room Climate Card: views[0].options.bogus is not an option of this card. It is ignored.",
+      "Room Climate Card: views[0].options.also_bogus is not an option of this card. It is ignored."
+    ]
+  },
+  "views-unknown-type": {
+    "block": "\"bogus\" is not a valid value for views[1]. It is ignored.",
+    "console": [
+      "Room Climate Card: \"bogus\" is not a valid value for views[1]. It is ignored."
+    ]
+  }
 }

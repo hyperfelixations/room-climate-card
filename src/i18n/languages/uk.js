@@ -117,4 +117,17 @@ export const uk = {
 
   "layout.nothingShown": "Усі елементи цієї картки приховано параметрами show:.",
   "views.none": "Немає доступного вигляду.",
+
+  "warning.label": "Попередження",
+  "warning.several": (v) =>
+    `${v.count} ${selectPlural("uk", v.count, { one: "проблема", few: "проблеми", many: "проблем", other: "проблеми" })} з цією карткою. Подробиці в консолі браузера.`,
+  "warning.invalidValue": (v) => `${v.value} — недійсне значення для ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} не є параметром цієї картки. Цей ключ ігнорується.`,
+  "warning.mixedMeasurements": "Кімнати вимірюють різні величини. Задайте entity або уніфікуйте device_class.",
+  "fallback.value": (v) => `За замовчуванням: ${v.value}.`,
+  "fallback.automatic": "Використовується автоматичне налаштування.",
+  "fallback.ignored": "Воно ігнорується.",
+  "fallback.firstView": "Картка почне з першого доступного вигляду.",
+  "fallback.defaults": "Використовуються значення за замовчуванням.",
+  "value.empty": "(порожньо)",
 };

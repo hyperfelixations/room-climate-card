@@ -1,13 +1,16 @@
-// The keys a card configuration may carry at its top level, and what to say about one
-// it may not. An unknown top-level key warns rather than refusing (a nested object
-// still throws) — full rationale, the two contract tests, and the FRAMEWORK_KEYS
-// ageing concern: see internal dev doc §3 "Der Schlüsselvertrag der obersten Ebene".
+// The keys a card configuration may carry at its top level, and what an unknown one means. A
+// key within two edits of one of the card's options is a typo and stops the card with that
+// option named; any other unknown key is foreign, warned about and ignored — so a key Home
+// Assistant or a frontend module adds later never breaks the card. Full contract: see internal
+// dev doc §3 "Der Schlüsselvertrag der obersten Ebene".
 //
 // The two lists differ in kind:
 //   TOP_LEVEL_KEYS   what the card OWNS: every key normalizeConfig() reads. Held in
 //                    lockstep with the product-surface manifest by a contract test.
 //   FRAMEWORK_KEYS   what the card is HANDED: `LovelaceCardConfig` bookkeeping plus
 //                    `card_mod`. Not owned, not read here, so not warned about.
+
+import { createDiagnostic } from "../core/diagnostics.js";
 
 // Owned by the card. The last three are older spellings, still accepted and listed for
 // removal at the next major.
@@ -48,6 +51,9 @@ export const TOP_LEVEL_KEYS = Object.freeze(
 export const FRAMEWORK_KEYS = Object.freeze(
   new Set(["type", "index", "view_index", "view_layout", "layout_options", "grid_options", "visibility", "disabled", "card_mod"])
 );
+
+// Both, for deciding which known key an unknown one is closest to.
+const KNOWN_KEYS = Object.freeze(new Set([...TOP_LEVEL_KEYS, ...FRAMEWORK_KEYS]));
 
 // Max edit distance for a suggestion: 2 covers a dropped/doubled character, a
 // transposition, or a separator written the other way (`tap-action`, `tapAction`).
@@ -94,18 +100,16 @@ export function nearestKey(written, allowed) {
   return ties === 1 ? best : null;
 }
 
-// One diagnostic per unknown key, not one naming them all: the suggestion belongs to
-// the key it is about.
-export function unknownTopLevelKeys(userConfig) {
-  const diagnostics = [];
+// Throws for the first key that is a typo of one of the card's options; records one
+// diagnostic per foreign key. A key closest to a framework key is foreign: it is not the
+// card's to name.
+export function checkTopLevelKeys(userConfig, diagnostics) {
   for (const key of Object.keys(userConfig)) {
-    if (TOP_LEVEL_KEYS.has(key) || FRAMEWORK_KEYS.has(key)) continue;
-    const suggestion = nearestKey(key, TOP_LEVEL_KEYS);
-    diagnostics.push(
-      suggestion
-        ? `${key}: ignoring an unknown top-level option; did you mean "${suggestion}"?`
-        : `${key}: ignoring an unknown top-level option`
-    );
+    if (KNOWN_KEYS.has(key)) continue;
+    const nearest = nearestKey(key, KNOWN_KEYS);
+    if (nearest && TOP_LEVEL_KEYS.has(nearest)) {
+      throw new Error(`Invalid configuration: ${key} is not an option of this card. Did you mean ${nearest}?`);
+    }
+    diagnostics.push(createDiagnostic("config.foreign_key", { path: key }));
   }
-  return diagnostics;
 }

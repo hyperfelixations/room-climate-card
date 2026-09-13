@@ -18,6 +18,7 @@ import { AVAILABILITY, readNumericAttribute, convertMetricValue } from "./entity
 import { effectiveMetricKind } from "./measurement-context.js";
 import { resolveSourceEligibility, resolveSourceTopology } from "./source-topology.js";
 import { buildRangeModel, buildTrendContext } from "./auxiliary-models.js";
+import { collectSourceDiagnostics } from "./source-diagnostics.js";
 import {
   buildRoomModels,
   buildSubtitleModel,
@@ -55,6 +56,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
     })),
   };
   const missingRooms = sourceAvailability.rooms.filter((room) => room.status === AVAILABILITY.MISSING).length;
+  const diagnostics = collectSourceDiagnostics({ context });
 
   // No source or no metric-kind arbiter yields no-data, never a cross-metric average.
   if (context.averageSource === null) {
@@ -85,6 +87,7 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       },
       missingRooms,
       configurationState: context.diagnostics[0]?.code ?? null,
+      diagnostics,
     };
   }
 
@@ -221,5 +224,6 @@ export function buildCardDomainModel({ states, config, context, language, surfac
       warmest,
       missingRooms,
     }),
+    diagnostics,
   };
 }

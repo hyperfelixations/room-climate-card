@@ -60,6 +60,7 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     `avgLabel:${viewModel.average.hasLabel ? 1 : 0}`,
     // Subtitle node presence is structural for the same reason.
     `subtitle:${viewModel.header.hasSubtitle ? 1 : 0}`,
+    `warning:${viewModel.warning.visible ? 1 : 0}`,
     // View-model-owned optional nodes share this one signature mechanism.
     `accentLine:${viewModel.accentLine ? 1 : 0}`,
     `icon:${viewModel.header.hasIcon ? 1 : 0}`,
@@ -104,12 +105,13 @@ export function renderCardBody(context, viewModel, viewRenderers) {
     pill: viewModel.header.hasPill,
   };
   const header = headerMarkup(viewModel, parts, subtitle);
+  const warning = warningMarkup(viewModel);
   const panel = mainPanelMarkup(context, viewModel, viewRenderers);
 
-  // If header, panel and rooms are all hidden, explain the reversible configuration state.
-  // The decorative accent line does not count as content.
-  const body = header || panel || roomGrid
-    ? `${header}${panel}${roomGrid}`
+  // If header, warnings, panel and rooms are all hidden, explain the reversible configuration
+  // state. The decorative accent line does not count as content.
+  const body = header || warning || panel || roomGrid
+    ? `${header}${warning}${panel}${roomGrid}`
     : `<div class="rtc-nothing-shown">${escapeHtml(viewModel.hiddenHint)}</div>`;
 
   // Programmatic last-resort focus target, excluded from normal tab order.
@@ -143,6 +145,18 @@ function headerMarkup(viewModel, parts, subtitle) {
   if (!children.length) return "";
   return `<div class="rtc-header">
             ${children.join("\n\n            ")}
+          </div>
+
+          `;
+}
+
+// The block between header and panel, present only while a warning is shown. The symbol is
+// drawn inline, so it needs no icon set; the accessible name carries the word "warning".
+function warningMarkup(viewModel) {
+  if (!viewModel.warning.visible) return "";
+  return `<div class="rtc-warning">
+            <svg class="rtc-warning-icon" viewBox="0 0 24 24" role="img" aria-label="${escapeHtml(viewModel.warning.label)}"><path fill-rule="evenodd" d="M12 2.5 1.5 21h21zM11 9.5h2v5.5h-2zm0 7h2v2h-2z"/></svg>
+            <div class="rtc-warning-text">${escapeHtml(viewModel.warning.text)}</div>
           </div>
 
           `;
@@ -186,6 +200,12 @@ function patchShell(context, root, viewModel) {
 
   const statusEl = root.querySelector(".rtc-status-pill");
   if (statusEl) statusEl.textContent = viewModel.header.statusLabel;
+
+  const warningTextEl = root.querySelector(".rtc-warning-text");
+  if (warningTextEl) warningTextEl.textContent = viewModel.warning.text;
+
+  const warningIconEl = root.querySelector(".rtc-warning-icon");
+  if (warningIconEl) warningIconEl.setAttribute("aria-label", viewModel.warning.label);
 
   updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);

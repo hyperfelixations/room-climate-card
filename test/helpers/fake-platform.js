@@ -19,6 +19,7 @@ function createFakePlatform(options = {}) {
   let reducedMotion = Boolean(options.reducedMotion);
   let currentFontsReady = options.fontsReady ?? null;
   const observers = [];
+  const logs = [];
   const calls = { setTimeout: 0, clearTimeout: 0, requestAnimationFrame: 0, cancelAnimationFrame: 0 };
 
   const platform = {
@@ -105,6 +106,11 @@ function createFakePlatform(options = {}) {
     fontsReady: () => currentFontsReady,
 
     createEvent: (type, init) => ({ type, ...init, __fake: true }),
+
+    // Recorded, never printed: a test asserts on what the card would have written.
+    log(level, ...args) {
+      logs.push({ level, args });
+    },
 
     readTranslateXPx: (element) => options.translateXPx ?? element?.__translateXPx ?? null,
 
@@ -194,6 +200,7 @@ function createFakePlatform(options = {}) {
     colorSchemeListenerCount: () => colorSchemeListeners.size,
     mutationObservers,
     observers,
+    logs,
     calls,
   });
 }

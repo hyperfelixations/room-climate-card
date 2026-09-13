@@ -53,6 +53,10 @@
           --rtc-chip-bg: color-mix(in srgb, var(--primary-text-color) 3%, transparent);
           --rtc-card-border: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 70%, transparent);
           --rtc-top-overlay: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          --rtc-warning: var(--warning-color, #ffa600);
+          --rtc-warning-bg: color-mix(in srgb, var(--rtc-warning) 14%, transparent);
+          --rtc-warning-border: color-mix(in srgb, var(--rtc-warning) 45%, transparent);
+          --rtc-warning-ink: color-mix(in srgb, var(--rtc-warning) 62%, var(--primary-text-color));
           -webkit-tap-highlight-color: transparent;
         }
 
@@ -197,6 +201,34 @@
           color: var(--tone-ink);
           background: var(--tone-soft);
           border: 1px solid var(--tone-border);
+        }
+
+        /* Tint and symbol derive from the theme's warning colour; the text keeps the primary
+           colour, which stays legible on the light tint in either theme. */
+        .rtc-warning {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 14px;
+          background: var(--rtc-warning-bg);
+          border: 1px solid var(--rtc-warning-border);
+          color: var(--primary-text-color);
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1.3;
+        }
+
+        .rtc-warning-icon {
+          flex: 0 0 16px;
+          width: 16px;
+          height: 16px;
+          fill: var(--rtc-warning-ink);
+        }
+
+        .rtc-warning-text {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
 
         /* Let the headline grow beyond its 106px floor while the adjacent view keeps at least

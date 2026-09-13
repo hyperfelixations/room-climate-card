@@ -116,4 +116,16 @@ export const it = {
   "layout.nothingShown": "Tutte le parti di questa scheda sono nascoste da show:.",
   "views.none": "Nessuna vista disponibile.",
 
+  "warning.label": "Avviso",
+  "warning.several": (v) => `${v.count} problemi con questa scheda. Dettagli nella console del browser.`,
+  "warning.invalidValue": (v) => `${v.value} non è un valore valido per ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} non è un’opzione di questa scheda. Questa chiave viene ignorata.`,
+  "warning.mixedMeasurements": "Le stanze misurano grandezze diverse. Imposta entity o uniforma device_class.",
+  "fallback.value": (v) => `Si usa il valore predefinito: ${v.value}.`,
+  "fallback.automatic": "Si usa l’impostazione automatica.",
+  "fallback.ignored": "Viene ignorato.",
+  "fallback.firstView": "Si parte dalla prima vista disponibile.",
+  "fallback.defaults": "Si usano i valori predefiniti.",
+  "value.empty": "(vuoto)",
+
 };

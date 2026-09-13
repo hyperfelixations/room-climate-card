@@ -101,7 +101,7 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
   assert.equal(data.views.options.scale.markers, "extremes", "invalid markers falls back to default (extremes)");
   assert.equal(data.views.options.extremes.show_value, true, "invalid show_value falls back to default (true)");
   for (const key of ["show_time", "footer", "markers", "show_value"]) {
-    assert.ok(warnings.some((w) => w.includes(key) && w.includes("falling back")), `${key}: invalid value must be diagnosed`);
+    assert.ok(warnings.some((w) => w.includes(`options.${key}.`) && w.includes("Using default:")), `${key}: invalid value must be diagnosed`);
   }
 
   el.ownerDocument.defaultView.console.warn = originalWarn;

@@ -256,6 +256,70 @@ test("visual golden: German (longer strings than English)", async ({ page }) => 
   await shot(page, cardId, "german.png");
 });
 
+// The warnings block in the scenes that change its frame: one warning, a count, a card without
+// data, no header, nothing else shown, dark, German.
+test.describe("visual golden: the warnings block", () => {
+  const STATES = {
+    "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+    "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+    "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
+  };
+  const BASE = { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] };
+  const INVALID = { rooms: "flasche" };
+  const HIDE_ALL = { accent_line: false, icon: false, title: false, subtitle: false, entity_label: false, pill: false, panel: false, rooms: false };
+
+  async function warnedCard(page, config, states = STATES, language) {
+    await gotoHarness(page);
+    const cardId = await createCard(page, config, states, language);
+    await expect(page.locator(`#${cardId} .rtc-warning-text`)).toBeVisible();
+    return cardId;
+  }
+
+  test("one warning", async ({ page }) => {
+    const cardId = await warnedCard(page, { ...BASE, show: INVALID });
+    await shot(page, cardId, "warning-single.png");
+  });
+
+  test("several warnings are counted", async ({ page }) => {
+    const cardId = await warnedCard(page, { ...BASE, auto_slide: "yes", show: INVALID });
+    await expect(page.locator(`#${cardId} .rtc-warning-text`)).toHaveText(/^2 problems/);
+    await shot(page, cardId, "warning-several.png");
+  });
+
+  test("a card without data keeps its reason in the subtitle", async ({ page }) => {
+    const mixed = {
+      "sensor.avg": mkStateObj("sensor.avg", "unavailable", {}),
+      "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
+      "sensor.r2": mkStateObj("sensor.r2", 55, HUMIDITY),
+    };
+    const cardId = await warnedCard(page, BASE, mixed);
+    await expect(page.locator(`#${cardId} .rtc-root`)).toHaveAttribute("data-state", "no-data");
+    await shot(page, cardId, "warning-no-data.png");
+  });
+
+  test("without a header the block comes first", async ({ page }) => {
+    const cardId = await warnedCard(page, { ...BASE, show: { ...INVALID, icon: false, title: false, subtitle: false, pill: false } });
+    await shot(page, cardId, "warning-header-parts-hidden.png");
+  });
+
+  test("with every other part hidden the block is what remains", async ({ page }) => {
+    const cardId = await warnedCard(page, { ...BASE, auto_slide: "yes", show: HIDE_ALL });
+    await expect(page.locator(`#${cardId} .rtc-nothing-shown`)).toHaveCount(0);
+    await shot(page, cardId, "nothing-shown-with-warning.png");
+  });
+
+  test("dark", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    const cardId = await warnedCard(page, { ...BASE, show: INVALID });
+    await shot(page, cardId, "warning-dark.png");
+  });
+
+  test("German", async ({ page }) => {
+    const cardId = await warnedCard(page, { ...BASE, show: INVALID }, STATES, "de");
+    await shot(page, cardId, "warning-german.png");
+  });
+});
+
 test.describe("visual golden: long-/short-form label architecture", () => {
   // Polish scale.optimalLabel and French rangeScale.currentLabel are the full word by
   // default, abbreviated only at measure time when they do not fit (_resolveLabelForm()).

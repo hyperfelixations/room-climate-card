@@ -118,4 +118,16 @@ export const fr = {
   "layout.nothingShown": "Tous les éléments de cette carte sont masqués par show:.",
   "views.none": "Aucune vue disponible.",
 
+  "warning.label": "Avertissement",
+  "warning.several": (v) => `${v.count} problèmes avec cette carte. Détails dans la console du navigateur.`,
+  "warning.invalidValue": (v) => `${v.value} n’est pas une valeur valide pour ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} n’est pas une option de cette carte. Cette clé est ignorée.`,
+  "warning.mixedMeasurements": "Les pièces mesurent des grandeurs différentes. Définissez entity ou harmonisez device_class.",
+  "fallback.value": (v) => `Valeur par défaut utilisée : ${v.value}.`,
+  "fallback.automatic": "Le réglage automatique est utilisé.",
+  "fallback.ignored": "Elle est ignorée.",
+  "fallback.firstView": "La carte démarre sur la première vue disponible.",
+  "fallback.defaults": "Les valeurs par défaut sont utilisées.",
+  "value.empty": "(vide)",
+
 };

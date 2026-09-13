@@ -41,5 +41,6 @@
   "room-entity-missing": "Invalid configuration: rooms[0].entity must be a non-empty entity id.",
   "room-not-an-object": "Invalid configuration: rooms[0] must be an object.",
   "rooms-not-an-array": "Invalid configuration: rooms must be an array.",
+  "top-level-misspelled-key": "Invalid configuration: pallete is not an option of this card. Did you mean palette?",
   "trend-entity-not-a-string": "Invalid configuration: trend_entity must be an entity id string."
 }

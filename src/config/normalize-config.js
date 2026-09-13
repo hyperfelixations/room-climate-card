@@ -1,8 +1,7 @@
 // The whole `setConfig()` contract, as one pure function. normalizeConfig() returns
-// the normalized config or throws the error the user needs; a malformed views: entry
-// or show: key records a diagnostic on _configDiagnostics instead, and the element
-// decides when to surface it. Transaction semantics: see internal dev doc §3
-// "setConfig() und YAML-Normalisierung".
+// the normalized config or throws the error the user needs; an invalid value records a
+// diagnostic on _configDiagnostics instead, which the card shows as a warning.
+// Transaction semantics: see internal dev doc §3 "setConfig() und YAML-Normalisierung".
 //
 // Injected collaborators, because config/ must not import the domain, i18n or view
 // registries. This list is authoritative:
@@ -16,16 +15,17 @@
 //   completePalette       fills a validated palette's missing wings
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
-//   viewTypes             every registered view type, for start_view
+//   viewTypes             every registered view type, for views and start_view
 //   metricKindForUnit     a unit string -> metric kind
 //   unitProfileForUnit    a metric kind + unit string -> unit profile
 
+import { createDiagnostic, FALLBACK } from "../core/diagnostics.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
 import { normalizeAction } from "./actions.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
 import { normalizeShowConfig, resolveShowConfig } from "./show.js";
-import { unknownTopLevelKeys } from "./top-level-keys.js";
+import { checkTopLevelKeys } from "./top-level-keys.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
 import {
@@ -96,10 +96,16 @@ export function normalizeHeaderLine(value, defaultOverflow) {
 export function normalizeStartView(value, viewTypes, diagnostics) {
   const requested = optionalString(value);
   if (requested === null || viewTypes.includes(requested)) return requested;
-  diagnostics.push(
-    `start_view: expected one of ${viewTypes.join(", ")}, got ${JSON.stringify(value)}, falling back to the first available view`
-  );
+  diagnostics.push(createDiagnostic("value.invalid", { path: "start_view", value, fallback: FALLBACK.FIRST_VIEW }));
   return null;
+}
+
+// Diagnostics in the order their top-level keys are written, so a list of warnings reads
+// like the YAML it describes. The sort is stable: within one key, reading order stays.
+function inWrittenOrder(diagnostics, userConfig) {
+  const position = new Map(Object.keys(userConfig).map((key, index) => [key, index]));
+  const rank = (diagnostic) => position.get(diagnostic.path.match(/^[^.[]+/)[0]) ?? position.size;
+  return [...diagnostics].sort((one, other) => rank(one) - rank(other));
 }
 
 export function normalizeConfig(config, collaborators) {
@@ -108,6 +114,10 @@ export function normalizeConfig(config, collaborators) {
   if (!isPlainObject(userConfig)) {
     throw new Error("Invalid configuration: card configuration must be an object.");
   }
+
+  // Before any value is read: a typo of an option stops the card, a foreign key is noted.
+  const diagnostics = [];
+  checkTopLevelKeys(userConfig, diagnostics);
 
   // `entity` is OPTIONAL and normalized before the requirement below: absent/empty is
   // legitimate (rooms can carry the card), present-but-malformed is a hard path error.
@@ -129,7 +139,7 @@ export function normalizeConfig(config, collaborators) {
   const rangeEntity = optionalEntity(userConfig.range_entity, null, "range_entity");
   const trendEntity = optionalEntity(userConfig.trend_entity, null, "trend_entity");
 
-  const { views, diagnostics: viewsDiagnostics } = normalizeViewsConfig(userConfig.views, { optionSchemaForView });
+  const { views, diagnostics: viewsDiagnostics } = normalizeViewsConfig(userConfig.views, { optionSchemaForView, viewTypes });
   const classification = normalizeClassificationConfig(userConfig.classification, collaborators);
   const palette = normalizePalette(userConfig.palette, collaborators);
 
@@ -139,15 +149,13 @@ export function normalizeConfig(config, collaborators) {
   // only. See internal dev doc §3 "Der show:-Block".
   const { show: requestedShow, diagnostics: showDiagnostics } = normalizeShowConfig(userConfig.show);
   const show = resolveShowConfig({ ...legacyShowRequests(userConfig), ...requestedShow });
+  diagnostics.push(...viewsDiagnostics, ...showDiagnostics);
 
-  // Top-level options that fall back with a diagnostic. The three booleans use the same
-  // reader as the `show:` block. Resolved before the returned object so the diagnostics
-  // exist when the list below is built.
-  const optionDiagnostics = [];
-  const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", optionDiagnostics) ?? DEFAULT_CONFIG.auto_slide;
-  const swipe = booleanOption(userConfig.swipe, "swipe", optionDiagnostics) ?? DEFAULT_CONFIG.swipe;
-  const hideFooter = booleanOption(userConfig.hide_footer, "hide_footer", optionDiagnostics) ?? DEFAULT_CONFIG.hide_footer;
-  const startView = normalizeStartView(userConfig.start_view, viewTypes, optionDiagnostics);
+  // The three booleans use the same reader as the `show:` block.
+  const autoSlide = booleanOption(userConfig.auto_slide, "auto_slide", diagnostics, DEFAULT_CONFIG.auto_slide) ?? DEFAULT_CONFIG.auto_slide;
+  const swipe = booleanOption(userConfig.swipe, "swipe", diagnostics, DEFAULT_CONFIG.swipe) ?? DEFAULT_CONFIG.swipe;
+  const hideFooter = booleanOption(userConfig.hide_footer, "hide_footer", diagnostics, DEFAULT_CONFIG.hide_footer) ?? DEFAULT_CONFIG.hide_footer;
+  const startView = normalizeStartView(userConfig.start_view, viewTypes, diagnostics);
 
   return {
     entity,
@@ -183,13 +191,12 @@ export function normalizeConfig(config, collaborators) {
     room_sort: normalizeEnum(userConfig.room_sort, ["configured", "name", "value_asc", "value_desc"], "value_asc"),
     room_label: normalizeEnum(userConfig.room_label, ["auto", "short", "name"], "auto"),
     // null = "not configured", resolving to one auto entry per registered view; a
-    // present array is authoritative even when empty. Invalid entries degrade to
-    // "ignored" via the diagnostics below.
+    // present array is authoritative even when empty.
     views,
-    // Internal-only (underscore = not a YAML key): the one channel carrying every
-    // cosmetic fallback forward for the element to surface once per config change.
-    // Unknown top-level keys first — read before any report about the keys that exist.
-    _configDiagnostics: [...unknownTopLevelKeys(userConfig), ...optionDiagnostics, ...showDiagnostics, ...viewsDiagnostics],
+    // Internal-only (underscore = not a YAML key): every value the normalizer replaced and
+    // every foreign key, as diagnostics in the order the YAML writes them. The view model
+    // shows them as warnings.
+    _configDiagnostics: inWrittenOrder(diagnostics, userConfig),
     start_view: startView,
     classification,
     // The resolved palette object, not its name: resolving once here keeps the domain

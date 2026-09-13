@@ -120,4 +120,16 @@ export const nb = {
   "layout.nothingShown": "Alle deler av dette kortet er skjult av show:.",
   "views.none": "Ingen visning tilgjengelig.",
 
+  "warning.label": "Advarsel",
+  "warning.several": (v) => `${v.count} problemer med dette kortet. Detaljer i nettleserkonsollen.`,
+  "warning.invalidValue": (v) => `${v.value} er ikke en gyldig verdi for ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} er ikke et alternativ for dette kortet. Nøkkelen ignoreres.`,
+  "warning.mixedMeasurements": "Rommene måler forskjellige ting. Angi entity eller samkjør device_class.",
+  "fallback.value": (v) => `Standardverdien brukes: ${v.value}.`,
+  "fallback.automatic": "Den automatiske innstillingen brukes.",
+  "fallback.ignored": "Den ignoreres.",
+  "fallback.firstView": "Kortet starter på den første tilgjengelige visningen.",
+  "fallback.defaults": "Standardverdiene brukes.",
+  "value.empty": "(tom)",
+
 };

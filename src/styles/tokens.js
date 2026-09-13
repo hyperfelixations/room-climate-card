@@ -15,6 +15,10 @@ export function tokensCss({ keyframes }) {
           --rtc-chip-bg: color-mix(in srgb, var(--primary-text-color) 3%, transparent);
           --rtc-card-border: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 70%, transparent);
           --rtc-top-overlay: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+          --rtc-warning: var(--warning-color, #ffa600);
+          --rtc-warning-bg: color-mix(in srgb, var(--rtc-warning) 14%, transparent);
+          --rtc-warning-border: color-mix(in srgb, var(--rtc-warning) 45%, transparent);
+          --rtc-warning-ink: color-mix(in srgb, var(--rtc-warning) 62%, var(--primary-text-color));
           -webkit-tap-highlight-color: transparent;
         }
 

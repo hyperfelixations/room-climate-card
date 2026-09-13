@@ -141,6 +141,56 @@ test("the shell patches the header, the average, the chips and then every view",
   assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["patch", "alpha"], ["patch", "beta"]]);
 });
 
+test("the warnings block sits between header and panel, and only while it is visible", () => {
+  const realm = makeRealm();
+  const shown = viewModel({ warning: { visible: true, text: "Something is wrong.", label: "Warning" } });
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, shown, registry.VIEW_RENDERERS);
+  const children = [...realm.root.querySelector(".rtc-root").children].map((node) => node.getAttribute("class"));
+  assert.deepEqual(children, ["rtc-top-line", "rtc-header", "rtc-warning", "rtc-main-panel", "rtc-room-grid"]);
+  assert.equal(realm.root.querySelector(".rtc-warning-text").textContent, "Something is wrong.");
+  assert.equal(realm.root.querySelector(".rtc-warning-icon").getAttribute("aria-label"), "Warning");
+
+  const hidden = cardShell.renderCardBody(realm.context, viewModel(), registry.VIEW_RENDERERS);
+  assert.ok(!hidden.includes("rtc-warning"), "no warning, no block");
+});
+
+test("a visible warnings block is content: with every other part hidden, it is what the card shows", () => {
+  const realm = makeRealm();
+  const bare = viewModel({
+    accentLine: false,
+    hasPanel: false,
+    header: { ...viewModel().header, hasIcon: false, hasTitle: false, hasSubtitle: false, hasPill: false },
+    rooms: { ...viewModel().rooms, showChips: false },
+  });
+  const warned = cardShell.renderCardBody(
+    realm.context,
+    { ...bare, warning: { visible: true, text: "Something is wrong.", label: "Warning" } },
+    syntheticRegistry([])
+  );
+  assert.match(warned, /rtc-warning/);
+  assert.ok(!warned.includes("rtc-nothing-shown"));
+  assert.match(cardShell.renderCardBody(realm.context, bare, syntheticRegistry([])), /rtc-nothing-shown/);
+});
+
+test("the shell patches the warning text and its accessible name in place", () => {
+  const realm = makeRealm();
+  realm.root.innerHTML = cardShell.renderCardBody(
+    realm.context,
+    viewModel({ warning: { visible: true, text: "One.", label: "Warning" } }),
+    registry.VIEW_RENDERERS
+  );
+  const before = realm.root.querySelector(".rtc-warning");
+  cardShell.patchCardBody(
+    realm.context,
+    realm.root,
+    viewModel({ warning: { visible: true, text: "Zwei.", label: "Warnung" } }),
+    registry.VIEW_RENDERERS
+  );
+  assert.equal(realm.root.querySelector(".rtc-warning"), before, "patched, not rebuilt");
+  assert.equal(realm.root.querySelector(".rtc-warning-text").textContent, "Zwei.");
+  assert.equal(realm.root.querySelector(".rtc-warning-icon").getAttribute("aria-label"), "Warnung");
+});
+
 test("the shell resolves the layout of every view that declares one, and skips those that do not", () => {
   const realm = makeRealm();
   const calls = [];
@@ -161,10 +211,20 @@ test("the structure signature composes the shell's parts with each view's own", 
   const signature = cardShell.cardStructureSignature(model, registry.VIEW_RENDERERS);
   assert.match(
     signature,
-    /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|accentLine:1\|icon:1\|title:1\|pill:1\|panel:1\|views:scale\|collapsed:0\|/
+    /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|warning:0\|accentLine:1\|icon:1\|title:1\|pill:1\|panel:1\|views:scale\|collapsed:0\|/
   );
   assert.match(signature, /scale:/, "the active view contributes its own part");
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
+});
+
+test("the warnings block's presence moves the signature, its text does not", () => {
+  const reference = cardShell.cardStructureSignature(viewModel(), registry.VIEW_RENDERERS);
+  const shown = (text) => viewModel({ warning: { visible: true, text, label: "Warning" } });
+  assert.notEqual(cardShell.cardStructureSignature(shown("a"), registry.VIEW_RENDERERS), reference);
+  assert.equal(
+    cardShell.cardStructureSignature(shown("a"), registry.VIEW_RENDERERS),
+    cardShell.cardStructureSignature(shown("b"), registry.VIEW_RENDERERS)
+  );
 });
 
 test("no-data structures distinguish the headline shape and hint kind", () => {
@@ -289,6 +349,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
     title: payload,
     subtitle: payload,
     header: { ...viewModel().header, icon: payload, title: payload, subtitle: payload, statusLabel: payload },
+    warning: { visible: true, text: payload, label: payload },
     average: { ...viewModel().average, entity: payload, label: payload, tooltip: payload, ariaLabel: payload, unitText: payload },
     carousel: { hint: payload, noActiveViewsHint: payload },
     rooms: {
@@ -310,6 +371,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
     }
   }
   assert.equal(realm.root.querySelector(".rtc-title").textContent, payload, "while the text itself is preserved verbatim");
+  assert.equal(realm.root.querySelector(".rtc-warning-text").textContent, payload);
 });
 
 // ---------------------------------------------------------------------- styles --

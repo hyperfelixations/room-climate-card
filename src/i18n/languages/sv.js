@@ -120,4 +120,16 @@ export const sv = {
   "layout.nothingShown": "Alla delar av det här kortet är dolda av show:.",
   "views.none": "Ingen vy tillgänglig.",
 
+  "warning.label": "Varning",
+  "warning.several": (v) => `${v.count} problem med det här kortet. Detaljer i webbläsarens konsol.`,
+  "warning.invalidValue": (v) => `${v.value} är inte ett giltigt värde för ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} är inte ett alternativ för det här kortet. Nyckeln ignoreras.`,
+  "warning.mixedMeasurements": "Rummen mäter olika saker. Ange entity eller samordna device_class.",
+  "fallback.value": (v) => `Standardvärdet används: ${v.value}.`,
+  "fallback.automatic": "Den automatiska inställningen används.",
+  "fallback.ignored": "Det ignoreras.",
+  "fallback.firstView": "Kortet startar på den första tillgängliga vyn.",
+  "fallback.defaults": "Standardvärdena används.",
+  "value.empty": "(tomt)",
+
 };

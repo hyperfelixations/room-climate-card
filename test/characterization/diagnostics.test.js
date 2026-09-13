@@ -2,10 +2,11 @@
 
 // Characterization of error and warning behaviour, verbatim. The card has two failure
 // modes, and the boundary is a product decision: structurally invalid config throws (HA's
-// setConfig() contract requires it to propagate), recoverable misconfiguration degrades and
-// warns exactly once. Changes must move neither the boundary nor the wording — the messages
-// are the only diagnostic channel, are quoted in the README, and the once-per-change dedup
-// keeps a misconfigured dashboard from flooding the console.
+// setConfig() contract requires it to propagate); an invalid value or a foreign key degrades,
+// is shown in the warnings block and is written to the console once per change. Changes must move
+// neither the boundary nor the wording without a deliberate baseline update — the messages are
+// what a user has to act on, and the once-per-change dedup keeps a misconfigured dashboard from
+// flooding the console.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -303,11 +304,11 @@ const INVALID_CONFIGS = [
     FAHRENHEIT_HASS,
     { entity: "sensor.avg", classification: { ...validCustom(), scale: { min: -5e307, max: 5e307, step: 2 } } },
   ],
+  ["top-level-misspelled-key", VALID_HASS, { entity: "sensor.avg", pallete: "vivid" }],
 ];
 
 const WARNING_CONFIGS = [
-  ["top-level-unknown-key", { entity: "sensor.avg", pallete: "vivid" }],
-  ["top-level-unknown-key-without-a-near-option", { entity: "sensor.avg", wibble_wobble: 1 }],
+  ["top-level-foreign-key", { entity: "sensor.avg", wibble_wobble: 1 }],
   ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
   ["views-not-an-array", { entity: "sensor.avg", views: "scale" }],
   ["views-unknown-type", { entity: "sensor.avg", views: ["scale", "bogus"] }],
@@ -358,16 +359,20 @@ test("every rejected configuration throws its documented message", () => {
   expectBaseline("diagnostics/config-errors.json", stableStringify(catalog));
 });
 
-test("every tolerated misconfiguration warns with its documented message", () => {
+test("every invalid value and foreign key warns in the warnings block and in the console", () => {
   const catalog = {};
   for (const [name, config] of WARNING_CONFIGS) {
     const el = newCard(VALID_HASS);
     const recorder = recordConsole(env);
     el.setConfig(config);
     recorder.restore();
-    catalog[name] = recorder.warnings;
+    catalog[name] = {
+      console: recorder.warnings,
+      block: el.shadowRoot.querySelector(".rtc-warning-text")?.textContent ?? null,
+    };
     assert.ok(recorder.warnings.length > 0, `${name}: must produce at least one warning`);
     assert.equal(recorder.errors.length, 0, `${name}: must not escalate to console.error`);
+    assert.ok(el.shadowRoot.querySelector(".rtc-warning"), `${name}: the warnings block is shown`);
     el.remove();
   }
   expectBaseline("diagnostics/config-warnings.json", stableStringify(catalog));

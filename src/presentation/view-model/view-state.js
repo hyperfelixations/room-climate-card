@@ -58,31 +58,24 @@ export function optionSchemaForView(type) {
 
 // An explicit `views` list is authoritative, including an empty list; otherwise
 // definitions resolve as `auto` in declaration order. Entries retain requested,
-// available and active independently; `keys` contains active views in order.
+// available and active independently; `keys` contains active views in order. An unknown
+// or repeated type is skipped: normalizeViewsConfig() has already reported and dropped it.
 export function resolveActiveViews(definitions, availability, config) {
   const requests = Array.isArray(config?.views)
     ? config.views
     : definitions.map((definition) => ({ type: definition.key, enabled: "auto", options: {} }));
-  const diagnostics = [];
   const seen = new Set();
   const entries = [];
   for (const request of requests) {
     const definition = definitions.find((candidate) => candidate.key === request.type);
-    if (!definition) {
-      diagnostics.push(`views: unknown view type "${request.type}"`);
-      continue;
-    }
-    if (seen.has(request.type)) {
-      diagnostics.push(`views: duplicate view type "${request.type}"`);
-      continue;
-    }
+    if (!definition || seen.has(request.type)) continue;
     seen.add(request.type);
     const available = definition.condition(availability);
     const requested = request.enabled === "auto" ? definition.defaultEnabled(availability) : request.enabled === true;
     entries.push({ type: request.type, requested, available, active: requested && available, options: request.options });
   }
 
-  return { keys: entries.filter((entry) => entry.active).map((entry) => entry.type), entries, diagnostics };
+  return { keys: entries.filter((entry) => entry.active).map((entry) => entry.type), entries };
 }
 
 // Resolves every schema option to its validated value or default.

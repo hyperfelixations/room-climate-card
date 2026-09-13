@@ -115,4 +115,16 @@ export const nl = {
   "layout.nothingShown": "Alle onderdelen van deze kaart zijn verborgen via show:.",
   "views.none": "Geen weergave beschikbaar.",
 
+  "warning.label": "Waarschuwing",
+  "warning.several": (v) => `${v.count} problemen met deze kaart. Details in de browserconsole.`,
+  "warning.invalidValue": (v) => `${v.value} is geen geldige waarde voor ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} is geen optie van deze kaart. Deze sleutel wordt genegeerd.`,
+  "warning.mixedMeasurements": "De kamers meten verschillende grootheden. Stel entity in of maak device_class gelijk.",
+  "fallback.value": (v) => `De standaardwaarde wordt gebruikt: ${v.value}.`,
+  "fallback.automatic": "De automatische instelling wordt gebruikt.",
+  "fallback.ignored": "Wordt genegeerd.",
+  "fallback.firstView": "De kaart start met de eerste beschikbare weergave.",
+  "fallback.defaults": "De standaardwaarden worden gebruikt.",
+  "value.empty": "(leeg)",
+
 };

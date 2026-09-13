@@ -15,6 +15,7 @@ const { VIEWS } = require("../../manifests/product-surface.js");
 
 let showModule;
 let normalizeConfigModule;
+let core;
 
 const SUPPORTED = new Set(["en", "de"]);
 const TINY_PALETTE = { id: "tiny", below: ["#111111"], optimal: "#222222", above: ["#333333"], invalid: "#999999" };
@@ -41,6 +42,7 @@ const configure = (overrides) => normalizeConfigModule.normalizeConfig({ entity:
 test.before(async () => {
   showModule = await import("../../../src/config/show.js");
   normalizeConfigModule = await import("../../../src/config/normalize-config.js");
+  core = await import("../../../src/core/diagnostics.js");
 });
 
 // ============================================ the block on its own ===============
@@ -59,18 +61,32 @@ test("an absent block asks for nothing, and every part is drawn", () => {
     subtitle: true,
     entity_label: true,
     pill: true,
+    warnings: true,
     panel: true,
     rooms: "auto",
     unavailable_rooms: true,
   });
 });
 
+test("show.warnings is a switch like every other part", () => {
+  assert.deepEqual(showModule.normalizeShowConfig({ warnings: false }), { show: { warnings: false }, diagnostics: [] });
+  assert.equal(configure({ show: { warnings: false } }).show.warnings, false);
+  const { show, diagnostics } = showModule.normalizeShowConfig({ warnings: "no" });
+  assert.deepEqual(show, {});
+  assert.deepEqual(diagnostics, [
+    core.createDiagnostic("value.invalid", { path: "show.warnings", value: "no", fallback: core.fallbackValue(true) }),
+  ]);
+});
+
 test("a block that is not an object is diagnosed and changes nothing", () => {
   for (const wrong of ["yes", 42, true, []]) {
     const { show, diagnostics } = showModule.normalizeShowConfig(wrong);
     assert.deepEqual(show, {}, JSON.stringify(wrong));
-    assert.equal(diagnostics.length, 1, JSON.stringify(wrong));
-    assert.match(diagnostics[0], /^show: expected an object/);
+    assert.deepEqual(
+      diagnostics,
+      [core.createDiagnostic("value.invalid", { path: "show", value: wrong, fallback: core.FALLBACK.DEFAULTS })],
+      JSON.stringify(wrong)
+    );
   }
 });
 
@@ -84,19 +100,22 @@ test("one part named turns off exactly that part", () => {
   assert.equal(config.show.unavailable_rooms, true);
 });
 
-test("an unknown key inside the block is ignored and said out loud", () => {
+test("each unknown key inside the block is ignored and named on its own", () => {
   const { show, diagnostics } = showModule.normalizeShowConfig({ icon: false, ikon: false, footer: false });
   assert.deepEqual(show, { icon: false });
-  assert.equal(diagnostics.length, 1);
-  assert.match(diagnostics[0], /ignoring unknown "show" key\(s\) "ikon", "footer"/);
+  assert.deepEqual(diagnostics, [
+    core.createDiagnostic("config.foreign_key", { path: "show.ikon" }),
+    core.createDiagnostic("config.foreign_key", { path: "show.footer" }),
+  ]);
 });
 
 test("a part that is not a boolean falls back to its default and is said out loud", () => {
   const { show, diagnostics } = showModule.normalizeShowConfig({ pill: "no", panel: 0 });
   assert.deepEqual(show, {}, "neither survives, so both fall back to the default");
-  assert.equal(diagnostics.length, 2);
-  assert.match(diagnostics[0], /show\.pill: expected true or false, got "no"/);
-  assert.match(diagnostics[1], /show\.panel: expected true or false, got 0/);
+  assert.deepEqual(diagnostics, [
+    core.createDiagnostic("value.invalid", { path: "show.pill", value: "no", fallback: core.fallbackValue(true) }),
+    core.createDiagnostic("value.invalid", { path: "show.panel", value: 0, fallback: core.fallbackValue(true) }),
+  ]);
 });
 
 test("rooms keeps its three states while every other part is a switch", () => {
@@ -109,7 +128,9 @@ test("rooms keeps its three states while every other part is a switch", () => {
   // A typo here is not silently defaulted: "auto" and "true" are different answers.
   const { show, diagnostics } = showModule.normalizeShowConfig({ rooms: "alway" });
   assert.deepEqual(show, {});
-  assert.match(diagnostics[0], /show\.rooms: expected auto, true or false, got "alway"/);
+  assert.deepEqual(diagnostics, [
+    core.createDiagnostic("value.invalid", { path: "show.rooms", value: "alway", fallback: core.fallbackValue("auto") }),
+  ]);
 });
 
 // ============================================ precedence over the older spellings =
@@ -172,9 +193,7 @@ test("legacyShowRequests() reports only what was actually asked for", () => {
 
 test("the diagnostics of the block travel on the same channel as the views diagnostics", () => {
   const config = configure({ show: { nonsense: true }, views: "not-an-array" });
-  assert.equal(config._configDiagnostics.length, 2);
-  assert.ok(config._configDiagnostics.some((entry) => entry.startsWith("show:")), config._configDiagnostics.join(" | "));
-  assert.ok(config._configDiagnostics.some((entry) => entry.startsWith("views:")), config._configDiagnostics.join(" | "));
+  assert.deepEqual(config._configDiagnostics.map((entry) => entry.path), ["show.nonsense", "views"]);
 });
 
 // ============================================ the two header lines ===============

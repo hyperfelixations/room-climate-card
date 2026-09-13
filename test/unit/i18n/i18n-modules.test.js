@@ -105,6 +105,8 @@ const INTERPOLATION_VARS = Object.freeze({
   max: "23.0 °C",
   maxTime: "15:00",
   time: "06:00",
+  key: "show.rooms",
+  instead: "Using the defaults.",
 });
 
 test("every function-valued translation reads exactly the documented variables, in every language", () => {

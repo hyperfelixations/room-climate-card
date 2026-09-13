@@ -1,4 +1,4 @@
-// SHIPPED STYLESHEET SLICE: header parts and the main panel below them.
+// SHIPPED STYLESHEET SLICE: header parts, the warnings block and the main panel below them.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const HEADER_CSS = `        .rtc-header {
@@ -104,6 +104,34 @@ export const HEADER_CSS = `        .rtc-header {
           color: var(--tone-ink);
           background: var(--tone-soft);
           border: 1px solid var(--tone-border);
+        }
+
+        /* Tint and symbol derive from the theme's warning colour; the text keeps the primary
+           colour, which stays legible on the light tint in either theme. */
+        .rtc-warning {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 14px;
+          background: var(--rtc-warning-bg);
+          border: 1px solid var(--rtc-warning-border);
+          color: var(--primary-text-color);
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1.3;
+        }
+
+        .rtc-warning-icon {
+          flex: 0 0 16px;
+          width: 16px;
+          height: 16px;
+          fill: var(--rtc-warning-ink);
+        }
+
+        .rtc-warning-text {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
 
         /* Let the headline grow beyond its 106px floor while the adjacent view keeps at least

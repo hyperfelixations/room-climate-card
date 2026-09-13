@@ -456,6 +456,16 @@ test("the browser adapter hands back a working unsubscribe for visibility", () =
   assert.equal(fired, 1, "the unsubscribe detaches exactly what it attached");
 });
 
+test("the browser adapter writes to the console of the card's current realm", () => {
+  const jsdom = new JSDOM("<!doctype html><html><body></body></html>");
+  const written = [];
+  jsdom.window.console.warn = (...args) => written.push(args.join(" "));
+  const platform = browserPlatform.createBrowserPlatform(() => jsdom.window.document);
+  platform.log("warn", "Room Climate Card:", "a line");
+  assert.deepEqual(written, ["Room Climate Card: a line"]);
+  assert.doesNotThrow(() => platform.log("no-such-level", "x"), "a level the console lacks is dropped");
+});
+
 test("a detached document leaves the adapter inert instead of throwing", () => {
   const platform = browserPlatform.createBrowserPlatform(() => null);
   assert.equal(platform.setTimeout(() => {}, 10), null);

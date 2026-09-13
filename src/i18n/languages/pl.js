@@ -120,4 +120,17 @@ export const pl = {
   "layout.nothingShown": "Wszystkie elementy tej karty są ukryte przez show:.",
   "views.none": "Brak dostępnego widoku.",
 
+  "warning.label": "Ostrzeżenie",
+  "warning.several": (v) =>
+    `${v.count} ${selectPlural("pl", v.count, { one: "problem", few: "problemy", many: "problemów", other: "problemu" })} z tą kartą. Szczegóły w konsoli przeglądarki.`,
+  "warning.invalidValue": (v) => `${v.value} nie jest prawidłową wartością dla ${v.key}. ${v.instead}`,
+  "warning.foreignKey": (v) => `${v.key} nie jest opcją tej karty. Ten klucz jest ignorowany.`,
+  "warning.mixedMeasurements": "Pomieszczenia mierzą różne wielkości. Ustaw entity lub ujednolić device_class.",
+  "fallback.value": (v) => `Używana jest wartość domyślna: ${v.value}.`,
+  "fallback.automatic": "Używane jest ustawienie automatyczne.",
+  "fallback.ignored": "Jest ignorowana.",
+  "fallback.firstView": "Karta zaczyna od pierwszego dostępnego widoku.",
+  "fallback.defaults": "Używane są wartości domyślne.",
+  "value.empty": "(puste)",
+
 };

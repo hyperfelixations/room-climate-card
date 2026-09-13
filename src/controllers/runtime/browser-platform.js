@@ -220,6 +220,12 @@ export function createBrowserPlatform(getDocument) {
       return new EventConstructor(type, init);
     },
 
+    // The console of the card's realm; a realm without one drops the line.
+    log: (level, ...args) => {
+      const target = viewOf()?.console ?? globalThis.console;
+      target?.[level]?.(...args);
+    },
+
     readTranslateXPx,
     readAnimationPhase,
     onAnimationStart,
