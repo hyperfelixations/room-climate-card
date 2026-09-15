@@ -99,6 +99,11 @@
           background: linear-gradient(90deg, var(--tone-color), transparent);
         }
 
+        .rtc-root[data-accent-line="bottom"] .rtc-top-line {
+          top: auto;
+          bottom: 0;
+        }
+
         .rtc-header {
           display: grid;
           grid-template-columns: auto 1fr auto;

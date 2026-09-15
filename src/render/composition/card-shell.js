@@ -13,7 +13,7 @@ function renderViewArea(context, viewModel, viewRenderers) {
 
   if (keys.length >= 2) {
     return `
-          <div class="rtc-rotator" aria-live="off" title="${escapeHtml(viewModel.carousel.hint)}">
+          <div class="rtc-rotator" aria-live="off"${carouselHintAttribute(viewModel)}>
             <div class="rtc-track">
               ${keys.map((key) => `<div class="rtc-view">${renderView(key)}</div>`).join("")}
             </div>
@@ -39,6 +39,14 @@ function subtitleOverflowAttribute(viewModel) {
 // Title wraps by default; separate attributes allow title/subtitle policies to differ.
 function titleOverflowAttribute(viewModel) {
   return viewModel.header.titleOverflow === "clip" ? ` data-title="clip"` : "";
+}
+
+function carouselHintAttribute(viewModel) {
+  return viewModel.carousel.hint ? ` title="${escapeHtml(viewModel.carousel.hint)}"` : "";
+}
+
+function accentLinePositionAttribute(viewModel) {
+  return viewModel.accentLinePosition === "bottom" ? ` data-accent-line="bottom"` : "";
 }
 
 // Tell the three-column CSS which parts exist; omit the attribute for the default full header.
@@ -116,7 +124,7 @@ export function renderCardBody(context, viewModel, viewRenderers) {
 
   // Programmatic last-resort focus target, excluded from normal tab order.
   return `
-        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${titleOverflowAttribute(viewModel)}${subtitleOverflowAttribute(viewModel)}${headerPartsAttribute(parts)} style="${viewModel.toneStyle}" tabindex="-1">
+        <div class="rtc-root" data-state="${viewModel.empty ? "no-data" : "data"}" data-metric="${escapeHtml(viewModel.metric.kind)}"${accentLinePositionAttribute(viewModel)}${titleOverflowAttribute(viewModel)}${subtitleOverflowAttribute(viewModel)}${headerPartsAttribute(parts)} style="${viewModel.toneStyle}" tabindex="-1">
           ${accentLineMarkup(viewModel)}${body}
         </div>
       `;
@@ -193,6 +201,8 @@ function patchShell(context, root, viewModel) {
     contentRoot.setAttribute("style", viewModel.toneStyle);
     contentRoot.setAttribute("data-state", viewModel.empty ? "no-data" : "data");
     contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
+    if (viewModel.accentLinePosition === "bottom") contentRoot.setAttribute("data-accent-line", "bottom");
+    else contentRoot.removeAttribute("data-accent-line");
     if (viewModel.header.subtitleOverflow === "wrap") contentRoot.setAttribute("data-subtitle", "wrap");
     else contentRoot.removeAttribute("data-subtitle");
     if (viewModel.header.titleOverflow === "clip") contentRoot.setAttribute("data-title", "clip");
@@ -216,6 +226,12 @@ function patchShell(context, root, viewModel) {
 
   const warningIconEl = root.querySelector(".rtc-warning-icon");
   if (warningIconEl) warningIconEl.setAttribute("aria-label", viewModel.warning.label);
+
+  const rotatorEl = root.querySelector(".rtc-rotator");
+  if (rotatorEl) {
+    if (viewModel.carousel.hint) rotatorEl.setAttribute("title", viewModel.carousel.hint);
+    else rotatorEl.removeAttribute("title");
+  }
 
   updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);

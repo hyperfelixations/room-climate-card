@@ -52,6 +52,7 @@ const THRESHOLDS = {
 // The enumerated options with their real domains. Each is also generated slightly wrong via
 // typo(), so misspellings get tried without being listed.
 const ENUMS = {
+  accent_line: ["top", "bottom"],
   room_sort: ["configured", "name", "value_asc", "value_desc"],
   room_label: ["auto", "short", "name"],
   show_rooms: ["auto", true, false],
@@ -203,6 +204,7 @@ const WEIGHTS = {
 // these are independent coin flips rather than a choice between alternatives — a card can
 // carry any combination of them, and combinations are the point.
 const OPTION_PRESENCE = {
+  accent_line: 0.1,
   title: 0.14,
   entity_label: 0.1,
   icon: 0.08,
@@ -628,6 +630,7 @@ function generateConfig(rng, metric) {
   if (has("title")) config.title = generateHeaderLine(rng);
   if (has("entity_label")) config.entity_label = rng.pick(V.AWKWARD_TEXT);
   if (has("icon")) config.icon = rng.pick(["mdi:thermometer", "mdi:nonexistent-icon", "", "thermometer", 42]);
+  if (has("accent_line")) config.accent_line = enumValue(rng, ENUMS.accent_line);
   if (has("subtitle")) config.subtitle = generateHeaderLine(rng);
   if (has("decimals")) config.decimals = numberValue(rng, 0, 3);
   if (has("hide_footer")) config.hide_footer = boolValue(rng);

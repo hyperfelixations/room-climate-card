@@ -6,6 +6,7 @@
 // normalize-config.js — see internal dev doc §3 "Konfigurationsvertrag".
 
 export const DEFAULT_CONFIG = {
+  accent_line: "top",
   rotation_seconds: 14, // hold time per view
   slide_seconds: 1, // transition time between views
   hold_seconds: 0.5,

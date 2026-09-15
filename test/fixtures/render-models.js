@@ -90,6 +90,7 @@ function viewModel(overrides = {}) {
     tone: { label: "Optimal", color: "#79A86C", soft: "rgba(121,168,108,0.2)", icon: "mdi:thermometer" },
     toneStyle: "--tone-color:#79A86C;--tone-soft:rgba(121,168,108,0.2);",
     accentLine: true,
+    accentLinePosition: "top",
     hasPanel: true,
     hiddenHint: "layout.nothingShown",
     header: {

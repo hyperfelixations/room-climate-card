@@ -222,6 +222,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     toneStyle: toneStyleDeclaration(tone),
     // Shared shell decisions for data and no-data states.
     accentLine: config.show.accent_line,
+    accentLinePosition: config.accent_line,
     hasPanel: config.show.panel,
     hiddenHint: texts.t("layout.nothingShown"),
     header: { icon, ...headerTitle, ...headerSubtitle, statusLabel, hasIcon: config.show.icon, hasPill: config.show.pill },
@@ -262,7 +263,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     scale: null,
     rangeScale: null,
     views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
-    carousel: { hint: "", noActiveViewsHint: "" },
+    carousel: { hint: null, noActiveViewsHint: "" },
   };
 }
 
@@ -451,6 +452,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     toneStyle: toneStyleDeclaration(tone),
     // Shared shell decisions for data and no-data states.
     accentLine: config.show.accent_line,
+    accentLinePosition: config.accent_line,
     hasPanel: config.show.panel,
     hiddenHint: texts.t("layout.nothingShown"),
     // Cohesive header slots share the already resolved strings.
@@ -490,7 +492,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       byKey,
     },
     carousel: {
-      hint: texts.t("rotator.hint"),
+      hint: config.swipe === true && viewState.keys.length >= 2 ? texts.t("rotator.hint") : null,
       // Hint only when requested views are unavailable; an explicit empty list collapses.
       noActiveViewsHint: texts.t("views.none"),
     },

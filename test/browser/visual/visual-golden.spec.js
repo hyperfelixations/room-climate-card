@@ -942,6 +942,29 @@ test("visual golden: a colour that has to be adjusted to be read on itself", asy
   await shot(page, cardId, "palette-yellow.png", 400);
 });
 
+// The bottom accent-line position is a paint-only alternative to the default top edge. This
+// picture checks the line against the rounded lower edge and the unchanged content spacing.
+test("visual golden: the card with its accent line at the bottom", async ({ page }) => {
+  await gotoHarness(page);
+  const attributes = TEMPERATURE_C;
+  const cardId = await createCard(
+    page,
+    {
+      entity: "sensor.avg",
+      accent_line: "bottom",
+      auto_slide: false,
+      rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
+      views: [{ type: "scale" }],
+    },
+    {
+      "sensor.avg": mkStateObj("sensor.avg", 22, attributes),
+      "sensor.r1": mkStateObj("sensor.r1", 19.8, attributes),
+      "sensor.r2": mkStateObj("sensor.r2", 24.3, attributes),
+    }
+  );
+  await shot(page, cardId, "accent-line-bottom.png", 400);
+});
+
 // The card with `show.accent_line: false`: removing the line leaves nothing behind — no
 // gap, no substitute border, the top corner radius matching the bottom. Only the "off" case
 // needs a picture; the default is in every other golden here.

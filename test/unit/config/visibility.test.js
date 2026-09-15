@@ -157,11 +157,14 @@ test("the older spelling still decides on its own", () => {
   assert.equal(configure({ unavailable_values: "hide" }).show.unavailable_rooms, false);
 });
 
-test("the top-level accent_line is gone: a foreign key, and only the block decides", () => {
-  const config = configure({ accent_line: false });
-  assert.equal(config.show.accent_line, true);
-  assert.deepEqual(config._configDiagnostics, [core.createDiagnostic("config.foreign_key", { path: "accent_line" })]);
-  assert.equal(configure({ show: { accent_line: false } }).show.accent_line, false);
+test("accent_line selects the edge while show.accent_line independently selects visibility", () => {
+  const bottom = configure({ accent_line: "bottom" });
+  assert.equal(bottom.accent_line, "bottom");
+  assert.equal(bottom.show.accent_line, true);
+
+  const hiddenBottom = configure({ accent_line: "bottom", show: { accent_line: false } });
+  assert.equal(hiddenBottom.accent_line, "bottom");
+  assert.equal(hiddenBottom.show.accent_line, false);
 });
 
 test("a block that mentions other parts does not silence the older spelling", () => {

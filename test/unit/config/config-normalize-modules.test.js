@@ -177,6 +177,7 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.hold_seconds, 0.5);
   assert.equal(result.auto_slide, true);
   assert.equal(result.swipe, true);
+  assert.equal(result.accent_line, "top");
   assert.equal(result.hide_footer, false);
   assert.equal(result.show.rooms, "auto");
   assert.equal(result.show.unavailable_rooms, true);
@@ -209,6 +210,22 @@ test("the three top-level switches read a boolean the way the show: block does",
     invalid("swipe", 1, fallbackValue(true)),
     invalid("hide_footer", "true", fallbackValue(false)),
   ]);
+});
+
+test("accent_line selects one edge and diagnoses every value outside its enum", () => {
+  assert.equal(configure({ accent_line: "top" }).accent_line, "top");
+  assert.equal(configure({ accent_line: "bottom" }).accent_line, "bottom");
+  assert.deepEqual(configure({ accent_line: null })._configDiagnostics, [], "an unfinished YAML value is silent");
+
+  for (const value of ["under", false, true, 0, {}, []]) {
+    const config = configure({ accent_line: value });
+    assert.equal(config.accent_line, "top", JSON.stringify(value));
+    assert.deepEqual(
+      config._configDiagnostics,
+      [invalid("accent_line", value, core.fallbackValue("top"))],
+      JSON.stringify(value)
+    );
+  }
 });
 
 test("every option that used to fall back in silence now names its default", () => {

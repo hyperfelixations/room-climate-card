@@ -20,6 +20,7 @@ test.before(async () => {
 
 test("the card defaults match the public contract", () => {
   assert.deepEqual(defaults.DEFAULT_CONFIG, {
+    accent_line: "top",
     rotation_seconds: 14,
     slide_seconds: 1,
     hold_seconds: 0.5,
@@ -34,7 +35,7 @@ test("the card defaults match the public contract", () => {
 test("no default of a `show:` decision is stated a second time here", () => {
   // SHOW_SWITCHES owns every one of them; a key here for one of those decisions would be a
   // second statement of the same default.
-  for (const key of ["show", "show_rooms", "unavailable_values", "accent_line", "rooms"]) {
+  for (const key of ["show", "show_rooms", "unavailable_values", "rooms"]) {
     assert.equal(key in defaults.DEFAULT_CONFIG, false, `DEFAULT_CONFIG must not restate ${key}`);
   }
 });

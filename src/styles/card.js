@@ -40,4 +40,9 @@ export const CARD_CSS = `        .rtc-card {
           background: linear-gradient(90deg, var(--tone-color), transparent);
         }
 
+        .rtc-root[data-accent-line="bottom"] .rtc-top-line {
+          top: auto;
+          bottom: 0;
+        }
+
 `;

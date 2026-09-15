@@ -1,4 +1,10 @@
 {
+  "accent-line-unknown": {
+    "block": "\"under\" is not a valid value for accent_line. Using default: top.",
+    "console": [
+      "Room Climate Card: \"under\" is not a valid value for accent_line. Using default: top."
+    ]
+  },
   "auto-slide-not-a-boolean": {
     "block": "\"yes\" is not a valid value for auto_slide. Using default: true.",
     "console": [

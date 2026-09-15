@@ -305,6 +305,43 @@ test("the soft tone colour is derived here, not in the domain", () => {
   assert.equal(result.tone.soft, "rgba(121,168,108,0.2)", "the CSS-ready variant is a presentation derivation");
 });
 
+test("the accent-line position crosses the presentation boundary in both card states", () => {
+  const data = cardViewModel.buildCardViewModel({
+    domainModel: minimalDomainModel(),
+    config: cfg({ accent_line: "bottom" }),
+    texts: stubTexts(),
+  });
+  const noData = cardViewModel.buildCardViewModel({
+    domainModel: noDataDomain(),
+    config: cfg({ accent_line: "bottom" }),
+    texts: stubTexts(),
+  });
+  assert.equal(data.accentLinePosition, "bottom");
+  assert.equal(noData.accentLinePosition, "bottom");
+});
+
+test("the carousel hint exists only when the rendered carousel can be swiped", () => {
+  const texts = stubTexts();
+  const swipable = cardViewModel.buildCardViewModel({
+    domainModel: withTwoRooms(),
+    config: cfgWithTwoRooms({ swipe: true }),
+    texts,
+  });
+  assert.ok(swipable.views.keys.length >= 2, "the fixture must render a carousel");
+  assert.equal(swipable.carousel.hint, "rotator.hint");
+
+  const disabled = cardViewModel.buildCardViewModel({
+    domainModel: withTwoRooms(),
+    config: cfgWithTwoRooms({ swipe: false }),
+    texts,
+  });
+  assert.equal(disabled.carousel.hint, null);
+
+  const solo = cardViewModel.buildCardViewModel({ domainModel: minimalDomainModel(), config: cfg(), texts });
+  assert.deepEqual(solo.views.keys, ["scale"]);
+  assert.equal(solo.carousel.hint, null);
+});
+
 test("every subtitle branch produces its own key and variables", () => {
   const texts = stubTexts();
   const build = (subtitle) =>

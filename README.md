@@ -164,7 +164,7 @@ Ideas and bug reports are welcome as
 
 Everything except a source is optional — leave an option out and you get the
 default. A value the card cannot use gets the default too, and a warning names
-it — see [Warnings and errors](#warnings-and-errors).
+it.
 
 ### Top-level options
 
@@ -206,13 +206,13 @@ show:
 
 | Part | Default | What it is |
 | --- | --- | --- |
-| `accent_line` | `true` | The colored bar along the top edge, in the color of the current reading. |
+| `accent_line` | `true` | The colored bar along the edge selected by the top-level `accent_line` option, in the color of the current reading. |
 | `icon` | `true` | The icon in the top left. |
 | `title` | `true` | The card title. |
 | `subtitle` | `true` | The line under the title. |
 | `entity_label` | `true` | The small caption above the large value. |
 | `pill` | `true` | The status label in the top right — “Optimal”, “Warm”, and so on. |
-| `warnings` | `true` | The block under the header that names a problem with the configuration or a sensor. See [Warnings and errors](#warnings-and-errors). |
+| `warnings` | `true` | The block under the header that names a problem with the configuration or a sensor. |
 | `panel` | `true` | The middle block: the large value and the views beside it. |
 | `rooms` | `auto` | The room chips. `auto` hides the one chip that would just repeat the large value on a single-room card and shows chips otherwise; `true` always shows them; `false` never does. |
 | `unavailable_rooms` | `true` | Shows a neutral `--` chip for an unavailable or non-numeric room sensor. Set it to `false` to omit these chips. |
@@ -233,6 +233,7 @@ selected in the order written under `rooms:`.
 
 | Option | Default | What it does |
 | --- | --- | --- |
+| `accent_line` | `top` | Places the colored accent line along the `top` or `bottom` edge of the card. |
 | `auto_slide` | `true` | `false` stops automatic movement between views. |
 | `swipe` | `true` | `false` disables horizontal swipe navigation. |
 | `rotation_seconds` | `14` | Seconds a view remains visible before automatic movement. Accepted range: `1`–`3600`. |
@@ -241,6 +242,12 @@ selected in the order written under `rooms:`.
 | `hold_action` | `more-info` | The same for a long press. |
 | `views` | automatic | Chooses which views appear, in which order, with which options. Write it and it is the full list — see [Views](#views). |
 | `start_view` | first active view | The view the card starts on: `range`, `range_scale`, `scale`, or `extremes`. If that one is not available, the first active view is used. |
+
+Place the accent line along the bottom edge:
+
+```yaml
+accent_line: bottom
+```
 
 `auto_slide` and `swipe` are independent. For example, this creates a
 manually swipeable carousel that never advances on its own:
@@ -737,42 +744,6 @@ views:
       show_value: true
 ```
 
-## Warnings and errors
-
-**An error takes the card's place** when its configuration cannot be used at
-all. Home Assistant shows its error card with one sentence, in your language:
-
-- a key that a block of the card does not have — in `show:`, a room entry, a
-  `views:` entry or its `options:`, the block form of `title` or `subtitle`,
-  `classification`, or a written-out `palette`;
-- a top-level key that looks like a typo of an option;
-- no `entity` and no `rooms`, a room without an `entity`, or two rooms with the
-  same `entity`.
-
-```text
-Invalid configuration: show.ikon is not an option of this card. Did you mean show.icon?
-```
-
-The error names the full path of the key, so a key indented under the wrong
-block shows up here too.
-
-**A warning appears under the header** when the card can carry on. It names the
-value, where it is written, and what the card uses until you fix it:
-
-```text
-"neon" is not a valid value for palette. Using default: pastel.
-```
-
-The same block names a sensor the card cannot use: an entity id Home Assistant
-does not know, a sensor measuring something else, or one whose unit the card
-cannot read. With two or more problems, the block counts them and the browser
-console lists each one. A top-level key that resembles none of the card's
-options is ignored with a warning; the keys Home Assistant and card-mod add,
-such as `visibility`, `grid_options`, and `card_mod`, are left alone.
-
-`show: {warnings: false}` hides the block; the browser console still lists
-every warning.
-
 ## Known limitations
 
 - There is no visual editor — everything is YAML. Start with the
@@ -865,6 +836,7 @@ If none of this helps, please open a
   `roomClimateCardVersion`, and press Enter);
 - your browser and its version;
 - the relevant part of your card's YAML configuration;
+- the exact warning shown by the card, if any;
 - any error message from the browser console.
 
 ## Links

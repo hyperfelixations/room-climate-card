@@ -42,6 +42,7 @@ import {
 
 const ROOM_SORTS = ["configured", "name", "value_asc", "value_desc"];
 const ROOM_LABELS = ["auto", "short", "name"];
+const ACCENT_LINE_POSITIONS = ["top", "bottom"];
 // room_columns/room_rows: a larger grid cannot be a deliberate layout; null decides automatically.
 const ROOM_GRID = { min: 1, max: 20, integer: true, fallback: null, instead: FALLBACK.AUTOMATIC };
 
@@ -192,6 +193,14 @@ export function normalizeConfig(config, collaborators) {
     title,
     subtitle,
     icon: readText(userConfig.icon, "icon", diagnostics),
+    // WHERE the decorative line is drawn; show.accent_line independently decides WHETHER.
+    accent_line: readEnum(
+      userConfig.accent_line,
+      "accent_line",
+      diagnostics,
+      ACCENT_LINE_POSITIONS,
+      DEFAULT_CONFIG.accent_line
+    ),
     // WHETHER each part is drawn; "" on the part's key and `show.<part>: false` are two
     // roads to the same absent node.
     show,

@@ -68,6 +68,47 @@ test("the shell renders the views the model lists, in registry order, through th
   assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["render", "beta"], ["render", "alpha"]]);
   assert.match(html, /rtc-rotator/);
   assert.match(html, /rtc-track/);
+  assert.match(html, /title="Swipe to switch views"/);
+});
+
+test("the shell omits an inapplicable carousel hint and patches both directions", () => {
+  const realm = makeRealm();
+  const calls = [];
+  const views = syntheticRegistry(calls);
+  const base = viewModel({ views: { ...viewModel().views, keys: ["alpha", "beta"] } });
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, base, views);
+  const rotator = realm.root.querySelector(".rtc-rotator");
+  assert.equal(rotator.getAttribute("title"), "Swipe to switch views");
+
+  cardShell.patchCardBody(
+    realm.context,
+    realm.root,
+    { ...base, carousel: { ...base.carousel, hint: null } },
+    views
+  );
+  assert.equal(realm.root.querySelector(".rtc-rotator"), rotator, "an attribute change does not rebuild the carousel");
+  assert.equal(rotator.hasAttribute("title"), false);
+
+  cardShell.patchCardBody(realm.context, realm.root, base, views);
+  assert.equal(rotator.getAttribute("title"), "Swipe to switch views");
+});
+
+test("accent-line position is a patchable root attribute with byte-stable top markup", () => {
+  const realm = makeRealm();
+  const top = viewModel();
+  const html = cardShell.renderCardBody(realm.context, top, registry.VIEW_RENDERERS);
+  assert.ok(!html.includes("data-accent-line"), "the default top edge adds no markup");
+  realm.root.innerHTML = html;
+  const contentRoot = realm.root.querySelector(".rtc-root");
+  const line = realm.root.querySelector(".rtc-top-line");
+
+  const bottom = viewModel({ accentLinePosition: "bottom" });
+  cardShell.patchCardBody(realm.context, realm.root, bottom, registry.VIEW_RENDERERS);
+  assert.equal(contentRoot.getAttribute("data-accent-line"), "bottom");
+  assert.equal(realm.root.querySelector(".rtc-top-line"), line, "the line node stays mounted");
+
+  cardShell.patchCardBody(realm.context, realm.root, top, registry.VIEW_RENDERERS);
+  assert.equal(contentRoot.hasAttribute("data-accent-line"), false);
 });
 
 test("one view renders without the carousel machinery at all", () => {

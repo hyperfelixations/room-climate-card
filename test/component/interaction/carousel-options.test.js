@@ -71,10 +71,10 @@ test("integration: auto_slide:false and swipe:false are honored independently", 
   env.cleanup(el2);
 });
 
-test("integration: any non-false value is treated as true (same tolerant style as hide_footer)", () => {
+test("integration: invalid switch values warn and fall back to true", () => {
   const el = threeViewCard({ auto_slide: "yes", swipe: 0 });
   assert.equal(el._config.auto_slide, true);
-  assert.equal(el._config.swipe, true, "0 is not === false, so it is not treated as a disable request");
+  assert.equal(el._config.swipe, true, "invalid swipe values fall back to the documented default");
   env.cleanup(el);
 });
 
@@ -135,6 +135,31 @@ test("swipe:true (default): a pointerdown inside the rotator IS tracked as a rot
   const el = threeViewCard();
   el._handlePointerDown(pointerDownEvent(el, { insideRotator: true }));
   assert.equal(el._interaction.pointer.rotator, true);
+  env.cleanup(el);
+});
+
+test("the swipe hint is present exactly while carousel swiping is enabled", () => {
+  const enabled = threeViewCard({ swipe: true });
+  assert.equal(enabled.shadowRoot.querySelector(".rtc-rotator").getAttribute("title"), "Swipe to switch between views");
+  env.cleanup(enabled);
+
+  const disabled = threeViewCard({ swipe: false });
+  assert.equal(disabled.shadowRoot.querySelector(".rtc-rotator").hasAttribute("title"), false);
+  env.cleanup(disabled);
+});
+
+test("setConfig(): live swipe changes patch the hint without replacing the carousel", () => {
+  const el = threeViewCard({ swipe: true });
+  const rotator = el.shadowRoot.querySelector(".rtc-rotator");
+  assert.equal(rotator.getAttribute("title"), "Swipe to switch between views");
+
+  el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], swipe: false });
+  assert.equal(el.shadowRoot.querySelector(".rtc-rotator"), rotator);
+  assert.equal(rotator.hasAttribute("title"), false);
+
+  el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], swipe: true });
+  assert.equal(el.shadowRoot.querySelector(".rtc-rotator"), rotator);
+  assert.equal(rotator.getAttribute("title"), "Swipe to switch between views");
   env.cleanup(el);
 });
 

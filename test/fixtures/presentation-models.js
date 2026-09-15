@@ -42,6 +42,8 @@ function cfg(overrides = {}) {
     subtitle: { text: null, overflow: "clip" },
     entity_label: null,
     icon: null,
+    accent_line: "top",
+    swipe: true,
     room_label: "auto",
     room_sort: "value_asc",
     room_columns: null,

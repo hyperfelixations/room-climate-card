@@ -41,7 +41,7 @@ const CLASSIFICATION_ZONES = ["optimal", "comfort", "outside", "invalid"];
 // architecture suite blocks a second complete copy.
 const TOP_LEVEL_CONFIG_KEYS = [
   "entity", "rooms", "range_entity", "trend_entity", "classification", "palette",
-  "title", "subtitle", "entity_label", "icon", "decimals", "language", "room_sort",
+  "title", "subtitle", "entity_label", "icon", "accent_line", "decimals", "language", "room_sort",
   "room_label", "show", "room_columns", "room_rows",
   "auto_slide", "swipe", "rotation_seconds", "slide_seconds",
   "tap_action", "hold_action", "views", "start_view",

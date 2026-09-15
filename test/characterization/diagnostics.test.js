@@ -102,6 +102,7 @@ const WARNING_CONFIGS = [
   ["subtitle-overflow-unknown", { entity: "sensor.avg", subtitle: { text: "Downstairs", overflow: "sideways" } }],
   ["entity-label-not-text", { entity: "sensor.avg", entity_label: 5 }],
   ["icon-empty", { entity: "sensor.avg", icon: "" }],
+  ["accent-line-unknown", { entity: "sensor.avg", accent_line: "under" }],
   ["decimals-out-of-range", { entity: "sensor.avg", decimals: 3 }],
   ["language-unsupported", { entity: "sensor.avg", language: "xx" }],
   ["show-not-an-object", { entity: "sensor.avg", show: "yes" }],
