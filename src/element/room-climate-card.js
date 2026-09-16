@@ -57,6 +57,7 @@ import {
   renderFailureBody,
   resolveViewLayouts,
 } from "../render/composition/card-shell.js";
+import { createShadowMount } from "../render/composition/shadow-mount.js";
 import { VIEW_RENDERERS } from "../views/registry.js";
 import { buildStyles } from "../styles/index.js";
 import { createBrowserPlatform } from "../controllers/runtime/browser-platform.js";
@@ -102,9 +103,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this.attachShadow({ mode: "open" });
 
       // _config/_hass come from Home Assistant; everything else drives
-      // rendering, slider position, and pointer interaction.
+      // rendering, slider position, and pointer interaction. _config is the normalized
+      // configuration; _lovelaceConfig is the object setConfig() accepted, exposed as `config`.
       this._config = null;
+      this._lovelaceConfig = null;
       this._hass = null;
+
+      // The only writer of this shadow root; nodes another module inserts are left alone.
+      this._shadowMount = createShadowMount(this.shadowRoot);
 
       // The only route to browser runtime services (clock, timers, rAF, reduced-motion,
       // visibility, observers, fonts, event construction, transform read). The document
@@ -145,13 +151,16 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         onMeasure: () => this._resolveViewLayouts(this._renderController.lastViewModel),
       });
 
-      // A theme switch, an OS dark-mode flip, a card-mod repaint — none changes an
-      // entity or the config, so nothing else would bring the card back to re-read what
-      // it is standing on. The watch supplies the occasion; _render()'s data signature
-      // decides whether anything changed. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
+      // A theme switch, an OS dark-mode flip, a stylesheet card-mod places or rewrites in
+      // this card — none changes an entity or the config, so nothing else would bring the
+      // card back to re-read what it is standing on. The watch supplies the occasion;
+      // _render()'s data signature decides whether anything changed. See internal dev doc §5
+      // "Render-Auslöser bei Themewechsel".
       this._surfaceWatch = createSurfaceWatch({
         platform: this._platform,
         onChange: () => this._renderSafely(),
+        getStyleContainers: () => this._shadowMount.containers(),
+        getForeignNodes: () => this._shadowMount.foreignNodes(),
       });
 
       // Hands a user action to Home Assistant. Gets neither hass nor this element:
@@ -261,6 +270,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return stubConfigFor(hass?.states, entities, entitiesFallback);
     }
 
+    // The configuration as written, read by frontend modules such as card-mod (`card_mod`,
+    // `type`, Jinja `config`). Read-only. See internal dev doc §4 "Shadow-DOM-Eigentum".
+    get config() {
+      return this._lovelaceConfig;
+    }
+
     // Strong exception safety: normalization runs first and writes nothing; the commit
     // phase cannot fail, because a render that fails shows its failure message instead of
     // throwing. HA's live YAML editor calls setConfig() on every keystroke, so refused calls
@@ -281,6 +296,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // dropped — the _render(false) below settles it.
         this._interaction.cancelForConfigChange();
         this._config = normalized;
+        this._lovelaceConfig = config;
         // _activeView is left untouched: _renderAll() preserves it across a structural
         // change, else falls back to config.start_view then the first active view.
         this._renderController.invalidateDataSignature();
@@ -658,9 +674,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         message = translate(DEFAULT_LANGUAGE, "error.renderFailed");
       }
       try {
-        this.shadowRoot.innerHTML = `<style>${this._styles()}</style><ha-card class="rtc-card">${renderFailureBody(message)}</ha-card>`;
+        this._shadowMount.mount(this._renderContext(), { css: this._styles(), bodyHtml: renderFailureBody(message) });
       } catch (_error) {
-        this.shadowRoot.textContent = message;
+        this._shadowMount.showText(message);
       }
     }
 
@@ -681,7 +697,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const focusedEntity = focusedBefore?.getAttribute?.("data-entity") ?? null;
       const hadCardFocus = Boolean(focusedBefore);
 
-      // The innerHTML replacement destroys what an in-flight gesture is anchored to; the
+      // Replacing the body destroys what an in-flight gesture is anchored to; the
       // runtime owns that decision, the element only says when.
       this._interaction.abandonGestureForRebuild();
 
@@ -706,12 +722,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._activeView = nextIndex === -1 ? 0 : nextIndex;
 
       const context = this._renderContext();
-      this.shadowRoot.innerHTML = `
-        <style>${this._styles()}</style>
-        <ha-card class="rtc-card">
-          ${renderCardBody(context, viewModel, VIEW_RENDERERS)}
-        </ha-card>
-      `;
+      this._shadowMount.mount(context, { css: this._styles(), bodyHtml: renderCardBody(context, viewModel, VIEW_RENDERERS) });
       if (hadCardFocus) {
         const matchingSource = focusedEntity
           ? Array.from(this.shadowRoot.querySelectorAll("[data-entity]")).find(

@@ -13,6 +13,7 @@ const assert = require("node:assert/strict");
 
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { scenario } = require("../../fixtures/scenario.js");
+const { attachCardMod } = require("../../helpers/card-mod-double.js");
 
 let env;
 test.before(() => {
@@ -74,17 +75,60 @@ test("an attribute that changed nothing about the background costs a comparison,
   env.cleanup(card);
 });
 
-test("a card-mod rule on this one card is a reason to look again", async () => {
+test("a style written on this one card element is a reason to look again", async () => {
   const { card, repaint } = cardOnBackground(["#FFFFFF"]);
   card._render(false);
   const onLight = toneColorOf(card);
 
-  // card-mod colours a single card by writing on the element itself. Nothing about the
+  // An inline style or a class on the host colours this card alone. Nothing about the
   // document changes, so the root observer would never see it.
   repaint(["#0A2A4F"]);
   card.setAttribute("style", "background:#0A2A4F");
 
   await settle(() => toneColorOf(card) !== onLight, "the card to follow a rule aimed at it alone");
+  env.cleanup(card);
+});
+
+test("a card-mod stylesheet arriving in the shadow root is a reason to look again", async () => {
+  const { card, repaint } = cardOnBackground(["#FFFFFF"]);
+  card._render(false);
+  const onLight = toneColorOf(card);
+
+  // card-mod neither touches the document nor an attribute of the host: it appends a
+  // <card-mod> element with a <style> inside to the card's shadow root.
+  repaint(["#0A2A4F"]);
+  attachCardMod(card.shadowRoot, "ha-card { background: #0A2A4F; }");
+
+  await settle(() => toneColorOf(card) !== onLight, "the card to follow a stylesheet placed inside it");
+  env.cleanup(card);
+});
+
+test("a card-mod stylesheet that rewrites itself is a reason to look again", async () => {
+  // Theme reloads and Jinja templates change the text of the <style> card-mod already placed.
+  const { card, repaint } = cardOnBackground(["#FFFFFF"]);
+  card._render(false);
+  const cardMod = attachCardMod(card.shadowRoot, "ha-card { background: #FFFFFF; }");
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const onLight = toneColorOf(card);
+
+  repaint(["#0A2A4F"]);
+  cardMod.setStyle("ha-card { background: #0A2A4F; }");
+
+  await settle(() => toneColorOf(card) !== onLight, "the card to follow the rewritten stylesheet");
+  env.cleanup(card);
+});
+
+test("a card-mod stylesheet inside ha-card is watched as well", async () => {
+  const { card, repaint } = cardOnBackground(["#FFFFFF"]);
+  card._render(false);
+  const cardMod = attachCardMod(card.shadowRoot.querySelector("ha-card"), "");
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const onLight = toneColorOf(card);
+
+  repaint(["#0A2A4F"]);
+  cardMod.setStyle("ha-card { background: #0A2A4F; }");
+
+  await settle(() => toneColorOf(card) !== onLight, "the card to follow a stylesheet inside its ha-card");
   env.cleanup(card);
 });
 

@@ -9,8 +9,8 @@
 // before room-climate-card.js.
 (function () {
   // --- ha-card ---
-  // Only `display: block` is missing versus a real ha-card (.rtc-card CSS re-declares the
-  // rest). Set inline so it wins regardless of specificity or scoping.
+  // Only `display: block` is missing versus a real ha-card (the card's ha-card rule
+  // re-declares the rest). Set inline so it wins regardless of specificity or scoping.
   class HaCardStub extends HTMLElement {
     connectedCallback() {
       this.style.display = "block";

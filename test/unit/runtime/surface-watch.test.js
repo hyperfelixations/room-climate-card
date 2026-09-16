@@ -5,8 +5,9 @@
 // or fonts promise calls the render path — a theme switch is none of those. This watch
 // supplies the occasion and nothing else: it says "ask again", and the data signature
 // answers with a string comparison.
-// No timer, ever: the three sources are events; the tests assert the absence of timers
-// directly. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
+// No timer, ever: every source is an event — the colour scheme, the theme attributes, and a
+// stylesheet another module (card-mod) places inside the card; the tests assert the absence
+// of timers directly. See internal dev doc §5 "Render-Auslöser bei Themewechsel".
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -19,13 +20,23 @@ test.before(async () => {
   surfaceWatch = await import("../../../src/controllers/runtime/surface-watch.js");
 });
 
+// `scope` stands in for the card's shadow mount: the containers a foreign stylesheet can land
+// in, and the nodes in them the card did not insert. Tests change it between calls.
 function setup(platformOptions = {}) {
   const dom = new JSDOM("<!doctype html><html><body><div id='card'></div></body></html>");
   const platform = createFakePlatform(platformOptions);
   let calls = 0;
-  const watch = surfaceWatch.createSurfaceWatch({ platform, onChange: () => (calls += 1) });
-  return { dom, platform, watch, element: dom.window.document.getElementById("card"), changes: () => calls };
+  const scope = { containers: [], foreign: [] };
+  const watch = surfaceWatch.createSurfaceWatch({
+    platform,
+    onChange: () => (calls += 1),
+    getStyleContainers: () => scope.containers,
+    getForeignNodes: () => scope.foreign,
+  });
+  return { dom, platform, watch, scope, element: dom.window.document.getElementById("card"), changes: () => calls };
 }
+
+const childListRecord = (target) => ({ type: "childList", target, addedNodes: [], removedNodes: [] });
 
 test("it subscribes to the colour scheme and to the attributes that carry a theme", () => {
   const { platform, watch, element, dom } = setup();
@@ -50,6 +61,68 @@ test("it subscribes to the colour scheme and to the attributes that carry a them
   const cardEntry = observer.observed.find((entry) => entry.target === element);
   assert.deepEqual(cardEntry.options.attributeFilter, ["style", "class"]);
 
+  watch.disconnect();
+});
+
+test("a stylesheet another module puts inside the card is watched, and nothing the card owns is", () => {
+  // card-mod appends a <card-mod> element to the shadow root (or into ha-card) and rewrites
+  // the text of the <style> inside it; neither touches an attribute of the host.
+  const { platform, watch, scope, element, dom } = setup();
+  const shadow = element.attachShadow({ mode: "open" });
+  const surface = dom.window.document.createElement("ha-card");
+  const foreign = dom.window.document.createElement("card-mod");
+  scope.containers = [shadow, surface];
+  scope.foreign = [foreign];
+  watch.observe(element);
+
+  const [observer] = platform.mutationObservers;
+  const entryFor = (target) => observer.observed.find((entry) => entry.target === target);
+  for (const container of [shadow, surface]) {
+    assert.deepEqual(entryFor(container).options, { childList: true }, "arrivals and departures, never the card's own subtree");
+  }
+  assert.deepEqual(entryFor(foreign).options, { attributes: true, characterData: true, childList: true, subtree: true });
+  assert.equal(observer.observed.filter((entry) => entry.options.subtree).length, 1, "a subtree is watched only where the card owns nothing");
+  watch.disconnect();
+});
+
+test("a node arriving in a container renews the subscription before the question is asked", () => {
+  const { platform, watch, scope, element, dom, changes } = setup();
+  const shadow = element.attachShadow({ mode: "open" });
+  scope.containers = [shadow];
+  watch.observe(element);
+  const [observer] = platform.mutationObservers;
+  assert.equal(observer.observed.some((entry) => entry.options.subtree), false);
+
+  const foreign = dom.window.document.createElement("card-mod");
+  scope.foreign = [foreign];
+  observer.callback([childListRecord(shadow)], observer);
+  assert.ok(
+    observer.observed.find((entry) => entry.target === foreign && entry.options.subtree),
+    "the newcomer's stylesheet is watched from now on"
+  );
+  assert.ok(observer.observed.find((entry) => entry.target === dom.window.document.documentElement), "the theme sources stay subscribed");
+  assert.ok(observer.observed.find((entry) => entry.target === element), "and so does the card");
+
+  platform.flushFrames();
+  assert.equal(changes(), 1, "the arrival itself is also a reason to look");
+  watch.disconnect();
+});
+
+test("a mutation inside a foreign stylesheet asks again without renewing anything", () => {
+  const { platform, watch, scope, element, dom, changes } = setup();
+  const shadow = element.attachShadow({ mode: "open" });
+  const foreign = dom.window.document.createElement("card-mod");
+  scope.containers = [shadow];
+  scope.foreign = [foreign];
+  watch.observe(element);
+  const [observer] = platform.mutationObservers;
+  const before = observer.observed;
+
+  scope.foreign = [];
+  observer.callback([{ type: "characterData", target: foreign }], observer);
+  assert.equal(observer.observed, before, "only a container's child list can change what is foreign");
+  platform.flushFrames();
+  assert.equal(changes(), 1);
   watch.disconnect();
 });
 

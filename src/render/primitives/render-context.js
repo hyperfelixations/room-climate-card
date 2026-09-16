@@ -8,6 +8,7 @@ export function createRenderContext(ownerDocument) {
     defaultView: ownerDocument.defaultView,
     createElement: (tagName) => ownerDocument.createElement(tagName),
     htmlToElement: (html) => htmlToElementIn(ownerDocument, html),
+    htmlToNodes: (html) => htmlToNodesIn(ownerDocument, html),
   };
 }
 
@@ -16,4 +17,11 @@ export function htmlToElementIn(ownerDocument, html) {
   const wrapper = ownerDocument.createElement("div");
   wrapper.innerHTML = html.trim();
   return wrapper.firstElementChild;
+}
+
+// Every node of already-escaped renderer output, untrimmed: surrounding whitespace is shipped markup.
+export function htmlToNodesIn(ownerDocument, html) {
+  const wrapper = ownerDocument.createElement("div");
+  wrapper.innerHTML = html;
+  return Array.from(wrapper.childNodes);
 }

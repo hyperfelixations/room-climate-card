@@ -744,6 +744,20 @@ views:
       show_value: true
 ```
 
+### Styling with card-mod
+
+With [card-mod](https://github.com/thomasloven/lovelace-card-mod) installed, style
+the card through `ha-card`:
+
+```yaml
+card_mod:
+  style: |
+    ha-card {
+      background: #1c2733;
+      border: none;
+    }
+```
+
 ## Known limitations
 
 - There is no visual editor — everything is YAML. Start with the

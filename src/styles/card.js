@@ -1,7 +1,9 @@
 // SHIPPED STYLESHEET SLICE: card surface, content root and top accent.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
+// The surface is selected by type, so an `ha-card` rule a frontend module such as card-mod
+// appends after this sheet wins at equal specificity.
 
-export const CARD_CSS = `        .rtc-card {
+export const CARD_CSS = `        ha-card {
           container: rtc-card / inline-size;
           border-radius: var(--rtc-radius);
           padding: 0;

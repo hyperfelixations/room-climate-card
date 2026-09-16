@@ -106,14 +106,16 @@ test("only the historical characterization tests reach the frozen legacy DTO", (
   }
 });
 
-// Home Assistant's own card surface. Every one of these is called by the dashboard, not
-// by anything in src/, so "no caller here" says nothing about them.
+// Home Assistant's own card surface, plus `config`, which frontend modules such as card-mod
+// read. Every one of these is called from outside, not by anything in src/, so "no caller
+// here" says nothing about them.
 const HOST_API = new Set([
   "constructor",
   "connectedCallback",
   "disconnectedCallback",
   "setConfig",
   "hass",
+  "config",
   "getCardSize",
   "getGridOptions",
   "getStubConfig",

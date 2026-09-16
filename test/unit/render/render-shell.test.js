@@ -436,8 +436,8 @@ test("the stylesheet is assembled from its sections with nothing inserted betwee
   assert.match(css, /flex: 0 0 33\.3333%;/);
   assert.match(css, /animation: none;/);
   // The section order is normative: token block before the card, motion overrides last.
-  assert.ok(css.indexOf(":host {") < css.indexOf(".rtc-card {"));
-  assert.ok(css.indexOf(".rtc-card {") < css.indexOf("@container rtc-card"));
+  assert.ok(css.indexOf(":host {") < css.indexOf("        ha-card {"));
+  assert.ok(css.indexOf("        ha-card {") < css.indexOf("@container rtc-card"));
   assert.ok(css.indexOf("@container rtc-card") < css.indexOf("prefers-reduced-motion"));
 });
 

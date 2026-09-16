@@ -94,9 +94,9 @@ test("only the two scale-shaped views declare a layout pass", () => {
 
 // -------------------------------------------------------------- render context --
 
-test("the render context exposes only the realm and its two element operations", () => {
+test("the render context exposes only the realm and its three node operations", () => {
   const realm = makeRealm();
-  assert.deepEqual(Object.keys(realm.context).sort(), ["createElement", "defaultView", "htmlToElement", "ownerDocument"]);
+  assert.deepEqual(Object.keys(realm.context).sort(), ["createElement", "defaultView", "htmlToElement", "htmlToNodes", "ownerDocument"]);
   assert.equal(realm.context.ownerDocument, realm.ownerDocument);
   assert.equal(realm.context.defaultView, realm.jsdom.window);
 });
@@ -116,6 +116,15 @@ test("htmlToElement parses one detached element from an already-escaped string",
   assert.equal(element.getAttribute("data-entity"), "sensor.a");
   assert.equal(element.isConnected, false, "parsed into a throwaway wrapper, never into the live document");
   assert.equal(element.ownerDocument, realm.ownerDocument);
+});
+
+test("htmlToNodes parses every detached node, whitespace included, from an already-escaped string", () => {
+  const realm = makeRealm();
+  const nodes = realm.context.htmlToNodes("\n  <style>a{}</style>\n  <ha-card class=\"rtc-card\"></ha-card>\n");
+  assert.deepEqual(nodes.map((node) => node.nodeName), ["#text", "STYLE", "#text", "HA-CARD", "#text"], "the whitespace is shipped markup");
+  assert.equal(nodes[0].data, "\n  ");
+  assert.ok(nodes.every((node) => node.isConnected === false && node.ownerDocument === realm.ownerDocument));
+  assert.equal(nodes[1].parentNode, nodes[3].parentNode, "siblings in one throwaway wrapper until the caller moves them");
 });
 
 // ------------------------------------------------------------------- primitives --

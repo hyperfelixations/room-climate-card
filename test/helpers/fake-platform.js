@@ -70,11 +70,16 @@ function createFakePlatform(options = {}) {
         callback,
         observed: [],
         disconnected: false,
+        // As the real observer: observing a target again replaces its options, and an observer
+        // that was disconnected observes again after its next observe().
         observe(target, observeOptions) {
+          observer.observed = observer.observed.filter((entry) => entry.target !== target);
           observer.observed.push({ target, options: observeOptions });
+          observer.disconnected = false;
         },
         disconnect() {
           observer.disconnected = true;
+          observer.observed = [];
         },
         takeRecords: () => [],
       };

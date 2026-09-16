@@ -60,7 +60,7 @@
           -webkit-tap-highlight-color: transparent;
         }
 
-        .rtc-card {
+        ha-card {
           container: rtc-card / inline-size;
           border-radius: var(--rtc-radius);
           padding: 0;
