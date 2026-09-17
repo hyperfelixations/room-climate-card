@@ -9,6 +9,6 @@
 
 export const CARD_TYPE = "room-climate-card";
 export const CARD_NAME = "Room Climate Card";
-export const CARD_VERSION = "2.38.2";
+export const CARD_VERSION = "2.39.0-dev.1";
 // The window property carrying CARD_VERSION; camelCase of CARD_TYPE plus "Version".
 export const CARD_VERSION_GLOBAL = "roomClimateCardVersion";
