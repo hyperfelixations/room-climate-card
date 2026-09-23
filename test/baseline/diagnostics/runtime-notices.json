@@ -42,6 +42,13 @@
     ],
     "subtitle": "Avg. in comfort."
   },
+  "room-declares-a-foreign-measurement": {
+    "block": "sensor.battery measures something else and is ignored.",
+    "console": [
+      "Room Climate Card: sensor.battery measures something else and is ignored."
+    ],
+    "subtitle": "Avg. in comfort."
+  },
   "room-entity-not-found": {
     "block": "sensor.gone does not exist in Home Assistant.",
     "console": [

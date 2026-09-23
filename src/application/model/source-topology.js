@@ -1,10 +1,10 @@
 // Source identity is decided only here: eligibility filters declarations, topology shapes them.
 // Declaration, not live availability, owns card form; outages may change only the value.
-// Unknown ids are not sources. Foreign-kind rooms are excluded only when a primary declares
-// the card kind; unreadable and untyped rooms remain availability/arbitration concerns.
-// Details: see internal dev doc §3 "EntityModel und MeasurementContext".
+// Unknown ids and declared foreign measurements are never sources. Rooms of another card kind
+// are excluded only when a primary declares the card kind; unreadable and untyped rooms remain
+// availability/arbitration concerns. Details: see internal dev doc §3 "EntityModel und MeasurementContext".
 
-import { hasEntity, metricKindForEntity } from "./entity-model.js";
+import { declaresForeignMeasurement, hasEntity, metricKindForEntity } from "./entity-model.js";
 
 export const SOURCE_TOPOLOGY = {
   // One primary source; headline needs no distinguishing label.
@@ -55,6 +55,7 @@ export function resolveSourceEligibility(states, config) {
   const declaredKind = metricKindForEntity(states, config?.entity || null);
   return (entityId) => {
     if (!hasEntity(states, entityId)) return false;
+    if (declaresForeignMeasurement(states, entityId)) return false;
     if (!declaredKind) return true;
     const kind = metricKindForEntity(states, entityId);
     return kind === null || kind === declaredKind;

@@ -365,6 +365,83 @@ test("a declared device class is unaffected by the unit rule", () => {
   assert.equal(resolution.resolveUnitProfileKey("pm25", "µg/m³"), "microgram_per_m3");
 });
 
+// ---------------------------------------------------- what a declared device class says --
+
+// Home Assistant's SensorDeviceClass values (homeassistant/components/sensor/const.py),
+// written out so every entry is pinned: a dropped class would let its unit decide again.
+const HA_SENSOR_DEVICE_CLASSES = [
+  "absolute_humidity", "apparent_power", "aqi", "area", "atmospheric_pressure", "battery",
+  "blood_glucose_concentration", "carbon_dioxide", "carbon_monoxide", "conductivity", "current",
+  "data_rate", "data_size", "date", "distance", "duration", "energy", "energy_distance",
+  "energy_storage", "enum", "frequency", "gas", "humidity", "illuminance", "irradiance", "moisture",
+  "monetary", "nitrogen_dioxide", "nitrogen_monoxide", "nitrous_oxide", "ozone", "ph", "pm1", "pm10",
+  "pm25", "pm4", "power", "power_factor", "precipitation", "precipitation_intensity", "pressure",
+  "radon", "reactive_energy", "reactive_power", "signal_strength", "sound_pressure", "speed",
+  "sulphur_dioxide", "temperature", "temperature_delta", "timestamp", "uptime",
+  "volatile_organic_compounds", "volatile_organic_compounds_parts", "voltage", "volume",
+  "volume_flow_rate", "volume_storage", "water", "weight", "wind_direction", "wind_speed",
+];
+
+test("the Home Assistant device class vocabulary is complete and frozen", () => {
+  assert.deepEqual([...resolution.HA_SENSOR_DEVICE_CLASSES].sort(), HA_SENSOR_DEVICE_CLASSES);
+  assert.equal(HA_SENSOR_DEVICE_CLASSES.length, 62);
+  assert.ok(Object.isFrozen(resolution.HA_SENSOR_DEVICE_CLASSES));
+  assert.throws(() => resolution.HA_SENSOR_DEVICE_CLASSES.push("made_up"), TypeError);
+  for (const deviceClass of Object.keys(resolution.METRIC_TYPE_BY_DEVICE_CLASS)) {
+    assert.ok(resolution.HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant class`);
+  }
+});
+
+test("a declared device class of the card names its measurement, whatever the spelling around it", () => {
+  const cases = {
+    temperature: "temperature",
+    humidity: "humidity",
+    carbon_dioxide: "co2",
+    pm25: "pm25",
+    " Temperature ": "temperature",
+    HUMIDITY: "humidity",
+  };
+  for (const [raw, metricKind] of Object.entries(cases)) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), { metricKind, foreign: false }, JSON.stringify(raw));
+  }
+});
+
+// The TIMMERFLOTTE battery reports % and declares battery: the declaration decides, not the unit.
+test("a declared Home Assistant device class that is not the card's is a foreign measurement", () => {
+  const theCards = new Set(Object.keys(resolution.METRIC_TYPE_BY_DEVICE_CLASS));
+  for (const deviceClass of HA_SENSOR_DEVICE_CLASSES.filter((name) => !theCards.has(name))) {
+    assert.deepEqual(resolution.classifyDeviceClass(deviceClass), { metricKind: null, foreign: true }, deviceClass);
+  }
+  assert.deepEqual(resolution.classifyDeviceClass(" Battery"), { metricKind: null, foreign: true });
+});
+
+// A typo or an invented class is a declaration error, not a statement; the unit may still decide.
+test("an absent, malformed or unknown device class declares nothing", () => {
+  const nothing = { metricKind: null, foreign: false };
+  for (const raw of [undefined, null, "", "   ", 5, true, {}, [], "temperatur", "temp", "rel_humidity", "pm2.5"]) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, JSON.stringify(raw));
+  }
+  // Object-literal lookups must not answer from the prototype chain.
+  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, raw);
+  }
+  assert.ok(Object.isFrozen(resolution.classifyDeviceClass("battery")));
+});
+
+test("unit lookups answer only for registered units, never from the prototype chain", () => {
+  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    assert.equal(resolution.metricKindFromUnitAlone(raw), null, `sensor unit ${raw}`);
+    assert.equal(resolution.metricKindOfUnit(raw), null, `profile unit ${raw}`);
+    assert.equal(resolution.resolveUnitProfileKey(raw, "°C"), null, `metric kind ${raw}`);
+  }
+  assert.equal(resolution.metricKindOfUnit("ppm"), "co2", "a profile written in ppm is a CO2 profile");
+  assert.equal(resolution.metricKindOfUnit(" °F "), "temperature");
+  assert.equal(resolution.metricKindOfUnit("hPa"), null);
+  for (const nothing of [undefined, null, "", 5]) {
+    assert.equal(resolution.metricKindOfUnit(nothing), null, JSON.stringify(nothing));
+  }
+});
+
 test("temperature word and bare-letter aliases all resolve", () => {
   for (const unit of ["°C", "c", "celsius", "°F", "f", "fahrenheit", "K", "kelvin"]) {
     assert.equal(

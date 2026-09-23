@@ -328,6 +328,9 @@ test("every way of being unusable has its own reason, and availability is unchan
     ["sensor.air", mkState("sensor.air", 700, { unit_of_measurement: "ppm" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIT_AMBIGUOUS],
     ["sensor.mute", mkState("sensor.mute", 7, {}), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
     ["sensor.press", mkState("sensor.press", 1013, { unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
+    // Declares a Home Assistant measurement the card does not show; its unit is not asked.
+    ["sensor.battery", mkState("sensor.battery", 100, { device_class: "battery", unit_of_measurement: "%" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT],
+    ["sensor.baro", mkState("sensor.baro", 1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT],
     // A recognized measurement in a unit the card cannot read for it.
     ["sensor.odd", mkState("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }), AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_UNREADABLE],
     ["sensor.ok", state("sensor.ok", 22), AVAILABILITY.USABLE, UNUSABLE_REASON.NONE],
@@ -376,6 +379,9 @@ test("the card says which of the things went wrong, and where it says it", () =>
       mkState("sensor.primary", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }),
       "sensor.primary reports a unit the card cannot read here.",
     ],
+    // It has a device_class, so "has no device_class" would be false; it measures something else.
+    [mkState("sensor.primary", 1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }), "sensor.primary measures something else and is ignored."],
+    [mkState("sensor.primary", 100, { device_class: "battery", unit_of_measurement: "%" }), "sensor.primary measures something else and is ignored."],
   ];
   for (const [stateObject, expected] of lasting) {
     const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": stateObject }));
@@ -400,5 +406,26 @@ test("a room measuring something else is named, unless every room disagrees", ()
   } finally {
     env.cleanup(foreign);
     env.cleanup(mixed);
+  }
+});
+
+// Two hygrometers and a battery reporting %: the card shows the hygrometers' mean and names the battery.
+test("a room declaring battery is named and left out of the humidity average", () => {
+  const el = env.createCard(
+    { rooms: [room("sensor.wz", "WZ"), room("sensor.battery", "Battery"), room("sensor.ba", "BA")] },
+    mkHass({
+      "sensor.wz": state("sensor.wz", 63.3, HUMIDITY),
+      "sensor.ba": state("sensor.ba", 69, HUMIDITY),
+      "sensor.battery": mkState("sensor.battery", 100, { device_class: "battery", unit_of_measurement: "%" }),
+    })
+  );
+  try {
+    assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.battery measures something else and is ignored.");
+    const data = el._computeViewModel();
+    assert.equal(data.metric.kind, "humidity");
+    assert.equal(data.rooms.count, 2, "only the two hygrometers are averaged");
+    assert.deepEqual(Array.from(data.rooms.chips, (chip) => chip.entity).sort(), ["sensor.ba", "sensor.wz"]);
+  } finally {
+    env.cleanup(el);
   }
 });

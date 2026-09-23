@@ -85,6 +85,11 @@ test("each metric is reachable through the device class the manifest names", asy
       .map((m) => m.deviceClass)
       .sort()
   );
+  // Each is one Home Assistant defines, and so declares the card's measurement, not a foreign one.
+  for (const { deviceClass } of Object.values(surface.METRICS)) {
+    assert.ok(resolution.HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant device class`);
+    assert.equal(resolution.classifyDeviceClass(deviceClass).foreign, false, deviceClass);
+  }
 });
 
 // ----------------------------------------------------------------------- views --

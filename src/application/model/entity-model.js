@@ -7,7 +7,7 @@ import { normalizeUnitToken } from "../../domain/units/unit-token.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { convertMetricValue } from "../../domain/metrics/access.js";
 import {
-  METRIC_TYPE_BY_DEVICE_CLASS,
+  classifyDeviceClass,
   metricKindFromUnitAlone,
   resolveUnitProfileKey,
   unitPredictsMetricKind,
@@ -44,6 +44,8 @@ export const UNUSABLE_REASON = Object.freeze({
   UNIT_UNREADABLE: "unit_unreadable",
   // A recognized measurement, but not the one this card is showing.
   KIND_MISMATCH: "kind_mismatch",
+  // A declared Home Assistant device class no climate card shows (battery reporting %).
+  FOREIGN_MEASUREMENT: "foreign_measurement",
 });
 
 export function hasEntity(states, entityId) {
@@ -81,17 +83,23 @@ export function rawUnitForEntity(states, entityId) {
   return typeof entityUnit === "string" && entityUnit.trim() ? entityUnit.trim() : null;
 }
 
-// Prefer device_class; use only an unambiguous unit fallback.
-export function metricKindForEntity(states, entityId) {
+function declaredDeviceClassOf(states, entityId) {
   const state = states?.[entityId];
-  if (!state) return null;
-  const deviceClass = state.attributes?.device_class;
-  if (typeof deviceClass === "string" && deviceClass.trim()) {
-    const metric = METRIC_TYPE_BY_DEVICE_CLASS[deviceClass.trim().toLowerCase()];
-    if (metric) return metric;
-  }
-  // Shared units require device_class instead of a guess.
-  return metricKindFromUnitAlone(state.attributes?.unit_of_measurement);
+  return state ? classifyDeviceClass(state.attributes?.device_class) : null;
+}
+
+// Prefer device_class; the unit decides only for a sensor declaring no Home Assistant class,
+// and only when unambiguous.
+export function metricKindForEntity(states, entityId) {
+  const declared = declaredDeviceClassOf(states, entityId);
+  if (!declared) return null;
+  if (declared.metricKind || declared.foreign) return declared.metricKind;
+  return metricKindFromUnitAlone(states[entityId].attributes?.unit_of_measurement);
+}
+
+// Whether the entity declares a Home Assistant measurement no climate card shows.
+export function declaresForeignMeasurement(states, entityId) {
+  return declaredDeviceClassOf(states, entityId)?.foreign === true;
 }
 
 // Auxiliary sensors also require registered units but do not arbitrate metric kind.
@@ -109,10 +117,12 @@ export function resolveAuxiliaryUnitProfileKey(states, entityId, metricKind, { r
 // domain/metrics/access.js).
 export { convertMetricValue };
 
-// Derive policy status and explanatory reason together from the same ordered facts.
-function resolveAvailability({ stateObject, validNumeric, metricKind, rawUnit, validUnit, validPhysical }) {
+// Derive policy status and explanatory reason together from the same ordered facts. A foreign
+// declaration precedes the state checks: HA keeps device_class on a restored unavailable state.
+function resolveAvailability({ stateObject, foreign, validNumeric, metricKind, rawUnit, validUnit, validPhysical }) {
   const pair = (availability, unusableReason) => ({ availability, unusableReason });
   if (!stateObject) return pair(AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING);
+  if (foreign) return pair(AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT);
   if (isUnavailableState(stateObject.state)) return pair(AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE);
   if (!validNumeric) return pair(AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC);
   if (metricKind === null) {
@@ -165,6 +175,7 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
 
   const { availability, unusableReason } = resolveAvailability({
     stateObject,
+    foreign: declaresForeignMeasurement(states, entityId),
     validNumeric,
     metricKind,
     rawUnit,

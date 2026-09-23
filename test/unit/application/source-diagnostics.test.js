@@ -68,6 +68,18 @@ test("every fault that stays until something is fixed is a warning naming its en
   assert.deepEqual(hints, [], "a missing main sensor is a configuration fault, not a momentary outage");
 });
 
+// A battery among disagreeing rooms is its own fault, not one side of their disagreement.
+test("a sensor declaring a foreign measurement is named, even beside a mixed state", () => {
+  const rooms = [source("sensor.t", R.KIND_MISMATCH), source("sensor.h", R.KIND_MISMATCH), source("sensor.battery", R.FOREIGN_MEASUREMENT)];
+  assert.deepEqual(collect({ rooms, diagnostics: [MIXED], averageSource: null }), {
+    warnings: [core.createDiagnostic("sources.mixed"), warning("entity.other_measurement", "sensor.battery")],
+    hints: [],
+  });
+  const { warnings, hints } = collect({ primary: source("sensor.battery", R.FOREIGN_MEASUREMENT), rooms: [source("sensor.a")], averageSource: { kind: "roomConsensus" } });
+  assert.deepEqual(warnings, [warning("entity.other_measurement", "sensor.battery")]);
+  assert.deepEqual(hints, [], "a foreign main sensor is lasting, never a momentary outage");
+});
+
 test("a sensor written as main sensor and as a room is named once", () => {
   const { warnings } = collect({ primary: source("sensor.a", R.MISSING), rooms: [source("sensor.a", R.MISSING)], averageSource: null });
   assert.deepEqual(warnings, [warning("entity.not_found", "sensor.a")]);

@@ -377,6 +377,10 @@ const RUNTIME_SCENARIOS = [
     ...VALID_HASS.states,
     "sensor.h": st("sensor.h", 45, HUMIDITY),
   }],
+  ["room-declares-a-foreign-measurement", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.battery" }] }, {
+    ...VALID_HASS.states,
+    "sensor.battery": st("sensor.battery", 100, { device_class: "battery", unit_of_measurement: "%" }),
+  }],
   ["range-entity-unit-unreadable", { entity: "sensor.avg", range_entity: "sensor.range" }, {
     ...VALID_HASS.states,
     "sensor.range": st("sensor.range", 4, { unit_of_measurement: "hPa", minimum: 18, maximum: 22 }),

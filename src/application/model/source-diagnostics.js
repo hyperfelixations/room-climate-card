@@ -14,6 +14,7 @@ const LASTING = Object.freeze({
   [UNUSABLE_REASON.UNIDENTIFIED]: "entity.unidentified",
   [UNUSABLE_REASON.UNIT_UNREADABLE]: "entity.unit_unreadable",
   [UNUSABLE_REASON.KIND_MISMATCH]: "entity.other_measurement",
+  [UNUSABLE_REASON.FOREIGN_MEASUREMENT]: "entity.other_measurement",
 });
 
 const MOMENTARY = new Set([UNUSABLE_REASON.UNAVAILABLE, UNUSABLE_REASON.NOT_NUMERIC, UNUSABLE_REASON.OUT_OF_RANGE]);
@@ -36,7 +37,8 @@ export function collectSourceDiagnostics({ context, config, states, range = null
     warnings.push(diagnostic);
   };
 
-  // Rooms that measure different things are one fact: none of them is the odd one out.
+  // Rooms that measure different things are one fact: none of them is the odd one out. A
+  // declared foreign measurement is not part of that disagreement and is still named.
   const mixed = context.diagnostics.some((diagnostic) => diagnostic.code === "mixed_metric_kinds");
   if (mixed) warnings.push(createDiagnostic("sources.mixed"));
   const hasValue = context.averageSource !== null;
@@ -44,7 +46,7 @@ export function collectSourceDiagnostics({ context, config, states, range = null
 
   for (const source of primary ? [primary, ...context.rooms] : context.rooms) {
     const code = LASTING[source.unusableReason];
-    if (code && !(mixed && code === "entity.other_measurement")) warn(code, source.entityId);
+    if (code && !(mixed && source.unusableReason === UNUSABLE_REASON.KIND_MISMATCH)) warn(code, source.entityId);
   }
 
   if (hasValue && primary && MOMENTARY.has(primary.unusableReason) && context.averageSource.kind === "roomConsensus") {

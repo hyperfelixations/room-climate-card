@@ -33,8 +33,7 @@ import {
 import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { surfaceOf } from "../domain/classification/paint-roles.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
-import { METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
-import { normalizeUnitToken } from "../domain/units/unit-token.js";
+import { metricKindOfUnit, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
 import { resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
 import {
@@ -80,7 +79,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     isSupportedLanguage,
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
-    metricKindForUnit: (unit) => METRIC_TYPE_BY_UNIT[normalizeUnitToken(unit)],
+    metricKindForUnit: metricKindOfUnit,
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;

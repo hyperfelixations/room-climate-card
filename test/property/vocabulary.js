@@ -57,7 +57,8 @@ const NON_HA_UNITS = [
   "very hot",
 ];
 
-// Device classes that exist in Home Assistant but not in this card's world.
+// Device classes that exist in Home Assistant but not in this card's world. The last four
+// share a unit with the card's measurements, so only the declaration keeps them out.
 const FOREIGN_DEVICE_CLASSES = [
   "power",
   "energy",
@@ -65,10 +66,13 @@ const FOREIGN_DEVICE_CLASSES = [
   "atmospheric_pressure",
   "sound_pressure",
   "irradiance",
-  "battery",
   "signal_strength",
   "timestamp",
   "enum",
+  "battery",
+  "moisture",
+  "power_factor",
+  "temperature_delta",
 ];
 
 // --------------------------------------------------------------- misspellings --
@@ -119,10 +123,11 @@ function damage(rng, source) {
 const MISSPELLED_DEVICE_CLASS_KEYS = ["device_clas", "deviceclass", "Device_Class", "device-class", "device class"];
 const MISSPELLED_UNIT_KEYS = ["unit_of_measure", "unit_of_measurment", "Unit_of_measurement", "unit", "unit_of_measurements"];
 
-// The device class VALUES people write when they mean one of the card's four.
+// The device class VALUES people write when they mean one of the card's four. None is a
+// foreign Home Assistant class (`moisture` is one, and sits in FOREIGN_DEVICE_CLASSES).
 const MISSPELLED_DEVICE_CLASS_VALUES = {
   temperature: ["temperatur", "Temperature", "TEMPERATURE", "temp", "temperature "],
-  humidity: ["humidty", "Humidity", "moisture", "humidite", "rel_humidity"],
+  humidity: ["humidty", "Humidity", "relative_humidity", "humidite", "rel_humidity"],
   co2: ["carbon_dioxid", "co2", "CO2", "carbondioxide", "carbon-dioxide"],
   pm25: ["pm2_5", "pm2.5", "PM25", "particulate_matter_25", "pm_25"],
 };

@@ -255,6 +255,52 @@ test("a card whose rooms are all foreign refers to its primary alone", () => {
   });
 });
 
+// ------------------------------------ measurements no climate card shows --
+//
+// A declared Home Assistant device class the card does not measure (the battery beside a
+// thermometer) is a statement about the sensor like any other declaration, and no climate
+// card can ever show it — so it is not a source whatever the primary declares.
+
+const FOREIGN_STATES = {
+  "sensor.h1": state(63.3, HUMIDITY),
+  "sensor.h2": state(69, HUMIDITY),
+  "sensor.t1": state(21, TEMPERATURE_C),
+  "sensor.battery": state(100, { device_class: "battery", unit_of_measurement: "%" }),
+  "sensor.battery_off": state("unavailable", { device_class: "battery", unit_of_measurement: "%" }),
+  "sensor.pressure": state(1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }),
+  "sensor.delta": state(5, { device_class: "temperature_delta", unit_of_measurement: "°C" }),
+  "sensor.typo": state(22, { device_class: "temperatur", unit_of_measurement: "°C" }),
+};
+
+test("a sensor declaring a measurement no climate card shows is never a source", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
+  const shape = (config) => resolveSourceTopology(config, resolveSourceEligibility(FOREIGN_STATES, config));
+  for (const foreign of ["sensor.battery", "sensor.battery_off", "sensor.pressure", "sensor.delta"]) {
+    // Beside a declaring primary, and with no primary at all.
+    assert.equal(resolveSourceEligibility(FOREIGN_STATES, { entity: "sensor.h1" })(foreign), false, `${foreign} beside a primary`);
+    assert.equal(resolveSourceEligibility(FOREIGN_STATES, { entity: null })(foreign), false, `${foreign} without a primary`);
+    assert.deepEqual(shape(config(null, ["sensor.h1", foreign])), {
+      kind: SOURCE_TOPOLOGY.SINGLE_ROOM,
+      headlineEntity: "sensor.h1",
+      roomIndex: 0,
+    }, foreign);
+  }
+  // As the main sensor it does not shape the card either: the rooms carry it.
+  assert.equal(shape(config("sensor.battery", ["sensor.h1", "sensor.h2"])).kind, SOURCE_TOPOLOGY.ROOM_CONSENSUS);
+  // A misspelled class declares nothing, so its unit still makes it a thermometer.
+  assert.equal(resolveSourceEligibility(FOREIGN_STATES, { entity: "sensor.t1" })("sensor.typo"), true);
+  assert.equal(resolveSourceEligibility(FOREIGN_STATES, { entity: "sensor.h1" })("sensor.typo"), false);
+});
+
+test("a card made only of foreign measurements keeps the shape its configuration gives it", () => {
+  const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
+  const onlyForeign = config(null, ["sensor.battery", "sensor.pressure"]);
+  assert.equal(
+    resolveSourceTopology(onlyForeign, resolveSourceEligibility(FOREIGN_STATES, onlyForeign)).kind,
+    SOURCE_TOPOLOGY.ROOM_CONSENSUS
+  );
+});
+
 test("before any state is published the configuration alone decides", () => {
   const { SOURCE_TOPOLOGY, resolveSourceEligibility, resolveSourceTopology } = topology;
   // Start-up moment: `states` is empty, so the full-configuration fallback keeps the card

@@ -50,6 +50,20 @@ test("a recognized unit alone is enough, and an unrecognized one is not", () => 
   assert.equal(suggestions.suggestionsForEntity(states, "sensor.pressure"), null);
 });
 
+// A battery or a temperature difference shares a unit with the card's measurements; its declared class says it is something else.
+test("an entity declaring another Home Assistant measurement is not offered, whatever its unit", () => {
+  const states = statesWith([
+    ["sensor.battery", { device_class: "battery", unit_of_measurement: "%" }],
+    ["sensor.soil", { device_class: "moisture", unit_of_measurement: "%" }],
+    ["sensor.delta", { device_class: "temperature_delta", unit_of_measurement: "°C" }],
+    ["sensor.typo", { device_class: "temperatur", unit_of_measurement: "°C" }],
+  ]);
+  for (const entityId of ["sensor.battery", "sensor.soil", "sensor.delta"]) {
+    assert.equal(suggestions.suggestionsForEntity(states, entityId), null, entityId);
+  }
+  assert.ok(suggestions.suggestionsForEntity(states, "sensor.typo"), "a misspelled class declares nothing; °C still identifies it");
+});
+
 test("entities this card cannot read are not offered", () => {
   const states = {
     ...statesWith([["sensor.plain", {}]]),

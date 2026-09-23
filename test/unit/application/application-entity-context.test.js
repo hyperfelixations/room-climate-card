@@ -153,6 +153,40 @@ test("device_class wins over unit, and unit is the fallback", () => {
   assert.equal(entityModel.metricKindForEntity(states, "sensor.neither"), null);
 });
 
+// The unit speaks only where nothing is declared; a declared Home Assistant class is never overruled by it.
+test("a declared foreign device class keeps the unit from deciding", () => {
+  const states = {
+    "sensor.battery": st(100, { device_class: "battery", unit_of_measurement: "%" }),
+    "sensor.soil": st(40, { device_class: "moisture", unit_of_measurement: "%" }),
+    "sensor.delta": st(5, { device_class: "temperature_delta", unit_of_measurement: "°C" }),
+    "sensor.pressure": st(1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }),
+    "sensor.typo": st(21, { device_class: "temperatur", unit_of_measurement: "°C" }),
+    "sensor.bare": st(55, { unit_of_measurement: "%" }),
+  };
+  for (const foreign of ["sensor.battery", "sensor.soil", "sensor.delta", "sensor.pressure"]) {
+    assert.equal(entityModel.metricKindForEntity(states, foreign), null, foreign);
+    assert.equal(entityModel.declaresForeignMeasurement(states, foreign), true, foreign);
+  }
+  assert.equal(entityModel.metricKindForEntity(states, "sensor.typo"), "temperature", "a typo declares nothing, so °C decides");
+  assert.equal(entityModel.metricKindForEntity(states, "sensor.bare"), "humidity", "no device class, so % decides");
+  for (const undeclared of ["sensor.typo", "sensor.bare", "sensor.absent"]) {
+    assert.equal(entityModel.declaresForeignMeasurement(states, undeclared), false, undeclared);
+  }
+  assert.equal(entityModel.declaresForeignMeasurement(states, null), false);
+});
+
+test("a foreign measurement is reported as such, and an outage does not change the verdict", () => {
+  const battery = { device_class: "battery", unit_of_measurement: "%" };
+  for (const value of [100, "unavailable", "unknown", "garbage"]) {
+    const model = entityModel.buildEntityModel({ "sensor.battery": st(value, battery) }, cfg(), "sensor.battery", "room");
+    assert.equal(model.metricKind, null, String(value));
+    assert.equal(model.availability, "incompatible_kind", String(value));
+    assert.equal(model.unusableReason, entityModel.UNUSABLE_REASON.FOREIGN_MEASUREMENT, String(value));
+  }
+  // The declaration is read from a state that exists; a missing one declares nothing.
+  assert.equal(entityModel.buildEntityModel({}, cfg(), "sensor.battery", "room").unusableReason, "missing");
+});
+
 test("auxiliary unit resolution strips a rate suffix but stays strict otherwise", () => {
   const states = {
     "sensor.rate": st(0.4, { unit_of_measurement: "°C/h" }),
@@ -465,6 +499,44 @@ test("an unavailable source preserves its kind while absent metadata preserves n
   assert.equal(fromNothing.identityMetricKind, null);
   assert.equal(fromNothing.sourceKind, "primary");
   assert.equal(fromNothing.unit, "");
+});
+
+// The TIMMERFLOTTE case: a battery reporting % once pulled 63.3 % and 69 % humidity up to a mean with 100 %.
+test("a sensor declaring a foreign measurement is never averaged in", () => {
+  const battery = { device_class: "battery", unit_of_measurement: "%" };
+  const states = { "sensor.wz": st(63.3, RH), "sensor.ba": st(69, RH), "sensor.battery": st(100, battery) };
+  const context = measurementContext.resolveMeasurementContext(
+    states,
+    cfg({ entity: null, rooms: [room("sensor.wz"), room("sensor.battery"), room("sensor.ba")] })
+  );
+  assert.equal(context.metricKind, "humidity");
+  assert.deepEqual(context.participatingRooms.map((model) => model.entityId), ["sensor.wz", "sensor.ba"]);
+  assert.ok(Math.abs(context.averageSource.canonicalValue - 66.15) < 1e-9, `got ${context.averageSource.canonicalValue}`);
+  const excluded = context.rooms.find((model) => model.entityId === "sensor.battery");
+  assert.equal(excluded.availability, "incompatible_kind");
+  assert.equal(excluded.unusableReason, "foreign_measurement");
+  assert.equal(context.consistent, true, "a foreign measurement is not one of the card's kinds to disagree with");
+});
+
+test("a main sensor declaring a foreign measurement leaves the rooms to decide", () => {
+  const states = {
+    "sensor.avg": st(100, { device_class: "battery", unit_of_measurement: "%" }),
+    "sensor.r1": st(20, C),
+    "sensor.r2": st(24, C),
+  };
+  const context = measurementContext.resolveMeasurementContext(states, cfg({ rooms: [room("sensor.r1"), room("sensor.r2")] }));
+  assert.equal(context.metricKind, "temperature");
+  assert.equal(context.averageSource.kind, "roomConsensus");
+  assert.equal(context.averageSource.canonicalValue, 22);
+  assert.equal(context.primary.unusableReason, "foreign_measurement");
+});
+
+test("a temperature difference is not a room temperature", () => {
+  const states = { "sensor.avg": st(22, C), "sensor.delta": st(5, { device_class: "temperature_delta", unit_of_measurement: "°C" }) };
+  const context = measurementContext.resolveMeasurementContext(states, cfg({ rooms: [room("sensor.delta")] }));
+  assert.equal(context.averageSource.canonicalValue, 22);
+  assert.deepEqual(context.participatingRooms, []);
+  assert.equal(context.rooms[0].unusableReason, "foreign_measurement");
 });
 
 test("effectiveMetricKind() substitutes the default for the mixed state", () => {
