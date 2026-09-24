@@ -18,6 +18,7 @@ const path = require("path");
 const vm = require("vm");
 const test = require("node:test");
 const { JSDOM } = require("jsdom");
+const { shippedSource } = require("./shipped-source.js");
 
 const environmentCleanups = new Set();
 test.afterEach(() => {
@@ -33,6 +34,9 @@ if (!fs.existsSync(CARD_SOURCE_PATH)) {
   );
 }
 const CARD_SOURCE = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
+// What the artifact tests judge: the file itself, or under `npm run coverage` the file without
+// its appended inline source map (shipped-source.js). Loading always uses the file itself.
+const SHIPPED_CARD_SOURCE = shippedSource(CARD_SOURCE, process.env.ROOM_CLIMATE_CARD_COVERAGE_ARTIFACT === "1");
 const CARD_TAG = "room-climate-card";
 
 class ResizeObserverStub {
@@ -168,4 +172,4 @@ function normalize(value) {
   return value;
 }
 
-module.exports = { createTestEnvironment, CARD_TAG, CARD_SOURCE_PATH, normalize };
+module.exports = { createTestEnvironment, CARD_TAG, CARD_SOURCE_PATH, SHIPPED_CARD_SOURCE, normalize };

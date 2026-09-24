@@ -9,14 +9,13 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const { JSDOM } = require("jsdom");
-const { CARD_SOURCE_PATH } = require("../helpers/load-card.jsdom.js");
+const { SHIPPED_CARD_SOURCE } = require("../helpers/load-card.jsdom.js");
 const packageJson = require("../../package.json");
 const { CO2, TEMPERATURE_C } = require("../fixtures/attributes.js");
 
 const CARD_TAG = "room-climate-card";
-const source = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
+const source = SHIPPED_CARD_SOURCE;
 
 function evaluateInBareRealm() {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {

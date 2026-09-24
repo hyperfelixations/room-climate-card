@@ -232,22 +232,40 @@ the attachment.
 
 ## Coverage
 
-`npm run coverage` measures three independent layers and then merges them:
+`npm run coverage` builds the bundle once with an inline source map, measures four independent
+layers and then merges them:
 
-- direct-source unit coverage;
-- Node bundle/component coverage mapped through Rollup source maps;
-- Chromium browser coverage collected by the shared Playwright fixture.
+| Layer | Tests | What runs |
+| --- | --- | --- |
+| `unit` | `test/unit/` | `src/` modules imported directly |
+| `bundle` | `test/component/`, `test/known-issues.test.js` | the built bundle in jsdom, plus any `src/` module a test imports |
+| `surface` | `test/contract/`, `test/property/`, `test/characterization/`, `test/fixtures/` | the same, driven from outside: registration, artifact, generated populations, recordings |
+| `browser` | the Chromium suite | the built bundle in a real browser, collected by the shared Playwright fixture |
 
-Every report is normalized to `src/`; `dist/` is never presented as a product source. Each
-layer and the merge writes LCOV, JSON and a text summary under `coverage/`.
+`test/architecture/` is the one unmeasured directory: it reads sources as text and never runs
+the card. `test/architecture/coverage-layers.test.js` fails when a Node test directory belongs
+to no layer, so a new one cannot drop out of the measurement unnoticed.
 
-Before it reports anything, the merge checks the INVENTORY: every `.js` file under `src/` has
-to appear in each of the three layers and in the merge, and the run fails naming the files if
-one does not. The reason is how Istanbul reports: it covers only the files it was handed, so a
+Every report is normalized to `src/`; `dist/` is never presented as a product source. c8
+reports the `src/` modules a test imports; the bundle, which the tests evaluate with `vm`, is
+remapped to `src/` from the raw V8 coverage c8 keeps in `coverage/raw-<layer>/v8/` — c8's own
+remapping of it (`--exclude-after-remap`) counts every bundled line as covered. The Node layers
+run with fixed settings: property runs at their default counts and seeds, no baseline is
+rewritten, and the artifact tests judge `dist/` without the coverage source map. Each layer and
+the merge write LCOV, JSON and a text summary under `coverage/`.
+
+Before it reports anything, the merge runs two checks. The INVENTORY: every `.js` file under
+`src/` has to appear in each layer and in the merge, and the run fails naming the files if one
+does not. The reason is how Istanbul reports: it covers only the files it was handed, so a
 module no layer executed does not show up as 0 % — it does not show up at all, and every
-percentage below it is then computed over a smaller product than the one that ships. The merge
-then enforces the calibrated floor of 98% statements, 97% branches, 75% functions and 98%
-lines. CI uploads the complete folder.
+percentage below it is then computed over a smaller product than the one that ships. And
+EXECUTION: every layer that loads the bundle has to show `src/index.js` and
+`src/element/room-climate-card.js` executed, and a function of the card element called — both
+files are reachable only through the bundle, and every such layer creates cards, so a layer
+that lost the bundle's coverage, or counts its lines without mapping its functions, fails by
+name instead of reporting a quietly wrong number. The merge then enforces the calibrated floor of 99% statements, 98% branches, 99%
+functions and 99% lines; branches sit a point lower because a few timing-dependent tests take
+a different branch from run to run. CI uploads the complete folder.
 
 ## Mutation testing
 

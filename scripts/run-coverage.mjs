@@ -1,8 +1,8 @@
-// Executes the three coverage layers with one instrumented build and delegates source-map
+// Executes the four coverage layers with one instrumented build and delegates source-map
 // normalization/reporting to merge-coverage.mjs. The ordinary reviewable bundle is restored
 // before exit, including after failure, so coverage never poisons a later pipeline `*:run`.
 // Commands are spawned without a shell so paths, environment values and failures retain
-// their exact meaning on Windows and POSIX.
+// their exact meaning on Windows and POSIX. See internal dev doc §4 "Coverage in vier Schichten".
 
 import fs from "node:fs";
 import path from "node:path";
@@ -12,6 +12,57 @@ import { fileURLToPath } from "node:url";
 const MODULE_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(MODULE_PATH), "..");
 const COVERAGE = path.join(ROOT, "coverage");
+
+// The Node layers, each one c8 run over its tests. Every Node test directory belongs to exactly
+// one layer or to UNMEASURED_TEST_DIRECTORIES (test/architecture/coverage-layers.test.js).
+export const COVERAGE_LAYERS = Object.freeze([
+  Object.freeze({ name: "unit", tests: Object.freeze(["test/unit/**/*.test.js"]) }),
+  Object.freeze({ name: "bundle", tests: Object.freeze(["test/component/**/*.test.js", "test/known-issues.test.js"]) }),
+  Object.freeze({
+    name: "surface",
+    tests: Object.freeze([
+      "test/contract/*.test.js",
+      "test/property/*.test.js",
+      "test/characterization/*.test.js",
+      "test/fixtures/*.test.js",
+    ]),
+  }),
+]);
+export const BROWSER_LAYER = "browser";
+export const UNMEASURED_TEST_DIRECTORIES = Object.freeze({
+  architecture: "reads sources and scripts as text; it never executes the card",
+});
+
+// Fixed for every Node layer run: the artifact tests judge dist/ without its coverage source
+// map, property runs use their default counts and seeds, and nothing rewrites a baseline or
+// writes a report. `null` removes a variable inherited from the shell.
+export const NODE_LAYER_ENV = Object.freeze({
+  ROOM_CLIMATE_CARD_COVERAGE_ARTIFACT: "1",
+  ROOM_CLIMATE_CARD_FUZZ_CASES: null,
+  ROOM_CLIMATE_CARD_FUZZ_SEED: null,
+  ROOM_CLIMATE_CARD_METAMORPHIC_CASES: null,
+  ROOM_CLIMATE_CARD_METAMORPHIC_SEED: null,
+  ROOM_CLIMATE_CARD_DISCOVERY_CASES: null,
+  ROOM_CLIMATE_CARD_DISCOVERY_SEED: null,
+  ROOM_CLIMATE_CARD_PROPERTY_REPORT_DIR: null,
+  UPDATE_CHARACTERIZATION: null,
+});
+
+// c8 reports the src/ modules a test imports directly. It drops the vm-evaluated dist bundle
+// (--include applies before remapping, and --exclude-after-remap marks every bundled line
+// covered), so merge-coverage.mjs remaps the bundle from the raw V8 files kept in `v8/`.
+export function c8Args(directory, tests) {
+  return [
+    "--report-dir", directory,
+    "--temp-directory", `${directory}/v8`,
+    "--reporter=json",
+    "--all",
+    "--include=src/**/*.js",
+    process.execPath,
+    "--test",
+    ...tests,
+  ];
+}
 
 function run(script, args, extraEnv = {}) {
   const env = { ...process.env };
@@ -64,20 +115,9 @@ function main() {
       run(rollup, ["-c"], { ROOM_CLIMATE_CARD_COVERAGE: "1" });
 
       const c8 = path.join(ROOT, "node_modules", "c8", "bin", "c8.js");
-      const c8Args = (directory, tests) => [
-        "--report-dir", directory,
-        "--reporter=json",
-        "--all",
-        "--include=src/**/*.js",
-        process.execPath,
-        "--test",
-        ...tests,
-      ];
-      run(c8, c8Args("coverage/raw-unit", ["test/unit/**/*.test.js"]));
-      run(c8, c8Args("coverage/raw-bundle", [
-        "test/component/**/*.test.js",
-        "test/known-issues.test.js",
-      ]));
+      for (const layer of COVERAGE_LAYERS) {
+        run(c8, c8Args(`coverage/raw-${layer.name}`, layer.tests), NODE_LAYER_ENV);
+      }
 
       run(path.join(ROOT, "node_modules", "@playwright", "test", "cli.js"), ["test", "--project=chromium"], {
         ROOM_CLIMATE_CARD_BROWSER_COVERAGE: "1",

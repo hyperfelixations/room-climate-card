@@ -71,7 +71,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium firefox webkit
 
-      - name: Source-normalized coverage across unit, bundle and browser layers
+      - name: Source-normalized coverage across unit, bundle, surface and browser layers
         run: npm run coverage
 
       # coverage already ran the full Chromium suite; run only the Firefox/WebKit core here.

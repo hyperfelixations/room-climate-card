@@ -13,7 +13,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { JSDOM } = require("jsdom");
-const { CARD_SOURCE_PATH, createTestEnvironment } = require("../helpers/load-card.jsdom.js");
+const { CARD_SOURCE_PATH, SHIPPED_CARD_SOURCE, createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { buildScenario } = require("../fixtures/scenario.js");
 const { CO2 } = require("../fixtures/attributes.js");
 const packageJson = require("../../package.json");
@@ -49,7 +49,7 @@ test.before(async () => {
   productHashBefore = sha256(CARD_SOURCE_PATH);
   await devScript.buildDevBundle({ outFile: devFile, builtAt: BUILT_AT, git: { commit: "abc1234", dirty: true } });
   devSource = fs.readFileSync(devFile, "utf8");
-  productSource = fs.readFileSync(CARD_SOURCE_PATH, "utf8");
+  productSource = SHIPPED_CARD_SOURCE;
 });
 
 test.after(() => {
