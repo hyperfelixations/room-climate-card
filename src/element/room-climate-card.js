@@ -261,12 +261,12 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return this._interaction.isDragging;
     }
 
-    // The configuration the card starts out as in the picker. HA passes the current
-    // view's entities and a fallback list (all three args optional); the stub names a
-    // real sensor when it can, else the documented placeholder template. See internal
-    // dev doc §4 "Card-Picker-Vertrag".
-    static getStubConfig(hass, entities, entitiesFallback) {
-      return stubConfigFor(hass?.states, entities, entitiesFallback);
+    // The configuration the card starts out as in the picker: up to three real rooms found
+    // in `hass` (states and registries), else the documented placeholder template. HA's
+    // entity lists (second and third argument) are not read. See internal dev doc §4
+    // "Card-Picker-Vertrag".
+    static getStubConfig(hass) {
+      return stubConfigFor(hass);
     }
 
     // The configuration as written, read by frontend modules such as card-mod (`card_mod`,

@@ -1,9 +1,10 @@
 # The expensive generated and mutation checks, once a week. Not in CI: a sweep that draws
 # different cards each run would eventually fail on an unrelated change. Weekly, not nightly:
 # a custom card is not developed every day and a job that usually reports nothing goes
-# unread. Two independent jobs: the property sweep (model + metamorphic, different case
-# counts because a metamorphic case costs ~3x a model one) and mutation, kept parallel so a
-# slow mutation cycle cannot hide the sweep result. See internal dev doc §4 "GitHub-Workflows".
+# unread. Two independent jobs: the property sweep (model + metamorphic + card-picker
+# discovery, separate case counts because a metamorphic case costs ~3x a model one) and
+# mutation, kept parallel so a slow mutation cycle cannot hide the sweep result. See internal
+# dev doc §4 "GitHub-Workflows".
 # A property failure prints a locally minimized scenario as lossless JSON, usable directly
 # as a scenario(...) fixture; the JSON report records seed and census for replay. Known
 # defects (test/known-issues.js) do not fail this job.
@@ -30,6 +31,13 @@ on:
         required: false
       metamorphic_seed:
         description: "Optional unsigned 32-bit metamorphic seed (decimal or 0x-prefixed)"
+        required: false
+      discovery_cases:
+        description: "How many randomly described installations to offer the card picker"
+        required: false
+        default: "20000"
+      discovery_seed:
+        description: "Optional unsigned 32-bit card-picker discovery seed (decimal or 0x-prefixed)"
         required: false
 
 permissions:
@@ -64,6 +72,8 @@ jobs:
           ROOM_CLIMATE_CARD_METAMORPHIC_CASES: ${{ github.event.inputs.metamorphic_cases || '20000' }}
           ROOM_CLIMATE_CARD_FUZZ_SEED: ${{ github.event.inputs.seed || github.run_id }}
           ROOM_CLIMATE_CARD_METAMORPHIC_SEED: ${{ github.event.inputs.metamorphic_seed || github.run_id }}
+          ROOM_CLIMATE_CARD_DISCOVERY_CASES: ${{ github.event.inputs.discovery_cases || '20000' }}
+          ROOM_CLIMATE_CARD_DISCOVERY_SEED: ${{ github.event.inputs.discovery_seed || github.run_id }}
           ROOM_CLIMATE_CARD_PROPERTY_REPORT_DIR: test-results/property
         run: npm run test:property:run
 

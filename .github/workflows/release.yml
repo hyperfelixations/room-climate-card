@@ -186,6 +186,8 @@ jobs:
           ROOM_CLIMATE_CARD_METAMORPHIC_CASES: "1200"
           ROOM_CLIMATE_CARD_FUZZ_SEED: ${{ github.run_id }}
           ROOM_CLIMATE_CARD_METAMORPHIC_SEED: ${{ github.run_id }}
+          ROOM_CLIMATE_CARD_DISCOVERY_CASES: "2500"
+          ROOM_CLIMATE_CARD_DISCOVERY_SEED: ${{ github.run_id }}
         run: npm run test:property:run
 
       # Provenance: the digest covers every committed baseline, so the draft can state which

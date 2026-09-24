@@ -103,18 +103,26 @@ test("the artifact's suggestion hook answers for climate entities and declines e
   assert.equal(entry.getEntitySuggestion(undefined, undefined), null, "the picker may call it before hass exists");
 });
 
-// With real candidates the stub config names one, so the preview shows the user's own reading.
-test("the artifact's stub configuration prefers a real climate entity over the placeholder template", () => {
+// With real candidates the stub config names them as rooms, so the preview shows the user's own readings.
+test("the artifact's stub configuration prefers real rooms over the placeholder template", () => {
   const window = evaluateInBareRealm();
   const ctor = window.customElements.get(CARD_TAG);
   const hass = {
     states: {
       "sensor.hall": { entity_id: "sensor.hall", state: "21.4", attributes: TEMPERATURE_C },
+      "sensor.den": { entity_id: "sensor.den", state: "22.1", attributes: TEMPERATURE_C },
     },
+    entities: { "sensor.hall": { entity_id: "sensor.hall", area_id: "hall" }, "sensor.den": { entity_id: "sensor.den", area_id: "den" } },
+    devices: {},
+    areas: { hall: { area_id: "hall", name: "Hall" }, den: { area_id: "den", name: "Den" } },
   };
-  const stub = ctor.getStubConfig(hass, ["sensor.hall"], []);
-  assert.equal(stub.entity, "sensor.hall");
-  assert.equal(stub.rooms, undefined, "a real entity is offered on its own, without invented rooms beside it");
+  // HA's own entity lists are passed and not needed; compared field by field across realms.
+  const stub = ctor.getStubConfig(hass, ["sensor.den"], []);
+  assert.equal(stub.entity, undefined, "no sensor is declared the home average");
+  assert.deepEqual(Array.from(stub.rooms, (room) => [room.name, room.entity]), [
+    ["Hall", "sensor.hall"],
+    ["Den", "sensor.den"],
+  ]);
   assert.equal(ctor.getStubConfig().entity, "sensor.house_temperature", "with no arguments the documented template still comes back");
 });
 

@@ -78,8 +78,10 @@ manually:
 The card picker knows this card. Start from **Add card**, pick a temperature,
 humidity, CO₂, or PM2.5 entity, and the Room Climate Card appears under
 **Community**, already set to the entity you picked and previewing your own
-reading. You can also select the card from the full list, where it previews a
-climate sensor found in your system.
+reading. You can also select the card from the full list, where it starts with up
+to three rooms from your system: one sensor per area, named after the area, all
+measuring the same thing. It finds sensors whose `device_class` is
+`temperature`, `humidity`, `carbon_dioxide`, or `pm25`.
 
 From there the YAML below is what you edit. Pick the shape that matches what you
 have — you need at least one sensor.

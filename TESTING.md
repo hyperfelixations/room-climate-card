@@ -166,14 +166,31 @@ say reports correct behaviour as a defect, which is worse than no test — so ea
 needs and why, and the runner **fails if a relation never applied at all**. A relation excluded
 by a wrong precondition looks exactly like one that holds.
 
+### What the card picker finds
+
+`discovery.js` generates whole Home Assistant installations instead of cards: areas in the
+order the user arranged them, devices (some nested under a parent), zero to five sensors of
+each measurement — declared, misspelled, undeclared or foreign, usable or not, named or not,
+placed in an area or not, hidden or diagnostic — and distractors such as batteries reporting
+`%`. For each, the browse path's start configuration must be rooms only, one to three of them,
+of one measurement, never a distractor, named all by area or all by `friendly_name`, the same
+whatever order the installation arrived in, unchanged by one more distractor, and chosen by
+the priority rule over each measurement taken alone; found usable rooms are then rendered in
+the built card, which must show a value without a warning. The run fails when its census —
+template, one, two or three rooms, area or sensor names, each measurement — leaves its bands.
+`discovery.test.js` measures the generator against `DISCOVERY_WEIGHTS`, and a failure prints the
+minimized installation as JSON for `installation(…)` in `test/fixtures/installation.js`.
+
 ```bash
-npm run test:property                                            # both deterministic runs
+npm run test:property                                            # all three deterministic runs
 ROOM_CLIMATE_CARD_FUZZ_CASES=25000 npm run test:property:run         # a real model sweep
 ROOM_CLIMATE_CARD_METAMORPHIC_CASES=15000 npm run test:property:run  # a real metamorphic sweep
+ROOM_CLIMATE_CARD_DISCOVERY_CASES=20000 npm run test:property:run    # a real card-picker sweep
 ```
 
-The two counts are separate because a metamorphic case builds the card at least twice and costs
-about three times a model case — measured at 48 ms against 15 ms.
+The counts are separate because a metamorphic case builds the card at least twice and costs
+about three times a model case — measured at 48 ms against 15 ms. `ROOM_CLIMATE_CARD_DISCOVERY_SEED`
+replays a card-picker population.
 
 A failure prints a **locally minimized** case as lossless JSON, including values such as
 `NaN` and `-0`. The shrinker accepts a candidate only when it reproduces the same exact unknown
