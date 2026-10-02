@@ -359,6 +359,7 @@ updates weekly and opens a pull request for each security advisory.
 An `overrides` entry only raises a transitive package that is in the lockfile to a caret minimum
 such as `^6.16.0`, for a fix its parent does not yet allow. An exact pin is rejected: it holds a
 package on a vulnerable version after its fix ships. Every workflow action is pinned to a full
-commit SHA with its version as a comment, and Dependabot moves both together. `hacs/action`
-publishes no current release; its pin is a commit of `main`, renewed by hand.
+commit SHA with its version as a comment, and Dependabot moves both together. The one exception
+is `hacs/action@main`: it publishes no releases to follow and runs only in jobs without
+permissions, where it reaches neither the repository nor its secrets.
 `test/architecture/dependency-security.test.js` enforces all of this.

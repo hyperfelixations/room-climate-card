@@ -54,10 +54,20 @@ test("a release candidate is audited before it is built", () => {
   assert.ok(job[1].indexOf("check:security") < job[1].indexOf("npm run build"), "audit precedes the build");
 });
 
-test("every action is pinned to a full commit SHA with its version as comment", () => {
+// hacs/action publishes no releases Dependabot could follow; it tracks main and is confined to
+// jobs without permissions, where it reaches neither the repository nor its secrets.
+test("every action is pinned to a full commit SHA, except hacs/action@main without permissions", () => {
   for (const name of WORKFLOWS) {
-    for (const line of read(".github", "workflows", name).split("\n").filter((entry) => /^\s*(?:- )?uses:/.test(entry))) {
-      assert.match(line, /uses: [\w.-]+\/[\w.\/-]+@[0-9a-f]{40} # [\w.-]+$/, `${name}: ${line.trim()}`);
+    const workflow = read(".github", "workflows", name);
+    const unprivileged = /^permissions: \{\}$/m.test(workflow);
+    for (const [, job, body] of workflow.matchAll(/^  ([\w-]+):\n((?:    .*\n|\n)*)/gm)) {
+      for (const line of body.split("\n").filter((entry) => /^\s*(?:- )?uses:/.test(entry))) {
+        if (/uses: hacs\/action@main$/.test(line)) {
+          assert.ok(unprivileged || /^    permissions: \{\}$/m.test(body), `${name} ${job}: hacs/action needs permissions: {}`);
+        } else {
+          assert.match(line, /uses: [\w.-]+\/[\w.\/-]+@[0-9a-f]{40} # [\w.-]+$/, `${name} ${job}: ${line.trim()}`);
+        }
+      }
     }
   }
 });

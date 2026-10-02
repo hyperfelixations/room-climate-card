@@ -1,5 +1,5 @@
 # Security updates arrive one advisory per pull request; routine tooling updates are grouped.
-# Actions stay pinned to commit SHAs; Dependabot moves the SHA and its version comment together.
+# Actions are pinned to commit SHAs; Dependabot moves the SHA and its version comment together.
 
 version: 2
 updates:
