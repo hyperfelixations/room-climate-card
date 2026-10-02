@@ -36,6 +36,7 @@
     "characterize:update": "npm run build && node scripts/update-characterization.mjs",
     "test:install": "playwright install chromium firefox webkit",
     "check:run": "node --check dist/room-climate-card.js",
+    "check:security": "npm audit --omit=dev --audit-level=low && npm audit --audit-level=high && npm audit signatures",
     "test:node:run": "node --test --test-reporter=./test/helpers/compact-reporter.js --test-reporter-destination=stdout \"test/**/*.test.js\"",
     "test:node:verbose:run": "node --test \"test/**/*.test.js\"",
     "test:unit:run": "node --test \"test/unit/**/*.test.js\"",
@@ -60,12 +61,13 @@
     "istanbul-lib-coverage": "3.2.2",
     "istanbul-lib-report": "3.0.1",
     "istanbul-reports": "3.2.0",
-    "jsdom": "^29.1.1",
-    "rollup": "^4.62.3",
+    "jsdom": "^30.1.1",
+    "rollup": "^4.63.6",
     "v8-to-istanbul": "9.3.0"
   },
   "overrides": {
-    "qs": "6.15.3",
-    "undici": "7.29.0"
+    "typed-rest-client": {
+      "qs": "^6.16.0"
+    }
   }
 }

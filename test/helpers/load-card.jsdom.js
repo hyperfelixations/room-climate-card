@@ -71,11 +71,20 @@ function createTestEnvironment({ additionalScripts = [] } = {}) {
 
   window.ResizeObserver = ResizeObserverStub;
   window.document.fonts = { ready: Promise.resolve() };
-  // Guarded by try/catch in the card; stubbed so that path runs instead of
-  // always hitting the catch.
+  // jsdom has no DOMMatrixReadOnly and no layout: getComputedStyle returns the inline
+  // transform unresolved. Like a browser's, this one reads absolute translations and throws
+  // on relative lengths (`%`), so the card takes its index-derived fallback for those.
   window.DOMMatrixReadOnly = class DOMMatrixReadOnly {
-    constructor() {
-      this.m41 = 0;
+    constructor(transform = "none") {
+      const text = String(transform).trim();
+      const matrix = /^matrix\(([^)]*)\)$/.exec(text);
+      const matrix3d = /^matrix3d\(([^)]*)\)$/.exec(text);
+      const translate = /^translate(?:3d|X)?\(\s*(-?[\d.]+)(?:px)?\s*(?:,[^)]*)?\)$/.exec(text);
+      if (text === "none") this.m41 = 0;
+      else if (matrix) this.m41 = Number(matrix[1].split(",")[4]);
+      else if (matrix3d) this.m41 = Number(matrix3d[1].split(",")[12]);
+      else if (translate && !text.includes("%")) this.m41 = Number(translate[1]);
+      else throw new window.DOMException(`Failed to parse '${text}'`, "SyntaxError");
     }
   };
 

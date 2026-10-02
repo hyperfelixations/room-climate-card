@@ -336,3 +336,29 @@ reports.
 [`property.yml`](.github/workflows/property.yml) sweeps both large generated populations and
 runs the narrow mutation scope once a week. It can be started by hand with a case count and
 optional seed for each property population.
+
+## Dependency security
+
+```sh
+npm run check:security
+```
+
+The check runs three audits against the installed lockfile:
+
+| Audit | Fails on |
+| --- | --- |
+| `npm audit --omit=dev --audit-level=low` | any advisory against a runtime dependency |
+| `npm audit --audit-level=high` | a high or critical advisory against build and test tooling |
+| `npm audit signatures` | a package without a valid registry signature |
+
+The card has no runtime dependencies today, so the first audit guards the moment one is added.
+[`security.yml`](.github/workflows/security.yml) runs the check on every push and pull request and
+weekly, and the release workflow runs it before the build. Dependabot proposes npm and action
+updates weekly and opens a pull request for each security advisory.
+
+An `overrides` entry only raises a transitive package that is in the lockfile to a caret minimum
+such as `^6.16.0`, for a fix its parent does not yet allow. An exact pin is rejected: it holds a
+package on a vulnerable version after its fix ships. Every workflow action is pinned to a full
+commit SHA with its version as a comment, and Dependabot moves both together. `hacs/action`
+publishes no current release; its pin is a commit of `main`, renewed by hand.
+`test/architecture/dependency-security.test.js` enforces all of this.
