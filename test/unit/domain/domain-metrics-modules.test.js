@@ -11,6 +11,7 @@ const assert = require("node:assert/strict");
 
 let definitions;
 let resolution;
+let homeAssistant;
 let conversion;
 let unitToken;
 
@@ -19,6 +20,7 @@ const METRIC_KINDS = ["temperature", "humidity", "co2", "pm25"];
 test.before(async () => {
   definitions = await import("../../../src/domain/metrics/definitions.js");
   resolution = await import("../../../src/domain/metrics/resolution.js");
+  homeAssistant = await import("../../../src/domain/metrics/home-assistant.js");
   conversion = await import("../../../src/domain/units/conversion.js");
   unitToken = await import("../../../src/domain/units/unit-token.js");
 });
@@ -27,6 +29,25 @@ test.before(async () => {
 
 test("exactly the four supported metric kinds are registered", () => {
   assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS).sort(), [...METRIC_KINDS].sort());
+});
+
+test("the kinds keep one order, the one they are registered in", () => {
+  assert.deepEqual([...definitions.METRIC_KIND_ORDER], ["temperature", "humidity", "co2", "pm25"]);
+  assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS), [...definitions.METRIC_KIND_ORDER]);
+  assert.ok(Object.isFrozen(definitions.METRIC_KIND_ORDER));
+});
+
+// References, not copies: a profile edited in classification/ is what the kind classifies by.
+test("each kind's canonical tiers and bands are its default built-in profile's own", async () => {
+  const { CLASSIFICATION_PROFILE_REGISTRY } = await import("../../../src/domain/classification/registry.js");
+  for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
+    const registry = CLASSIFICATION_PROFILE_REGISTRY[kind];
+    const profile = registry.profiles[registry.defaultProfile];
+    assert.equal(definition.canonicalClassificationTiers, profile.tiers, `${kind}: tiers`);
+    assert.equal(definition.canonicalComfortBand, profile.comfort, `${kind}: comfort`);
+    assert.equal(definition.canonicalOptimalBand, profile.optimal, `${kind}: optimal`);
+    assert.equal(definition.canonicalBaseScaleBand, profile.scale, `${kind}: scale`);
+  }
 });
 
 test("every metric definition is internally consistent", () => {
@@ -249,123 +270,189 @@ test("Fahrenheit declares dynamic display steps; Celsius and Kelvin do not", () 
 
 // -------------------------------------------------------------- resolution --
 
-test("the device_class map covers Home Assistant's four sensor classes", () => {
+test("each card kind is reached through its own device class, derived from its definition", () => {
   assert.deepEqual(resolution.METRIC_TYPE_BY_DEVICE_CLASS, {
     temperature: "temperature",
     humidity: "humidity",
     carbon_dioxide: "co2",
     pm25: "pm25",
   });
+  assert.ok(Object.isFrozen(resolution.METRIC_TYPE_BY_DEVICE_CLASS));
+  for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
+    assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS[definition.deviceClass], kind, kind);
+  }
 });
 
-test("METRIC_TYPE_BY_UNIT is derived from every registered unit alias", () => {
-  // The index is derived, not hand-maintained: every alias in every unitProfile resolves.
-  // This answers which measurement uses a unit; whether that identifies a sensor is tested
-  // below.
+test("the unit index lists every registered alias under the kinds registering it, and nothing else", () => {
+  const expected = {};
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
     for (const profile of Object.values(definition.unitProfiles)) {
-      for (const unit of profile.units) {
-        const token = unitToken.normalizeUnitToken(unit);
-        assert.equal(
-          resolution.METRIC_TYPE_BY_UNIT[token],
-          kind,
-          `unit "${unit}" (token "${token}") must resolve to ${kind}`
-        );
-      }
+      for (const unit of profile.units) expected[unitToken.normalizeUnitToken(unit)] = [kind];
     }
+  }
+  assert.deepEqual(resolution.METRIC_KINDS_BY_UNIT, expected);
+  assert.deepEqual(resolution.METRIC_KINDS_BY_UNIT.c, ["temperature"], "the word and letter aliases are in it");
+  assert.ok(Object.isFrozen(resolution.METRIC_KINDS_BY_UNIT));
+  for (const kinds of Object.values(resolution.METRIC_KINDS_BY_UNIT)) assert.ok(Object.isFrozen(kinds));
+});
+
+// Inverted by unit token, so µ/μ and ³/3 spellings meet in one entry.
+test("Home Assistant's unit table is inverted by unit token, every reporting class kept", () => {
+  assert.deepEqual(resolution.DEVICE_CLASSES_BY_UNIT, {
+    "°c": ["temperature"],
+    "°f": ["temperature"],
+    k: ["temperature"],
+    "%": ["humidity"],
+    ppm: ["carbon_dioxide", "carbon_monoxide", "nitrogen_dioxide", "ozone", "volatile_organic_compounds_parts"],
+    "ug/m3": [
+      "pm1", "pm25", "pm4", "pm10", "carbon_monoxide", "nitrogen_dioxide", "ozone", "nitrogen_monoxide",
+      "sulphur_dioxide", "nitrous_oxide", "volatile_organic_compounds",
+    ],
+    ppb: ["carbon_monoxide", "nitrogen_dioxide", "ozone", "nitrogen_monoxide", "sulphur_dioxide", "volatile_organic_compounds_parts"],
+    "mg/m3": ["carbon_monoxide", "volatile_organic_compounds", "absolute_humidity"],
+    "g/m3": ["absolute_humidity"],
+    "bq/m3": ["radon"],
+    "pci/l": ["radon"],
+  });
+  assert.ok(!resolution.DEVICE_CLASSES_BY_UNIT["ug/m3"].includes("absolute_humidity"), "absolute humidity is g/m³ or mg/m³");
+  assert.ok(Object.isFrozen(resolution.DEVICE_CLASSES_BY_UNIT));
+  for (const deviceClasses of Object.values(resolution.DEVICE_CLASSES_BY_UNIT)) assert.ok(Object.isFrozen(deviceClasses));
+});
+
+test("a registered unit names the one kind registering it", () => {
+  assert.equal(resolution.metricKindOfUnit("ppm"), "co2", "a profile written in ppm is a CO2 profile");
+  assert.equal(resolution.metricKindOfUnit(" °F "), "temperature");
+  assert.equal(resolution.metricKindOfUnit("ug/m3"), "pm25");
+  assert.equal(resolution.metricKindOfUnit("hPa"), null);
+  for (const nothing of [undefined, null, "", 5]) {
+    assert.equal(resolution.metricKindOfUnit(nothing), null, JSON.stringify(nothing));
   }
 });
 
-test("the derived index contains no entries beyond the registered aliases", () => {
-  const expected = new Set();
-  for (const definition of Object.values(definitions.METRIC_DEFINITIONS)) {
-    for (const profile of Object.values(definition.unitProfiles)) {
-      for (const unit of profile.units) expected.add(unitToken.normalizeUnitToken(unit));
-    }
-  }
-  assert.deepEqual(Object.keys(resolution.METRIC_TYPE_BY_UNIT).sort(), [...expected].sort());
-});
+// -------------------------------------------- how a sensor's measurement is identified --
 
-// -------------------------------------- when a unit may stand in for a device class ---
+const identity = (metricKind, basis, unknownDeviceClass = false) => ({ metricKind, basis, unknownDeviceClass });
+
+test("the ways a measurement can be identified are a closed vocabulary", () => {
+  assert.deepEqual(resolution.MEASUREMENT_BASIS, {
+    DEVICE_CLASS: "device_class",
+    FOREIGN: "foreign",
+    UNIT: "unit",
+    UNIT_AMBIGUOUS: "unit_ambiguous",
+    UNIT_UNKNOWN: "unit_unknown",
+    NOTHING: "nothing",
+  });
+  assert.ok(Object.isFrozen(resolution.MEASUREMENT_BASIS));
+});
 
 // The card asks for device_class first; the unit is a fallback for template sensors that
 // never got one, and it applies only where the unit belongs to one measurement — a wrong
 // guess shows a real number against the wrong scale and colour.
-test("a unit stands in for a device class only when one measurement uses it", () => {
-  for (const unit of ["°C", "°F", "K", "celsius", "kelvin", "%"]) {
-    assert.equal(resolution.unitPredictsMetricKind(unit), true, unit);
-  }
-  // Home Assistant defines five sensor device classes reporting ppm and eleven reporting
-  // µg/m³, so neither says what is being measured.
-  for (const unit of ["ppm", "µg/m³", "ug/m3", "μg/m³"]) {
-    assert.equal(resolution.unitPredictsMetricKind(unit), false, unit);
-  }
-  for (const nothing of [null, undefined, ""]) {
-    assert.equal(resolution.unitPredictsMetricKind(nothing), false, JSON.stringify(nothing));
+test("a declared class decides; a unit decides only without one, and only when one measurement uses it", () => {
+  const cases = [
+    [["temperature", undefined], identity("temperature", "device_class")],
+    [[" Carbon_Dioxide ", "ppm"], identity("co2", "device_class")],
+    [["humidity", "°C"], identity("humidity", "device_class")],
+    [["battery", "%"], identity(null, "foreign")],
+    [[undefined, "°C"], identity("temperature", "unit")],
+    [[null, " celsius "], identity("temperature", "unit")],
+    [[undefined, "%"], identity("humidity", "unit")],
+    [["temperatur", "°F"], identity("temperature", "unit", true)],
+    // Home Assistant defines five sensor classes reporting ppm and eleven reporting µg/m³.
+    [[undefined, "ppm"], identity(null, "unit_ambiguous")],
+    [[undefined, "μg/m³"], identity(null, "unit_ambiguous")],
+    [["co2", "ppm"], identity(null, "unit_ambiguous", true)],
+    [[undefined, "lx"], identity(null, "unit_unknown")],
+    // ppb is several classes' unit, but none of the card's, so it identifies nothing either way.
+    [["co2", "ppb"], identity(null, "unit_unknown", true)],
+    [[undefined, undefined], identity(null, "nothing")],
+    [["   ", "   "], identity(null, "nothing")],
+    [[5, 7], identity(null, "nothing")],
+    [["pm2.5", null], identity(null, "nothing", true)],
+  ];
+  for (const [[deviceClass, unit], expected] of cases) {
+    const actual = resolution.identifyMeasurement(deviceClass, unit);
+    assert.deepEqual(actual, expected, JSON.stringify([deviceClass, unit]));
+    assert.ok(Object.isFrozen(actual));
   }
 });
 
-// The rule is written as data, so a shared unit loses its fallback by itself.
-test("the ambiguity table is what decides, not a list of exceptions", () => {
-  for (const [unit, deviceClasses] of Object.entries(resolution.DEVICE_CLASSES_BY_UNIT)) {
-    assert.ok(deviceClasses.length >= 1, unit);
-    assert.equal(
-      resolution.unitPredictsMetricKind(unit),
-      deviceClasses.length === 1,
-      `${unit} is claimed by ${deviceClasses.length} device class(es)`
-    );
+test("unit and device class lookups never answer from the prototype chain", () => {
+  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    assert.deepEqual(resolution.identifyMeasurement(raw, raw), identity(null, "unit_unknown", true), raw);
+    assert.equal(resolution.metricKindOfUnit(raw), null, `profile unit ${raw}`);
+    assert.equal(resolution.resolveUnitProfileKey(raw, "°C"), null, `metric kind ${raw}`);
   }
-  // And the two the card itself measures in a shared unit are genuinely in there.
-  assert.ok(resolution.DEVICE_CLASSES_BY_UNIT.ppm.includes("carbon_dioxide"));
-  assert.ok(resolution.DEVICE_CLASSES_BY_UNIT["µg/m³"].includes("pm25"));
-
-  // Two questions, two tables: a profile written in ppm is a CO2 profile (there is only
-  // one), while a sensor reporting ppm is a guess.
-  assert.equal(resolution.METRIC_TYPE_BY_UNIT.ppm, "co2", "which measurement uses ppm");
-  assert.equal(resolution.metricKindFromUnitAlone("ppm"), null, "but a sensor reporting it is not identified");
-  assert.equal(resolution.metricKindFromUnitAlone("°C"), "temperature");
-  assert.equal(resolution.metricKindFromUnitAlone("parsecs"), null);
 });
 
-test("the Home Assistant unit ambiguity table preserves every owning device class", () => {
-  assert.deepEqual(resolution.DEVICE_CLASSES_BY_UNIT, {
-    "°C": ["temperature"],
-    "°F": ["temperature"],
-    K: ["temperature"],
-    "%": ["humidity"],
-    ppm: [
-      "carbon_dioxide",
-      "carbon_monoxide",
-      "nitrogen_dioxide",
-      "ozone",
-      "volatile_organic_compounds_parts",
-    ],
-    "µg/m³": [
-      "absolute_humidity",
-      "carbon_monoxide",
-      "nitrogen_dioxide",
-      "nitrogen_monoxide",
-      "ozone",
-      "pm1",
-      "pm10",
-      "pm25",
-      "pm4",
-      "sulphur_dioxide",
-      "volatile_organic_compounds",
-    ],
+// A kind that does not exist yet, assembled from the same parts, so the rules for a shared unit
+// are pinned before a second kind in µg/m³ arrives.
+test("units two kinds share decide nothing, while a unit one Home Assistant class reports does", () => {
+  const ha = { haDeviceClasses: ["pm1", "pm25", "radon"], haDeviceClassUnits: { pm1: ["μg/m³"], pm25: ["μg/m³"], radon: ["Bq/m³"] } };
+  const kind = (metricKind, deviceClass, units) => ({ metricKind, deviceClass, unitProfiles: { only: { key: "only", units } } });
+  const resolved = resolution.createMetricResolution({
+    ...ha,
+    definitions: {
+      pm25: kind("pm25", "pm25", ["µg/m³"]),
+      pm1: kind("pm1", "pm1", ["µg/m³", "shared"]),
+      radon: kind("radon", "radon", ["Bq/m³", "shared"]),
+    },
   });
-});
-
-// A declared device_class always wins, so nothing changes for a sensor that has one.
-test("a declared device class is unaffected by the unit rule", () => {
-  assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS.carbon_dioxide, "co2");
-  assert.equal(resolution.METRIC_TYPE_BY_DEVICE_CLASS.pm25, "pm25");
-  // And the unit still resolves to its profile once the kind is settled.
-  assert.equal(resolution.resolveUnitProfileKey("co2", "ppm"), "ppm");
-  assert.equal(resolution.resolveUnitProfileKey("pm25", "µg/m³"), "microgram_per_m3");
+  assert.deepEqual(resolved.METRIC_KINDS_BY_UNIT, { "ug/m3": ["pm25", "pm1"], shared: ["pm1", "radon"], "bq/m3": ["radon"] });
+  assert.deepEqual(resolved.DEVICE_CLASSES_BY_UNIT, { "ug/m3": ["pm1", "pm25"], "bq/m3": ["radon"] });
+  assert.deepEqual(resolved.METRIC_TYPE_BY_DEVICE_CLASS, { pm25: "pm25", pm1: "pm1", radon: "radon" });
+  assert.equal(resolved.metricKindOfUnit("µg/m³"), null, "a profile in µg/m³ could be either");
+  assert.equal(resolved.metricKindOfUnit("Bq/m³"), "radon");
+  assert.deepEqual(resolved.identifyMeasurement(undefined, "µg/m³"), identity(null, "unit_ambiguous"));
+  assert.deepEqual(resolved.identifyMeasurement(undefined, "shared"), identity(null, "unit_ambiguous"), "two kinds, no Home Assistant class");
+  assert.deepEqual(resolved.identifyMeasurement(undefined, "Bq/m³"), identity("radon", "unit"));
+  assert.deepEqual(resolved.identifyMeasurement("PM1", "ppm"), identity("pm1", "device_class"));
+  assert.deepEqual(resolved.classifyDeviceClass("pm1"), { metricKind: "pm1", foreign: false });
+  assert.equal(resolved.resolveUnitProfileKey("pm1", "ug/m3"), "only");
+  assert.ok(Object.isFrozen(resolved));
 });
 
 // ---------------------------------------------------- what a declared device class says --
+
+test("a declared device class of the card names its measurement, whatever the spelling around it", () => {
+  const cases = {
+    temperature: "temperature",
+    humidity: "humidity",
+    carbon_dioxide: "co2",
+    pm25: "pm25",
+    " Temperature ": "temperature",
+    HUMIDITY: "humidity",
+  };
+  for (const [raw, metricKind] of Object.entries(cases)) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), { metricKind, foreign: false }, JSON.stringify(raw));
+    assert.ok(Object.isFrozen(resolution.classifyDeviceClass(raw)));
+  }
+});
+
+// The TIMMERFLOTTE battery reports % and declares battery: the declaration decides, not the unit.
+test("a declared Home Assistant device class that is not the card's is a foreign measurement", () => {
+  const theCards = new Set(Object.keys(resolution.METRIC_TYPE_BY_DEVICE_CLASS));
+  for (const deviceClass of HA_SENSOR_DEVICE_CLASSES.filter((name) => !theCards.has(name))) {
+    assert.deepEqual(resolution.classifyDeviceClass(deviceClass), { metricKind: null, foreign: true }, deviceClass);
+  }
+  assert.deepEqual(resolution.classifyDeviceClass(" Battery"), { metricKind: null, foreign: true });
+  assert.ok(Object.isFrozen(resolution.classifyDeviceClass("battery")));
+});
+
+// A typo or an invented class is a declaration error, not a statement; the unit may still decide.
+test("an absent, malformed or unknown device class declares nothing", () => {
+  const nothing = { metricKind: null, foreign: false };
+  for (const raw of [undefined, null, "", "   ", 5, true, {}, [], "temperatur", "temp", "rel_humidity", "pm2.5"]) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, JSON.stringify(raw));
+  }
+  // Object-literal lookups must not answer from the prototype chain.
+  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, raw);
+  }
+  assert.ok(Object.isFrozen(resolution.classifyDeviceClass(undefined)));
+});
+
+// ----------------------------------------------------- Home Assistant's own tables --
 
 // Home Assistant's SensorDeviceClass values (homeassistant/components/sensor/const.py),
 // written out so every entry is pinned: a dropped class would let its unit decide again.
@@ -383,74 +470,42 @@ const HA_SENSOR_DEVICE_CLASSES = [
 ];
 
 test("the Home Assistant device class vocabulary is complete and frozen", () => {
-  assert.deepEqual([...resolution.HA_SENSOR_DEVICE_CLASSES].sort(), HA_SENSOR_DEVICE_CLASSES);
+  assert.deepEqual([...homeAssistant.HA_SENSOR_DEVICE_CLASSES].sort(), HA_SENSOR_DEVICE_CLASSES);
   assert.equal(HA_SENSOR_DEVICE_CLASSES.length, 62);
-  assert.ok(Object.isFrozen(resolution.HA_SENSOR_DEVICE_CLASSES));
-  assert.throws(() => resolution.HA_SENSOR_DEVICE_CLASSES.push("made_up"), TypeError);
-  for (const deviceClass of Object.keys(resolution.METRIC_TYPE_BY_DEVICE_CLASS)) {
-    assert.ok(resolution.HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant class`);
+  assert.ok(Object.isFrozen(homeAssistant.HA_SENSOR_DEVICE_CLASSES));
+  assert.throws(() => homeAssistant.HA_SENSOR_DEVICE_CLASSES.push("made_up"), TypeError);
+});
+
+// DEVICE_CLASS_UNITS as Home Assistant writes it (μ is U+03BC), for the classes a climate card
+// could be pointed at.
+test("the Home Assistant unit table is copied verbatim for the climate classes", () => {
+  assert.deepEqual(homeAssistant.HA_DEVICE_CLASS_UNITS, {
+    temperature: ["°C", "°F", "K"],
+    humidity: ["%"],
+    carbon_dioxide: ["ppm"],
+    pm1: ["μg/m³"],
+    pm25: ["μg/m³"],
+    pm4: ["μg/m³"],
+    pm10: ["μg/m³"],
+    carbon_monoxide: ["ppb", "ppm", "mg/m³", "μg/m³"],
+    nitrogen_dioxide: ["ppb", "ppm", "μg/m³"],
+    ozone: ["ppb", "ppm", "μg/m³"],
+    nitrogen_monoxide: ["ppb", "μg/m³"],
+    sulphur_dioxide: ["ppb", "μg/m³"],
+    nitrous_oxide: ["μg/m³"],
+    volatile_organic_compounds: ["μg/m³", "mg/m³"],
+    volatile_organic_compounds_parts: ["ppm", "ppb"],
+    absolute_humidity: ["g/m³", "mg/m³"],
+    radon: ["Bq/m³", "pCi/L"],
+  });
+  assert.ok(Object.isFrozen(homeAssistant.HA_DEVICE_CLASS_UNITS));
+  for (const [deviceClass, units] of Object.entries(homeAssistant.HA_DEVICE_CLASS_UNITS)) {
+    assert.ok(Object.isFrozen(units), deviceClass);
+    assert.ok(HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant class`);
   }
 });
 
-test("a declared device class of the card names its measurement, whatever the spelling around it", () => {
-  const cases = {
-    temperature: "temperature",
-    humidity: "humidity",
-    carbon_dioxide: "co2",
-    pm25: "pm25",
-    " Temperature ": "temperature",
-    HUMIDITY: "humidity",
-  };
-  for (const [raw, metricKind] of Object.entries(cases)) {
-    assert.deepEqual(resolution.classifyDeviceClass(raw), { metricKind, foreign: false }, JSON.stringify(raw));
-  }
-});
-
-// The TIMMERFLOTTE battery reports % and declares battery: the declaration decides, not the unit.
-test("a declared Home Assistant device class that is not the card's is a foreign measurement", () => {
-  const theCards = new Set(Object.keys(resolution.METRIC_TYPE_BY_DEVICE_CLASS));
-  for (const deviceClass of HA_SENSOR_DEVICE_CLASSES.filter((name) => !theCards.has(name))) {
-    assert.deepEqual(resolution.classifyDeviceClass(deviceClass), { metricKind: null, foreign: true }, deviceClass);
-  }
-  assert.deepEqual(resolution.classifyDeviceClass(" Battery"), { metricKind: null, foreign: true });
-});
-
-// A typo or an invented class is a declaration error, not a statement; the unit may still decide.
-test("an absent, malformed or unknown device class declares nothing", () => {
-  const nothing = { metricKind: null, foreign: false };
-  for (const raw of [undefined, null, "", "   ", 5, true, {}, [], "temperatur", "temp", "rel_humidity", "pm2.5"]) {
-    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, JSON.stringify(raw));
-  }
-  // Object-literal lookups must not answer from the prototype chain.
-  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
-    assert.deepEqual(resolution.classifyDeviceClass(raw), nothing, raw);
-  }
-  assert.ok(Object.isFrozen(resolution.classifyDeviceClass("battery")));
-});
-
-test("unit lookups answer only for registered units, never from the prototype chain", () => {
-  for (const raw of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
-    assert.equal(resolution.metricKindFromUnitAlone(raw), null, `sensor unit ${raw}`);
-    assert.equal(resolution.metricKindOfUnit(raw), null, `profile unit ${raw}`);
-    assert.equal(resolution.resolveUnitProfileKey(raw, "°C"), null, `metric kind ${raw}`);
-  }
-  assert.equal(resolution.metricKindOfUnit("ppm"), "co2", "a profile written in ppm is a CO2 profile");
-  assert.equal(resolution.metricKindOfUnit(" °F "), "temperature");
-  assert.equal(resolution.metricKindOfUnit("hPa"), null);
-  for (const nothing of [undefined, null, "", 5]) {
-    assert.equal(resolution.metricKindOfUnit(nothing), null, JSON.stringify(nothing));
-  }
-});
-
-test("temperature word and bare-letter aliases all resolve", () => {
-  for (const unit of ["°C", "c", "celsius", "°F", "f", "fahrenheit", "K", "kelvin"]) {
-    assert.equal(
-      resolution.METRIC_TYPE_BY_UNIT[unitToken.normalizeUnitToken(unit)],
-      "temperature",
-      `unit "${unit}"`
-    );
-  }
-});
+// ------------------------------------------------------------ unit profiles --
 
 test("resolveUnitProfileKey() maps a raw unit to its profile, or null", () => {
   assert.equal(resolution.resolveUnitProfileKey("temperature", "°C"), "celsius");

@@ -29,10 +29,9 @@ let formatNumber;
 let formatTimeOfDay;
 let metricMetaFor;
 let CLASSIFICATION_ZONES;
-let METRIC_TYPE_BY_UNIT;
+let metricKindOfUnit;
 let METRIC_DEFINITIONS;
 let resolveUnitProfileKey;
-let normalizeUnitToken;
 let palettes;
 
 // The surface the card is standing on. HA's default light background is what the element
@@ -53,9 +52,8 @@ test.before(async () => {
   ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
   ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
   ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
-  ({ METRIC_TYPE_BY_UNIT, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
+  ({ metricKindOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
-  ({ normalizeUnitToken } = await import("../../src/domain/units/unit-token.js"));
   palettes = await import("../../src/domain/classification/palettes/registry.js");
   const { SURFACE_BACKGROUNDS } = await import("../../src/domain/classification/surface.js");
   const { surfaceOf } = await import("../../src/domain/classification/paint-roles.js");
@@ -70,7 +68,7 @@ function configCollaborators() {
     isSupportedLanguage,
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
-    metricKindForUnit: (unit) => METRIC_TYPE_BY_UNIT[normalizeUnitToken(unit)],
+    metricKindForUnit: metricKindOfUnit,
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;

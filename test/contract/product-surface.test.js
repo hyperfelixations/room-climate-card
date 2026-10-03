@@ -70,6 +70,7 @@ test("each metric's canonical unit and unit profiles match the manifest", () => 
 
 test("each metric is reachable through the device class the manifest names", async () => {
   const resolution = await import("../../src/domain/metrics/resolution.js");
+  const { HA_SENSOR_DEVICE_CLASSES } = await import("../../src/domain/metrics/home-assistant.js");
   for (const [kind, expected] of Object.entries(surface.METRICS)) {
     assert.equal(
       resolution.METRIC_TYPE_BY_DEVICE_CLASS[expected.deviceClass],
@@ -87,7 +88,7 @@ test("each metric is reachable through the device class the manifest names", asy
   );
   // Each is one Home Assistant defines, and so declares the card's measurement, not a foreign one.
   for (const { deviceClass } of Object.values(surface.METRICS)) {
-    assert.ok(resolution.HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant device class`);
+    assert.ok(HA_SENSOR_DEVICE_CLASSES.includes(deviceClass), `${deviceClass} is a Home Assistant device class`);
     assert.equal(resolution.classifyDeviceClass(deviceClass).foreign, false, deviceClass);
   }
 });

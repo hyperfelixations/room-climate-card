@@ -1,15 +1,11 @@
-// Presentation-only metadata for titles, icons, formatting and chip density.
-// Canonical-unit fallbacks come from metric definitions; classification bands
-// remain in the semantic profiles.
-
-import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
+// Presentation-only metadata for titles, icons, formatting and chip density, one entry per
+// metric kind; classification bands remain in the semantic profiles.
 
 export const METRIC_META = {
   temperature: {
     titleKey: "title.temperature",
     icon: "mdi:thermometer",
     emptyIcon: "mdi:thermometer-off",
-    unitFallback: METRIC_DEFINITIONS.temperature.canonicalUnit,
     decimals: 1,
     lowRoomKey: "card.coldestRoom",
     highRoomKey: "card.warmestRoom",
@@ -21,7 +17,6 @@ export const METRIC_META = {
     titleKey: "title.humidity",
     icon: "mdi:water-percent",
     emptyIcon: "mdi:water-off",
-    unitFallback: METRIC_DEFINITIONS.humidity.canonicalUnit,
     decimals: 1,
     lowRoomKey: "card.driestRoom",
     highRoomKey: "card.mostHumidRoom",
@@ -33,7 +28,6 @@ export const METRIC_META = {
     titleKey: "title.co2",
     icon: "mdi:molecule-co2",
     emptyIcon: "mdi:molecule-co2",
-    unitFallback: METRIC_DEFINITIONS.co2.canonicalUnit,
     decimals: 0,
     lowRoomKey: "card.lowestRoom",
     highRoomKey: "card.highestRoom",
@@ -45,7 +39,6 @@ export const METRIC_META = {
     titleKey: "title.pm25",
     icon: "mdi:molecule",
     emptyIcon: "mdi:molecule",
-    unitFallback: METRIC_DEFINITIONS.pm25.canonicalUnit,
     decimals: 1,
     lowRoomKey: "card.lowestRoom",
     highRoomKey: "card.highestRoom",

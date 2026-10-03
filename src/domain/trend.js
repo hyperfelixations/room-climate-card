@@ -1,17 +1,22 @@
 // Trend direction: the semantic classification of a RATE of change.
 //
 // Direction is independent of the display unit, so the deadband policies are in each
-// metric's canonical unit and a converted value is compared against them. Lower and upper
-// limits are separate fields on purpose, to allow a future asymmetric override without
-// touching the classifier. Returns semantic tokens ("rising"/"stable"/"falling") plus a
-// translation key; formatting and translation belong to the presentation side.
+// metric's canonical unit and a converted value is compared against them; each kind states
+// its own in domain/metrics/kinds/. Lower and upper limits are separate fields on purpose, to
+// allow a future asymmetric override without touching the classifier. Returns semantic tokens
+// ("rising"/"stable"/"falling") plus a translation key; formatting and translation belong to
+// the presentation side.
 
-export const TREND_POLICY_REGISTRY = Object.freeze({
-  temperature: Object.freeze({ fallingBelow: -0.1, risingAbove: 0.1 }),
-  humidity: Object.freeze({ fallingBelow: -0.5, risingAbove: 0.5 }),
-  co2: Object.freeze({ fallingBelow: -25, risingAbove: 25 }),
-  pm25: Object.freeze({ fallingBelow: -0.5, risingAbove: 0.5 }),
-});
+import { METRIC_DEFINITIONS } from "./metrics/definitions.js";
+
+export const TREND_POLICY_REGISTRY = Object.freeze(
+  Object.fromEntries(
+    Object.values(METRIC_DEFINITIONS).map(({ metricKind, trend: { fallingBelow, risingAbove } }) => [
+      metricKind,
+      Object.freeze({ fallingBelow, risingAbove }),
+    ])
+  )
+);
 
 export const TREND_DIRECTION_META = Object.freeze({
   rising: Object.freeze({ translationKey: "trend.direction.rising" }),

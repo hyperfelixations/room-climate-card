@@ -352,11 +352,11 @@ test("converted range_entity values produce a physically meaningful single-unit 
   env.cleanup(el);
 });
 
-// ==== METRIC_TYPE_BY_UNIT is derived from METRIC_DEFINITIONS.unitProfiles[*].units ====
+// ==== The unit index is derived from METRIC_DEFINITIONS.unitProfiles[*].units ====
 // The word/letter aliases ("c", "celsius", "f", "fahrenheit") live in the UnitProfiles, so
 // an entity with one of these units and no device_class now resolves as temperature.
 
-test("temperature word and letter aliases resolve through METRIC_TYPE_BY_UNIT without device_class", () => {
+test("temperature word and letter aliases resolve through the unit alone without device_class", () => {
   for (const [unit, expectedProfileKey] of [["c", "celsius"], ["celsius", "celsius"], ["f", "fahrenheit"], ["fahrenheit", "fahrenheit"]]) {
     const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, { unit_of_measurement: unit }) });
     const el = env.createCard({ entity: "sensor.avg" }, hass);

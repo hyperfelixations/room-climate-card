@@ -3,6 +3,7 @@
 // error suppression. Details: see internal dev doc §4 "Card-Picker-Vertrag".
 
 import { CARD_TYPE } from "../../core/card-metadata.js";
+import { METRIC_KIND_ORDER } from "../../domain/metrics/definitions.js";
 import { classifyDeviceClass } from "../../domain/metrics/resolution.js";
 import { AVAILABILITY, buildEntityModel, metricKindForEntity } from "./entity-model.js";
 
@@ -15,8 +16,9 @@ export const BROWSE_DISCOVERY = "rooms";
 // Enough to demonstrate comparison without filling the preview.
 export const BROWSE_ROOM_LIMIT = 3;
 
-// The first kind filling two rooms wins; failing that, the first filling one.
-export const BROWSE_KIND_PRIORITY = Object.freeze(["temperature", "humidity", "co2", "pm25"]);
+// The first kind filling two rooms wins; failing that, the first filling one. Kinds are tried
+// in the order the card registers them.
+export const BROWSE_KIND_PRIORITY = METRIC_KIND_ORDER;
 
 // Preserve the documented teaching shape when no real candidate exists.
 function templateConfig() {

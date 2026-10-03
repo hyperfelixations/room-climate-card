@@ -6,12 +6,7 @@ import { isUnavailableState, parseNumericState } from "../../core/numbers.js";
 import { normalizeUnitToken } from "../../domain/units/unit-token.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { convertMetricValue } from "../../domain/metrics/access.js";
-import {
-  classifyDeviceClass,
-  metricKindFromUnitAlone,
-  resolveUnitProfileKey,
-  unitPredictsMetricKind,
-} from "../../domain/metrics/resolution.js";
+import { identifyMeasurement, MEASUREMENT_BASIS, resolveUnitProfileKey } from "../../domain/metrics/resolution.js";
 import { classificationPolicyOf, isValuePhysicallyValid } from "./classification.js";
 
 // Closed decision vocabulary; consumers never repeat raw state/unit/kind checks.
@@ -83,23 +78,20 @@ export function rawUnitForEntity(states, entityId) {
   return typeof entityUnit === "string" && entityUnit.trim() ? entityUnit.trim() : null;
 }
 
-function declaredDeviceClassOf(states, entityId) {
+function identityOf(states, entityId) {
   const state = states?.[entityId];
-  return state ? classifyDeviceClass(state.attributes?.device_class) : null;
+  return state ? identifyMeasurement(state.attributes?.device_class, state.attributes?.unit_of_measurement) : null;
 }
 
 // Prefer device_class; the unit decides only for a sensor declaring no Home Assistant class,
 // and only when unambiguous.
 export function metricKindForEntity(states, entityId) {
-  const declared = declaredDeviceClassOf(states, entityId);
-  if (!declared) return null;
-  if (declared.metricKind || declared.foreign) return declared.metricKind;
-  return metricKindFromUnitAlone(states[entityId].attributes?.unit_of_measurement);
+  return identityOf(states, entityId)?.metricKind ?? null;
 }
 
 // Whether the entity declares a Home Assistant measurement no climate card shows.
 export function declaresForeignMeasurement(states, entityId) {
-  return declaredDeviceClassOf(states, entityId)?.foreign === true;
+  return identityOf(states, entityId)?.basis === MEASUREMENT_BASIS.FOREIGN;
 }
 
 // Auxiliary sensors also require registered units but do not arbitrate metric kind.
@@ -119,15 +111,15 @@ export { convertMetricValue };
 
 // Derive policy status and explanatory reason together from the same ordered facts. A foreign
 // declaration precedes the state checks: HA keeps device_class on a restored unavailable state.
-function resolveAvailability({ stateObject, foreign, validNumeric, metricKind, rawUnit, validUnit, validPhysical }) {
+function resolveAvailability({ stateObject, basis, validNumeric, metricKind, validUnit, validPhysical }) {
   const pair = (availability, unusableReason) => ({ availability, unusableReason });
   if (!stateObject) return pair(AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING);
-  if (foreign) return pair(AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT);
+  if (basis === MEASUREMENT_BASIS.FOREIGN) return pair(AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT);
   if (isUnavailableState(stateObject.state)) return pair(AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE);
   if (!validNumeric) return pair(AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC);
   if (metricKind === null) {
     // Shared and unknown units have one policy result but different remedies.
-    const shared = Boolean(rawUnit) && !unitPredictsMetricKind(rawUnit);
+    const shared = basis === MEASUREMENT_BASIS.UNIT_AMBIGUOUS;
     return pair(AVAILABILITY.INCOMPATIBLE_KIND, shared ? UNUSABLE_REASON.UNIT_AMBIGUOUS : UNUSABLE_REASON.UNIDENTIFIED);
   }
   if (!validUnit) return pair(AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_UNREADABLE);
@@ -142,7 +134,8 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
   const rawUnit = rawUnitForEntity(states, entityId);
   const rawDeviceClass = stateObject?.attributes?.device_class;
   const deviceClass = typeof rawDeviceClass === "string" && rawDeviceClass.trim() ? rawDeviceClass.trim() : null;
-  const metricKind = metricKindForEntity(states, entityId);
+  const identity = identityOf(states, entityId);
+  const metricKind = identity?.metricKind ?? null;
   const validNumeric = rawValue !== null;
 
   let unitProfile = null;
@@ -175,10 +168,9 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
 
   const { availability, unusableReason } = resolveAvailability({
     stateObject,
-    foreign: declaresForeignMeasurement(states, entityId),
+    basis: identity?.basis ?? null,
     validNumeric,
     metricKind,
-    rawUnit,
     validUnit,
     validPhysical,
   });

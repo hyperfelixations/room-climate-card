@@ -39,7 +39,6 @@ test("every metric kind has complete presentation metadata", () => {
     assert.match(meta.titleKey, /^title\./, `${kind}: titleKey`);
     assert.match(meta.icon, /^mdi:/, `${kind}: icon`);
     assert.match(meta.emptyIcon, /^mdi:/, `${kind}: emptyIcon`);
-    assert.equal(typeof meta.unitFallback, "string", `${kind}: unitFallback`);
     assert.equal(typeof meta.decimals, "number", `${kind}: decimals`);
     assert.match(meta.lowRoomKey, /^card\./, `${kind}: lowRoomKey`);
     assert.match(meta.highRoomKey, /^card\./, `${kind}: highRoomKey`);
@@ -47,13 +46,6 @@ test("every metric kind has complete presentation metadata", () => {
     assert.match(meta.belowAdjectiveKey, /^adjective\./, `${kind}: belowAdjectiveKey`);
     assert.ok(meta.autoRoomColumns > 0, `${kind}: autoRoomColumns`);
   }
-});
-
-test("the unit fallback comes from the metric definition, not a second literal", () => {
-  assert.equal(metricMeta.METRIC_META.temperature.unitFallback, "°C");
-  assert.equal(metricMeta.METRIC_META.humidity.unitFallback, "%");
-  assert.equal(metricMeta.METRIC_META.co2.unitFallback, "ppm");
-  assert.equal(metricMeta.METRIC_META.pm25.unitFallback, "µg/m³");
 });
 
 test("an unknown metric kind resolves to temperature", () => {

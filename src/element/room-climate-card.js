@@ -34,7 +34,7 @@ import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { surfaceOf } from "../domain/classification/paint-roles.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
 import { metricKindOfUnit, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
-import { resolveMeasurementContext } from "../application/model/measurement-context.js";
+import { effectiveMetricKind, resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
 import {
   chipsWouldDuplicateHeadline,
@@ -531,7 +531,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // Card mode, kept consistent with _unit(). null in the "mixed_metric_kinds" state
       // (incompatible room kinds, no primary to arbitrate); the fallback keeps direct
       // callers working with a sensible default.
-      return this._resolveMetricContext().metricType || "temperature";
+      return effectiveMetricKind(this._resolveMetricContext());
     }
 
     _fmtWithUnit(value, digits, withSpace = true) {

@@ -263,7 +263,7 @@ test("rooms of different metric kinds are never averaged together", () => {
 
 test("an unrecognized-unit primary falls back without displaying hPa as temperature", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 1013, { unit_of_measurement: "hPa" }), // no device_class, "hpa" not in METRIC_TYPE_BY_UNIT
+    "sensor.avg": mkState("sensor.avg", 1013, { unit_of_measurement: "hPa" }), // no device_class, and no metric kind registers "hPa"
     "sensor.t1": mkState("sensor.t1", 21, TEMPERATURE_C),
     "sensor.t2": mkState("sensor.t2", 23, TEMPERATURE_C),
   });

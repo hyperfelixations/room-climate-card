@@ -41,6 +41,15 @@ test("the deadband values are unchanged", () => {
   assert.deepEqual({ ...trend.TREND_POLICY_REGISTRY.pm25 }, { fallingBelow: -0.5, risingAbove: 0.5 });
 });
 
+// Each kind states its deadband once, in its own module; the registry only reads it.
+test("each policy is the deadband its metric definition states, and nothing more", async () => {
+  const { METRIC_DEFINITIONS } = await import("../../../src/domain/metrics/definitions.js");
+  for (const [kind, definition] of Object.entries(METRIC_DEFINITIONS)) {
+    assert.deepEqual({ ...trend.TREND_POLICY_REGISTRY[kind] }, { fallingBelow: definition.trend.fallingBelow, risingAbove: definition.trend.risingAbove }, kind);
+    assert.deepEqual(Object.keys(trend.TREND_POLICY_REGISTRY[kind]), ["fallingBelow", "risingAbove"], kind);
+  }
+});
+
 test("each direction maps to its translation key and nothing else", () => {
   assert.deepEqual(Object.keys(trend.TREND_DIRECTION_META).sort(), ["falling", "rising", "stable"]);
   assert.equal(trend.TREND_DIRECTION_META.rising.translationKey, "trend.direction.rising");
