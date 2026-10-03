@@ -10,7 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { HUMIDITY, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
 
@@ -171,12 +171,27 @@ test("a no-data explanation outranks a custom subtitle, and gives way again when
     mkHass({ "sensor.avg": mkState("sensor.avg", "unavailable", TEMPERATURE_C) })
   );
   assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The value is currently unavailable.");
-  // The overflow choice is the user's either way — a long explanation is exactly when
-  // wrapping helps most.
-  assert.equal(el.shadowRoot.querySelector(".rtc-root").getAttribute("data-subtitle"), "wrap");
 
   el.hass = OK_HASS();
   assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "Ground floor");
+  env.cleanup(el);
+});
+
+// Like a hint, the reason wraps whatever overflow the card asks for: a clipped "physically
+// impossible" would hide why there is no value.
+test("a no-data reason wraps in a card that clips, and the line clips again when data returns", () => {
+  const overflowOf = (el) => el.shadowRoot.querySelector(".rtc-root").getAttribute("data-subtitle");
+  const humidity = (value) => mkHass({ "sensor.avg": mkState("sensor.avg", value, HUMIDITY) });
+  const el = env.createCard({ entity: "sensor.avg" }, humidity(800));
+  assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The entity reports a physically impossible value.");
+  assert.equal(overflowOf(el), "wrap");
+
+  el.hass = humidity("unavailable");
+  assert.equal(el.shadowRoot.querySelector(".rtc-subtitle").textContent, "The value is currently unavailable.");
+  assert.equal(overflowOf(el), "wrap", "from one reason to another");
+
+  el.hass = humidity(50);
+  assert.equal(overflowOf(el), null);
   env.cleanup(el);
 });
 

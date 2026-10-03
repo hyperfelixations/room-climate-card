@@ -235,11 +235,14 @@ test("the warnings block is visible while a warning exists and show.warnings all
 
 test("the no-data reason, then the card's own text, then the automatic sentence", () => {
   const { composeSubtitle } = notices;
-  assert.deepEqual(
-    composeSubtitle({ config: cfg({ show: { subtitle: false }, subtitle: { text: "", overflow: "wrap" } }), automatic: null, noDataReason: "No value." }),
-    { subtitle: "No value.", hasSubtitle: true, subtitleOverflow: "wrap" },
-    "a no-data reason is forced into view, in the card's own overflow"
-  );
+  for (const overflow of ["clip", "wrap"]) {
+    assert.deepEqual(
+      composeSubtitle({ config: cfg({ show: { subtitle: false }, subtitle: { text: "", overflow } }), automatic: null, noDataReason: "No value." }),
+      { subtitle: "No value.", hasSubtitle: true, subtitleOverflow: "wrap" },
+      `a no-data reason is forced into view and wraps, so it is read in full (overflow ${overflow})`
+    );
+  }
+  assert.equal(composeSubtitle({ config: cfg(), automatic: "Avg.", noDataReason: "No value." }).subtitleOverflow, "wrap", "the default clip included");
   assert.deepEqual(
     composeSubtitle({ config: cfg({ subtitle: { text: "Ground floor", overflow: "clip" } }), automatic: "Avg." }),
     { subtitle: "Ground floor", hasSubtitle: true, subtitleOverflow: "clip" }

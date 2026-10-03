@@ -98,6 +98,16 @@ test("visual golden: no-data state", async ({ page }) => {
   await shot(page, cardId, "no-data-state.png");
 });
 
+// The longer reason needs a second line at 400 px: it wraps although the card clips.
+test("visual golden: a no-data reason that wraps", async ({ page }) => {
+  await gotoHarness(page);
+  const states = { "sensor.avg": mkStateObj("sensor.avg", 800, HUMIDITY) };
+  const cardId = await createCard(page, { entity: "sensor.avg" }, states);
+  await expect(page.locator(`#${cardId} .rtc-root`)).toHaveAttribute("data-subtitle", "wrap");
+  await expect(page.locator(`#${cardId} .rtc-subtitle`)).toHaveText("The entity reports a physically impossible value.");
+  await shot(page, cardId, "no-data-impossible-value.png");
+});
+
 test.describe("visual golden: 1/2/3/4 views", () => {
   test("1 view (avg only)", async ({ page }) => {
     await gotoHarness(page);

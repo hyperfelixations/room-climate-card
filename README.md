@@ -680,7 +680,8 @@ the text, use the block form: `title: {text: wrap}`.
 An empty string removes the line entirely, and so does `show: {title: false}`.
 
 When the card has no usable data, the subtitle shows the reason even with
-`show: {subtitle: false}`. For usable data, the configured subtitle applies.
+`show: {subtitle: false}`, and wraps so the reason is read in full. For usable
+data, the configured subtitle applies.
 
 While a source is briefly out — a room sensor that is `unavailable`, say — the
 subtitle adds a short note such as “1 room is currently unavailable.” and wraps

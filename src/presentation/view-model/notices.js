@@ -142,11 +142,11 @@ function appendHint(line, hint) {
 
 // Subtitle precedence: the no-data reason, then the card's own text or the automatic sentence,
 // with a hint appended. A no-data reason is shown whatever show.subtitle and `subtitle: ""` ask
-// for; a hint never brings back a line that is switched off or empty, and wraps the line while
-// it is there, so it is read in full.
+// for; a hint never brings back a line that is switched off or empty. Either wraps the line
+// while it is there, so it is read in full.
 export function composeSubtitle({ config, automatic, noDataReason = null, hintText: hint = null }) {
   const overflow = config.subtitle?.overflow || "clip";
-  if (noDataReason !== null) return { subtitle: noDataReason, hasSubtitle: true, subtitleOverflow: overflow };
+  if (noDataReason !== null) return { subtitle: noDataReason, hasSubtitle: true, subtitleOverflow: "wrap" };
   const own = config.subtitle?.text;
   const line = (own === null || own === undefined ? automatic : own) ?? "";
   const hasSubtitle = line !== "" && config.show.subtitle;
