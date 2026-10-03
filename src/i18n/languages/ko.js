@@ -117,7 +117,7 @@ export const ko = {
   "fallback.defaults": "기본값을 사용합니다.",
   "fallback.cardAction": "카드의 동작을 사용합니다.",
   "fallback.option": (v) => `${v.key}에 ${v.value}을(를) 사용합니다.`,
-  "warning.deprecated": (v) => `${v.written}은(는) 더 이상 사용되지 않으며 제거될 예정입니다. ${v.replacement}을(를) 사용하세요.`,
+  "warning.deprecated": (v) => `${v.written}은(는) 폐지 예정입니다. ${v.replacement}을(를) 사용하세요.`,
   "warning.entityNotFound": (v) => `${v.entity}이(가) Home Assistant에 없습니다.`,
   "warning.unitAmbiguous": (v) => `${v.entity}에는 device_class가 필요합니다. 단위가 여러 측정 유형에 해당합니다.`,
   "warning.unidentified": (v) => `${v.entity}에는 device_class도, 카드가 아는 단위도 없습니다.`,

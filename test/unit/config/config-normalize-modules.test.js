@@ -376,29 +376,64 @@ test("normalizeConfig() reaches the injected collaborators, not a real registry"
 
 // ------------------------------------------------- the older spellings due to go --
 
-test("the older spellings stay silent while the deprecation switch is off", () => {
-  assert.equal(normalizeConfigModule.DEPRECATION_LEVEL, null);
-  const legacy = { show_rooms: false, unavailable_values: "hide", hide_footer: true, views: [{ type: "scale", options: { legacy: false } }] };
-  assert.deepEqual(configure(legacy)._configDiagnostics, []);
+// Each is named where it still takes effect, with the value it asks for; one the show: block
+// overrides, or one that asks for the default, changes nothing and stays silent.
+const deprecated = (path, written, replacement) => core.createDiagnostic("config.deprecated", { path, params: { written, replacement } });
+const deprecationsOf = (config) => configure({ entity: "sensor.a", ...config })._configDiagnostics.filter((diagnostic) => diagnostic.code === "config.deprecated");
+
+test("an older spelling that takes effect names its replacement with the value it asks for", () => {
+  assert.equal(normalizeConfigModule.DEPRECATION_LEVEL, "warning");
+  assert.deepEqual(deprecationsOf({ show_rooms: false }), [deprecated("show_rooms", "show_rooms: false", "show.rooms: false")]);
+  assert.deepEqual(deprecationsOf({ show_rooms: "TRUE" }), [deprecated("show_rooms", "show_rooms: true", "show.rooms: true")]);
+  assert.deepEqual(deprecationsOf({ unavailable_values: "hide" }), [deprecated("unavailable_values", "unavailable_values: hide", "show.unavailable_rooms: false")]);
+  assert.deepEqual(deprecationsOf({ hide_footer: true }), [deprecated("hide_footer", "hide_footer: true", "views[].options.show_footer: false")]);
+  assert.deepEqual(
+    configure({ hide_footer: true, entity: "sensor.a", show_rooms: false })._configDiagnostics.map((diagnostic) => diagnostic.path),
+    ["hide_footer", "show_rooms"],
+    "in the order the YAML writes them"
+  );
 });
 
-test("switched on, each older spelling names what replaces it", () => {
+test("an older spelling that changes nothing stays silent", () => {
+  for (const config of [
+    {},
+    { show_rooms: "auto" },
+    { unavailable_values: "show" },
+    { hide_footer: false },
+    { show_rooms: false, show: { rooms: true } },
+    { unavailable_values: "hide", show: { unavailable_rooms: true } },
+  ]) {
+    assert.deepEqual(configure({ entity: "sensor.a", ...config })._configDiagnostics, [], JSON.stringify(config));
+  }
+  for (const config of [{ show_rooms: "alway" }, { unavailable_values: "hidden" }, { hide_footer: "yes" }]) {
+    assert.deepEqual(deprecationsOf(config), [], `${JSON.stringify(config)}: an invalid value asks for nothing, so only its own warning is shown`);
+  }
+});
+
+test("footer: false in a view is named at the entry the card keeps, unless show_footer is written", () => {
   const { deprecationDiagnostics } = normalizeConfigModule;
-  const deprecated = (path, written, replacement) => core.createDiagnostic("config.deprecated", { path, params: { written, replacement } });
-  const userConfig = {
-    entity: "sensor.a",
-    hide_footer: true,
-    show_rooms: false,
-    unavailable_values: "hide",
-    views: ["scale", { type: "range_scale", options: { footer: false } }, { type: "range_scale", options: { footer: "compact" } }],
-  };
-  assert.deepEqual(deprecationDiagnostics(userConfig, null), []);
-  assert.deepEqual(deprecationDiagnostics(userConfig, "warning"), [
-    deprecated("show_rooms", "show_rooms", "show.rooms"),
-    deprecated("unavailable_values", "unavailable_values", "show.unavailable_rooms"),
-    deprecated("hide_footer", "hide_footer", "views[].options.show_footer"),
+  const effect = (views) => ({ legacyRequests: {}, requestedShow: {}, hideFooter: false, views });
+  const raw = ["scale", { type: "range_scale", options: { footer: false } }];
+  assert.deepEqual(deprecationDiagnostics({ views: raw }, effect([{ type: "scale", enabled: true, options: {} }, { type: "range_scale", enabled: true, options: { footer: false } }]), "warning"), [
     deprecated("views[1].options.footer", "views[1].options.footer: false", "views[1].options.show_footer: false"),
   ]);
+  assert.deepEqual(deprecationDiagnostics({ views: raw }, effect([{ type: "range_scale", enabled: true, options: { footer: false, show_footer: true } }]), "warning"), [], "show_footer wins");
+  assert.deepEqual(
+    deprecationDiagnostics(
+      { views: [" range_scale ", { type: "range_scale", options: { footer: false } }] },
+      effect([{ type: "range_scale", enabled: true, options: {} }]),
+      "warning"
+    ),
+    [],
+    "a repeated entry is dropped, so its footer asks for nothing"
+  );
+  assert.deepEqual(
+    deprecationDiagnostics({ views: [7, { type: " range_scale", options: { footer: false } }] }, effect([{ type: "range_scale", enabled: true, options: { footer: false } }]), "warning"),
+    [deprecated("views[1].options.footer", "views[1].options.footer: false", "views[1].options.show_footer: false")],
+    "the index is the entry's own, past one the card dropped"
+  );
+  assert.deepEqual(deprecationDiagnostics({}, effect(null), "warning"), [], "no views list");
+  assert.deepEqual(deprecationDiagnostics({ views: raw }, effect([{ type: "range_scale", enabled: true, options: { footer: false } }]), null), [], "the switch off silences all");
 });
 
 // ------------------------------------------------------------- palette ----

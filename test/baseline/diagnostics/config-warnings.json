@@ -203,6 +203,12 @@
       "Room Climate Card: 5 is not a valid value for entity_label. Using the automatic setting."
     ]
   },
+  "hide-footer-legacy-in-effect": {
+    "block": "hide_footer: true is outdated and will be removed. Use views[].options.show_footer: false.",
+    "console": [
+      "Room Climate Card: hide_footer: true is outdated and will be removed. Use views[].options.show_footer: false."
+    ]
+  },
   "icon-empty": {
     "block": "(empty) is not a valid value for icon. Using the automatic setting.",
     "console": [
@@ -293,6 +299,12 @@
       "Room Climate Card: \"no\" is not a valid value for show.pill. Using default: true."
     ]
   },
+  "show-rooms-legacy-in-effect": {
+    "block": "show_rooms: false is outdated and will be removed. Use show.rooms: false.",
+    "console": [
+      "Room Climate Card: show_rooms: false is outdated and will be removed. Use show.rooms: false."
+    ]
+  },
   "show-rooms-legacy-unknown": {
     "block": "\"alway\" is not a valid value for show_rooms. Using default: auto.",
     "console": [
@@ -347,10 +359,22 @@
       "Room Climate Card: 7 is not a valid value for trend_entity. It is ignored."
     ]
   },
+  "unavailable-values-legacy-in-effect": {
+    "block": "unavailable_values: hide is outdated and will be removed. Use show.unavailable_rooms: false.",
+    "console": [
+      "Room Climate Card: unavailable_values: hide is outdated and will be removed. Use show.unavailable_rooms: false."
+    ]
+  },
   "unavailable-values-legacy-unknown": {
     "block": "\"hidden\" is not a valid value for unavailable_values. Using default: show.",
     "console": [
       "Room Climate Card: \"hidden\" is not a valid value for unavailable_values. Using default: show."
+    ]
+  },
+  "view-footer-legacy-in-effect": {
+    "block": "views[1].options.footer: false is outdated and will be removed. Use views[1].options.show_footer: false.",
+    "console": [
+      "Room Climate Card: views[1].options.footer: false is outdated and will be removed. Use views[1].options.show_footer: false."
     ]
   },
   "views-duplicate-type": {

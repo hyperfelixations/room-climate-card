@@ -181,7 +181,7 @@ test("every warning stays one short sentence in English", () => {
     invalid("decimals", 3, core.FALLBACK.METRIC_DECIMALS),
     invalid("classification.bands.optimal.min", 19, core.fallbackOption("classification", "auto")),
     core.createDiagnostic("config.foreign_key", { path: "avg_label" }),
-    core.createDiagnostic("config.deprecated", { path: "unavailable_values", params: { written: "unavailable_values", replacement: "show.unavailable_rooms" } }),
+    core.createDiagnostic("config.deprecated", { path: "unavailable_values", params: { written: "unavailable_values: hide", replacement: "show.unavailable_rooms: false" } }),
     core.createDiagnostic("sources.mixed"),
   ];
   for (const diagnostic of samples) {

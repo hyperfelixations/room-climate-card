@@ -113,30 +113,37 @@ export function normalizeStartView(value, viewTypes, diagnostics) {
   return null;
 }
 
-// The older spellings due for removal at the next major, and what replaces each. Silent while
-// DEPRECATION_LEVEL is null; at "warning" each one written is named. See internal dev doc §3
-// "Konfigurationsvertrag".
-export const DEPRECATION_LEVEL = null;
+// The older spellings due for removal at the next major, each named with its replacement where
+// it still takes effect, read from what the normalizer kept: one the show: block overrides, one
+// that asks for the default and one with an invalid value change nothing and stay silent. Null
+// silences all. See internal dev doc §3 "Konfigurationsvertrag".
+export const DEPRECATION_LEVEL = "warning";
 
-export const DEPRECATED_SPELLINGS = Object.freeze([
-  Object.freeze({ key: "show_rooms", replacement: "show.rooms" }),
-  Object.freeze({ key: "unavailable_values", replacement: "show.unavailable_rooms" }),
-  Object.freeze({ key: "hide_footer", replacement: "views[].options.show_footer" }),
-]);
-
-export function deprecationDiagnostics(userConfig, level) {
+export function deprecationDiagnostics(userConfig, { legacyRequests, requestedShow, hideFooter, views }, level) {
   if (level !== "warning") return [];
-  const deprecated = (path, written, replacement) => createDiagnostic("config.deprecated", { path, params: { written, replacement } });
-  const found = DEPRECATED_SPELLINGS.filter(({ key }) => !isUnwritten(userConfig[key])).map(({ key, replacement }) =>
-    deprecated(key, key, replacement)
-  );
-  // `footer: false` in a view's options is the older spelling of `show_footer: false`.
-  (Array.isArray(userConfig.views) ? userConfig.views : []).forEach((entry, index) => {
-    if (!isPlainObject(entry) || !isPlainObject(entry.options) || entry.options.footer !== false) return;
+  const found = [];
+  const deprecated = (path, written, replacement) => found.push(createDiagnostic("config.deprecated", { path, params: { written, replacement } }));
+  if (Object.hasOwn(legacyRequests, "rooms") && !Object.hasOwn(requestedShow, "rooms")) {
+    deprecated("show_rooms", `show_rooms: ${legacyRequests.rooms}`, `show.rooms: ${legacyRequests.rooms}`);
+  }
+  if (legacyRequests.unavailable_rooms === false && !Object.hasOwn(requestedShow, "unavailable_rooms")) {
+    deprecated("unavailable_values", "unavailable_values: hide", "show.unavailable_rooms: false");
+  }
+  if (hideFooter) deprecated("hide_footer", "hide_footer: true", "views[].options.show_footer: false");
+  // `footer: false` is the older spelling of `show_footer: false`. A repeated type is dropped,
+  // so the entry the card kept is the first one naming it.
+  for (const view of views ?? []) {
+    if (view.options.footer !== false || view.options.show_footer !== undefined) continue;
+    const index = userConfig.views.findIndex((entry) => writtenViewType(entry) === view.type);
     const path = `views[${index}].options.footer`;
-    found.push(deprecated(path, `${path}: false`, `views[${index}].options.show_footer: false`));
-  });
+    deprecated(path, `${path}: false`, `views[${index}].options.show_footer: false`);
+  }
   return found;
+}
+
+function writtenViewType(entry) {
+  const type = isPlainObject(entry) ? entry.type : entry;
+  return typeof type === "string" ? type.trim() : null;
 }
 
 // Diagnostics in the order their top-level keys are written, so a list of warnings reads
@@ -180,7 +187,8 @@ export function normalizeConfig(config, collaborators) {
   // are on their way out (backlog, next major). Everything downstream sees `config.show`
   // only. See internal dev doc §3 "Der show:-Block".
   const requestedShow = normalizeShowConfig(userConfig.show, diagnostics);
-  const show = resolveShowConfig({ ...legacyShowRequests(userConfig, diagnostics), ...requestedShow });
+  const legacyRequests = legacyShowRequests(userConfig, diagnostics);
+  const show = resolveShowConfig({ ...legacyRequests, ...requestedShow });
 
   // The two header lines; see normalizeHeaderLine() above.
   const title = normalizeHeaderLine(userConfig.title, "wrap", "title", diagnostics);
@@ -238,7 +246,7 @@ export function normalizeConfig(config, collaborators) {
     range_entity: readOptionalEntity(userConfig.range_entity, "range_entity", diagnostics),
     trend_entity: readOptionalEntity(userConfig.trend_entity, "trend_entity", diagnostics),
   };
-  diagnostics.push(...deprecationDiagnostics(userConfig, DEPRECATION_LEVEL));
+  diagnostics.push(...deprecationDiagnostics(userConfig, { legacyRequests, requestedShow, hideFooter: normalized.hide_footer, views }, DEPRECATION_LEVEL));
 
   // Internal-only (underscore = not a YAML key): every value the normalizer replaced and
   // every foreign key, as diagnostics in the order the YAML writes them. The view model

@@ -127,6 +127,11 @@ const WARNING_CONFIGS = [
   ["start-view-unknown", { entity: "sensor.avg", start_view: "sclae" }],
   ["show-rooms-legacy-unknown", { entity: "sensor.avg", show_rooms: "alway" }],
   ["unavailable-values-legacy-unknown", { entity: "sensor.avg", unavailable_values: "hidden" }],
+  // An older spelling that takes effect is named with its replacement.
+  ["show-rooms-legacy-in-effect", { entity: "sensor.avg", show_rooms: false }],
+  ["unavailable-values-legacy-in-effect", { entity: "sensor.avg", unavailable_values: "hide" }],
+  ["hide-footer-legacy-in-effect", { entity: "sensor.avg", hide_footer: true }],
+  ["view-footer-legacy-in-effect", { entity: "sensor.avg", views: ["scale", { type: "range_scale", options: { footer: false } }] }],
   ["palette-unknown-name", { entity: "sensor.avg", palette: "neon" }],
   ["palette-gradient-with-an-empty-part", { entity: "sensor.avg", palette: "teal--black" }],
   ["palette-written-color-invalid", { entity: "sensor.avg", palette: { optimal: "1DB85D", above: "FD9808, nope" } }],

@@ -778,8 +778,8 @@ card_mod:
 
 > [!WARNING]
 > **Four option spellings disappear in 3.0.0.** They still work today, and the
-> reference above already uses what replaces them — if your card has one of
-> these, change it now:
+> reference above already uses what replaces them. The card warns about each one
+> that still takes effect and names what to write instead — change it now:
 >
 > - `show_rooms: auto | true | false` → `show:` with `rooms: auto | true | false`
 > - `unavailable_values: show | hide` → `show:` with `unavailable_rooms: true | false`
