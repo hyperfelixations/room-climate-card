@@ -10,7 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkHass, mkState } = require("../../helpers/hass-fixtures.js");
-const { CO2, HUMIDITY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO2, CO2_CLASS_ONLY, HUMIDITY, HUMIDITY_CLASS_ONLY, PM25_CLASS_ONLY, TEMPERATURE, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
@@ -340,6 +340,24 @@ test("every way of being unusable has its own reason, and availability is unchan
     assert.equal(model.availability, availability, `${entity}: availability`);
     assert.equal(model.unusableReason, reason, `${entity}: reason`);
   }
+});
+
+// A sensor that declares humidity, CO2 or PM2.5 and reports no unit is in the one unit Home
+// Assistant allows for that class; a thermometer without one is not, °C, °F and K all being
+// possible.
+test("a declared class with one Home Assistant unit stands in for a missing unit", () => {
+  const { AVAILABILITY, UNUSABLE_REASON, buildEntityModel } = entityModel;
+  const model = (attributes, value) => buildEntityModel({ "sensor.s": mkState("sensor.s", value, attributes) }, null, "sensor.s", "primary");
+  for (const [attributes, value, unitProfile] of [[HUMIDITY_CLASS_ONLY, 55, "percent"], [CO2_CLASS_ONLY, 700, "ppm"], [PM25_CLASS_ONLY, 8, "microgram_per_m3"]]) {
+    const read = model(attributes, value);
+    assert.equal(read.availability, AVAILABILITY.USABLE, attributes.device_class);
+    assert.equal(read.unitProfile, unitProfile, attributes.device_class);
+    assert.equal(read.canonicalValue, value, attributes.device_class);
+    assert.equal(read.rawUnit, null, `${attributes.device_class}: what the sensor reported stays recorded`);
+  }
+  assert.equal(model(HUMIDITY_CLASS_ONLY, 800).unusableReason, UNUSABLE_REASON.OUT_OF_RANGE, "and is checked in that unit");
+  assert.equal(model(TEMPERATURE, 22).unusableReason, UNUSABLE_REASON.UNIT_UNREADABLE);
+  assert.equal(model({ device_class: "humidity", unit_of_measurement: "ppm" }, 55).unusableReason, UNUSABLE_REASON.UNIT_UNREADABLE, "a reported unit is never overruled");
 });
 
 // A card-wide fact the entity cannot know about itself: only the two rewrites meaning

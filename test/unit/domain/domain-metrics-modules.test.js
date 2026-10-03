@@ -388,7 +388,10 @@ test("unit and device class lookups never answer from the prototype chain", () =
 // A kind that does not exist yet, assembled from the same parts, so the rules for a shared unit
 // are pinned before a second kind in µg/m³ arrives.
 test("units two kinds share decide nothing, while a unit one Home Assistant class reports does", () => {
-  const ha = { haDeviceClasses: ["pm1", "pm25", "radon"], haDeviceClassUnits: { pm1: ["μg/m³"], pm25: ["μg/m³"], radon: ["Bq/m³"] } };
+  const ha = {
+    haDeviceClasses: ["pm1", "pm25", "radon", "ozone"],
+    haDeviceClassUnits: { pm1: ["μg/m³"], pm25: ["μg/m³"], radon: ["Bq/m³", "pCi/L"], ozone: ["ppm"] },
+  };
   const kind = (metricKind, deviceClass, units) => ({ metricKind, deviceClass, unitProfiles: { only: { key: "only", units } } });
   const resolved = resolution.createMetricResolution({
     ...ha,
@@ -396,11 +399,13 @@ test("units two kinds share decide nothing, while a unit one Home Assistant clas
       pm25: kind("pm25", "pm25", ["µg/m³"]),
       pm1: kind("pm1", "pm1", ["µg/m³", "shared"]),
       radon: kind("radon", "radon", ["Bq/m³", "shared"]),
+      loudness: kind("loudness", "sound_pressure", ["dB"]),
+      ozone: kind("ozone", "ozone", ["ppb"]),
     },
   });
-  assert.deepEqual(resolved.METRIC_KINDS_BY_UNIT, { "ug/m3": ["pm25", "pm1"], shared: ["pm1", "radon"], "bq/m3": ["radon"] });
-  assert.deepEqual(resolved.DEVICE_CLASSES_BY_UNIT, { "ug/m3": ["pm1", "pm25"], "bq/m3": ["radon"] });
-  assert.deepEqual(resolved.METRIC_TYPE_BY_DEVICE_CLASS, { pm25: "pm25", pm1: "pm1", radon: "radon" });
+  assert.deepEqual(resolved.METRIC_KINDS_BY_UNIT, { "ug/m3": ["pm25", "pm1"], shared: ["pm1", "radon"], "bq/m3": ["radon"], db: ["loudness"], ppb: ["ozone"] });
+  assert.deepEqual(resolved.DEVICE_CLASSES_BY_UNIT, { "ug/m3": ["pm1", "pm25"], "bq/m3": ["radon"], "pci/l": ["radon"], ppm: ["ozone"] });
+  assert.deepEqual(resolved.METRIC_TYPE_BY_DEVICE_CLASS, { pm25: "pm25", pm1: "pm1", radon: "radon", sound_pressure: "loudness", ozone: "ozone" });
   assert.equal(resolved.metricKindOfUnit("µg/m³"), null, "a profile in µg/m³ could be either");
   assert.equal(resolved.metricKindOfUnit("Bq/m³"), "radon");
   assert.deepEqual(resolved.identifyMeasurement(undefined, "µg/m³"), identity(null, "unit_ambiguous"));
@@ -409,7 +414,32 @@ test("units two kinds share decide nothing, while a unit one Home Assistant clas
   assert.deepEqual(resolved.identifyMeasurement("PM1", "ppm"), identity("pm1", "device_class"));
   assert.deepEqual(resolved.classifyDeviceClass("pm1"), { metricKind: "pm1", foreign: false });
   assert.equal(resolved.resolveUnitProfileKey("pm1", "ug/m3"), "only");
+  // pm1 and pm25 allow one unit each, which their profiles read; radon allows two, the units of
+  // sound_pressure are not in the table, and ozone's one unit is not the kind's.
+  assert.deepEqual(resolved.IMPLIED_UNIT_PROFILE, { pm25: "only", pm1: "only" });
   assert.ok(Object.isFrozen(resolved));
+});
+
+// ------------------------------------------ the unit a declared class leaves no choice in --
+
+// Home Assistant allows humidity only in %, CO2 only in ppm, PM2.5 only in µg/m³; temperature
+// has three units, so a thermometer without one still says nothing about its scale.
+test("a kind whose device class allows exactly one unit implies that unit's profile", () => {
+  assert.deepEqual(resolution.IMPLIED_UNIT_PROFILE, { humidity: "percent", co2: "ppm", pm25: "microgram_per_m3" });
+  assert.ok(Object.isFrozen(resolution.IMPLIED_UNIT_PROFILE));
+});
+
+test("a sensor's unit profile is its own unit's, or the implied one when it declared its class and reports none", () => {
+  const { sensorUnitProfileKey } = resolution;
+  assert.equal(sensorUnitProfileKey("humidity", "%", "device_class"), "percent");
+  assert.equal(sensorUnitProfileKey("humidity", null, "device_class"), "percent");
+  assert.equal(sensorUnitProfileKey("co2", undefined, "device_class"), "ppm");
+  assert.equal(sensorUnitProfileKey("pm25", "   ", "device_class"), "microgram_per_m3", "a blank unit is no unit");
+  assert.equal(sensorUnitProfileKey("temperature", null, "device_class"), null, "°C, °F or K: no choice to make for it");
+  assert.equal(sensorUnitProfileKey("humidity", "ppm", "device_class"), null, "a reported unit is never overruled");
+  assert.equal(sensorUnitProfileKey("temperature", "°F", "unit"), "fahrenheit");
+  assert.equal(sensorUnitProfileKey("humidity", null, "unit"), null, "only a declaration implies a unit");
+  assert.equal(sensorUnitProfileKey("constructor", null, "device_class"), null);
 });
 
 // ---------------------------------------------------- what a declared device class says --

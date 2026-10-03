@@ -1,12 +1,13 @@
 // Resolve each configured entity atomically from one read-only Home Assistant state object.
-// Units must be present and registered; metric kind may still identify unusable readings for
-// no-data title and icon selection.
+// A unit must be reported and registered, or implied by a declared device class Home Assistant
+// allows only one unit for; metric kind may still identify unusable readings for no-data title
+// and icon selection.
 
 import { isUnavailableState, parseNumericState } from "../../core/numbers.js";
 import { normalizeUnitToken } from "../../domain/units/unit-token.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { convertMetricValue } from "../../domain/metrics/access.js";
-import { identifyMeasurement, MEASUREMENT_BASIS, resolveUnitProfileKey } from "../../domain/metrics/resolution.js";
+import { identifyMeasurement, MEASUREMENT_BASIS, resolveUnitProfileKey, sensorUnitProfileKey } from "../../domain/metrics/resolution.js";
 import { classificationPolicyOf, isValuePhysicallyValid } from "./classification.js";
 
 // Closed decision vocabulary; consumers never repeat raw state/unit/kind checks.
@@ -143,12 +144,8 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
   let validUnit = true;
   if (validNumeric && metricKind) {
     const definition = METRIC_DEFINITIONS[metricKind]; // every registered kind has one
-    if (rawUnit) {
-      unitProfile = resolveUnitProfileKey(metricKind, rawUnit);
-      if (!unitProfile) validUnit = false;
-    } else {
-      validUnit = false;
-    }
+    unitProfile = sensorUnitProfileKey(metricKind, rawUnit, identity.basis);
+    validUnit = unitProfile !== null;
     if (unitProfile) {
       canonicalValue = convertMetricValue(rawValue, {
         metricKind,

@@ -175,7 +175,7 @@ it.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `entity` | none | Your main or whole-home sensor. Its `device_class` decides whether this is a temperature, humidity, CO₂, or PM2.5 card; for a sensor without a `device_class`, a unit of `°C`, `°F`, `K` or `%` is enough. Leave it out and the rooms take over: one room is used directly, several are averaged. |
+| `entity` | none | Your main or whole-home sensor. Its `device_class` decides whether this is a temperature, humidity, CO₂, or PM2.5 card; for a sensor without a `device_class`, a unit of `°C`, `°F`, `K` or `%` is enough. A humidity, CO₂ or PM2.5 sensor that has its `device_class` but no unit is read in `%`, `ppm` or `µg/m³`, the only unit Home Assistant allows for it; a temperature sensor needs its unit. Leave it out and the rooms take over: one room is used directly, several are averaged. |
 | `rooms` | `[]` | Your room sensors. From two rooms with values on, you get the comparison features and the `extremes` view. Each room needs its own `entity` — see [Room entries](#room-entries). |
 | `range_entity` | none | A sensor holding today's range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_timestamp` and `maximum_timestamp` if you also want the times — `minimum_zeitpunkt` and `maximum_zeitpunkt` work too. Only `minimum` and `maximum` are needed; where a time is missing, the card just shows the value. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |

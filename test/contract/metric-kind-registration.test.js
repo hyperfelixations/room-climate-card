@@ -56,6 +56,15 @@ test("each kind displays only units Home Assistant allows for its device class",
   }
 });
 
+test("a kind whose device class allows one unit reads a sensor that reports none in it", () => {
+  for (const [kind, definition] of kinds()) {
+    const units = homeAssistant.HA_DEVICE_CLASS_UNITS[definition.deviceClass];
+    const implied = units.length === 1 ? resolution.resolveUnitProfileKey(kind, units[0]) : null;
+    assert.equal(resolution.IMPLIED_UNIT_PROFILE[kind] ?? null, implied, `${kind}: ${units.join(", ")}`);
+    if (units.length === 1) assert.ok(implied, `${kind}: one of its profiles reads ${units[0]}`);
+  }
+});
+
 test("each kind has a canonical unit profile and a default classification profile", () => {
   for (const [kind, definition] of kinds()) {
     assert.equal(definition.unitProfiles[definition.canonicalProfileKey]?.displayUnit, definition.canonicalUnit, kind);

@@ -372,12 +372,24 @@ test("a temperature room without a unit is excluded as unusable_unit", () => {
 
 test("a no-data state retains metric-specific presentation when every entity lacks a unit", () => {
   const hass = mkHass({
-    "sensor.avg": mkState("sensor.avg", 55, HUMIDITY_CLASS_ONLY), // no unit_of_measurement
+    "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE), // no unit_of_measurement
   });
   const el = env.createCard({ entity: "sensor.avg" }, hass);
   const data = el._computeViewModel();
   assert.equal(data.empty, true);
-  assert.equal(data.metric.kind, "humidity", "device_class alone still drives the no-data title/icon, even though the reading itself is unusable");
+  assert.equal(data.metric.kind, "temperature", "device_class alone still drives the no-data title/icon, even though the reading itself is unusable");
+  env.cleanup(el);
+});
+
+// Home Assistant allows humidity only in %, so the card reads and shows it in %.
+test("a humidity sensor that reports no unit is shown in %", () => {
+  const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 55, HUMIDITY_CLASS_ONLY) });
+  const el = env.createCard({ entity: "sensor.avg" }, hass);
+  const data = el._computeViewModel();
+  assert.equal(data.empty, false);
+  assert.equal(data.metric.kind, "humidity");
+  assert.equal(el._unit(), "%");
+  assert.equal(el.shadowRoot.querySelector(".rtc-warning"), null, "nothing to warn about");
   env.cleanup(el);
 });
 

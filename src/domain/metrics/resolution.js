@@ -106,14 +106,38 @@ export function createMetricResolution({ definitions, haDeviceClasses, haDeviceC
     return Object.keys(unitProfiles).find((key) => unitProfiles[key].units.some((unit) => normalizeUnitToken(unit) === normalized)) || null;
   }
 
+  // The unit profile a kind's device class leaves no choice in: Home Assistant allows exactly
+  // one unit for it, and one of the kind's profiles reads that unit (humidity %, not
+  // temperature with °C, °F and K).
+  const impliedUnitProfile = Object.freeze(
+    Object.fromEntries(
+      Object.values(definitions).flatMap(({ metricKind, deviceClass }) => {
+        if (!Object.hasOwn(haDeviceClassUnits, deviceClass) || haDeviceClassUnits[deviceClass].length !== 1) return [];
+        const profileKey = resolveUnitProfileKey(metricKind, haDeviceClassUnits[deviceClass][0]);
+        return profileKey ? [[metricKind, profileKey]] : [];
+      })
+    )
+  );
+
+  // The unit profile a sensor's reading is in: its own unit's, or — when it reports none and
+  // its kind was declared by device class — the implied one. A reported unit is never
+  // overruled; range and trend sensors keep requiring one (resolveUnitProfileKey()).
+  function sensorUnitProfileKey(metricKind, rawUnit, basis) {
+    if (normalizeUnitToken(rawUnit) !== "") return resolveUnitProfileKey(metricKind, rawUnit);
+    if (basis !== MEASUREMENT_BASIS.DEVICE_CLASS || !Object.hasOwn(impliedUnitProfile, metricKind)) return null;
+    return impliedUnitProfile[metricKind];
+  }
+
   return Object.freeze({
     METRIC_TYPE_BY_DEVICE_CLASS: metricTypeByDeviceClass,
     DEVICE_CLASSES_BY_UNIT: deviceClassesByUnit,
     METRIC_KINDS_BY_UNIT: metricKindsByUnit,
+    IMPLIED_UNIT_PROFILE: impliedUnitProfile,
     classifyDeviceClass,
     metricKindOfUnit,
     identifyMeasurement,
     resolveUnitProfileKey,
+    sensorUnitProfileKey,
   });
 }
 
@@ -121,10 +145,12 @@ export const {
   METRIC_TYPE_BY_DEVICE_CLASS,
   DEVICE_CLASSES_BY_UNIT,
   METRIC_KINDS_BY_UNIT,
+  IMPLIED_UNIT_PROFILE,
   classifyDeviceClass,
   metricKindOfUnit,
   identifyMeasurement,
   resolveUnitProfileKey,
+  sensorUnitProfileKey,
 } = createMetricResolution({
   definitions: METRIC_DEFINITIONS,
   haDeviceClasses: HA_SENSOR_DEVICE_CLASSES,

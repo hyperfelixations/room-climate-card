@@ -392,6 +392,7 @@ test("usable sensors are preferred; every kind of unusable one is left for the s
     unknown: { state: "unknown", attributes: TEMPERATURE_C },
     "not a number": { state: "warm", attributes: TEMPERATURE_C },
     "unreadable unit": { state: 21, attributes: { device_class: "temperature", unit_of_measurement: "furlongs" } },
+    "no unit for a temperature": { state: 21, attributes: { device_class: "temperature" } },
     impossible: { state: -500, attributes: TEMPERATURE_C },
   };
   for (const [label, { state: value, attributes }] of Object.entries(broken)) {
@@ -407,6 +408,15 @@ test("usable sensors are preferred; every kind of unusable one is left for the s
     ],
   });
   assert.deepEqual(suggestions.stubConfigFor(home), { rooms: [{ name: "H", entity: "sensor.h" }] });
+  // Humidity has one unit in Home Assistant, so a sensor that reports none is still usable.
+  const unitless = installation({
+    sensors: [
+      sensor("sensor.t1", TEMPERATURE_C, { state: "unavailable", name: "T1" }),
+      sensor("sensor.t2", TEMPERATURE_C, { state: "unavailable", name: "T2" }),
+      sensor("sensor.h", { device_class: "humidity" }, { state: 50, name: "H" }),
+    ],
+  });
+  assert.deepEqual(suggestions.stubConfigFor(unitless), { rooms: [{ name: "H", entity: "sensor.h" }] });
 });
 
 // A restart window: real ids with no value yet still beat the invented template.
