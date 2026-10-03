@@ -21,8 +21,7 @@ export const CARD_CSS = `        ha-card {
         }
 
         /* What is left when the show: block has hidden every part, and what a failed render
-           shows. An empty card looks broken; each line says why, in the same centred, muted
-           voice the card uses for its other "nothing here" line (.rtc-no-views). */
+           shows. Each line is the card's only content, so it reads in the title colour. */
         .rtc-nothing-shown,
         .rtc-render-failed {
           text-align: center;
@@ -30,7 +29,7 @@ export const CARD_CSS = `        ha-card {
           font-size: 13px;
           font-weight: 700;
           line-height: 1.3;
-          color: var(--secondary-text-color);
+          color: var(--primary-text-color);
         }
 
         .rtc-top-line {

@@ -989,22 +989,26 @@ test("visual golden: the card without its accent line", async ({ page }) => {
   await shot(page, cardId, "accent-line-off.png", 400);
 });
 
-// The card with a part taken out. Six pictures, each about shape not colour: whether the
-// row still reads as a row, whether what is left sits where it should, and whether the
-// missing part's space went with it — none of which an assertion settles. The default is
-// not among them (it is in every other golden here).
+// The card with a part taken out. Six pictures about shape, not colour: whether the row
+// still reads as a row, whether what is left sits where it should, and whether the missing
+// part's space went with it — none of which an assertion settles. The default is not among
+// them (it is in every other golden here). The seventh shows the one line left when every
+// part is hidden in dark, where its colour has to read as the card's content.
 test.describe("visual golden: the parts a card can leave out", () => {
+  const NOTHING = { icon: false, title: false, subtitle: false, pill: false, panel: false, rooms: false };
   const SHOW_CASES = [
     ["no-icon", { icon: false }],
     ["no-title-block", { title: false, subtitle: false }],
     ["no-pill", { pill: false }],
     ["no-panel", { panel: false }],
     ["rooms-only", { icon: false, title: false, subtitle: false, pill: false, panel: false }],
-    ["nothing-shown", { icon: false, title: false, subtitle: false, pill: false, panel: false, rooms: false }],
+    ["nothing-shown", NOTHING],
+    ["nothing-shown-dark", NOTHING, "dark"],
   ];
 
-  for (const [name, show] of SHOW_CASES) {
+  for (const [name, show, colorScheme = "light"] of SHOW_CASES) {
     test(name, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
       await gotoHarness(page);
       const attributes = TEMPERATURE_C;
       const cardId = await createCard(
