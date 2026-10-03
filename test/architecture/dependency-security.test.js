@@ -1,7 +1,8 @@
 "use strict";
 // Supply-chain gates: no dependency is pinned past its fixes, every advisory against a runtime
-// dependency and every high one against tooling stops CI and the release, and every action runs
-// from a reviewed commit that Dependabot keeps current. See TESTING.md "Dependency security".
+// dependency and every package without a registry signature stops CI and the release, and every
+// action runs from a reviewed commit that Dependabot keeps current. Advisories against build and
+// test tooling do not gate: none of that code ships. See TESTING.md "Dependency security".
 // Boundary: the files are read as text; whether an advisory exists is npm audit's verdict in CI.
 
 const test = require("node:test");
@@ -31,11 +32,8 @@ test("overrides only set a caret minimum for packages in the lockfile", () => {
   assert.equal(pkg.resolutions, undefined);
 });
 
-test("check:security audits runtime at any severity, tooling from high, and registry signatures", () => {
-  assert.equal(
-    pkg.scripts["check:security"],
-    "npm audit --omit=dev --audit-level=low && npm audit --audit-level=high && npm audit signatures",
-  );
+test("check:security audits runtime at any severity and registry signatures, not tooling advisories", () => {
+  assert.equal(pkg.scripts["check:security"], "npm audit --omit=dev --audit-level=low && npm audit signatures");
 });
 
 test("the security workflow audits every push, pull request and week", () => {

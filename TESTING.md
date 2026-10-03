@@ -343,18 +343,20 @@ optional seed for each property population.
 npm run check:security
 ```
 
-The check runs three audits against the installed lockfile:
+The check runs two audits against the installed lockfile:
 
 | Audit | Fails on |
 | --- | --- |
 | `npm audit --omit=dev --audit-level=low` | any advisory against a runtime dependency |
-| `npm audit --audit-level=high` | a high or critical advisory against build and test tooling |
 | `npm audit signatures` | a package without a valid registry signature |
 
 The card has no runtime dependencies today, so the first audit guards the moment one is added.
+Build and test tooling does not ship: an advisory against it does not change the bundle and
+does not stop CI or a release. GitHub reports it through Dependabot alerts, and Dependabot opens
+a pull request for each security advisory.
 [`security.yml`](.github/workflows/security.yml) runs the check on every push and pull request and
 weekly, and the release workflow runs it before the build. Dependabot proposes npm and action
-updates weekly and opens a pull request for each security advisory.
+updates weekly.
 
 An `overrides` entry only raises a transitive package that is in the lockfile to a caret minimum
 such as `^6.16.0`, for a fix its parent does not yet allow. An exact pin is rejected: it holds a

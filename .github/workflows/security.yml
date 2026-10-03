@@ -1,6 +1,7 @@
-# Dependency audit: any advisory against a runtime dependency fails, advisories against build
-# and test tooling fail from severity high. The schedule catches advisories published without
-# a new commit.
+# Dependency audit: any advisory against a runtime dependency fails, and every installed package
+# needs a valid registry signature. Advisories against build and test tooling are reported by
+# GitHub (Dependabot alerts and security updates) and do not stop CI: none of that code ships.
+# The schedule catches advisories published without a new commit.
 
 name: Security
 

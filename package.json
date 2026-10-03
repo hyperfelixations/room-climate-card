@@ -36,7 +36,7 @@
     "characterize:update": "npm run build && node scripts/update-characterization.mjs",
     "test:install": "playwright install chromium firefox webkit",
     "check:run": "node --check dist/room-climate-card.js",
-    "check:security": "npm audit --omit=dev --audit-level=low && npm audit --audit-level=high && npm audit signatures",
+    "check:security": "npm audit --omit=dev --audit-level=low && npm audit signatures",
     "test:node:run": "node --test --test-reporter=./test/helpers/compact-reporter.js --test-reporter-destination=stdout \"test/**/*.test.js\"",
     "test:node:verbose:run": "node --test \"test/**/*.test.js\"",
     "test:unit:run": "node --test \"test/unit/**/*.test.js\"",
