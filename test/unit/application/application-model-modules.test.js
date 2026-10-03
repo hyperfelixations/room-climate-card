@@ -265,7 +265,7 @@ test("a trend rate that overflows on either conversion is no trend", () => {
   }
 });
 
-test("range and trend say what their sensor gave: nothing, no entity, a momentary gap, an unreadable unit, or a value", () => {
+test("range and trend say what their sensor gave: nothing, no entity, a momentary gap, a missing or unreadable unit, or a value", () => {
   const identity = (v) => v;
   const range = (states, entity = "sensor.range") =>
     auxiliary.buildRangeModel({
@@ -285,7 +285,7 @@ test("range and trend say what their sensor gave: nothing, no entity, a momentar
   assert.deepEqual(range({ "sensor.range": st("n/a", C) }), { entity: "sensor.range", status: "transient" });
   assert.deepEqual(range({ "sensor.range": st(-1, C) }), { entity: "sensor.range", status: "transient" }, "a negative width is impossible");
   assert.deepEqual(range({ "sensor.range": st(5, { unit_of_measurement: "hPa" }) }), { entity: "sensor.range", status: "unreadable" });
-  assert.deepEqual(range({ "sensor.range": st(5, {}) }), { entity: "sensor.range", status: "unreadable" });
+  assert.deepEqual(range({ "sensor.range": st(5, {}) }), { entity: "sensor.range", status: "unit_missing" });
   assert.deepEqual(range({ "sensor.range": st(5, C) }), { entity: "sensor.range", status: "usable" });
 
   const trend = (states, entity = "sensor.trend", toDisplayDelta = identity) =>
@@ -294,6 +294,7 @@ test("range and trend say what their sensor gave: nothing, no entity, a momentar
   assert.deepEqual(trend({}), { entity: "sensor.trend", status: "missing" });
   assert.deepEqual(trend({ "sensor.trend": st("unknown", {}) }), { entity: "sensor.trend", status: "transient" });
   assert.deepEqual(trend({ "sensor.trend": st(0.4, { unit_of_measurement: "hPa/h" }) }), { entity: "sensor.trend", status: "unreadable" });
+  assert.deepEqual(trend({ "sensor.trend": st(0.4, { unit_of_measurement: " " }) }), { entity: "sensor.trend", status: "unit_missing" });
   assert.deepEqual(trend({ "sensor.trend": st(1e308, { unit_of_measurement: "°C/h" }) }, "sensor.trend", FAHRENHEIT.deltaFromCanonical), {
     entity: "sensor.trend",
     status: "transient",

@@ -125,6 +125,8 @@ const INTERPOLATION_VARS = Object.freeze({
   instead: "Using the defaults.",
   profile: '"outdoor"',
   measurement: "Humidity",
+  cardMeasurement: "Temperature",
+  deviceClass: '"battery"',
   unit: "°F",
   written: "show_rooms",
   replacement: "show.rooms",

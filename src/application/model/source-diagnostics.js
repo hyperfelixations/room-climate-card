@@ -5,19 +5,26 @@
 // rooms as written, range, trend. See internal dev doc §4 "Diagnosevertrag".
 
 import { createDiagnostic, diagnosticKey } from "../../core/diagnostics.js";
-import { UNUSABLE_REASON } from "./entity-model.js";
+import { rawUnitForEntity, UNUSABLE_REASON } from "./entity-model.js";
 import { AUXILIARY_STATUS } from "./auxiliary-models.js";
 
-const LASTING = Object.freeze({
-  [UNUSABLE_REASON.MISSING]: "entity.not_found",
-  [UNUSABLE_REASON.UNIT_AMBIGUOUS]: "entity.unit_ambiguous",
-  [UNUSABLE_REASON.UNIDENTIFIED]: "entity.unidentified",
-  [UNUSABLE_REASON.UNIT_UNREADABLE]: "entity.unit_unreadable",
-  [UNUSABLE_REASON.KIND_MISMATCH]: "entity.other_measurement",
-  [UNUSABLE_REASON.FOREIGN_MEASUREMENT]: "entity.other_measurement",
+// Each lasting reason as a code and what its sentence names: the class or unit the sensor
+// reported, the measurement it was taken for, and the card's own (`cardMeasurement`).
+const named = (code, facts = () => null) => Object.freeze({ code, facts });
+export const LASTING = Object.freeze({
+  [UNUSABLE_REASON.MISSING]: named("entity.not_found"),
+  [UNUSABLE_REASON.FOREIGN_MEASUREMENT]: named("entity.foreign_measurement", (source) => ({ deviceClass: source.deviceClass })),
+  [UNUSABLE_REASON.UNKNOWN_DEVICE_CLASS]: named("entity.unknown_device_class", (source) => ({ deviceClass: source.deviceClass })),
+  [UNUSABLE_REASON.UNIT_AMBIGUOUS]: named("entity.unit_ambiguous", (source) => ({ unit: source.rawUnit })),
+  [UNUSABLE_REASON.UNIDENTIFIED]: named("entity.unidentified"),
+  [UNUSABLE_REASON.UNIT_UNKNOWN]: named("entity.unit_unknown", (source) => ({ unit: source.rawUnit })),
+  [UNUSABLE_REASON.UNIT_MISSING]: named("entity.unit_missing", (source) => ({ measurement: source.metricKind })),
+  [UNUSABLE_REASON.UNIT_UNREADABLE]: named("entity.unit_unreadable", (source) => ({ unit: source.rawUnit, measurement: source.metricKind })),
+  [UNUSABLE_REASON.KIND_MISMATCH]: named("entity.other_measurement", (source, cardMeasurement) => ({ measurement: source.metricKind, cardMeasurement })),
 });
 
-const MOMENTARY = new Set([UNUSABLE_REASON.UNAVAILABLE, UNUSABLE_REASON.NOT_NUMERIC, UNUSABLE_REASON.OUT_OF_RANGE]);
+// The reasons that pass by themselves; the no-data line words them (card-view-model.js).
+export const MOMENTARY = Object.freeze(new Set([UNUSABLE_REASON.UNAVAILABLE, UNUSABLE_REASON.NOT_NUMERIC, UNUSABLE_REASON.OUT_OF_RANGE]));
 
 const AUXILIARY_HINTS = [
   ["range_entity", "range", "hint.range_unavailable"],
@@ -27,13 +34,13 @@ const AUXILIARY_HINTS = [
 export function collectSourceDiagnostics({ context, config, states, range = null, trend = null }) {
   const warnings = [];
   const hints = [];
-  const named = new Set();
+  const warned = new Set();
   // A sensor written as main sensor and as a room is named once.
-  const warn = (code, entity) => {
-    const diagnostic = createDiagnostic(code, { entity });
+  const warn = (code, entity, params = null) => {
+    const diagnostic = createDiagnostic(code, { entity, params });
     const key = diagnosticKey(diagnostic);
-    if (named.has(key)) return;
-    named.add(key);
+    if (warned.has(key)) return;
+    warned.add(key);
     warnings.push(diagnostic);
   };
 
@@ -45,8 +52,9 @@ export function collectSourceDiagnostics({ context, config, states, range = null
   const primary = context.primary.entityId ? context.primary : null;
 
   for (const source of primary ? [primary, ...context.rooms] : context.rooms) {
-    const code = LASTING[source.unusableReason];
-    if (code && !(mixed && source.unusableReason === UNUSABLE_REASON.KIND_MISMATCH)) warn(code, source.entityId);
+    if (!Object.hasOwn(LASTING, source.unusableReason) || (mixed && source.unusableReason === UNUSABLE_REASON.KIND_MISMATCH)) continue;
+    const { code, facts } = LASTING[source.unusableReason];
+    warn(code, source.entityId, facts(source, context.metricType));
   }
 
   if (hasValue && primary && MOMENTARY.has(primary.unusableReason) && context.averageSource.kind === "roomConsensus") {
@@ -63,7 +71,8 @@ export function collectSourceDiagnostics({ context, config, states, range = null
     const model = models[modelName];
     const status = model ? model.source.status : states?.[entity] ? null : AUXILIARY_STATUS.MISSING;
     if (status === AUXILIARY_STATUS.MISSING) warn("entity.not_found", entity);
-    else if (status === AUXILIARY_STATUS.UNREADABLE) warn("entity.unit_unreadable", entity);
+    else if (status === AUXILIARY_STATUS.UNIT_MISSING) warn("entity.unit_missing", entity, { measurement: context.metricType });
+    else if (status === AUXILIARY_STATUS.UNREADABLE) warn("entity.unit_unreadable", entity, { unit: rawUnitForEntity(states, entity), measurement: context.metricType });
     else if (status === AUXILIARY_STATUS.TRANSIENT && hasValue) hints.push(createDiagnostic(hint, { entity }));
   }
   return { warnings, hints };

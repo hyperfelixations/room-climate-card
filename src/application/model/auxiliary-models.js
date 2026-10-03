@@ -8,6 +8,7 @@ import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
 import { classificationColorOf, isValuePhysicallyValid } from "./classification.js";
 import {
   convertMetricValue,
+  rawUnitForEntity,
   readFirstAttribute,
   readNumericAttribute,
   readNumericState,
@@ -15,13 +16,14 @@ import {
 } from "./entity-model.js";
 
 // What an auxiliary sensor gave, for the diagnostics that name it: nothing configured, no such
-// entity, a momentary gap (no number, or none that can be shown), a unit the card cannot read
-// for this measurement, or a value. The unit is judged only for a number, in the order
+// entity, a momentary gap (no number, or none that can be shown), no unit, a unit the card
+// cannot read for this measurement, or a value. The unit is judged only for a number, in the order
 // resolveAvailability() uses, so an `unavailable` state without attributes is a gap.
 export const AUXILIARY_STATUS = Object.freeze({
   NONE: "none",
   MISSING: "missing",
   TRANSIENT: "transient",
+  UNIT_MISSING: "unit_missing",
   UNREADABLE: "unreadable",
   USABLE: "usable",
 });
@@ -31,7 +33,7 @@ function auxiliarySource(states, entity, reading, profileKey, value) {
   if (!entity) status = AUXILIARY_STATUS.NONE;
   else if (!states?.[entity]) status = AUXILIARY_STATUS.MISSING;
   else if (reading === null) status = AUXILIARY_STATUS.TRANSIENT;
-  else if (!profileKey) status = AUXILIARY_STATUS.UNREADABLE;
+  else if (!profileKey) status = rawUnitForEntity(states, entity) === null ? AUXILIARY_STATUS.UNIT_MISSING : AUXILIARY_STATUS.UNREADABLE;
   else if (value === null) status = AUXILIARY_STATUS.TRANSIENT;
   return { entity: entity || null, status };
 }

@@ -377,7 +377,11 @@ const RUNTIME_SCENARIOS = [
   ["room-entity-not-found", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.gone" }] }, VALID_HASS.states],
   ["entity-unit-fits-several-measurements", { entity: "sensor.air" }, { "sensor.air": st("sensor.air", 700, { unit_of_measurement: "ppm" }) }],
   ["entity-unidentified", { entity: "sensor.mute" }, { "sensor.mute": st("sensor.mute", 7, {}) }],
+  ["entity-unit-unknown", { entity: "sensor.lux" }, { "sensor.lux": st("sensor.lux", 300, { unit_of_measurement: "lx" }) }],
+  ["entity-device-class-unknown", { entity: "sensor.typo" }, { "sensor.typo": st("sensor.typo", 700, { device_class: "co2", unit_of_measurement: "ppm" }) }],
+  ["entity-unit-missing", { entity: "sensor.bare" }, { "sensor.bare": st("sensor.bare", 22, { device_class: "temperature" }) }],
   ["entity-unit-unreadable", { entity: "sensor.odd" }, { "sensor.odd": st("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }) }],
+  ["entity-unit-of-another-measurement", { entity: "sensor.odd" }, { "sensor.odd": st("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "%" }) }],
   ["room-measures-something-else", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.h" }] }, {
     ...VALID_HASS.states,
     "sensor.h": st("sensor.h", 45, HUMIDITY),
@@ -389,6 +393,10 @@ const RUNTIME_SCENARIOS = [
   ["range-entity-unit-unreadable", { entity: "sensor.avg", range_entity: "sensor.range" }, {
     ...VALID_HASS.states,
     "sensor.range": st("sensor.range", 4, { unit_of_measurement: "hPa", minimum: 18, maximum: 22 }),
+  }],
+  ["range-entity-unit-missing", { entity: "sensor.avg", range_entity: "sensor.range" }, {
+    ...VALID_HASS.states,
+    "sensor.range": st("sensor.range", 4, { minimum: 18, maximum: 22 }),
   }],
   ["hint-room-unavailable", { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, {
     ...VALID_HASS.states,

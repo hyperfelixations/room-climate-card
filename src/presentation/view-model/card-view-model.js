@@ -159,7 +159,7 @@ function noDataHeadlineSource(domainModel, config, topology) {
 
 // The reasons that pass by themselves, one text each. A fault someone has to fix is a warning
 // (application/model/source-diagnostics.js). Details: see internal dev doc §4 "No-Data-Vertrag".
-const REASON_TEXTS = {
+export const REASON_TEXTS = {
   [UNUSABLE_REASON.UNAVAILABLE]: { kind: "value-unavailable", key: "availability.valueUnavailable" },
   [UNUSABLE_REASON.NOT_NUMERIC]: { kind: "value-not-numeric", key: "availability.valueNotNumeric" },
   [UNUSABLE_REASON.OUT_OF_RANGE]: { kind: "value-impossible", key: "availability.valueImpossible" },

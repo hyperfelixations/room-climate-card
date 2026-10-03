@@ -327,12 +327,17 @@ test("every way of being unusable has its own reason, and availability is unchan
     // ppm belongs to five Home Assistant device classes, so the unit decides nothing.
     ["sensor.air", mkState("sensor.air", 700, { unit_of_measurement: "ppm" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIT_AMBIGUOUS],
     ["sensor.mute", mkState("sensor.mute", 7, {}), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
-    ["sensor.press", mkState("sensor.press", 1013, { unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIDENTIFIED],
+    ["sensor.press", mkState("sensor.press", 1013, { unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNIT_UNKNOWN],
+    // A class Home Assistant does not define is the thing to fix, whatever the unit says.
+    ["sensor.typo", mkState("sensor.typo", 700, { device_class: "co2", unit_of_measurement: "ppm" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNKNOWN_DEVICE_CLASS],
+    ["sensor.typo2", mkState("sensor.typo2", 7, { device_class: "temp" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.UNKNOWN_DEVICE_CLASS],
     // Declares a Home Assistant measurement the card does not show; its unit is not asked.
     ["sensor.battery", mkState("sensor.battery", 100, { device_class: "battery", unit_of_measurement: "%" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT],
     ["sensor.baro", mkState("sensor.baro", 1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }), AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT],
     // A recognized measurement in a unit the card cannot read for it.
     ["sensor.odd", mkState("sensor.odd", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }), AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_UNREADABLE],
+    // A recognized measurement whose unit is not reported and cannot be implied (°C, °F or K).
+    ["sensor.bare", mkState("sensor.bare", 22, TEMPERATURE), AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_MISSING],
     ["sensor.ok", state("sensor.ok", 22), AVAILABILITY.USABLE, UNUSABLE_REASON.NONE],
   ];
   for (const [entity, stateObject, availability, reason] of cases) {
@@ -356,7 +361,7 @@ test("a declared class with one Home Assistant unit stands in for a missing unit
     assert.equal(read.rawUnit, null, `${attributes.device_class}: what the sensor reported stays recorded`);
   }
   assert.equal(model(HUMIDITY_CLASS_ONLY, 800).unusableReason, UNUSABLE_REASON.OUT_OF_RANGE, "and is checked in that unit");
-  assert.equal(model(TEMPERATURE, 22).unusableReason, UNUSABLE_REASON.UNIT_UNREADABLE);
+  assert.equal(model(TEMPERATURE, 22).unusableReason, UNUSABLE_REASON.UNIT_MISSING);
   assert.equal(model({ device_class: "humidity", unit_of_measurement: "ppm" }, 55).unusableReason, UNUSABLE_REASON.UNIT_UNREADABLE, "a reported unit is never overruled");
 });
 
@@ -391,15 +396,23 @@ test("the card says which of the things went wrong, and where it says it", () =>
     env.cleanup(el);
   }
   const lasting = [
-    [mkState("sensor.primary", 700, { unit_of_measurement: "ppm" }), "sensor.primary needs a device_class; its unit fits several measurements."],
-    [mkState("sensor.primary", 7, {}), "sensor.primary has no device_class and no unit the card knows."],
+    [mkState("sensor.primary", 700, { unit_of_measurement: "ppm" }), 'sensor.primary needs a device_class: "ppm" fits several measurements.'],
+    [mkState("sensor.primary", 7, {}), "sensor.primary has neither a device_class nor a unit_of_measurement."],
+    [mkState("sensor.primary", 7, { unit_of_measurement: "lx" }), 'sensor.primary has no device_class, and the card does not know the unit "lx".'],
+    [
+      mkState("sensor.primary", 700, { device_class: "co2", unit_of_measurement: "ppm" }),
+      'sensor.primary has device_class "co2", which Home Assistant does not define.',
+    ],
     [
       mkState("sensor.primary", 22, { device_class: "temperature", unit_of_measurement: "furlongs" }),
-      "sensor.primary reports a unit the card cannot read here.",
+      'sensor.primary reports "furlongs", which is not a unit of Temperature.',
     ],
-    // It has a device_class, so "has no device_class" would be false; it measures something else.
-    [mkState("sensor.primary", 1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }), "sensor.primary measures something else and is ignored."],
-    [mkState("sensor.primary", 100, { device_class: "battery", unit_of_measurement: "%" }), "sensor.primary measures something else and is ignored."],
+    [mkState("sensor.primary", 22, { device_class: "temperature" }), "sensor.primary has no unit_of_measurement; Temperature needs one."],
+    [
+      mkState("sensor.primary", 1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }),
+      'sensor.primary has device_class "atmospheric_pressure", which this card does not show.',
+    ],
+    [mkState("sensor.primary", 100, { device_class: "battery", unit_of_measurement: "%" }), 'sensor.primary has device_class "battery", which this card does not show.'],
   ];
   for (const [stateObject, expected] of lasting) {
     const el = env.createCard({ entity: "sensor.primary" }, mkHass({ "sensor.primary": stateObject }));
@@ -419,7 +432,7 @@ test("a room measuring something else is named, unless every room disagrees", ()
     mkHass({ "sensor.t": state("sensor.t", 21), "sensor.h": state("sensor.h", 45, HUMIDITY) })
   );
   try {
-    assert.equal(foreign.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.humid measures something else and is ignored.");
+    assert.equal(foreign.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.humid measures Humidity, not Temperature, and is ignored.");
     assert.equal(mixed.shadowRoot.querySelector(".rtc-warning-text").textContent, "The rooms measure different things. Set entity or align device_class.");
   } finally {
     env.cleanup(foreign);
@@ -438,7 +451,7 @@ test("a room declaring battery is named and left out of the humidity average", (
     })
   );
   try {
-    assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, "sensor.battery measures something else and is ignored.");
+    assert.equal(el.shadowRoot.querySelector(".rtc-warning-text").textContent, 'sensor.battery has device_class "battery", which this card does not show.');
     const data = el._computeViewModel();
     assert.equal(data.metric.kind, "humidity");
     assert.equal(data.rooms.count, 2, "only the two hygrometers are averaged");

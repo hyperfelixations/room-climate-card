@@ -21,6 +21,11 @@ const DATA = {
   "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
   "sensor.r2": mkStateObj("sensor.r2", 23, TEMPERATURE_C),
 };
+const HUMID = {
+  "sensor.avg": mkStateObj("sensor.avg", 50, HUMIDITY),
+  "sensor.r1": mkStateObj("sensor.r1", 48, HUMIDITY),
+  "sensor.r2": mkStateObj("sensor.r2", 52, HUMIDITY),
+};
 const MIXED = {
   "sensor.avg": mkStateObj("sensor.avg", "unavailable", {}),
   "sensor.r1": mkStateObj("sensor.r1", 21, TEMPERATURE_C),
@@ -29,7 +34,7 @@ const MIXED = {
 
 // An entity id of typical length (30 characters), for the warnings that name one.
 const LONG_ENTITY = "sensor.living_room_temperature";
-const withLong = (state, attributes) => ({ ...DATA, [LONG_ENTITY]: mkStateObj(LONG_ENTITY, state, attributes) });
+const withLong = (state, attributes, base = DATA) => ({ ...base, [LONG_ENTITY]: mkStateObj(LONG_ENTITY, state, attributes) });
 
 // One configuration per sentence the card can show as a warning, each fallback clause once.
 const CASES = [
@@ -62,9 +67,28 @@ const CASES = [
   { name: "rooms that measure different things", config: {}, states: MIXED },
   { name: "an entity that does not exist", config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] } },
   { name: "a unit that fits several measurements", config: { entity: LONG_ENTITY }, states: withLong(700, { unit_of_measurement: "ppm" }) },
-  { name: "no device_class and no known unit", config: { entity: LONG_ENTITY }, states: withLong(7, {}) },
+  { name: "neither a device_class nor a unit", config: { entity: LONG_ENTITY }, states: withLong(7, {}) },
+  { name: "a unit no measurement uses", config: { entity: LONG_ENTITY }, states: withLong(7, { unit_of_measurement: VALUE }) },
+  {
+    name: "a device_class Home Assistant does not define",
+    config: { entity: LONG_ENTITY },
+    states: withLong(700, { device_class: "carbon_dioxid", unit_of_measurement: "ppm" }),
+  },
+  {
+    name: "a device_class the card does not show",
+    config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] },
+    states: withLong(1013, { device_class: "atmospheric_pressure", unit_of_measurement: "hPa" }),
+  },
+  { name: "a missing unit", config: { entity: LONG_ENTITY }, states: withLong(22, { device_class: "temperature" }) },
+  { name: "a missing unit of the range", config: { range_entity: LONG_ENTITY }, states: withLong(4, {}, HUMID) },
   { name: "a unit the card cannot read", config: { entity: LONG_ENTITY }, states: withLong(22, { device_class: "temperature", unit_of_measurement: "furlongs" }) },
+  { name: "a unit that is not one of Humidity", config: { entity: LONG_ENTITY }, states: withLong(45, { device_class: "humidity", unit_of_measurement: VALUE }, HUMID) },
   { name: "a room measuring something else", config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] }, states: withLong(45, HUMIDITY) },
+  {
+    name: "a room measuring Temperature on a Humidity card",
+    config: { rooms: [{ entity: "sensor.r1" }, { entity: LONG_ENTITY }] },
+    states: withLong(21, TEMPERATURE_C, HUMID),
+  },
   { name: "several problems", config: { auto_slide: VALUE, swipe: VALUE } },
 ];
 

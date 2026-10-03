@@ -840,11 +840,22 @@ at. Add the matching `device_class` to the sensor (`carbon_dioxide` or `pm25`)
 and the card picks it up. Temperature and humidity sensors are unaffected:
 their units belong to one measurement each.
 
-**"… measures something else", and the sensor reads % or °C.**
-Its `device_class` names another measurement — `battery`, `moisture` or
+**"… has device_class "battery", which this card does not show."**
+The `device_class` names another measurement — `battery`, `moisture` or
 `power_factor` for `%`, `temperature_delta` for `°C` — and the card follows the
-`device_class`. Point the card at the sensor that reports the temperature or
-humidity itself.
+`device_class`, whatever the unit. Point the card at the sensor that reports the
+temperature or humidity itself.
+
+**"… which Home Assistant does not define."**
+The `device_class` is not one Home Assistant knows, usually a typo or a
+shortened name such as `co2`. Use Home Assistant's own name: `temperature`,
+`humidity`, `carbon_dioxide` or `pm25`.
+
+**"… has no unit_of_measurement".**
+A temperature sensor needs its unit, because `°C`, `°F` and `K` all exist; so
+does a `range_entity` or `trend_entity`. Give the sensor a `unit_of_measurement`
+in Home Assistant, for example in its template definition. Humidity, CO₂ and
+PM2.5 sensors with a `device_class` work without one.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the

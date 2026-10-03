@@ -34,8 +34,14 @@ export const UNUSABLE_REASON = Object.freeze({
   OUT_OF_RANGE: "out_of_range",
   // Shared unit without device_class; adding one resolves the ambiguity.
   UNIT_AMBIGUOUS: "unit_ambiguous",
-  // No device_class and no unit the card recognizes: nothing says what this measures.
+  // A device_class Home Assistant does not define (a typo), and no unit that decides instead.
+  UNKNOWN_DEVICE_CLASS: "unknown_device_class",
+  // Neither a device_class nor a unit: nothing says what this measures.
   UNIDENTIFIED: "unidentified",
+  // No device_class, and a unit no measurement of the card uses.
+  UNIT_UNKNOWN: "unit_unknown",
+  // The measurement is known and reports no unit, and none is implied for it.
+  UNIT_MISSING: "unit_missing",
   // The measurement is known, its unit is not one the card can read for it.
   UNIT_UNREADABLE: "unit_unreadable",
   // A recognized measurement, but not the one this card is showing.
@@ -110,20 +116,28 @@ export function resolveAuxiliaryUnitProfileKey(states, entityId, metricKind, { r
 // domain/metrics/access.js).
 export { convertMetricValue };
 
+// A measurement nothing identified, by what would identify it: the class to correct, the class
+// to add, or the unit the card does not know.
+const UNIDENTIFIED_BY_BASIS = Object.freeze({
+  [MEASUREMENT_BASIS.UNIT_AMBIGUOUS]: UNUSABLE_REASON.UNIT_AMBIGUOUS,
+  [MEASUREMENT_BASIS.UNIT_UNKNOWN]: UNUSABLE_REASON.UNIT_UNKNOWN,
+  [MEASUREMENT_BASIS.NOTHING]: UNUSABLE_REASON.UNIDENTIFIED,
+});
+
 // Derive policy status and explanatory reason together from the same ordered facts. A foreign
 // declaration precedes the state checks: HA keeps device_class on a restored unavailable state.
-function resolveAvailability({ stateObject, basis, validNumeric, metricKind, validUnit, validPhysical }) {
+function resolveAvailability({ stateObject, identity, validNumeric, rawUnit, validUnit, validPhysical }) {
   const pair = (availability, unusableReason) => ({ availability, unusableReason });
   if (!stateObject) return pair(AVAILABILITY.MISSING, UNUSABLE_REASON.MISSING);
+  const { metricKind, basis, unknownDeviceClass } = identity;
   if (basis === MEASUREMENT_BASIS.FOREIGN) return pair(AVAILABILITY.INCOMPATIBLE_KIND, UNUSABLE_REASON.FOREIGN_MEASUREMENT);
   if (isUnavailableState(stateObject.state)) return pair(AVAILABILITY.UNAVAILABLE, UNUSABLE_REASON.UNAVAILABLE);
   if (!validNumeric) return pair(AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.NOT_NUMERIC);
+  // One policy result each, but different remedies.
   if (metricKind === null) {
-    // Shared and unknown units have one policy result but different remedies.
-    const shared = basis === MEASUREMENT_BASIS.UNIT_AMBIGUOUS;
-    return pair(AVAILABILITY.INCOMPATIBLE_KIND, shared ? UNUSABLE_REASON.UNIT_AMBIGUOUS : UNUSABLE_REASON.UNIDENTIFIED);
+    return pair(AVAILABILITY.INCOMPATIBLE_KIND, unknownDeviceClass ? UNUSABLE_REASON.UNKNOWN_DEVICE_CLASS : UNIDENTIFIED_BY_BASIS[basis]);
   }
-  if (!validUnit) return pair(AVAILABILITY.INCOMPATIBLE_UNIT, UNUSABLE_REASON.UNIT_UNREADABLE);
+  if (!validUnit) return pair(AVAILABILITY.INCOMPATIBLE_UNIT, rawUnit === null ? UNUSABLE_REASON.UNIT_MISSING : UNUSABLE_REASON.UNIT_UNREADABLE);
   if (!validPhysical) return pair(AVAILABILITY.INVALID_VALUE, UNUSABLE_REASON.OUT_OF_RANGE);
   return pair(AVAILABILITY.USABLE, UNUSABLE_REASON.NONE);
 }
@@ -165,9 +179,9 @@ export function buildEntityModel(states, config, entityId, sourceRole) {
 
   const { availability, unusableReason } = resolveAvailability({
     stateObject,
-    basis: identity?.basis ?? null,
+    identity,
     validNumeric,
-    metricKind,
+    rawUnit,
     validUnit,
     validPhysical,
   });

@@ -1,22 +1,50 @@
 {
-  "entity-unidentified": {
-    "block": "sensor.mute has no device_class and no unit the card knows.",
+  "entity-device-class-unknown": {
+    "block": "sensor.typo has device_class \"co2\", which Home Assistant does not define.",
     "console": [
-      "Room Climate Card: sensor.mute has no device_class and no unit the card knows."
+      "Room Climate Card: sensor.typo has device_class \"co2\", which Home Assistant does not define."
+    ],
+    "subtitle": null
+  },
+  "entity-unidentified": {
+    "block": "sensor.mute has neither a device_class nor a unit_of_measurement.",
+    "console": [
+      "Room Climate Card: sensor.mute has neither a device_class nor a unit_of_measurement."
     ],
     "subtitle": null
   },
   "entity-unit-fits-several-measurements": {
-    "block": "sensor.air needs a device_class; its unit fits several measurements.",
+    "block": "sensor.air needs a device_class: \"ppm\" fits several measurements.",
     "console": [
-      "Room Climate Card: sensor.air needs a device_class; its unit fits several measurements."
+      "Room Climate Card: sensor.air needs a device_class: \"ppm\" fits several measurements."
+    ],
+    "subtitle": null
+  },
+  "entity-unit-missing": {
+    "block": "sensor.bare has no unit_of_measurement; Temperature needs one.",
+    "console": [
+      "Room Climate Card: sensor.bare has no unit_of_measurement; Temperature needs one."
+    ],
+    "subtitle": null
+  },
+  "entity-unit-of-another-measurement": {
+    "block": "sensor.odd reports \"%\", which is not a unit of Temperature.",
+    "console": [
+      "Room Climate Card: sensor.odd reports \"%\", which is not a unit of Temperature."
+    ],
+    "subtitle": null
+  },
+  "entity-unit-unknown": {
+    "block": "sensor.lux has no device_class, and the card does not know the unit \"lx\".",
+    "console": [
+      "Room Climate Card: sensor.lux has no device_class, and the card does not know the unit \"lx\"."
     ],
     "subtitle": null
   },
   "entity-unit-unreadable": {
-    "block": "sensor.odd reports a unit the card cannot read here.",
+    "block": "sensor.odd reports \"furlongs\", which is not a unit of Temperature.",
     "console": [
-      "Room Climate Card: sensor.odd reports a unit the card cannot read here."
+      "Room Climate Card: sensor.odd reports \"furlongs\", which is not a unit of Temperature."
     ],
     "subtitle": null
   },
@@ -35,17 +63,24 @@
     "console": [],
     "subtitle": "Avg. in comfort. 1 room is currently unavailable."
   },
-  "range-entity-unit-unreadable": {
-    "block": "sensor.range reports a unit the card cannot read here.",
+  "range-entity-unit-missing": {
+    "block": "sensor.range has no unit_of_measurement; Temperature needs one.",
     "console": [
-      "Room Climate Card: sensor.range reports a unit the card cannot read here."
+      "Room Climate Card: sensor.range has no unit_of_measurement; Temperature needs one."
+    ],
+    "subtitle": "Avg. in comfort."
+  },
+  "range-entity-unit-unreadable": {
+    "block": "sensor.range reports \"hPa\", which is not a unit of Temperature.",
+    "console": [
+      "Room Climate Card: sensor.range reports \"hPa\", which is not a unit of Temperature."
     ],
     "subtitle": "Avg. in comfort."
   },
   "room-declares-a-foreign-measurement": {
-    "block": "sensor.battery measures something else and is ignored.",
+    "block": "sensor.battery has device_class \"battery\", which this card does not show.",
     "console": [
-      "Room Climate Card: sensor.battery measures something else and is ignored."
+      "Room Climate Card: sensor.battery has device_class \"battery\", which this card does not show."
     ],
     "subtitle": "Avg. in comfort."
   },
@@ -57,9 +92,9 @@
     "subtitle": "Avg. in comfort."
   },
   "room-measures-something-else": {
-    "block": "sensor.h measures something else and is ignored.",
+    "block": "sensor.h measures Humidity, not Temperature, and is ignored.",
     "console": [
-      "Room Climate Card: sensor.h measures something else and is ignored."
+      "Room Climate Card: sensor.h measures Humidity, not Temperature, and is ignored."
     ],
     "subtitle": "Avg. in comfort."
   },

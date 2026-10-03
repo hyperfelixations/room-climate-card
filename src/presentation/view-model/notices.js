@@ -29,8 +29,15 @@ function defaultProfile(diagnostic) {
   return message("fallback.value", { value: diagnostic.params.fallback });
 }
 
-// A source that stays unusable is named by its entity.
-const entityWarning = (key) => (diagnostic) => message(key, { entity: diagnostic.entity });
+// A source that stays unusable is named by its entity and what is wrong with it: the class or
+// unit as reported, the measurement by its title.
+const entityWarning = (key) => (diagnostic) => {
+  const vars = { entity: diagnostic.entity };
+  for (const [name, fact] of Object.entries(diagnostic.params ?? {})) {
+    vars[name] = name === "measurement" || name === "cardMeasurement" ? message(`title.${fact}`) : writtenValue(fact);
+  }
+  return message(key, vars);
+};
 
 const MESSAGE_FOR_CODE = {
   "value.invalid": (diagnostic, context) =>
@@ -44,8 +51,12 @@ const MESSAGE_FOR_CODE = {
     message("warning.deprecated", { written: diagnostic.params.written, replacement: diagnostic.params.replacement }),
   "sources.mixed": () => message("warning.mixedMeasurements"),
   "entity.not_found": entityWarning("warning.entityNotFound"),
+  "entity.foreign_measurement": entityWarning("warning.foreignMeasurement"),
+  "entity.unknown_device_class": entityWarning("warning.unknownDeviceClass"),
   "entity.unit_ambiguous": entityWarning("warning.unitAmbiguous"),
   "entity.unidentified": entityWarning("warning.unidentified"),
+  "entity.unit_unknown": entityWarning("warning.unitUnknown"),
+  "entity.unit_missing": entityWarning("warning.unitMissing"),
   "entity.unit_unreadable": entityWarning("warning.unitUnreadable"),
   "entity.other_measurement": entityWarning("warning.otherMeasurement"),
   "hint.rooms_unavailable": (diagnostic) => message("hint.roomsUnavailable", { count: diagnostic.params.count }),

@@ -80,16 +80,26 @@ test("decimals fall back to the precision of the card's measurement", () => {
   assert.equal(notices.renderMessage(built.warnings[0], t("en")), "3 is not a valid value for decimals. Using default: 0.");
 });
 
-test("a source that stays unusable is named by its entity", () => {
-  const entity = (code) => words("en", core.createDiagnostic(code, { entity: "sensor.hall" }));
-  assert.equal(entity("entity.not_found"), "sensor.hall does not exist in Home Assistant.");
-  assert.equal(entity("entity.unit_ambiguous"), "sensor.hall needs a device_class; its unit fits several measurements.");
-  assert.equal(entity("entity.unidentified"), "sensor.hall has no device_class and no unit the card knows.");
-  assert.equal(entity("entity.unit_unreadable"), "sensor.hall reports a unit the card cannot read here.");
-  assert.equal(entity("entity.other_measurement"), "sensor.hall measures something else and is ignored.");
+// Each names what is wrong — the class, the unit, the measurement — so the fix follows from it.
+const SOURCE_FAULTS = [
+  ["entity.not_found", null, "sensor.hall does not exist in Home Assistant."],
+  ["entity.foreign_measurement", { deviceClass: "battery" }, 'sensor.hall has device_class "battery", which this card does not show.'],
+  ["entity.unknown_device_class", { deviceClass: "co2" }, 'sensor.hall has device_class "co2", which Home Assistant does not define.'],
+  ["entity.unit_ambiguous", { unit: "ppm" }, 'sensor.hall needs a device_class: "ppm" fits several measurements.'],
+  ["entity.unidentified", null, "sensor.hall has neither a device_class nor a unit_of_measurement."],
+  ["entity.unit_unknown", { unit: "lx" }, 'sensor.hall has no device_class, and the card does not know the unit "lx".'],
+  ["entity.unit_missing", { measurement: "temperature" }, "sensor.hall has no unit_of_measurement; Temperature needs one."],
+  ["entity.unit_unreadable", { unit: "°R", measurement: "temperature" }, 'sensor.hall reports "°R", which is not a unit of Temperature.'],
+  ["entity.other_measurement", { measurement: "humidity", cardMeasurement: "temperature" }, "sensor.hall measures Humidity, not Temperature, and is ignored."],
+];
+
+test("a source that stays unusable is named by its entity and its cause", () => {
+  for (const [code, params, sentence] of SOURCE_FAULTS) {
+    assert.equal(words("en", core.createDiagnostic(code, { entity: "sensor.hall", params })), sentence, code);
+  }
   assert.equal(
-    words("de", core.createDiagnostic("entity.not_found", { entity: "sensor.hall" })),
-    "sensor.hall existiert in Home Assistant nicht."
+    words("de", core.createDiagnostic("entity.unit_unreadable", { entity: "sensor.hall", params: { unit: "°R", measurement: "humidity" } })),
+    'sensor.hall meldet "°R", keine Einheit für Luftfeuchtigkeit.'
   );
 });
 
@@ -183,6 +193,7 @@ test("every warning stays one short sentence in English", () => {
     core.createDiagnostic("config.foreign_key", { path: "avg_label" }),
     core.createDiagnostic("config.deprecated", { path: "unavailable_values", params: { written: "unavailable_values: hide", replacement: "show.unavailable_rooms: false" } }),
     core.createDiagnostic("sources.mixed"),
+    ...SOURCE_FAULTS.map(([code, params]) => core.createDiagnostic(code, { entity: "sensor.living_room_temperature", params })),
   ];
   for (const diagnostic of samples) {
     const sentence = words("en", diagnostic);
