@@ -46,29 +46,19 @@ jobs:
     outputs:
       artifact_sha256: ${{ steps.artifact-metadata.outputs.sha256 }}
       baseline_anchor: ${{ steps.baseline-anchor.outputs.posix }}
+      release_sha: ${{ steps.release-metadata.outputs.sha }}
       release_tag: ${{ steps.release-metadata.outputs.tag }}
       release_title: ${{ steps.release-metadata.outputs.title }}
 
     steps:
-      - name: Check out the selected main commit
+      - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           # Nothing in this job pushes; a persisted token would let a later step write to the repo.
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Install exactly from the lockfile
-        run: npm ci
-
-      - name: Audit dependencies and registry signatures
-        run: npm run check:security
-
+      # The approved commit may be any commit in the history of main; see internal dev doc §4 "Release-Workflow".
       - name: Validate branch, SHA, version and HACS contract
         id: release-metadata
         shell: pwsh
@@ -97,8 +87,13 @@ jobs:
           if ($expectedSha -notmatch '^[0-9a-f]{40}$') {
             throw "expected_sha must be the complete 40-character commit SHA."
           }
-          if ($expectedSha -ne $actualSha) {
-            throw "The selected commit is $actualSha, not the approved commit $expectedSha."
+          git cat-file -e "$expectedSha^{commit}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Commit $expectedSha does not exist in this repository."
+          }
+          git merge-base --is-ancestor $expectedSha $actualSha
+          if ($LASTEXITCODE -ne 0) {
+            throw "Commit $expectedSha is not part of the main branch history."
           }
 
           # SemVer without leading zeros. Case-sensitive and ASCII-only on purpose: -notmatch
@@ -126,8 +121,53 @@ jobs:
             throw "Tag '$tag' already exists. Release tags are immutable; use a new version."
           }
 
+          # GitHub orders releases by the date of their commit, so a stable release must be the
+          # newest by version and by history.
+          if ($releaseKind -eq "stable") {
+            $stableTag = '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+            foreach ($existing in @(git tag --list "v*")) {
+              if ($existing -cnotmatch $stableTag) {
+                continue
+              }
+              if ([version]$existing.Substring(1) -ge [version]$version) {
+                throw "Stable version $version must be higher than the existing release $existing."
+              }
+              git merge-base --is-ancestor "refs/tags/$existing" $expectedSha
+              if ($LASTEXITCODE -ne 0) {
+                throw "Release $existing is not an ancestor of $expectedSha; a stable release must contain every earlier stable release."
+              }
+            }
+          }
+
           "tag=$tag" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
           "title=$title" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "sha=$expectedSha" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+
+      - name: Check out the approved commit
+        shell: pwsh
+        env:
+          APPROVED_SHA: ${{ steps.release-metadata.outputs.sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          git checkout --detach $env:APPROVED_SHA
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not check out the approved commit."
+          }
+          if ((git rev-parse HEAD) -ne $env:APPROVED_SHA) {
+            throw "The checkout is not at the approved commit."
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install exactly from the lockfile
+        run: npm ci
+
+      - name: Audit dependencies and registry signatures
+        run: npm run check:security
 
       - name: Validate version files and HACS manifest
         shell: pwsh
@@ -229,17 +269,56 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # HACS validates the published releases and the default branch, so it can only pass once a stable
+  # release exists; the verdict of the very first release comes from the Validate workflow after publishing.
+  release-state:
+    name: Published release state
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      stable_release_exists: ${{ steps.state.outputs.stable_release_exists }}
+    steps:
+      - name: Look for a published stable release
+        id: state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          stable_tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')"
+          if [[ -n "$stable_tags" ]]; then
+            echo "stable_release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stable_release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Repeated from the Validate workflow so a release candidate carries its own HACS verdict.
   hacs-validation:
     name: HACS validation
+    needs: release-state
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {}
     steps:
       - name: HACS validation
+        if: needs.release-state.outputs.stable_release_exists != 'false'
         uses: hacs/action@main
         with:
           category: plugin
+
+      - name: Note the skipped HACS validation
+        if: needs.release-state.outputs.stable_release_exists == 'false'
+        shell: bash
+        run: |
+          {
+            echo "## HACS validation skipped"
+            echo
+            echo "No stable release is published yet, so HACS has no release asset to validate."
+            echo "Run the Validate workflow after publishing the first release."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   browser-tests:
     name: Browser tests on candidate bundle
@@ -248,9 +327,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out the selected main commit
+      - name: Check out the approved commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.build-and-test.outputs.release_sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -309,7 +389,7 @@ jobs:
       contents: write
     env:
       BASELINE_ANCHOR: ${{ needs.build-and-test.outputs.baseline_anchor }}
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      EXPECTED_SHA: ${{ needs.build-and-test.outputs.release_sha }}
       EXPECTED_SHA256: ${{ needs.build-and-test.outputs.artifact_sha256 }}
       GH_TOKEN: ${{ github.token }}
       RELEASE_KIND: ${{ inputs.release_kind }}
