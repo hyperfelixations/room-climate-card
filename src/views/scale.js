@@ -87,8 +87,7 @@ export const scaleView = {
   },
 
   // Context is unused by string renderers but belongs to the uniform registry contract.
-  render(context, viewModel) {
-    const content = viewModel.views.byKey.scale;
+  render(context, content) {
     return renderScaleBar({
       content,
       viewClass: VIEW_CLASS,
@@ -97,13 +96,10 @@ export const scaleView = {
     });
   },
 
-  patch(context, root, viewModel) {
-    const content = viewModel.views.byKey.scale;
-    if (!content) return;
-    const containerEl = root.querySelector(CONTAINER_SELECTOR);
+  patch(context, viewEl, content) {
+    const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     patchScaleBar(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
-    if (!containerEl) return;
 
     // Set visibility first; measured layout exclusively owns comfort-label form/position.
     const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
@@ -126,10 +122,8 @@ export const scaleView = {
   },
 
   // Re-derive upper/lower labels on render, resize and fonts-ready.
-  resolveLayout(context, root, viewModel) {
-    const content = viewModel.views.byKey.scale;
-    if (!content) return;
-    const containerEl = root.querySelector(CONTAINER_SELECTOR);
+  resolveLayout(context, viewEl, content) {
+    const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     resolveComfortLabelPosition(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
   },

@@ -238,7 +238,7 @@ test("without a views: config every view resolves from its own default", () => {
     config: { views: null },
   });
   assert.deepEqual(state.keys, ["range", "scale", "extremes"], "range_scale stays off by default");
-  assert.equal(state.hasRangeScale, false);
+  assert.equal(Object.hasOwn(state, "hasRangeScale"), false, "the generic view state names no single view");
   assert.equal(state.collapsed, false);
 });
 
@@ -264,7 +264,6 @@ test("an explicitly requested range_scale appears", () => {
     config: { views: [{ type: "range_scale", enabled: true, options: {} }] },
   });
   assert.deepEqual(state.keys, ["range_scale"]);
-  assert.equal(state.hasRangeScale, true);
 });
 
 test("an empty views: list collapses the view area", () => {
@@ -362,14 +361,16 @@ test("whether a footer is drawn and which form it takes are two options, read ap
   assert.equal(Object.hasOwn(resolve("scale", { footer: false }), "footer"), false);
 });
 
-test("the view definitions carry no render or update callback", () => {
-  // These are semantic definitions; the composition root binds the renderers separately.
+test("each view definition is one presentation module: semantics and content, no render callback", () => {
+  // The composition root binds the renderers separately.
+  assert.ok(Object.isFrozen(viewState.VIEW_DEFINITIONS));
   for (const definition of viewState.VIEW_DEFINITIONS) {
     assert.deepEqual(
       Object.keys(definition).sort(),
-      ["condition", "defaultEnabled", "key", "optionsSchema"],
+      ["buildContent", "condition", "defaultEnabled", "key", "optionsSchema"],
       `view "${definition.key}"`
     );
+    assert.equal(typeof definition.buildContent, "function", `view "${definition.key}"`);
   }
 });
 

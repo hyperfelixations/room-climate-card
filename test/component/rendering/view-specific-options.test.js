@@ -286,9 +286,9 @@ test("range_scale.footer does not affect the comfort/optimal band geometry or la
   const b = env
     .createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: "compact" } }] }), rangeStates())
     ._computeViewModel();
-  assert.equal(a.rangeScale.comfortMin, b.rangeScale.comfortMin);
-  assert.equal(a.rangeScale.optimalMin, b.rangeScale.optimalMin);
-  assert.equal((a.rangeScale?.markerPositions.current ?? 0), (b.rangeScale?.markerPositions.current ?? 0));
+  assert.equal(a.views.byKey.range_scale.geometry.comfortMin, b.views.byKey.range_scale.geometry.comfortMin);
+  assert.equal(a.views.byKey.range_scale.geometry.optimalMin, b.views.byKey.range_scale.geometry.optimalMin);
+  assert.equal((a.views.byKey.range_scale?.geometry.markerPositions.current ?? 0), (b.views.byKey.range_scale?.geometry.markerPositions.current ?? 0));
 });
 
 // ==== range.show_time ====

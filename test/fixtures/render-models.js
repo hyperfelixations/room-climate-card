@@ -137,7 +137,6 @@ function viewModel(overrides = {}) {
       entries: [],
       options: {},
       collapsed: false,
-      hasRangeScale: false,
       byKey: {
         range: null,
         range_scale: null,
@@ -185,7 +184,7 @@ function emptyViewModel(overrides = {}) {
       unavailable: true,
     },
     rooms: { ...base.rooms, visible: [], rowSizes: [], count: 0, comparable: false, showChips: false, chips: [], chipRows: [] },
-    views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
+    views: { keys: [], entries: [], options: {}, collapsed: true, byKey: {} },
     carousel: { hint: "", noActiveViewsHint: "" },
     ...overrides,
   };

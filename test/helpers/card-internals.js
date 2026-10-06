@@ -159,9 +159,9 @@ async function loadCardInternals() {
     // One view's markup, rendered on its own. Throws for a view the current
     // configuration does not activate, which is what the card would do too.
     viewMarkup: (el, key) => {
-      const viewModel = el._computeViewModel();
-      if (!viewModel.views.byKey[key]) throw new Error(`view "${key}" is not active for this configuration`);
-      return m.registry.VIEW_RENDERERS.find((view) => view.key === key).render(el._renderContext(), viewModel);
+      const content = el._computeViewModel().views.byKey[key];
+      if (!content) throw new Error(`view "${key}" is not active for this configuration`);
+      return m.registry.VIEW_RENDERERS.find((view) => view.key === key).render(el._renderContext(), content);
     },
   };
   return cached;

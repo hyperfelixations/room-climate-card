@@ -125,11 +125,11 @@ test("outdoor main and range scales share the same unanchored winter bounds and 
   );
   const data = card._computeViewModel();
   assert.deepEqual(normalize([data.scale.scaleMin, data.scale.scaleMax]), [-3, 9]);
-  assert.deepEqual(normalize([data.rangeScale.scaleMin, data.rangeScale.scaleMax]), [-3, 9]);
+  assert.deepEqual(normalize([data.views.byKey.range_scale.geometry.scaleMin, data.views.byKey.range_scale.geometry.scaleMax]), [-3, 9]);
   assert.equal(data.scale.comfortVisible, false);
   assert.equal(data.scale.optimalVisible, false);
-  assert.equal(data.rangeScale.comfortVisible, false);
-  assert.equal(data.rangeScale.optimalVisible, false);
+  assert.equal(data.views.byKey.range_scale.geometry.comfortVisible, false);
+  assert.equal(data.views.byKey.range_scale.geometry.optimalVisible, false);
   assert.match(internals.viewMarkup(card, "scale", data), /rtc-comfort-band[^>]* hidden/);
   assert.match(internals.viewMarkup(card, "range_scale", data), /rtc-optimal-band[^>]* hidden/);
   env.cleanup(card);

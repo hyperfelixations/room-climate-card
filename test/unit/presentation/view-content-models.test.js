@@ -12,11 +12,11 @@ const assert = require("node:assert/strict");
 const { cfg, minimalDomainModel, stubTexts } = require("../../fixtures/presentation-models.js");
 
 let cardViewModel;
-let viewContent;
+let viewState;
 
 test.before(async () => {
   cardViewModel = await import("../../../src/presentation/view-model/card-view-model.js");
-  viewContent = await import("../../../src/presentation/view-model/view-content/index.js");
+  viewState = await import("../../../src/presentation/view-model/view-state.js");
 });
 
 // ------------------------------------------------- lazy view content models --
@@ -39,7 +39,6 @@ function sharedFor(overrides = {}) {
     comfort: { min: 20, max: 24, inComfort: 1, tooWarm: 0, tooCool: 1 },
     optimal: { min: 21, max: 23 },
     spread: 2,
-    hideFooter: false,
     rangeEntity: "sensor.range",
     average: { value: 22, label: "Average", hasLabel: true, position: 50, color: "#79A86C" },
     rooms: { comparable: true, count: 2, byValue: [] },
@@ -59,11 +58,10 @@ function stateWith(keys) {
     keys,
     entries: [],
     collapsed: keys.length === 0,
-    hasRangeScale: keys.includes("range_scale"),
     options: {
       range: { show_time: true },
-      range_scale: { show_comfort_band: true, show_optimal_band: true, footer: "detailed" },
-      scale: { show_comfort_band: true, show_optimal_band: true, footer: true, markers: "extremes" },
+      range_scale: { show_comfort_band: true, show_optimal_band: true, show_footer: true, footer: "detailed" },
+      scale: { show_comfort_band: true, show_optimal_band: true, show_footer: true, markers: "extremes" },
       extremes: { show_value: true },
     },
   };
@@ -77,7 +75,7 @@ test("an available but not activated range-scale view builds no geometry at all"
       return sharedFor().geometry;
     },
   });
-  const byKey = viewContent.buildViewContent({ shared, viewState: stateWith(["scale"]) });
+  const byKey = viewState.buildViewContent({ shared, viewState: stateWith(["scale"]) });
   assert.equal(axisBuilds, 0, "the axis builder must not be called for an inactive view");
   assert.equal(byKey.range_scale, null);
   assert.ok(byKey.scale, "the active view is still built");
@@ -91,7 +89,7 @@ test("an activated range-scale view builds its geometry exactly once", () => {
       return sharedFor().geometry;
     },
   });
-  const byKey = viewContent.buildViewContent({ shared, viewState: stateWith(["range_scale", "scale"]) });
+  const byKey = viewState.buildViewContent({ shared, viewState: stateWith(["range_scale", "scale"]) });
   assert.equal(axisBuilds, 1, "once, not once per marker or per label");
   assert.ok(byKey.range_scale);
   assert.equal(byKey.range_scale.markers.min.position, 10);
@@ -99,7 +97,7 @@ test("an activated range-scale view builds its geometry exactly once", () => {
 });
 
 test("every inactive view gets a null content model, and the key set is complete", () => {
-  const byKey = viewContent.buildViewContent({ shared: sharedFor({ buildRangeScaleAxis: () => sharedFor().geometry }), viewState: stateWith([]) });
+  const byKey = viewState.buildViewContent({ shared: sharedFor({ buildRangeScaleAxis: () => sharedFor().geometry }), viewState: stateWith([]) });
   assert.deepEqual(Object.keys(byKey).sort(), ["extremes", "range", "range_scale", "scale"]);
   assert.deepEqual(Object.values(byKey), [null, null, null, null]);
 });
@@ -109,14 +107,16 @@ test("the whole view model omits the range-scale geometry when the view is off, 
     range: { hasRange: true, state: 5, min: 18, max: 25, minTimestamp: null, maxTimestamp: null, minColor: "#1", maxColor: "#2", rangeScaleAvailable: true },
   });
   const off = cardViewModel.buildCardViewModel({ domainModel: available, config: cfg(), texts: stubTexts() });
-  assert.equal(off.rangeScale, null, "available is not the same as requested");
-  assert.equal(off.views.byKey.range_scale, null);
+  assert.equal(off.views.byKey.range_scale, null, "available is not the same as requested");
+  assert.equal(Object.hasOwn(off, "rangeScale"), false, "the geometry lives in the view's own content only");
 
   const on = cardViewModel.buildCardViewModel({
     domainModel: available,
     config: cfg({ views: [{ type: "range_scale", enabled: true, options: {} }] }),
     texts: stubTexts(),
   });
-  assert.ok(on.rangeScale, "and requested is what builds it");
+  assert.ok(on.views.byKey.range_scale.geometry, "and requested is what builds it");
   assert.ok(on.views.byKey.range_scale.markers.min);
+  assert.equal(Object.hasOwn(on, "rangeScale"), false);
+  assert.equal(Object.hasOwn(on.views, "hasRangeScale"), false);
 });

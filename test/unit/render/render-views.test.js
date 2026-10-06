@@ -1,7 +1,7 @@
 "use strict";
 
 // Direct unit tests for the registered view renderers and their patch paths. Markup and DOM
-// patching are pure functions of a view model: no custom element, no hass, no configuration,
+// patching are pure functions of a view's content model: no custom element, no hass, no configuration,
 // mostly no global document. This file owns what happens inside a view — the scale, the
 // daily-range scale, the range cards, the extremes cards: their markup and their in-place
 // patch.
@@ -16,7 +16,6 @@ const { JSDOM } = require("jsdom");
 const { marker, scaleBarContent, metricCardModel, viewModel } = require("../../fixtures/render-models.js");
 
 let renderContext;
-let registry;
 let scaleView;
 let rangeScaleView;
 let rangeViewModule;
@@ -24,7 +23,6 @@ let extremesViewModule;
 
 test.before(async () => {
   renderContext = await import("../../../src/render/primitives/render-context.js");
-  registry = await import("../../../src/views/registry.js");
   scaleView = await import("../../../src/views/scale.js");
   rangeScaleView = await import("../../../src/views/range-scale.js");
   rangeViewModule = await import("../../../src/views/range.js");
@@ -51,7 +49,7 @@ function makeRealm() {
 test("each view renders its own container and patches it without touching the others", () => {
   const realm = makeRealm();
   const scaleModel = viewModel();
-  realm.root.innerHTML = scaleView.scaleView.render(realm.context, scaleModel);
+  realm.root.innerHTML = scaleView.scaleView.render(realm.context, scaleModel.views.byKey.scale);
   assert.match(realm.root.innerHTML, /rtc-scale-view/);
   assert.match(realm.root.innerHTML, /rtc-marker-avg/);
   // The comfort label's initial text is the content model's long form; asserted because a
@@ -66,7 +64,7 @@ test("each view renders its own container and patches it without touching the ot
   const changed = viewModel();
   changed.views.byKey.scale.footerText = "2 of 4 in comfort";
   changed.views.byKey.scale.markers.average = marker({ position: 70, title: "Average 24.0 °C" });
-  scaleView.scaleView.patch(realm.context, realm.root, changed);
+  scaleView.scaleView.patch(realm.context, realm.root, changed.views.byKey.scale);
   assert.equal(realm.root.querySelector(".rtc-scale-footer").textContent, "2 of 4 in comfort");
   assert.match(realm.root.querySelector(".rtc-marker-avg").getAttribute("style"), /left:70%/);
 });
@@ -78,7 +76,7 @@ test("the scale view's marker set follows the resolved option, extremes and room
     cold: marker({ position: 20, shiftPx: -4, title: "Coldest room: KI 19.2 °C" }),
     warm: marker({ position: 80, shiftPx: 4, title: "Warmest room: BA 24.4 °C" }),
   };
-  const extremaHtml = scaleView.scaleView.render(realm.context, withExtremes);
+  const extremaHtml = scaleView.scaleView.render(realm.context, withExtremes.views.byKey.scale);
   assert.match(extremaHtml, /rtc-marker-cold/);
   assert.match(extremaHtml, /left:calc\(20% \+ -4px\)/);
   assert.ok(!extremaHtml.includes("rtc-marker-room"));
@@ -89,7 +87,7 @@ test("the scale view's marker set follows the resolved option, extremes and room
     { ...marker({ position: 80, title: "BA: 24.4 °C" }), index: 1 },
   ];
   withRooms.views.byKey.scale.emphasizeAverage = true;
-  const roomsHtml = scaleView.scaleView.render(realm.context, withRooms);
+  const roomsHtml = scaleView.scaleView.render(realm.context, withRooms.views.byKey.scale);
   assert.equal((roomsHtml.match(/rtc-marker-room/g) || []).length, 2);
   assert.match(roomsHtml, /data-room-marker-index="1"/);
   assert.match(roomsHtml, /rtc-marker-avg rtc-marker-emphasized/);
@@ -102,7 +100,7 @@ test("the scale view's room markers are patched by room index, adding and removi
     { ...marker({ position: 20 }), index: 0 },
     { ...marker({ position: 80 }), index: 5 },
   ];
-  realm.root.innerHTML = scaleView.scaleView.render(realm.context, model);
+  realm.root.innerHTML = scaleView.scaleView.render(realm.context, model.views.byKey.scale);
   assert.deepEqual(
     [...realm.root.querySelectorAll(".rtc-marker-room")].map((el) => el.dataset.roomMarkerIndex),
     ["0", "5"]
@@ -110,7 +108,7 @@ test("the scale view's room markers are patched by room index, adding and removi
 
   const fewer = viewModel();
   fewer.views.byKey.scale.markers.rooms = [{ ...marker({ position: 30 }), index: 5 }];
-  scaleView.scaleView.patch(realm.context, realm.root, fewer);
+  scaleView.scaleView.patch(realm.context, realm.root, fewer.views.byKey.scale);
   assert.deepEqual(
     [...realm.root.querySelectorAll(".rtc-marker-room")].map((el) => el.dataset.roomMarkerIndex),
     ["5"],
@@ -118,12 +116,17 @@ test("the scale view's room markers are patched by room index, adding and removi
   );
 });
 
-test("a view's patch is a no-op when that view has no content model", () => {
+test("a view patches only inside the slide element it is handed", () => {
   const realm = makeRealm();
-  realm.root.innerHTML = "<div></div>";
-  const before = realm.root.innerHTML;
-  for (const view of registry.VIEW_RENDERERS) view.patch(realm.context, realm.root, viewModel());
-  assert.equal(realm.root.innerHTML, before, "an inactive view touches nothing");
+  const content = viewModel().views.byKey.scale;
+  realm.root.innerHTML = [0, 1].map(() => `<div class="rtc-view">${scaleView.scaleView.render(realm.context, content)}</div>`).join("");
+  const [first, second] = realm.root.querySelectorAll(".rtc-view");
+  const firstBefore = first.innerHTML;
+
+  const changed = { ...content, footerText: "2 of 4 in comfort" };
+  scaleView.scaleView.patch(realm.context, second, changed);
+  assert.equal(second.querySelector(".rtc-scale-footer").textContent, "2 of 4 in comfort");
+  assert.equal(first.innerHTML, firstBefore, "another slide's nodes are not this view's to touch");
 });
 
 test("the daily-range and extreme views render two cards each, in a structurally fixed order", () => {
@@ -133,11 +136,11 @@ test("the daily-range and extreme views render two cards each, in a structurally
   model.views.byKey.range = { key: "range", cards: rangeCards };
   model.views.byKey.extremes = { key: "extremes", cards: rangeCards };
 
-  const rangeHtml = rangeViewModule.rangeView.render(realm.context, model);
+  const rangeHtml = rangeViewModule.rangeView.render(realm.context, model.views.byKey.range);
   assert.match(rangeHtml, /rtc-range-view/);
   assert.ok(rangeHtml.indexOf("Daily minimum") < rangeHtml.indexOf("Daily maximum"));
 
-  const extremesHtml = extremesViewModule.extremesView.render(realm.context, model);
+  const extremesHtml = extremesViewModule.extremesView.render(realm.context, model.views.byKey.extremes);
   assert.match(extremesHtml, /rtc-extremes-view/);
   assert.equal((extremesHtml.match(/rtc-extreme-card/g) || []).length, 2);
 });
@@ -156,14 +159,14 @@ test("the range-scale view renders its three top labels in min-before-max order 
     },
     markers: { min: marker({ position: 10 }), max: marker({ position: 90 }), average: marker({ position: 50 }) },
   };
-  const html = rangeScaleView.rangeScaleView.render(realm.context, model);
+  const html = rangeScaleView.rangeScaleView.render(realm.context, model.views.byKey.range_scale);
   assert.ok(html.indexOf("rtc-range-scale-label-current") < html.indexOf("rtc-range-scale-label-min"));
   assert.ok(html.indexOf("rtc-range-scale-label-min") < html.indexOf("rtc-range-scale-label-max"));
   assert.match(html, /rtc-range-scale-label-max" style="left:90%"/);
 
   realm.root.innerHTML = html;
   model.views.byKey.range_scale.topLabels.sides[0].position = 25;
-  rangeScaleView.rangeScaleView.patch(realm.context, realm.root, model);
+  rangeScaleView.rangeScaleView.patch(realm.context, realm.root, model.views.byKey.range_scale);
   assert.equal(realm.root.querySelector(".rtc-range-scale-label-min").style.left, "25%");
 });
 

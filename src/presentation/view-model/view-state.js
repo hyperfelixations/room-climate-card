@@ -1,54 +1,36 @@
-// Semantic view registry and config resolution, independent of render callbacks.
+// Semantic view registry and config resolution, independent of render callbacks. Each view is
+// one presentation module in view-content/: its definition and its content builder.
 // Declaration order defines both carousel position and automatic slide order.
 
-import { boolOption, enumOption } from "../../config/option-schemas.js";
+import { rangeViewDefinition } from "./view-content/range.js";
+import { rangeScaleViewDefinition } from "./view-content/range-scale.js";
+import { scaleViewDefinition } from "./view-content/scale.js";
+import { extremesViewDefinition } from "./view-content/extremes.js";
 
-export const VIEW_DEFINITIONS = [
-  {
-    key: "range",
-    // Available with a usable daily range.
-    condition: (availability) => availability.hasRange,
-    // `auto` mirrors availability except for range_scale.
-    defaultEnabled: (availability) => availability.hasRange,
-    // `show_time` affects timestamps only.
-    optionsSchema: { show_time: boolOption(true) },
-  },
-  {
-    key: "range_scale",
-    // Availability and user activation remain separate.
-    condition: (availability) => availability.rangeScaleAvailable,
-    // The only view disabled by default because it mirrors the main scale shape.
-    defaultEnabled: () => false,
-    // Band toggles suppress both band and label. `show_footer` controls presence;
-    // `footer` selects compact/detailed form.
-    optionsSchema: {
-      show_comfort_band: boolOption(true),
-      show_optimal_band: boolOption(true),
-      show_footer: boolOption(true),
-      footer: enumOption("detailed", ["compact", "detailed"]),
-    },
-  },
-  {
-    key: "scale",
-    condition: () => true,
-    // An explicit `views` list may still omit the otherwise-default scale.
-    defaultEnabled: () => true,
-    // Band toggles are visual only. Marker modes select average, extrema or all rooms.
-    optionsSchema: {
-      show_comfort_band: boolOption(true),
-      show_optimal_band: boolOption(true),
-      show_footer: boolOption(true),
-      markers: enumOption("extremes", ["average", "extremes", "all"]),
-    },
-  },
-  {
-    key: "extremes",
-    condition: (availability) => availability.roomsComparable,
-    defaultEnabled: (availability) => availability.roomsComparable,
-    // `show_value` hides only the numeric value.
-    optionsSchema: { show_value: boolOption(true) },
-  },
-];
+const DEFINITION_FUNCTIONS = ["condition", "defaultEnabled", "buildContent"];
+
+// Validates a definition list once, so drift fails at load instead of as an empty slot.
+export function defineViews(definitions) {
+  const seen = new Set();
+  for (const definition of definitions) {
+    if (seen.has(definition.key)) throw new Error(`view definitions: duplicate key "${definition.key}"`);
+    seen.add(definition.key);
+    for (const name of DEFINITION_FUNCTIONS) {
+      if (typeof definition[name] !== "function") throw new Error(`view definitions: "${definition.key}" needs a ${name} function`);
+    }
+    if (typeof definition.optionsSchema !== "object" || definition.optionsSchema === null) {
+      throw new Error(`view definitions: "${definition.key}" needs an optionsSchema object`);
+    }
+  }
+  return Object.freeze([...definitions]);
+}
+
+export const VIEW_DEFINITIONS = defineViews([
+  rangeViewDefinition,
+  rangeScaleViewDefinition,
+  scaleViewDefinition,
+  extremesViewDefinition,
+]);
 
 export function optionSchemaForView(type) {
   return VIEW_DEFINITIONS.find((definition) => definition.key === type)?.optionsSchema;
@@ -89,12 +71,12 @@ export function resolveViewOptions(definition, providedOptions) {
 
 // Empty-by-configuration collapses the view area; requested-but-unavailable views
 // keep it open for a diagnostic hint.
-export function buildViewState({ availability, config }) {
-  const { keys, entries } = resolveActiveViews(VIEW_DEFINITIONS, availability, config);
+export function buildViewState({ availability, config }, definitions = VIEW_DEFINITIONS) {
+  const { keys, entries } = resolveActiveViews(definitions, availability, config);
 
   // Resolve inactive definitions too so consumers need no special case.
   const options = {};
-  for (const definition of VIEW_DEFINITIONS) {
+  for (const definition of definitions) {
     const entry = entries.find((candidate) => candidate.type === definition.key);
     options[definition.key] = resolveViewOptions(definition, entry?.options);
   }
@@ -105,6 +87,14 @@ export function buildViewState({ availability, config }) {
     entries,
     options,
     collapsed: keys.length === 0 && !anyRequestedButUnavailable,
-    hasRangeScale: keys.includes("range_scale"),
   };
+}
+
+// Content per view in declaration order; an inactive view stays null and builds nothing.
+export function buildViewContent({ shared, viewState }, definitions = VIEW_DEFINITIONS) {
+  const byKey = {};
+  for (const definition of definitions) {
+    byKey[definition.key] = viewState.keys.includes(definition.key) ? definition.buildContent(shared, viewState.options[definition.key]) : null;
+  }
+  return byKey;
 }

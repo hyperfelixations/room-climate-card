@@ -3,6 +3,7 @@
 // determine order, while formatted `sortKey` is used only for equality/tie detection
 // and must never be parsed (grouped display text is not numeric input).
 
+import { boolOption, enumOption } from "../../../config/option-schemas.js";
 import { buildMarker } from "../marker.js";
 import { buildScaleBarContent } from "./scale-bar.js";
 
@@ -71,3 +72,21 @@ export function buildRangeScaleViewContent(shared, options, axis) {
     },
   };
 }
+
+export const rangeScaleViewDefinition = Object.freeze({
+  key: "range_scale",
+  // Availability and user activation remain separate.
+  condition: (availability) => availability.rangeScaleAvailable,
+  // The only view disabled by default because it mirrors the main scale shape.
+  defaultEnabled: () => false,
+  // Band toggles suppress both band and label. `show_footer` controls presence;
+  // `footer` selects compact/detailed form.
+  optionsSchema: {
+    show_comfort_band: boolOption(true),
+    show_optimal_band: boolOption(true),
+    show_footer: boolOption(true),
+    footer: enumOption("detailed", ["compact", "detailed"]),
+  },
+  // The axis is built here, so an inactive view never computes it.
+  buildContent: (shared, options) => buildRangeScaleViewContent(shared, options, shared.buildRangeScaleAxis()),
+});

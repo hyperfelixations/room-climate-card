@@ -50,8 +50,7 @@ export const rangeScaleView = {
     ].join("");
   },
 
-  render(context, viewModel) {
-    const content = viewModel.views.byKey.range_scale;
+  render(context, content) {
     return renderScaleBar({
       content,
       viewClass: VIEW_CLASS,
@@ -60,11 +59,8 @@ export const rangeScaleView = {
     });
   },
 
-  patch(context, root, viewModel) {
-    const content = viewModel.views.byKey.range_scale;
-    if (!content) return;
-    const containerEl = root.querySelector(CONTAINER_SELECTOR);
-    if (!containerEl) return;
+  patch(context, viewEl, content) {
+    const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     patchScaleBar(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
 
@@ -82,11 +78,8 @@ export const rangeScaleView = {
     resolveRangeScaleLabels(containerEl, content);
   },
 
-  resolveLayout(context, root, viewModel) {
-    const content = viewModel.views.byKey.range_scale;
-    if (!content) return;
-    const containerEl = root.querySelector(CONTAINER_SELECTOR);
-    if (!containerEl) return;
+  resolveLayout(context, viewEl, content) {
+    const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     // Resolve both shared lower and view-specific upper label groups on every layout trigger.
     resolveOptimalLabelPosition(containerEl, content);
     resolveRangeScaleLabels(containerEl, content);

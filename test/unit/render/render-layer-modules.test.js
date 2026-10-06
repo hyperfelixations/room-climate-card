@@ -27,7 +27,6 @@ let dom;
 let labelForm;
 let sideLabels;
 let registry;
-let viewContent;
 let viewState;
 
 test.before(async () => {
@@ -42,7 +41,6 @@ test.before(async () => {
   labelForm = await import("../../../src/render/layout/label-form.js");
   sideLabels = await import("../../../src/render/layout/side-labels.js");
   registry = await import("../../../src/views/registry.js");
-  viewContent = await import("../../../src/presentation/view-model/view-content/index.js");
   viewState = await import("../../../src/presentation/view-model/view-state.js");
 });
 
@@ -78,13 +76,8 @@ test("every registered view has a render and a patch function, and unique keys",
     assert.equal(typeof view.render, "function", `${view.key}: render`);
     assert.equal(typeof view.patch, "function", `${view.key}: patch`);
     if (view.resolveLayout !== undefined) assert.equal(typeof view.resolveLayout, "function", `${view.key}: resolveLayout`);
+    if (view.structureSignature !== undefined) assert.equal(typeof view.structureSignature, "function", `${view.key}: structureSignature`);
   }
-});
-
-test("every view definition has a content builder, and every builder a definition", () => {
-  // The same guard the view-content module runs at load time, asserted directly so a
-  // failure names the mismatch rather than showing as an empty carousel slot.
-  assert.deepEqual(viewContent.VIEW_CONTENT_KEYS, viewState.VIEW_DEFINITIONS.map((d) => d.key));
 });
 
 test("only the two scale-shaped views declare a layout pass", () => {

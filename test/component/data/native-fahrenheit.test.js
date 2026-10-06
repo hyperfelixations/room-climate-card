@@ -341,11 +341,11 @@ test("converted range_entity values produce a physically meaningful single-unit 
     hass
   );
   const data = el._computeViewModel();
-  assert.equal(data.views.hasRangeScale, true);
-  assert.ok(data.rangeScale.scaleMin < data.rangeScale.scaleMax);
+  assert.ok(data.views.keys.includes("range_scale"));
+  assert.ok(data.views.byKey.range_scale.geometry.scaleMin < data.views.byKey.range_scale.geometry.scaleMax);
   assert.ok(Math.abs(data.range.min - 64.4) < 1e-9);
   assert.ok(Math.abs(data.range.max - 73.4) < 1e-9);
-  for (const pos of [(data.rangeScale?.markerPositions.current ?? 0), (data.rangeScale?.markerPositions.min ?? 0), (data.rangeScale?.markerPositions.max ?? 0)]) {
+  for (const pos of [(data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0), (data.views.byKey.range_scale?.geometry.markerPositions.min ?? 0), (data.views.byKey.range_scale?.geometry.markerPositions.max ?? 0)]) {
     assert.equal(Number.isFinite(pos), true);
     assert.ok(pos >= 0 && pos <= 100);
   }

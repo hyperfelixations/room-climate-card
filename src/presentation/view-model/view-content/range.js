@@ -1,6 +1,7 @@
 // Daily min/max are attributes of one range entity, so both cards use default actions.
 // `show_time` controls the name slot; absent timestamps omit that slot without a placeholder.
 
+import { boolOption } from "../../../config/option-schemas.js";
 import { buildMetricCardModel } from "../metric-card.js";
 
 export function buildRangeViewContent(shared, options) {
@@ -26,3 +27,13 @@ export function buildRangeViewContent(shared, options) {
     ],
   };
 }
+
+export const rangeViewDefinition = Object.freeze({
+  key: "range",
+  // Available with a usable daily range; `auto` mirrors availability.
+  condition: (availability) => availability.hasRange,
+  defaultEnabled: (availability) => availability.hasRange,
+  // `show_time` affects timestamps only.
+  optionsSchema: { show_time: boolOption(true) },
+  buildContent: buildRangeViewContent,
+});

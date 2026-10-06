@@ -7,17 +7,15 @@ const CONTAINER_SELECTOR = ".rtc-range-view";
 export const rangeView = {
   key: "range",
 
-  render(context, viewModel) {
+  render(context, content) {
     return `
         <div class="rtc-range-view">
-          ${renderMetricCards(viewModel.views.byKey.range.cards)}
+          ${renderMetricCards(content.cards)}
         </div>
       `;
   },
 
-  patch(context, root, viewModel) {
-    const content = viewModel.views.byKey.range;
-    if (!content) return;
-    patchMetricCardPair(root.querySelector(CONTAINER_SELECTOR), content.cards, () => renderMetricCards(content.cards));
+  patch(context, viewEl, content) {
+    patchMetricCardPair(viewEl.querySelector(CONTAINER_SELECTOR), content.cards, () => renderMetricCards(content.cards));
   },
 };

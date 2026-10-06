@@ -8,17 +8,15 @@ const CONTAINER_SELECTOR = ".rtc-extremes-view";
 export const extremesView = {
   key: "extremes",
 
-  render(context, viewModel) {
+  render(context, content) {
     return `
         <div class="rtc-extremes-view">
-          ${renderMetricCards(viewModel.views.byKey.extremes.cards)}
+          ${renderMetricCards(content.cards)}
         </div>
       `;
   },
 
-  patch(context, root, viewModel) {
-    const content = viewModel.views.byKey.extremes;
-    if (!content) return;
-    patchMetricCardPair(root.querySelector(CONTAINER_SELECTOR), content.cards, () => renderMetricCards(content.cards));
+  patch(context, viewEl, content) {
+    patchMetricCardPair(viewEl.querySelector(CONTAINER_SELECTOR), content.cards, () => renderMetricCards(content.cards));
   },
 };

@@ -1,4 +1,4 @@
-// View-agnostic card shell; registry-injected renderers optionally own resolveLayout().
+// View-agnostic card shell; registry-injected renderers get their own content and slide only.
 // Template-literal indentation is shipped markup and baseline-pinned; see internal dev doc §4 "Render-Primitive-/Composition-Vertrag".
 
 import { escapeHtml } from "../../core/text.js";
@@ -9,7 +9,7 @@ import { renderRoomGridRows, updateRoomGrid } from "../primitives/room-grid.js";
 function renderViewArea(context, viewModel, viewRenderers) {
   const keys = viewModel.views.keys;
   const byKey = new Map(viewRenderers.map((view) => [view.key, view]));
-  const renderView = (key) => byKey.get(key).render(context, viewModel);
+  const renderView = (key) => byKey.get(key).render(context, viewModel.views.byKey[key]);
 
   if (keys.length >= 2) {
     return `
@@ -237,10 +237,20 @@ function patchShell(context, root, viewModel) {
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);
 }
 
+// Each active view with its renderer, content and slide: the i-th slide holds views.keys[i],
+// which the structure signature guarantees for a patched or measured DOM.
+function mountedViews(root, viewModel, viewRenderers) {
+  if (!viewModel.hasPanel) return [];
+  const keys = viewModel.views.keys;
+  const slides = keys.length >= 2 ? root.querySelectorAll(".rtc-track > .rtc-view") : root.querySelectorAll(".rtc-rotator-solo");
+  const byKey = new Map(viewRenderers.map((view) => [view.key, view]));
+  return keys.map((key, index) => ({ view: byKey.get(key), element: slides[index], content: viewModel.views.byKey[key] }));
+}
+
 export function patchCardBody(context, root, viewModel, viewRenderers) {
   patchShell(context, root, viewModel);
 
-  for (const view of viewRenderers) view.patch(context, root, viewModel);
+  for (const { view, element, content } of mountedViews(root, viewModel, viewRenderers)) view.patch(context, element, content);
 }
 
 export function patchEmptyCardBody(context, root, viewModel) {
@@ -250,7 +260,7 @@ export function patchEmptyCardBody(context, root, viewModel) {
 // Resolve mounted view layouts after initial render, resize or font settlement.
 export function resolveViewLayouts(context, root, viewModel, viewRenderers) {
   if (!root || !viewModel || viewModel.empty) return;
-  for (const view of viewRenderers) {
-    if (typeof view.resolveLayout === "function") view.resolveLayout(context, root, viewModel);
+  for (const { view, element, content } of mountedViews(root, viewModel, viewRenderers)) {
+    if (typeof view.resolveLayout === "function") view.resolveLayout(context, element, content);
   }
 }

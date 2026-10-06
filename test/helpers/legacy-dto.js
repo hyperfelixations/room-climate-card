@@ -27,7 +27,9 @@ function toLegacyData(viewModel) {
     };
   }
 
-  const { scale, rangeScale, extremes, range, trend, rooms, views } = viewModel;
+  const { scale, extremes, range, trend, rooms, views } = viewModel;
+  // The daily-range geometry and its flag, as the earlier flat shape carried them.
+  const rangeScale = views.byKey.range_scale ? views.byKey.range_scale.geometry : null;
 
   return {
     empty: false,
@@ -35,7 +37,7 @@ function toLegacyData(viewModel) {
     showRoomChips: rooms.showChips,
     hasRange: range.hasRange,
     rangeState: range.state,
-    hasRangeScale: views.hasRangeScale,
+    hasRangeScale: views.keys.includes("range_scale"),
     views: views.keys,
     viewOptions: views.options,
     viewAreaCollapsed: views.collapsed,

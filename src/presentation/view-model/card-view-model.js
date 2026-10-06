@@ -4,12 +4,11 @@
 
 import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
-import { buildViewState } from "./view-state.js";
+import { buildViewContent, buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
 import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/model/source-topology.js";
 import { buildRoomMarker } from "./marker.js";
 import { buildTone, toneStyleDeclaration, NO_DATA_COLOR } from "./tone.js";
-import { buildViewContent } from "./view-content/index.js";
 import { buildNotices, buildWarningBlock, composeSubtitle, hintText } from "./notices.js";
 import { AVAILABILITY, UNUSABLE_REASON } from "../../application/model/entity-model.js";
 import { CARD_NAME } from "../../core/card-metadata.js";
@@ -261,8 +260,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     range: null,
     trend: { model: null, text: "" },
     scale: null,
-    rangeScale: null,
-    views: { keys: [], entries: [], options: {}, collapsed: true, hasRangeScale: false, byKey: {} },
+    views: { keys: [], entries: [], options: {}, collapsed: true, byKey: {} },
     carousel: { hint: null, noActiveViewsHint: "" },
   };
 }
@@ -481,13 +479,11 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     range,
     trend: { ...domainModel.trend, text: trendText },
     scale,
-    rangeScale: byKey.range_scale ? byKey.range_scale.geometry : null,
     views: {
       keys: viewState.keys,
       entries: viewState.entries,
       options: viewState.options,
       collapsed: viewState.collapsed,
-      hasRangeScale: viewState.hasRangeScale,
       byKey,
     },
     carousel: {

@@ -49,23 +49,31 @@ function makeRealm() {
 function syntheticRegistry(calls) {
   const make = (key) => ({
     key,
-    render: (context, model) => {
-      calls.push(["render", key, model]);
+    render: (context, content) => {
+      calls.push(["render", key, content]);
       return `<div class="synthetic-${key}"></div>`;
     },
-    patch: (context, root, model) => calls.push(["patch", key, model]),
-    resolveLayout: (context, root, model) => calls.push(["layout", key, model]),
+    patch: (context, viewEl, content) => calls.push(["patch", key, content, viewEl]),
+    resolveLayout: (context, viewEl, content) => calls.push(["layout", key, content, viewEl]),
   });
   return [make("alpha"), make("beta")];
+}
+
+// Each synthetic view's content model, keyed like views.byKey.
+const SYNTHETIC_CONTENT = Object.freeze({ alpha: { id: "alpha" }, beta: { id: "beta" } });
+
+function syntheticModel(keys, overrides = {}) {
+  return viewModel({ views: { ...viewModel().views, keys, byKey: { ...SYNTHETIC_CONTENT } }, ...overrides });
 }
 
 test("the shell renders the views the model lists, in registry order, through the injected registry", () => {
   const realm = makeRealm();
   const calls = [];
-  const model = viewModel({ views: { ...viewModel().views, keys: ["beta", "alpha"] } });
+  const model = syntheticModel(["beta", "alpha"]);
   const html = cardShell.renderCardBody(realm.context, model, syntheticRegistry(calls));
   assert.ok(html.indexOf("synthetic-beta") < html.indexOf("synthetic-alpha"), "the MODEL's key order decides");
   assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["render", "beta"], ["render", "alpha"]]);
+  assert.deepEqual(calls.map((call) => call[2]), [SYNTHETIC_CONTENT.beta, SYNTHETIC_CONTENT.alpha], "each view gets its own content only");
   assert.match(html, /rtc-rotator/);
   assert.match(html, /rtc-track/);
   assert.match(html, /title="Swipe to switch views"/);
@@ -75,7 +83,7 @@ test("the shell omits an inapplicable carousel hint and patches both directions"
   const realm = makeRealm();
   const calls = [];
   const views = syntheticRegistry(calls);
-  const base = viewModel({ views: { ...viewModel().views, keys: ["alpha", "beta"] } });
+  const base = syntheticModel(["alpha", "beta"]);
   realm.root.innerHTML = cardShell.renderCardBody(realm.context, base, views);
   const rotator = realm.root.querySelector(".rtc-rotator");
   assert.equal(rotator.getAttribute("title"), "Swipe to switch views");
@@ -113,7 +121,7 @@ test("accent-line position is a patchable root attribute with byte-stable top ma
 
 test("one view renders without the carousel machinery at all", () => {
   const realm = makeRealm();
-  const model = viewModel({ views: { ...viewModel().views, keys: ["alpha"] } });
+  const model = syntheticModel(["alpha"]);
   const html = cardShell.renderCardBody(realm.context, model, syntheticRegistry([]));
   assert.match(html, /rtc-rotator-solo/);
   assert.ok(!html.includes("rtc-track"), "no track means the pointer handlers never treat it as swipeable");
@@ -151,7 +159,7 @@ test("the shell renders no data through the normal card frame", () => {
 
 test("the shell's chip grid follows showChips only", () => {
   const realm = makeRealm();
-  const base = viewModel({ views: { ...viewModel().views, keys: ["alpha"] } });
+  const base = syntheticModel(["alpha"]);
   const shown = cardShell.renderCardBody(realm.context, base, syntheticRegistry([]));
   assert.match(shown, /rtc-room-grid/);
   const hidden = cardShell.renderCardBody(
@@ -163,14 +171,13 @@ test("the shell's chip grid follows showChips only", () => {
   assert.match(hidden, /rtc-average/, "everything else is unaffected");
 });
 
-test("the shell patches the header, the average, the chips and then every view", () => {
+test("the shell patches the header, the average, the chips and then the active view in its slide", () => {
   const realm = makeRealm();
   const calls = [];
-  const model = viewModel({ views: { ...viewModel().views, keys: ["alpha"] } });
+  const model = syntheticModel(["alpha"]);
   realm.root.innerHTML = cardShell.renderCardBody(realm.context, model, syntheticRegistry(calls));
 
-  const changed = viewModel({
-    views: { ...model.views, keys: ["alpha"] },
+  const changed = syntheticModel(["alpha"], {
     header: { icon: "mdi:water-percent", title: "Humidity", subtitle: "Dry", hasSubtitle: true, subtitleOverflow: "clip", statusLabel: "Low" },
   });
   calls.length = 0;
@@ -179,7 +186,36 @@ test("the shell patches the header, the average, the chips and then every view",
   assert.equal(realm.root.querySelector(".rtc-subtitle").textContent, "Dry");
   assert.equal(realm.root.querySelector(".rtc-status-pill").textContent, "Low");
   assert.equal(realm.root.querySelector(".rtc-icon-badge ha-icon").getAttribute("icon"), "mdi:water-percent");
-  assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["patch", "alpha"], ["patch", "beta"]]);
+  assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["patch", "alpha"]], "an inactive view is never patched");
+  assert.equal(calls[0][2], SYNTHETIC_CONTENT.alpha);
+  assert.equal(calls[0][3], realm.root.querySelector(".rtc-rotator-solo"), "the solo slide is the view's element");
+});
+
+test("in the carousel each view is patched with its own slide, in the model's order", () => {
+  const realm = makeRealm();
+  const calls = [];
+  const model = syntheticModel(["beta", "alpha"]);
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, model, syntheticRegistry(calls));
+  const slides = [...realm.root.querySelectorAll(".rtc-view")];
+
+  calls.length = 0;
+  cardShell.patchCardBody(realm.context, realm.root, model, syntheticRegistry(calls));
+  assert.deepEqual(calls.map((call) => [call[0], call[1], call[2], call[3]]), [
+    ["patch", "beta", SYNTHETIC_CONTENT.beta, slides[0]],
+    ["patch", "alpha", SYNTHETIC_CONTENT.alpha, slides[1]],
+  ]);
+  assert.ok(slides[0].querySelector(".synthetic-beta"), "the slide holds the markup that view rendered");
+});
+
+test("with the panel hidden no view is patched or measured", () => {
+  const realm = makeRealm();
+  const calls = [];
+  const model = syntheticModel(["alpha", "beta"], { hasPanel: false });
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, model, syntheticRegistry(calls));
+  calls.length = 0;
+  cardShell.patchCardBody(realm.context, realm.root, model, syntheticRegistry(calls));
+  cardShell.resolveViewLayouts(realm.context, realm.root, model, syntheticRegistry(calls));
+  assert.deepEqual(calls, []);
 });
 
 test("the warnings block sits between header and panel, and only while it is visible", () => {
@@ -248,8 +284,20 @@ test("the shell resolves the layout of every view that declares one, and skips t
   const calls = [];
   const views = syntheticRegistry(calls);
   delete views[1].resolveLayout;
-  cardShell.resolveViewLayouts(realm.context, realm.root, viewModel(), views);
-  assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["layout", "alpha"]]);
+  const model = syntheticModel(["alpha", "beta"]);
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, model, views);
+  calls.length = 0;
+  cardShell.resolveViewLayouts(realm.context, realm.root, model, views);
+  assert.deepEqual(calls.map((call) => [call[0], call[1], call[2], call[3]]), [
+    ["layout", "alpha", SYNTHETIC_CONTENT.alpha, realm.root.querySelectorAll(".rtc-view")[0]],
+  ]);
+
+  const onlyBeta = syntheticRegistry(calls);
+  const betaModel = syntheticModel(["beta"]);
+  realm.root.innerHTML = cardShell.renderCardBody(realm.context, betaModel, onlyBeta);
+  calls.length = 0;
+  cardShell.resolveViewLayouts(realm.context, realm.root, betaModel, onlyBeta);
+  assert.deepEqual(calls.map((call) => [call[0], call[1]]), [["layout", "beta"]], "an inactive view is never measured");
 
   calls.length = 0;
   cardShell.resolveViewLayouts(realm.context, realm.root, emptyViewModel(), views);

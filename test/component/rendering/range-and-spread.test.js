@@ -155,14 +155,14 @@ function rangeScaleFixture(avg, rangeState, minimum, maximum) {
 test("rangeScale axis: avg outside [min,max] is not clamped to the 0/100% edge", () => {
   const el = rangeScaleFixture(30, 5, 18, 23); // avg way above the daily range
   const data = el._computeViewModel();
-  assert.ok((data.rangeScale?.markerPositions.current ?? 0) > 0 && (data.rangeScale?.markerPositions.current ?? 0) < 100, `rangeCurrentPos=${(data.rangeScale?.markerPositions.current ?? 0)} must not be clamped to an edge`);
+  assert.ok((data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0) > 0 && (data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0) < 100, `rangeCurrentPos=${(data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0)} must not be clamped to an edge`);
   env.cleanup(el);
 });
 
 test("rangeScale axis: avg inside [min,max] sits strictly between 0 and 100%", () => {
   const el = rangeScaleFixture(20, 5, 18, 23);
   const data = el._computeViewModel();
-  assert.ok((data.rangeScale?.markerPositions.current ?? 0) > 0 && (data.rangeScale?.markerPositions.current ?? 0) < 100);
+  assert.ok((data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0) > 0 && (data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0) < 100);
   env.cleanup(el);
 });
 
@@ -170,16 +170,16 @@ test("rangeScale axis: min === max (a fully flat day) does not throw or divide b
   const el = rangeScaleFixture(20, 0, 20, 20);
   const data = el._computeViewModel();
   assert.equal(data.range.hasRange, true);
-  assert.equal(Number.isFinite((data.rangeScale?.markerPositions.current ?? 0)), true);
-  assert.equal(Number.isFinite((data.rangeScale?.markerPositions.min ?? 0)), true);
-  assert.equal(Number.isFinite((data.rangeScale?.markerPositions.max ?? 0)), true);
+  assert.equal(Number.isFinite((data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0)), true);
+  assert.equal(Number.isFinite((data.views.byKey.range_scale?.geometry.markerPositions.min ?? 0)), true);
+  assert.equal(Number.isFinite((data.views.byKey.range_scale?.geometry.markerPositions.max ?? 0)), true);
   env.cleanup(el);
 });
 
 test("rangeScale axis: avg === min === max (all three identical) does not throw", () => {
   const el = rangeScaleFixture(20, 0, 20, 20);
   const data = el._computeViewModel();
-  assert.equal(Number.isFinite((data.rangeScale?.markerPositions.current ?? 0)), true);
+  assert.equal(Number.isFinite((data.views.byKey.range_scale?.geometry.markerPositions.current ?? 0)), true);
   env.cleanup(el);
 });
 

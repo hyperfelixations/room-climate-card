@@ -1,6 +1,7 @@
 // Main dynamic scale with optional bands and average, extrema or all-room markers.
 // Band toggles affect drawing only, never classification, footer data or colours.
 
+import { boolOption, enumOption } from "../../../config/option-schemas.js";
 import { UNAVAILABLE_TEXT } from "../../../core/text.js";
 import { extremeRoomLabel } from "../metric-meta.js";
 import { buildMarker } from "../marker.js";
@@ -79,3 +80,18 @@ export function buildScaleViewContent(shared, options) {
     },
   };
 }
+
+export const scaleViewDefinition = Object.freeze({
+  key: "scale",
+  condition: () => true,
+  // An explicit `views` list may still omit the otherwise-default scale.
+  defaultEnabled: () => true,
+  // Band toggles are visual only. Marker modes select average, extrema or all rooms.
+  optionsSchema: {
+    show_comfort_band: boolOption(true),
+    show_optimal_band: boolOption(true),
+    show_footer: boolOption(true),
+    markers: enumOption("extremes", ["average", "extremes", "all"]),
+  },
+  buildContent: buildScaleViewContent,
+});
