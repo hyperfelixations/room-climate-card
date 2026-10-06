@@ -118,6 +118,7 @@ export const ko = {
   "fallback.cardAction": "카드의 동작을 사용합니다.",
   "fallback.option": (v) => `${v.key}에 ${v.value}을(를) 사용합니다.`,
   "warning.deprecated": (v) => `${v.written}은(는) 폐지 예정입니다. ${v.replacement}을(를) 사용하세요.`,
+  "warning.removed": (v) => `${v.written}은(는) 폐지되었습니다. ${v.replacement}을(를) 사용하세요.`,
   "warning.entityNotFound": (v) => `${v.entity}이(가) Home Assistant에 없습니다.`,
   "warning.foreignMeasurement": (v) => `${v.entity}의 device_class ${v.deviceClass}은(는) 이 카드가 표시하지 않는 측정 유형입니다.`,
   "warning.unknownDeviceClass": (v) => `${v.entity}의 device_class ${v.deviceClass}은(는) Home Assistant에 정의되어 있지 않습니다.`,

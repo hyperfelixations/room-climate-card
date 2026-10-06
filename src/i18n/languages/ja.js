@@ -118,6 +118,7 @@ export const ja = {
   "fallback.cardAction": "カードのアクションを使用します。",
   "fallback.option": (v) => `${v.key} には ${v.value} を使用します。`,
   "warning.deprecated": (v) => `${v.written} は廃止予定です。${v.replacement} を使用してください。`,
+  "warning.removed": (v) => `${v.written} は無効になりました。${v.replacement} を使用してください。`,
   "warning.entityNotFound": (v) => `${v.entity} は Home Assistant に存在しません。`,
   "warning.foreignMeasurement": (v) => `${v.entity} の device_class ${v.deviceClass} は、このカードが表示しない測定種類です。`,
   "warning.unknownDeviceClass": (v) => `${v.entity} の device_class ${v.deviceClass} は Home Assistant で定義されていません。`,

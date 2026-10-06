@@ -32,5 +32,5 @@ export function entityDataSignature({ config, states, language, activeViewIndex,
 // Serializing `views` covers future structural view options generically. `show:` is omitted:
 // its node presence is owned by the view model and signed by cardStructureSignature().
 export function structuralConfigSignature(config) {
-  return `${config.hide_footer}|${config.rotation_seconds}|${config.slide_seconds}|${config.auto_slide}|${JSON.stringify(config.views)}`;
+  return `${config.rotation_seconds}|${config.slide_seconds}|${config.auto_slide}|${JSON.stringify(config.views)}`;
 }

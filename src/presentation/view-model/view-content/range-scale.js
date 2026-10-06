@@ -35,7 +35,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Daily span remains available with zero comparable rooms.
-      footerText: !options.show_footer || shared.hideFooter ? null : buildFooterText(shared, options.footer),
+      footerText: options.show_footer ? buildFooterText(shared, options.footer) : null,
     }),
     topLabels: {
       current: {

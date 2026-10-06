@@ -168,7 +168,7 @@ test("a refused configuration is worded from its code, and its English is what c
   );
 });
 
-test("an older spelling names what replaces it", () => {
+test("an older spelling names what replaces it, at either stage", () => {
   const deprecated = core.createDiagnostic("config.deprecated", {
     path: "views[1].options.footer",
     params: { written: "views[1].options.footer: false", replacement: "views[1].options.show_footer: false" },
@@ -177,6 +177,12 @@ test("an older spelling names what replaces it", () => {
     words("en", deprecated),
     "views[1].options.footer: false is outdated and will be removed. Use views[1].options.show_footer: false."
   );
+  const removed = core.createDiagnostic("config.removed", {
+    path: "show_rooms",
+    params: { written: "show_rooms: false", replacement: "show.rooms: false" },
+  });
+  assert.equal(words("en", removed), "show_rooms: false no longer has any effect. Use show.rooms: false.");
+  assert.equal(words("de", removed), "show_rooms: false wirkt nicht mehr. Nutze show.rooms: false.");
 });
 
 test("every warning stays one short sentence in English", () => {
@@ -192,6 +198,7 @@ test("every warning stays one short sentence in English", () => {
     invalid("classification.bands.optimal.min", 19, core.fallbackOption("classification", "auto")),
     core.createDiagnostic("config.foreign_key", { path: "avg_label" }),
     core.createDiagnostic("config.deprecated", { path: "unavailable_values", params: { written: "unavailable_values: hide", replacement: "show.unavailable_rooms: false" } }),
+    core.createDiagnostic("config.removed", { path: "unavailable_values", params: { written: "unavailable_values: hide", replacement: "show.unavailable_rooms: false" } }),
     core.createDiagnostic("sources.mixed"),
     ...SOURCE_FAULTS.map(([code, params]) => core.createDiagnostic(code, { entity: "sensor.living_room_temperature", params })),
   ];

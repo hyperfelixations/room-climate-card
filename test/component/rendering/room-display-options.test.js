@@ -1,9 +1,9 @@
 "use strict";
 
-// room_sort, room_label and show_rooms are presentation options. room_sort only reorders
+// room_sort, room_label and show.rooms are presentation options. room_sort only reorders
 // the rendered chips (data.rooms.visible), never data.allRooms (extrema/comfort/spread stay
 // value-sorted). room_label is a static 3-way choice between room.short/room.name.
-// show_rooms:false hides only the chip grid; rooms stay full data sources.
+// show.rooms:false hides only the chip grid; rooms stay full data sources.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -58,17 +58,17 @@ function roomNames(viewModel) {
 
 // ==== _normalizeConfig() ====
 
-test("integration: room_sort/room_label/show_rooms default correctly, invalid values fall back silently", () => {
+test("integration: room_sort/room_label/show.rooms default correctly, invalid values fall back to their defaults", () => {
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.equal(el._config.room_sort, "value_asc");
   assert.equal(el._config.room_label, "auto");
   assert.equal(el._config.show.rooms, "auto");
   env.cleanup(el);
 
-  const el2 = env.createCard(fourRoomConfig({ room_sort: "bogus", room_label: "bogus", show_rooms: "bogus" }), fourRoomHass());
+  const el2 = env.createCard(fourRoomConfig({ room_sort: "bogus", room_label: "bogus", show: { rooms: "bogus" } }), fourRoomHass());
   assert.equal(el2._config.room_sort, "value_asc", "invalid room_sort falls back to the default");
   assert.equal(el2._config.room_label, "auto", "invalid room_label falls back to the default");
-  assert.equal(el2._config.show.rooms, "auto", "an unrecognized show_rooms falls back to auto, like every other optional top-level enum");
+  assert.equal(el2._config.show.rooms, "auto", "an unrecognized show.rooms falls back to auto");
   env.cleanup(el2);
 });
 
@@ -260,10 +260,10 @@ test("shortGuaranteed: a stale data-short-guaranteed attribute is removed on set
   env.cleanup(el);
 });
 
-// ==== show_rooms ====
+// ==== show.rooms ====
 
-test("show_rooms:false removes .rtc-room-grid from the DOM but leaves data.rooms.comparable/extrema/footer text fully populated", () => {
-  const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
+test("show.rooms:false removes .rtc-room-grid from the DOM but leaves data.rooms.comparable/extrema/footer text fully populated", () => {
+  const el = env.createCard(fourRoomConfig({ show: { rooms: false } }), fourRoomHass());
   assert.equal(el.shadowRoot.querySelector(".rtc-room-grid"), null);
   const data = el._computeViewModel();
   assert.equal(data.rooms.comparable, true, "rooms remain a data source even with chips hidden");
@@ -273,22 +273,22 @@ test("show_rooms:false removes .rtc-room-grid from the DOM but leaves data.rooms
   env.cleanup(el);
 });
 
-test("show_rooms: auto (default) renders .rtc-room-grid for several rooms, as before", () => {
+test("show.rooms: auto (default) renders .rtc-room-grid for several rooms, as before", () => {
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.ok(el.shadowRoot.querySelector(".rtc-room-grid"));
   env.cleanup(el);
 });
 
-test("show_rooms:false via setConfig() removes an already-rendered grid (forces _renderAll(), not a partial update)", () => {
+test("show.rooms:false via setConfig() removes an already-rendered grid (forces _renderAll(), not a partial update)", () => {
   const el = env.createCard(fourRoomConfig(), fourRoomHass());
   assert.ok(el.shadowRoot.querySelector(".rtc-room-grid"), "precondition: grid must be rendered");
-  el.setConfig(fourRoomConfig({ show_rooms: false }));
+  el.setConfig(fourRoomConfig({ show: { rooms: false } }));
   assert.equal(el.shadowRoot.querySelector(".rtc-room-grid"), null);
   env.cleanup(el);
 });
 
-test("show_rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by roomsComparable, not showRoomChips)", () => {
-  const el = env.createCard(fourRoomConfig({ show_rooms: false }), fourRoomHass());
+test("show.rooms:false does not disable the scale view's cold/warm markers or comfort footer (both driven by roomsComparable, not showRoomChips)", () => {
+  const el = env.createCard(fourRoomConfig({ show: { rooms: false } }), fourRoomHass());
   const html = internals.viewMarkup(el, "scale");
   assert.ok(html.includes("rtc-marker-cold"), "cold marker must still render");
   assert.ok(html.includes("rtc-marker-warm"), "warm marker must still render");
@@ -297,16 +297,16 @@ test("show_rooms:false does not disable the scale view's cold/warm markers or co
 
 // ==== getCardSize() ====
 
-test("getCardSize(): show_rooms:false returns the base size (3) regardless of room count", () => {
+test("getCardSize(): show.rooms:false returns the base size (3) regardless of room count", () => {
   for (const roomCount of [2, 5, 10]) {
     const rooms = Array.from({ length: roomCount }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` }));
     const el = env.document.createElement("room-climate-card");
-    el.setConfig({ entity: "sensor.avg", rooms, show_rooms: false });
-    assert.equal(el.getCardSize(), 3, `show_rooms:false at ${roomCount} rooms`);
+    el.setConfig({ entity: "sensor.avg", rooms, show: { rooms: false } });
+    assert.equal(el.getCardSize(), 3, `show.rooms:false at ${roomCount} rooms`);
   }
 });
 
-test("getCardSize(): show_rooms auto scales with a multi-room grid (regression)", () => {
+test("getCardSize(): show.rooms auto scales with a multi-room grid (regression)", () => {
   const el = env.document.createElement("room-climate-card");
   el.setConfig({
     entity: "sensor.avg",
@@ -334,7 +334,7 @@ test("getCardSize(): the hint applies the same source rule the card does", () =>
 
   // A distinct primary plus a foreign room leaves nothing for the grid -- not even under show.rooms: true.
   const noRoomsLeft = env.document.createElement("room-climate-card");
-  noRoomsLeft.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.humidity", name: "Bath" }], show_rooms: true });
+  noRoomsLeft.setConfig({ entity: "sensor.avg", rooms: [{ entity: "sensor.humidity", name: "Bath" }], show: { rooms: true } });
   noRoomsLeft.hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C),
     "sensor.humidity": mkState("sensor.humidity", 50, { device_class: "humidity", unit_of_measurement: "%" }),

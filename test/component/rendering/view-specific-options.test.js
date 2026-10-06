@@ -77,7 +77,7 @@ function rangeStates() {
 
 // ==== optionsSchema whitelist + value validation ====
 
-test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each is diagnosed and falls back to its default", () => {
+test("optionsSchema: an invalid value on each view option is diagnosed and falls back to its default", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
   const warnings = [];
   const originalWarn = el.ownerDocument.defaultView.console.warn;
@@ -89,7 +89,7 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
       views: [
         { type: "range", options: { show_time: "nope" } },
         { type: "range_scale", enabled: true, options: { footer: "bogus" } },
-        { type: "scale", options: { footer: "bogus", markers: "bogus" } },
+        { type: "scale", options: { show_footer: "bogus", markers: "bogus" } },
         { type: "extremes", options: { show_value: "nope" } },
       ],
     })
@@ -97,10 +97,10 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
   const data = el._computeViewModel();
   assert.equal(data.views.options.range.show_time, true, "invalid show_time falls back to default (true)");
   assert.equal(data.views.options.range_scale.footer, "detailed", "invalid footer falls back to default (detailed)");
-  assert.equal(data.views.options.scale.footer, true, "invalid scale footer falls back to default (true)");
+  assert.equal(data.views.options.scale.show_footer, true, "invalid show_footer falls back to default (true)");
   assert.equal(data.views.options.scale.markers, "extremes", "invalid markers falls back to default (extremes)");
   assert.equal(data.views.options.extremes.show_value, true, "invalid show_value falls back to default (true)");
-  for (const key of ["show_time", "footer", "markers", "show_value"]) {
+  for (const key of ["show_time", "footer", "show_footer", "markers", "show_value"]) {
     assert.ok(warnings.some((w) => w.includes(`options.${key}.`) && w.includes("Using default:")), `${key}: invalid value must be diagnosed`);
   }
 
@@ -108,16 +108,14 @@ test("optionsSchema: all 5 new keys pass the whitelist; an invalid value on each
   env.cleanup(el);
 });
 
-test("optionsSchema: valid values for every key are honored, and footer:false folds onto show_footer", () => {
-  // `footer: false` is the old spelling of `show_footer: false`; resolveViewOptions() folds
-  // it once, so `footer` comes back as its own default here, not `false`.
+test("optionsSchema: valid values for every key are honored", () => {
   const el = env.createCard(
     baseConfig({
       range_entity: "sensor.range",
       views: [
         { type: "range", options: { show_time: false } },
-        { type: "range_scale", enabled: true, options: { footer: false } },
-        { type: "scale", options: { footer: false, markers: "average" } },
+        { type: "range_scale", enabled: true, options: { show_footer: false, footer: "compact" } },
+        { type: "scale", options: { show_footer: false, markers: "average" } },
         { type: "extremes", options: { show_value: false } },
       ],
     }),
@@ -126,15 +124,14 @@ test("optionsSchema: valid values for every key are honored, and footer:false fo
   const data = el._computeViewModel();
   assert.equal(data.views.options.range.show_time, false);
   assert.equal(data.views.options.range_scale.show_footer, false);
-  assert.equal(data.views.options.range_scale.footer, "detailed", "the word is left carrying only the form");
+  assert.equal(data.views.options.range_scale.footer, "compact");
   assert.equal(data.views.options.scale.show_footer, false);
-  assert.equal(data.views.options.scale.footer, true);
   assert.equal(data.views.options.scale.markers, "average");
   assert.equal(data.views.options.extremes.show_value, false);
   env.cleanup(el);
 });
 
-test("show_footer says whether, footer says which form, and the newer key decides when both are written", () => {
+test("show_footer says whether, footer says which form", () => {
   const options = (views) => env.createCard(baseConfig({ range_entity: "sensor.range", views }), rangeStates());
 
   // The new spelling alone.
@@ -143,11 +140,12 @@ test("show_footer says whether, footer says which form, and the newer key decide
   assert.equal(internals.footerText(off, "scale"), null, "and no footer is drawn");
   env.cleanup(off);
 
-  // Both, disagreeing: show_footer wins over the older `footer` word.
+  // The removed `footer: false` beside it decides nothing and never reaches a consumer as a form.
   const both = options([{ type: "range_scale", enabled: true, options: { show_footer: true, footer: false } }]);
   const resolved = both._computeViewModel().views.options.range_scale;
-  assert.equal(resolved.show_footer, true, "the newer key decides");
-  assert.equal(resolved.footer, "detailed", "and the older word never reaches a consumer as a form");
+  assert.equal(resolved.show_footer, true);
+  assert.equal(resolved.footer, "detailed");
+  assert.notEqual(internals.footerText(both, "range_scale"), null);
   env.cleanup(both);
 
   // The form, on its own, with the footer left on.
@@ -244,26 +242,26 @@ test("scale.markers does not affect coolest/warmest room selection, comfort coun
   env.cleanup(elAvg);
 });
 
-// ==== scale.footer / range_scale.footer ====
+// ==== show_footer / range_scale.footer ====
 
-test("scale.footer:false suppresses the comfort-count footer text, ANDed with the global hide_footer", () => {
-  const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { footer: false } }] }), twoRoomStates());
+test("scale.show_footer:false suppresses the comfort-count footer text", () => {
+  const el = env.createCard(baseConfig({ views: [{ type: "scale", options: { show_footer: false } }] }), twoRoomStates());
   const html = internals.viewMarkup(el, "scale");
   assert.ok(!html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
 
-test("scale.footer:true (default) keeps the footer, unrelated to markers", () => {
+test("scale.show_footer:true (default) keeps the footer, unrelated to markers", () => {
   const el = env.createCard(baseConfig(), twoRoomStates());
   const html = internals.viewMarkup(el, "scale");
   assert.ok(html.includes("rtc-scale-footer"));
   env.cleanup(el);
 });
 
-test("range_scale.footer: detailed (default) includes min/max timestamps, compact omits them, false omits the footer entirely", () => {
+test("range_scale.footer: detailed (default) includes min/max timestamps, compact omits them; show_footer:false omits the footer entirely", () => {
   const elDetailed = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true }] }), rangeStates());
   const elCompact = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: "compact" } }] }), rangeStates());
-  const elFalse = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates());
+  const elFalse = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { show_footer: false } }] }), rangeStates());
 
   const detailedHtml = internals.viewMarkup(elDetailed, "range_scale");
   const compactHtml = internals.viewMarkup(elCompact, "range_scale");
@@ -286,7 +284,7 @@ test("range_scale.footer: detailed (default) includes min/max timestamps, compac
 test("range_scale.footer does not affect the comfort/optimal band geometry or label positions", () => {
   const a = env.createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true }] }), rangeStates())._computeViewModel();
   const b = env
-    .createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: false } }] }), rangeStates())
+    .createCard(baseConfig({ range_entity: "sensor.range", views: [{ type: "range_scale", enabled: true, options: { footer: "compact" } }] }), rangeStates())
     ._computeViewModel();
   assert.equal(a.rangeScale.comfortMin, b.rangeScale.comfortMin);
   assert.equal(a.rangeScale.optimalMin, b.rangeScale.optimalMin);

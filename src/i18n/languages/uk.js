@@ -123,6 +123,7 @@ export const uk = {
   "fallback.cardAction": "Використовується дія картки.",
   "fallback.option": (v) => `Для ${v.key} використовується ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} застарів і буде вилучений. Використовуйте ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} більше не діє. Використовуйте ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} не існує в Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} має device_class ${v.deviceClass}; цю величину картка не показує.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} має device_class ${v.deviceClass}, якого немає в Home Assistant.`,

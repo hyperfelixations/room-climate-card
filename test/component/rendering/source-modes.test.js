@@ -61,8 +61,8 @@ const cases = [
     expected: { empty: false, source: "room", entity: "sensor.room", roomIndex: 0, label: "Kitchen", chips: false },
   },
   {
-    name: "show_rooms true reveals the otherwise redundant single-room chip",
-    config: { rooms: [room("sensor.room", "Kitchen")], show_rooms: true },
+    name: "show.rooms true reveals the otherwise redundant single-room chip",
+    config: { rooms: [room("sensor.room", "Kitchen")], show: { rooms: true } },
     states: { "sensor.room": state("sensor.room", 21) },
     expected: { empty: false, source: "room", entity: "sensor.room", roomIndex: 0, label: "Kitchen", chips: true },
   },

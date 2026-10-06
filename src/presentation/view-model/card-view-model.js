@@ -400,7 +400,6 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     comfort: domainModel.comfort,
     optimal: domainModel.optimal,
     spread: domainModel.spread,
-    hideFooter: Boolean(config.hide_footer),
     rangeEntity: config.range_entity,
     average: { ...averageModel },
     rooms: { comparable: rooms.comparable, count: rooms.count, byValue: rooms.byValue },

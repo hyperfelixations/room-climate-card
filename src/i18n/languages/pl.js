@@ -126,6 +126,7 @@ export const pl = {
   "fallback.cardAction": "Używana jest akcja karty.",
   "fallback.option": (v) => `Dla ${v.key} używana jest wartość ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} jest przestarzałe i zostanie usunięte. Użyj ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} już nie działa. Użyj ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} nie istnieje w Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} ma device_class ${v.deviceClass}; tej wielkości karta nie pokazuje.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} ma device_class ${v.deviceClass}, którego Home Assistant nie definiuje.`,

@@ -14,5 +14,4 @@ export const DEFAULT_CONFIG = {
   hold_action: { action: "more-info" },
   auto_slide: true,
   swipe: true, // Manual swiping remains independent of automatic rotation.
-  hide_footer: false, // Every view draws its footer unless something asks it not to.
 };

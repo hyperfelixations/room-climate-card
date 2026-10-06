@@ -148,7 +148,7 @@ const MISSPELLED_CONFIG_KEYS = [
   "vieuws",
   "decimal",
   "rotation_second",
-  "hide_foter",
+  "start_veiw",
   "tap-action",
   "tapAction",
 ];

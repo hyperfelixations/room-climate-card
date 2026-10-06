@@ -6,8 +6,8 @@
 // line, neither replacing the other); and an invalid value falls back to the default it names,
 // while a key the block does not have refuses the configuration.
 // Boundary: config-normalize-modules.test.js owns whole-configuration assembly and its
-// rejection messages; this file owns one block and two keys, including their precedence over
-// the older spellings they replace.
+// rejection messages; this file owns one block and two keys. The removed older spellings of the
+// block's decisions are deprecations.test.js's.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -133,28 +133,19 @@ test("rooms keeps its three states while every other part is a switch", () => {
   });
 });
 
-// ============================================ precedence over the older spellings =
+// ============================================ the block alone decides ============
 
-test("the block wins over the older spelling of the same decision", () => {
-  const both = configure({
-    show: { rooms: false, unavailable_rooms: false },
-    show_rooms: true,
-    unavailable_values: "show",
-  });
-  assert.equal(both.show.rooms, false);
-  assert.equal(both.show.unavailable_rooms, false);
-});
-
-test("an invalid value in the block takes the default it names, whatever the older spelling says", () => {
-  const config = configure({ show: { rooms: "alway" }, show_rooms: false });
+test("an invalid value in the block takes the default it names", () => {
+  const config = configure({ show: { rooms: "alway" } });
   assert.equal(config.show.rooms, "auto", "the warning says auto, so the card shows auto");
 });
 
-test("the older spelling still decides on its own", () => {
-  assert.equal(configure({ show_rooms: false }).show.rooms, false);
-  assert.equal(configure({ show_rooms: true }).show.rooms, true);
-  assert.equal(configure({ show_rooms: "false" }).show.rooms, false, "read the way show.rooms reads it");
-  assert.equal(configure({ unavailable_values: "hide" }).show.unavailable_rooms, false);
+test("a removed older spelling beside the block decides nothing", () => {
+  const both = configure({ show: { icon: false }, show_rooms: false, unavailable_values: "hide" });
+  assert.equal(both.show.icon, false);
+  assert.equal(both.show.rooms, "auto");
+  assert.equal(both.show.unavailable_rooms, true);
+  assert.deepEqual(both._configDiagnostics.map((diagnostic) => diagnostic.code), ["config.removed", "config.removed"]);
 });
 
 test("accent_line selects the edge while show.accent_line independently selects visibility", () => {
@@ -165,41 +156,6 @@ test("accent_line selects the edge while show.accent_line independently selects 
   const hiddenBottom = configure({ accent_line: "bottom", show: { accent_line: false } });
   assert.equal(hiddenBottom.accent_line, "bottom");
   assert.equal(hiddenBottom.show.accent_line, false);
-});
-
-test("a block that mentions other parts does not silence the older spelling", () => {
-  // Precedence is per decision, not per block: writing `show:` must not reset keys it says
-  // nothing about.
-  const config = configure({ show: { icon: false }, show_rooms: false, unavailable_values: "hide" });
-  assert.equal(config.show.icon, false);
-  assert.equal(config.show.rooms, false, "show_rooms still decides, because the block did not");
-  assert.equal(config.show.unavailable_rooms, false);
-});
-
-test("an older spelling with a value it never had falls back to its default, with a warning", () => {
-  const { fallbackValue } = core;
-  for (const nonsense of ["alway", "", 0, 1]) {
-    const config = configure({ show_rooms: nonsense });
-    assert.equal(config.show.rooms, "auto", JSON.stringify(nonsense));
-    assert.deepEqual(config._configDiagnostics, [invalid("show_rooms", nonsense, fallbackValue("auto"))], JSON.stringify(nonsense));
-  }
-  for (const nonsense of ["HIDE", "hidden", "", false]) {
-    const config = configure({ unavailable_values: nonsense });
-    assert.equal(config.show.unavailable_rooms, true, JSON.stringify(nonsense));
-    assert.deepEqual(config._configDiagnostics, [invalid("unavailable_values", nonsense, fallbackValue("show"))], JSON.stringify(nonsense));
-  }
-  assert.deepEqual(configure({ show_rooms: null, unavailable_values: null })._configDiagnostics, [], "not written");
-});
-
-test("legacyShowRequests() reports only what was actually asked for", () => {
-  const requests = (userConfig) => normalizeConfigModule.legacyShowRequests(userConfig, []);
-  assert.deepEqual(requests({}), {});
-  assert.deepEqual(requests({ show_rooms: true }), { rooms: true });
-  assert.deepEqual(requests({ show_rooms: false }), { rooms: false });
-  assert.deepEqual(requests({ show_rooms: "auto" }), {}, "the default is not this key's to state");
-  assert.deepEqual(requests({ unavailable_values: "hide" }), { unavailable_rooms: false });
-  assert.deepEqual(requests({ unavailable_values: "show" }), {});
-  assert.deepEqual(requests({ show_rooms: false, unavailable_values: "hide" }), { rooms: false, unavailable_rooms: false });
 });
 
 test("the diagnostics of the block travel on the same channel as the views diagnostics", () => {
@@ -272,7 +228,7 @@ test("emptying a line and hiding it are two roads to the same node, and both sta
 // ============================================ what the block does not do ========
 
 test("the block does not mutate the configuration it was handed", () => {
-  const raw = { entity: "sensor.a", show: { icon: false }, show_rooms: true };
+  const raw = { entity: "sensor.a", show: { icon: false } };
   const frozen = JSON.stringify(raw);
   normalizeConfigModule.normalizeConfig(raw, COLLABORATORS);
   assert.equal(JSON.stringify(raw), frozen);

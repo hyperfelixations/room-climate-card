@@ -123,6 +123,7 @@ export const ru = {
   "fallback.cardAction": "Используется действие карточки.",
   "fallback.option": (v) => `Для ${v.key} используется ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} устарел и будет удалён. Используйте ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} больше не действует. Используйте ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} не существует в Home Assistant.`,
   "warning.foreignMeasurement": (v) => `У ${v.entity} device_class ${v.deviceClass}; эту величину карточка не показывает.`,
   "warning.unknownDeviceClass": (v) => `У ${v.entity} device_class ${v.deviceClass}, которого нет в Home Assistant.`,

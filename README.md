@@ -777,19 +777,18 @@ card_mod:
 ## Troubleshooting
 
 > [!WARNING]
-> **Four option spellings disappear in 3.0.0.** They still work today, and the
-> reference above already uses what replaces them. The card warns about each one
-> that still takes effect and names what to write instead — change it now:
+> **Four option spellings no longer work since 3.0.0.** The card ignores them,
+> and a warning names each one it finds together with what to write instead:
 >
 > - `show_rooms: auto | true | false` → `show:` with `rooms: auto | true | false`
 > - `unavailable_values: show | hide` → `show:` with `unavailable_rooms: true | false`
 > - `hide_footer: true` → `show_footer: false` in every view that draws a footer
-> - `footer: false` inside a view's `options:` → `show_footer: false` in that view
+> - `footer: true | false` inside the `scale` view's `options:` → `show_footer: true | false`
+> - `footer: false` inside the `range_scale` view's `options:` → `show_footer: false`
 >
-> Where a card writes both spellings of one decision, the newer one applies.
-> `hide_footer` is the one without a one-line replacement: from 3.0.0 the footer
-> belongs to each view, so turning them all off takes a `show_footer: false` in
-> every `views:` entry that has one.
+> `hide_footer` has no one-line replacement: the footer belongs to each view, so
+> turning them all off takes a `show_footer: false` in every `views:` entry that
+> has one.
 
 **The card doesn't appear after installing.**
 Confirm the dashboard resource was actually added (Settings → Dashboards →

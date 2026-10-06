@@ -23,7 +23,7 @@ import { normalizeAction } from "./actions.js";
 import { rejectConfiguration } from "./errors.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
-import { normalizeShowConfig, readRoomsState, resolveShowConfig, SHOW_ROOMS_DEFAULT } from "./show.js";
+import { normalizeShowConfig, resolveShowConfig } from "./show.js";
 import { checkTopLevelKeys } from "./top-level-keys.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
@@ -55,22 +55,6 @@ export function normalizeLanguage(value, isSupportedLanguage, diagnostics) {
   if (code === "auto" || (code && isSupportedLanguage(code))) return code;
   diagnostics.push(createDiagnostic("value.invalid", { path: "language", value, fallback: fallbackValue("auto") }));
   return "auto";
-}
-
-// The two older spellings of a `show:` decision, read WITHOUT a default of their own, so
-// SHOW_SWITCHES stays the one place these defaults live: each speaks only where it asks for
-// something other than the default. An invalid value is a warning and asks for nothing. See
-// internal dev doc §3 "Der show:-Block".
-export function legacyShowRequests(userConfig, diagnostics) {
-  const requests = {};
-  if (!isUnwritten(userConfig.show_rooms)) {
-    const rooms = readRoomsState(userConfig.show_rooms, "show_rooms", diagnostics);
-    if (rooms !== SHOW_ROOMS_DEFAULT) requests.rooms = rooms;
-  }
-  if (readEnum(userConfig.unavailable_values, "unavailable_values", diagnostics, ["show", "hide"], "show") === "hide") {
-    requests.unavailable_rooms = false;
-  }
-  return requests;
 }
 
 // Title and subtitle take one shape carrying both what the line says and how it
@@ -113,39 +97,6 @@ export function normalizeStartView(value, viewTypes, diagnostics) {
   return null;
 }
 
-// The older spellings due for removal at the next major, each named with its replacement where
-// it still takes effect, read from what the normalizer kept: one the show: block overrides, one
-// that asks for the default and one with an invalid value change nothing and stay silent. Null
-// silences all. See internal dev doc §3 "Konfigurationsvertrag".
-export const DEPRECATION_LEVEL = "warning";
-
-export function deprecationDiagnostics(userConfig, { legacyRequests, requestedShow, hideFooter, views }, level) {
-  if (level !== "warning") return [];
-  const found = [];
-  const deprecated = (path, written, replacement) => found.push(createDiagnostic("config.deprecated", { path, params: { written, replacement } }));
-  if (Object.hasOwn(legacyRequests, "rooms") && !Object.hasOwn(requestedShow, "rooms")) {
-    deprecated("show_rooms", `show_rooms: ${legacyRequests.rooms}`, `show.rooms: ${legacyRequests.rooms}`);
-  }
-  if (legacyRequests.unavailable_rooms === false && !Object.hasOwn(requestedShow, "unavailable_rooms")) {
-    deprecated("unavailable_values", "unavailable_values: hide", "show.unavailable_rooms: false");
-  }
-  if (hideFooter) deprecated("hide_footer", "hide_footer: true", "views[].options.show_footer: false");
-  // `footer: false` is the older spelling of `show_footer: false`. A repeated type is dropped,
-  // so the entry the card kept is the first one naming it.
-  for (const view of views ?? []) {
-    if (view.options.footer !== false || view.options.show_footer !== undefined) continue;
-    const index = userConfig.views.findIndex((entry) => writtenViewType(entry) === view.type);
-    const path = `views[${index}].options.footer`;
-    deprecated(path, `${path}: false`, `views[${index}].options.show_footer: false`);
-  }
-  return found;
-}
-
-function writtenViewType(entry) {
-  const type = isPlainObject(entry) ? entry.type : entry;
-  return typeof type === "string" ? type.trim() : null;
-}
-
 // Diagnostics in the order their top-level keys are written, so a list of warnings reads
 // like the YAML it describes. The sort is stable: within one key, reading order stays.
 function inWrittenOrder(diagnostics, userConfig) {
@@ -159,7 +110,8 @@ export function normalizeConfig(config, collaborators) {
   const userConfig = config ?? {};
   if (!isPlainObject(userConfig)) rejectConfiguration("config.not_object");
 
-  // Before any value is read: a typo of an option refuses the card, a foreign key is noted.
+  // Before any value is read: a typo of an option refuses the card, a foreign key is noted, an
+  // older spelling is answered at its stage (deprecations.js).
   const diagnostics = [];
   checkTopLevelKeys(userConfig, diagnostics);
 
@@ -182,13 +134,9 @@ export function normalizeConfig(config, collaborators) {
   // registry out of the render path.
   const palette = normalizePalette(userConfig.palette, collaborators, diagnostics);
 
-  // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else. The block wins WHERE IT
-  // SPEAKS — per decision, not per block — over the two older top-level spellings, which
-  // are on their way out (backlog, next major). Everything downstream sees `config.show`
-  // only. See internal dev doc §3 "Der show:-Block".
-  const requestedShow = normalizeShowConfig(userConfig.show, diagnostics);
-  const legacyRequests = legacyShowRequests(userConfig, diagnostics);
-  const show = resolveShowConfig({ ...legacyRequests, ...requestedShow });
+  // WHICH PARTS THE CARD DRAWS, resolved here and nowhere else; everything downstream sees
+  // `config.show` only. See internal dev doc §3 "Der show:-Block".
+  const show = resolveShowConfig(normalizeShowConfig(userConfig.show, diagnostics));
 
   // The two header lines; see normalizeHeaderLine() above.
   const title = normalizeHeaderLine(userConfig.title, "wrap", "title", diagnostics);
@@ -215,9 +163,6 @@ export function normalizeConfig(config, collaborators) {
     // null: the measurement's own precision, which only the view model knows.
     decimals: readNumber(userConfig.decimals, "decimals", diagnostics, { min: 0, max: 2, integer: true, fallback: null, instead: FALLBACK.METRIC_DECIMALS }),
     language: normalizeLanguage(userConfig.language, isSupportedLanguage, diagnostics),
-    // The one global footer switch: turns every view's footer off at once. Backlog
-    // removal at the next major, leaving per-view `show_footer` as the only spelling.
-    hide_footer: readBoolean(userConfig.hide_footer, "hide_footer", diagnostics, DEFAULT_CONFIG.hide_footer),
     // The bounds keep an extreme value out of the animation-duration/setTimeout
     // millisecond maths it feeds into.
     rotation_seconds: readNumber(userConfig.rotation_seconds, "rotation_seconds", diagnostics, { min: 1, max: 3600, fallback: DEFAULT_CONFIG.rotation_seconds }),
@@ -246,10 +191,9 @@ export function normalizeConfig(config, collaborators) {
     range_entity: readOptionalEntity(userConfig.range_entity, "range_entity", diagnostics),
     trend_entity: readOptionalEntity(userConfig.trend_entity, "trend_entity", diagnostics),
   };
-  diagnostics.push(...deprecationDiagnostics(userConfig, { legacyRequests, requestedShow, hideFooter: normalized.hide_footer, views }, DEPRECATION_LEVEL));
 
-  // Internal-only (underscore = not a YAML key): every value the normalizer replaced and
-  // every foreign key, as diagnostics in the order the YAML writes them. The view model
-  // shows them as warnings.
+  // Internal-only (underscore = not a YAML key): every value the normalizer replaced, every
+  // foreign key and every older spelling, as diagnostics in the order the YAML writes them.
+  // The view model shows them as warnings.
   return { ...normalized, _configDiagnostics: inWrittenOrder(diagnostics, userConfig) };
 }

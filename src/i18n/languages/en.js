@@ -119,6 +119,7 @@ export const en = {
   "fallback.cardAction": "Using the card's action.",
   "fallback.option": (v) => `Using ${v.key}: ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} is outdated and will be removed. Use ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} no longer has any effect. Use ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} does not exist in Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} has device_class ${v.deviceClass}, which this card does not show.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} has device_class ${v.deviceClass}, which Home Assistant does not define.`,

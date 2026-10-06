@@ -10,6 +10,9 @@ const assert = require("node:assert/strict");
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
 const { generateDescription, weighted, WEIGHTS, OPTION_PRESENCE, ENUMS, OTHER_DOMAIN_UNITS } = require("./generators.js");
+const { REMOVED_SPELLINGS } = require("../manifests/product-surface.js");
+
+const REMOVED_TOP_LEVEL = Object.keys(REMOVED_SPELLINGS).filter((place) => !place.includes("."));
 const V = require("./vocabulary.js");
 const { describeScenario } = require("../fixtures/scenario.js");
 const { METRICS, METRIC_KINDS, LANGUAGES, VIEWS } = require("../manifests/product-surface.js");
@@ -95,12 +98,13 @@ test("every optional configuration key really does appear sometimes", () => {
   // OPTION_PRESENCE is read through a dynamic key, so the static check above cannot see it;
   // the realised population can.
   for (const key of Object.keys(OPTION_PRESENCE)) {
-    // Never appears under its own name — it exists to produce a misspelling of a real key.
-    if (key === "misspelledKey") continue;
+    // Never appear under their own name — they produce a misspelling of a real key, or a
+    // removed older spelling.
+    if (key === "misspelledKey" || key === "removedSpelling") continue;
     assert.ok(configShare(key) > 0, `${key} is declared in OPTION_PRESENCE and never generated`);
   }
   // And the misspelled one does turn up, spelled wrong.
-  const known = new Set([...Object.keys(OPTION_PRESENCE), "entity", "rooms", "palette", "views"]);
+  const known = new Set([...Object.keys(OPTION_PRESENCE), ...REMOVED_TOP_LEVEL, "entity", "rooms", "palette", "views"]);
   const strays = population.flatMap((description) => Object.keys(description.config).filter((key) => !known.has(key)));
   assert.ok(strays.length > 0, "no card was ever given a key nobody meant to type");
 });
@@ -203,7 +207,7 @@ test("every optional configuration key is generated, at roughly the rate declare
   // Keeps the YAML surface covered: a key that stops being generated takes a whole
   // configuration path out of the run without failing anything else.
   for (const [key, expected] of Object.entries(OPTION_PRESENCE)) {
-    if (key === "misspelledKey") continue; // measured separately below
+    if (key === "misspelledKey" || key === "removedSpelling") continue; // measured separately below
     const actual = configShare(key);
     assert.ok(actual > expected / 3, `${key} appears in only ${(100 * actual).toFixed(1)} % of cards`);
     assert.ok(actual < expected * 3 + 0.05, `${key} appears in ${(100 * actual).toFixed(1)} % of cards, far above its weight`);
@@ -219,6 +223,22 @@ test("view options are nested in entries, and misspelled top-level keys occur", 
     Object.keys(description.config).some((key) => V.MISSPELLED_CONFIG_KEYS.includes(key))
   );
   assert.ok(misspelled.length / SAMPLE > 0.01, "a misspelled top-level key is never generated");
+});
+
+test("every removed older spelling is written, at the top level and inside a view", () => {
+  for (const key of REMOVED_TOP_LEVEL) {
+    assert.ok(configShare(key) > 0, `${key} is never written`);
+  }
+  const removedShare = population.filter((description) => REMOVED_TOP_LEVEL.some((key) => key in description.config)).length / SAMPLE;
+  const expected = OPTION_PRESENCE.removedSpelling;
+  assert.ok(removedShare > expected / 3 && removedShare < expected * 3 + 0.05, `${(100 * removedShare).toFixed(1)} % of cards carry a removed spelling`);
+  const entries = valuesOf("views").filter(Array.isArray).flat();
+  for (const view of ["scale", "range_scale"]) {
+    assert.ok(
+      entries.some((entry) => entry?.type === view && entry.options?.footer === false),
+      `${view}: the removed footer: false is never written`
+    );
+  }
 });
 
 test("every enumerated option is written correctly, misspelled, and as the wrong type", () => {

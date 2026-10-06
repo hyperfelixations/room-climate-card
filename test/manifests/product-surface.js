@@ -45,11 +45,17 @@ const TOP_LEVEL_CONFIG_KEYS = [
   "room_label", "show", "room_columns", "room_rows",
   "auto_slide", "swipe", "rotation_seconds", "slide_seconds",
   "tap_action", "hold_action", "views", "start_view",
-  // Older spellings the card still accepts; each is outranked by its show: block entry and
-  // listed for removal at the next major. hide_footer is the exception: not in the block
-  // (the footer is a view's business) and the only way to turn every view's footer off at once.
-  "show_rooms", "unavailable_values", "hide_footer",
 ];
+
+// Older spellings the card no longer applies but still recognizes and names with their
+// replacement, by place: a top-level key, or `<view>.<option>` with the values retired.
+const REMOVED_SPELLINGS = {
+  show_rooms: "show.rooms",
+  unavailable_values: "show.unavailable_rooms",
+  hide_footer: "views[].options.show_footer",
+  "scale.footer": "show_footer",
+  "range_scale.footer: false": "show_footer",
+};
 
 // Which parts the card draws: all switches except `rooms`, whose default third answer (auto) is not a boolean.
 const SHOW_KEYS = {
@@ -72,11 +78,10 @@ const VIEW_OPTIONS = {
     show_comfort_band: "bool",
     show_optimal_band: "bool",
     show_footer: "bool",
-    // Two questions, two keys: show_footer says whether, footer says which form. `false` is
-    // the older spelling of show_footer: false and is still accepted.
-    footer: ["compact", "detailed", false],
+    // Two questions, two keys: show_footer says whether, footer says which form.
+    footer: ["compact", "detailed"],
   },
-  scale: { show_comfort_band: "bool", show_optimal_band: "bool", show_footer: "bool", footer: "bool", markers: ["average", "extremes", "all"] },
+  scale: { show_comfort_band: "bool", show_optimal_band: "bool", show_footer: "bool", markers: ["average", "extremes", "all"] },
   extremes: { show_value: "bool" },
 };
 const ACTION_TYPES = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
@@ -93,6 +98,7 @@ module.exports = {
   DEFAULT_PALETTE_ID,
   CLASSIFICATION_ZONES,
   TOP_LEVEL_CONFIG_KEYS,
+  REMOVED_SPELLINGS,
   SHOW_KEYS,
   ROOM_KEYS,
   VIEW_ENTRY_KEYS,

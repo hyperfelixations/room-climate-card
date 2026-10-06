@@ -6,7 +6,7 @@
 // presence changes, the card must be rebuilt, not patched. Each view declares its own
 // structure signature over the optional parts it does not reconcile itself; the shell
 // composes those with its own, and _render() compares one value. The reproduction: with
-// show_rooms:false the chip grid is absent either way, so a second valid room changed
+// show.rooms:false the chip grid is absent either way, so a second valid room changed
 // nothing on the old boolean list — while the scale footer and extrema markers had to appear.
 
 const test = require("node:test");
@@ -26,11 +26,11 @@ test.after(() => {
 
 const C = TEMPERATURE_C;
 
-// show_rooms:false pins the chip grid to "absent" in both states, isolating the change to the scale view.
+// show.rooms:false pins the chip grid to "absent" in both states, isolating the change to the scale view.
 function config(overrides = {}) {
   return {
     entity: "sensor.avg",
-    show_rooms: false,
+    show: { rooms: false },
     rooms: [
       { name: "Alpha", short: "AL", entity: "sensor.a" },
       { name: "Beta", short: "BE", entity: "sensor.b" },
@@ -183,11 +183,11 @@ test("markers:average never gains extrema markers, in either room state", () => 
   env.cleanup(el);
 });
 
-test("hide_footer keeps the footer absent while the extrema markers still appear", () => {
-  const el = env.createCard(config({ hide_footer: true }), oneValidRoom());
+test("show_footer: false keeps the footer absent while the extrema markers still appear", () => {
+  const el = env.createCard(config({ views: [{ type: "scale", options: { show_footer: false } }] }), oneValidRoom());
   assert.equal(structure(el).footer, false);
   el.hass = twoValidRooms(1000);
-  assert.equal(structure(el).footer, false, "hide_footer wins over the room count");
+  assert.equal(structure(el).footer, false, "show_footer wins over the room count");
   assert.equal(structure(el).coldMarker, true, "the markers are an independent decision");
   env.cleanup(el);
 });
@@ -196,7 +196,7 @@ test("markers:all reconciles its room markers without a rebuild", () => {
   // The counterpart: a part a view reconciles itself must stay out of the signature, or
   // every room appearing rebuilds and resets the carousel.
   const el = env.createCard(
-    config({ show_rooms: true, views: [{ type: "scale", options: { markers: "all" } }] }),
+    config({ show: { rooms: true }, views: [{ type: "scale", options: { markers: "all" } }] }),
     twoValidRooms()
   );
   const bar = el.shadowRoot.querySelector(".rtc-scale-bar");

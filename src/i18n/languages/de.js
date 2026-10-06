@@ -118,6 +118,7 @@ export const de = {
   "fallback.cardAction": "Es gilt die Aktion der Karte.",
   "fallback.option": (v) => `Es gilt ${v.key}: ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} ist veraltet und entfällt künftig. Nutze ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} wirkt nicht mehr. Nutze ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} existiert in Home Assistant nicht.`,
   "warning.foreignMeasurement": (v) => `${v.entity} hat device_class ${v.deviceClass}; diese Messart zeigt die Karte nicht.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} hat device_class ${v.deviceClass}, die Home Assistant nicht definiert.`,

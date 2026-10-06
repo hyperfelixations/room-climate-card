@@ -121,6 +121,7 @@ export const es = {
   "fallback.cardAction": "Se usa la acción de la tarjeta.",
   "fallback.option": (v) => `Se usa ${v.key}: ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} está obsoleto y se eliminará. Usa ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} ya no tiene efecto. Usa ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} no existe en Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} tiene el device_class ${v.deviceClass}, que esta tarjeta no muestra.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} tiene el device_class ${v.deviceClass}, que Home Assistant no define.`,

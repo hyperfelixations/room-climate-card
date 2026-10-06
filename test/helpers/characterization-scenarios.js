@@ -365,7 +365,7 @@ const SCENARIOS = [
       views: [
         { type: "range", options: { show_time: false } },
         { type: "range_scale", options: { show_comfort_band: false, footer: "compact" } },
-        { type: "scale", options: { show_optimal_band: false, footer: false, markers: "all" } },
+        { type: "scale", options: { show_optimal_band: false, show_footer: false, markers: "all" } },
         { type: "extremes", options: { show_value: false } },
       ],
     },
@@ -396,7 +396,7 @@ const SCENARIOS = [
   },
   {
     name: "rooms-hidden-chip-grid",
-    config: { entity: "sensor.avg", rooms: sevenRoomConfig(), show_rooms: false },
+    config: { entity: "sensor.avg", rooms: sevenRoomConfig(), show: { rooms: false } },
     states: { "sensor.avg": st("sensor.avg", 22.4, C), ...sevenRoomStates() },
   },
   {
@@ -408,7 +408,7 @@ const SCENARIOS = [
       entity_label: "Custom average",
       icon: "mdi:home-thermometer",
       decimals: 0,
-      hide_footer: true,
+      views: [{ type: "scale", options: { show_footer: false } }, "extremes"],
     },
     states: { "sensor.avg": st("sensor.avg", 22.4, C), ...sevenRoomStates() },
   },

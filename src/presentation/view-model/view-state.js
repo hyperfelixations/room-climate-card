@@ -20,12 +20,12 @@ export const VIEW_DEFINITIONS = [
     // The only view disabled by default because it mirrors the main scale shape.
     defaultEnabled: () => false,
     // Band toggles suppress both band and label. `show_footer` controls presence;
-    // `footer` selects compact/detailed form. Legacy `footer: false` is folded below.
+    // `footer` selects compact/detailed form.
     optionsSchema: {
       show_comfort_band: boolOption(true),
       show_optimal_band: boolOption(true),
       show_footer: boolOption(true),
-      footer: enumOption("detailed", ["compact", "detailed", false]),
+      footer: enumOption("detailed", ["compact", "detailed"]),
     },
   },
   {
@@ -38,8 +38,6 @@ export const VIEW_DEFINITIONS = [
       show_comfort_band: boolOption(true),
       show_optimal_band: boolOption(true),
       show_footer: boolOption(true),
-      // Legacy spelling of `show_footer`; this view has no footer mode.
-      footer: boolOption(true),
       markers: enumOption("extremes", ["average", "extremes", "all"]),
     },
   },
@@ -85,13 +83,6 @@ export function resolveViewOptions(definition, providedOptions) {
   for (const key of Object.keys(schema)) {
     const provided = providedOptions ? providedOptions[key] : undefined;
     resolved[key] = provided === undefined ? schema[key].default : provided;
-  }
-
-  // Fold legacy `footer: false` here because option meaning belongs to the registry,
-  // not schema parsing. Explicit `show_footer` wins; `footer` then regains its mode default.
-  if (Object.prototype.hasOwnProperty.call(schema, "show_footer") && resolved.footer === false) {
-    if (!providedOptions || providedOptions.show_footer === undefined) resolved.show_footer = false;
-    resolved.footer = schema.footer.default;
   }
   return resolved;
 }

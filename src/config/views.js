@@ -4,6 +4,7 @@
 // owns them also owns render callbacks and config/ may not import it.
 
 import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
+import { deprecationDiagnostic, isIneffective, toleratedViewOptions, viewOptionDeprecation } from "./deprecations.js";
 import { assertKnownKeys, isPlainObject, isUnwritten } from "./primitives.js";
 
 export const VIEW_ENTRY_KEYS = Object.freeze(["type", "enabled", "options"]);
@@ -70,23 +71,30 @@ function normalizeViewRequest(entry, type, entryPath, schema, diagnostics) {
     enabled = "auto";
     invalid(diagnostics, `${entryPath}.enabled`, entry.enabled, fallbackValue("auto"));
   }
-  return { type, enabled, options: normalizeViewOptions(entry.options, `${entryPath}.options`, schema, diagnostics) };
+  return { type, enabled, options: normalizeViewOptions(entry.options, type, `${entryPath}.options`, schema, diagnostics) };
 }
 
 // views[i].options against the view's own schema: only keys the view implements are accepted —
 // a renderer must never trust an arbitrary user key. A known key's value is validated when its
 // schema entry declares a validate(); an invalid value is diagnosed and dropped, so the schema
-// default applies. A key with nothing after it is not a request.
-function normalizeViewOptions(rawOptions, path, schema, diagnostics) {
+// default applies. A key with nothing after it is not a request. An older spelling is answered
+// at its stage first, and a removed one is dropped unread (deprecations.js).
+function normalizeViewOptions(rawOptions, type, path, schema, diagnostics) {
   if (isUnwritten(rawOptions)) return {};
   if (!isPlainObject(rawOptions)) {
     invalid(diagnostics, path, rawOptions, FALLBACK.DEFAULTS);
     return {};
   }
-  assertKnownKeys(rawOptions, Object.keys(schema), path);
+  assertKnownKeys(rawOptions, Object.keys(schema), path, toleratedViewOptions(type));
   const options = {};
   for (const [key, value] of Object.entries(rawOptions)) {
     if (isUnwritten(value)) continue;
+    const deprecation = viewOptionDeprecation(type, key, value);
+    if (deprecation) {
+      const diagnostic = deprecationDiagnostic(deprecation, `${path}.${key}`, value, `${path}.${deprecation.replacement}`);
+      if (diagnostic) diagnostics.push(diagnostic);
+      if (isIneffective(deprecation)) continue;
+    }
     const { validate, default: defaultValue } = schema[key];
     if (typeof validate === "function" && !validate(value)) {
       invalid(diagnostics, `${path}.${key}`, value, fallbackValue(defaultValue));

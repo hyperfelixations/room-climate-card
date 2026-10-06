@@ -118,6 +118,7 @@ export const zh = {
   "fallback.cardAction": "将使用卡片的操作。",
   "fallback.option": (v) => `${v.key} 将使用 ${v.value}。`,
   "warning.deprecated": (v) => `${v.written} 已过时，将被移除。请使用 ${v.replacement}。`,
+  "warning.removed": (v) => `${v.written} 已不再生效。请使用 ${v.replacement}。`,
   "warning.entityNotFound": (v) => `${v.entity} 在 Home Assistant 中不存在。`,
   "warning.foreignMeasurement": (v) => `${v.entity} 的 device_class 为 ${v.deviceClass}，此卡片不显示该测量类型。`,
   "warning.unknownDeviceClass": (v) => `${v.entity} 的 device_class 为 ${v.deviceClass}，Home Assistant 未定义该值。`,

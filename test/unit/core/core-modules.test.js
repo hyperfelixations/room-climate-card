@@ -47,6 +47,7 @@ test("every code has one of the two levels", () => {
     assert.ok(Object.values(diagnostics.SEVERITY).includes(severity), `${code}: ${severity}`);
   }
   assert.equal(diagnostics.DIAGNOSTIC_SEVERITY["config.deprecated"], diagnostics.SEVERITY.WARNING);
+  assert.equal(diagnostics.DIAGNOSTIC_SEVERITY["config.removed"], diagnostics.SEVERITY.WARNING);
 });
 
 test("what the card uses instead is a phrase, a value, or the value of an option, each frozen", () => {

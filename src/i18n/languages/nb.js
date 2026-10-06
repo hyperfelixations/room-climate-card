@@ -126,6 +126,7 @@ export const nb = {
   "fallback.cardAction": "Kortets handling brukes.",
   "fallback.option": (v) => `For ${v.key} brukes ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} er utdatert og fjernes. Bruk ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} har ingen virkning lenger. Bruk ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} finnes ikke i Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} har device_class ${v.deviceClass}, som dette kortet ikke viser.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} har device_class ${v.deviceClass}, som Home Assistant ikke definerer.`,

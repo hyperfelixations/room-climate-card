@@ -38,7 +38,6 @@ function cfg(overrides = {}) {
     room_rows: null,
     room_sort: "value_asc",
     room_label: "auto",
-    show_rooms: "auto",
     views: null,
     title: null,
     entity_label: null,

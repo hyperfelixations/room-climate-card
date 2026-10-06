@@ -133,6 +133,7 @@ export const lv = {
   "fallback.cardAction": "Tiek izmantota kartes darbība.",
   "fallback.option": (v) => `Opcijai ${v.key} tiek izmantota vērtība ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} ir novecojis un tiks noņemts. Izmanto ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} vairs nedarbojas. Izmanto ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} Home Assistant neeksistē.`,
   "warning.foreignMeasurement": (v) => `${v.entity} ir device_class ${v.deviceClass}; šo lielumu karte nerāda.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} ir device_class ${v.deviceClass}, ko Home Assistant nedefinē.`,

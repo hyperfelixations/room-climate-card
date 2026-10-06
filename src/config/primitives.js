@@ -30,10 +30,11 @@ function fallBack(diagnostics, path, value, instead, answer) {
 }
 
 // Refuses the first key `object` does not have, naming the option it was probably meant to be.
-export function assertKnownKeys(object, allowed, path) {
+// `tolerated` keys are accepted but never suggested: removed spellings (deprecations.js).
+export function assertKnownKeys(object, allowed, path, tolerated = []) {
   const known = allowed instanceof Set ? allowed : new Set(allowed);
   for (const key of Object.keys(object)) {
-    if (known.has(key)) continue;
+    if (known.has(key) || tolerated.includes(key)) continue;
     const nearest = nearestKey(key, known);
     rejectConfiguration("config.unknown_key", { key: `${path}.${key}`, suggestion: nearest === null ? null : `${path}.${nearest}` });
   }

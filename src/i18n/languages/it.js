@@ -122,6 +122,7 @@ export const it = {
   "fallback.cardAction": "Si usa l’azione della scheda.",
   "fallback.option": (v) => `Si usa ${v.key}: ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} è obsoleto e verrà rimosso. Usa ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} non ha più effetto. Usa ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} non esiste in Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} ha il device_class ${v.deviceClass}, che questa scheda non mostra.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} ha il device_class ${v.deviceClass}, che Home Assistant non definisce.`,

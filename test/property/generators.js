@@ -15,8 +15,19 @@ const {
   PALETTE_KEYS,
   VIEWS,
   VIEW_OPTIONS,
+  REMOVED_SPELLINGS,
 } = require("../manifests/product-surface.js");
 const V = require("./vocabulary.js");
+
+// The removed older spellings, from the manifest: top-level keys, and per view the option with
+// the values it no longer takes (`<view>.<option>[: <value>]`). Written, they only warn.
+const REMOVED_TOP_LEVEL = Object.keys(REMOVED_SPELLINGS).filter((place) => !place.includes("."));
+const REMOVED_VIEW_OPTIONS = {};
+for (const place of Object.keys(REMOVED_SPELLINGS).filter((entry) => entry.includes("."))) {
+  const [where, retired] = place.split(": ");
+  const [view, option] = where.split(".");
+  (REMOVED_VIEW_OPTIONS[view] ??= []).push({ option, values: retired === undefined ? [true, false] : [JSON.parse(retired)] });
+}
 
 // --------------------------------------------------------------------- the tables --
 
@@ -55,8 +66,6 @@ const ENUMS = {
   accent_line: ["top", "bottom"],
   room_sort: ["configured", "name", "value_asc", "value_desc"],
   room_label: ["auto", "short", "name"],
-  show_rooms: ["auto", true, false],
-  unavailable_values: ["show", "hide"],
   header_overflow: ["clip", "wrap"],
   show_rooms_part: ["auto", true, false],
 };
@@ -210,7 +219,6 @@ const OPTION_PRESENCE = {
   icon: 0.08,
   subtitle: 0.2,
   decimals: 0.12,
-  hide_footer: 0.08,
   auto_slide: 0.1,
   swipe: 0.08,
   rotation_seconds: 0.1,
@@ -219,8 +227,6 @@ const OPTION_PRESENCE = {
   room_rows: 0.08,
   room_sort: 0.12,
   room_label: 0.1,
-  show_rooms: 0.12,
-  unavailable_values: 0.1,
   show: 0.16,
   start_view: 0.08,
   tap_action: 0.1,
@@ -230,6 +236,8 @@ const OPTION_PRESENCE = {
   trend_entity: 0.08,
   // A typo of an option; the card refuses it and names the option meant.
   misspelledKey: 0.03,
+  // A removed older spelling; the card names its replacement and ignores it.
+  removedSpelling: 0.06,
 };
 
 // ------------------------------------------------------------------------ machinery --
@@ -471,6 +479,9 @@ function generateViewOptions(rng, type) {
     if (!rng.bool(0.6)) continue;
     options[domain === "bool" ? name : name] = domain === "bool" ? boolValue(rng) : enumValue(rng, domain);
   }
+  for (const { option, values } of REMOVED_VIEW_OPTIONS[type] ?? []) {
+    if (rng.bool(0.06)) options[option] = rng.pick(values);
+  }
   // An option the view does not have, which refuses the configuration.
   if (rng.bool(0.15)) options[V.typo(rng, Object.keys(schema)[0] || "option")] = true;
   return options;
@@ -633,7 +644,6 @@ function generateConfig(rng, metric) {
   if (has("accent_line")) config.accent_line = enumValue(rng, ENUMS.accent_line);
   if (has("subtitle")) config.subtitle = generateHeaderLine(rng);
   if (has("decimals")) config.decimals = numberValue(rng, 0, 3);
-  if (has("hide_footer")) config.hide_footer = boolValue(rng);
   if (has("auto_slide")) config.auto_slide = boolValue(rng);
   if (has("swipe")) config.swipe = boolValue(rng);
   if (has("rotation_seconds")) config.rotation_seconds = numberValue(rng, 2, 30);
@@ -642,8 +652,6 @@ function generateConfig(rng, metric) {
   if (has("room_rows")) config.room_rows = numberValue(rng, 1, 4);
   if (has("room_sort")) config.room_sort = enumValue(rng, ENUMS.room_sort);
   if (has("room_label")) config.room_label = enumValue(rng, ENUMS.room_label);
-  if (has("show_rooms")) config.show_rooms = enumValue(rng, ENUMS.show_rooms);
-  if (has("unavailable_values")) config.unavailable_values = enumValue(rng, ENUMS.unavailable_values);
   if (has("show")) config.show = generateShow(rng);
   if (has("start_view")) config.start_view = enumValue(rng, VIEWS);
   if (has("tap_action")) config.tap_action = generateAction(rng);
@@ -652,6 +660,7 @@ function generateConfig(rng, metric) {
   if (has("range_entity")) config.range_entity = rng.pick(["sensor.range", "sensor.missing", "", 42]);
   if (has("trend_entity")) config.trend_entity = rng.pick(["sensor.trend", "sensor.missing", "", 42]);
   if (has("misspelledKey")) config[rng.pick(V.MISSPELLED_CONFIG_KEYS)] = rng.pick(["vivid", true, 1, []]);
+  if (has("removedSpelling")) config[rng.pick(REMOVED_TOP_LEVEL)] = rng.pick([true, false, "auto", "hide", "show", "alway", 1]);
 
   return config;
 }

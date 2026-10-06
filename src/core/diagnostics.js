@@ -9,6 +9,7 @@ export const DIAGNOSTIC_SEVERITY = Object.freeze({
   "value.invalid": SEVERITY.WARNING,
   "config.foreign_key": SEVERITY.WARNING,
   "config.deprecated": SEVERITY.WARNING,
+  "config.removed": SEVERITY.WARNING,
   "sources.mixed": SEVERITY.WARNING,
   "entity.not_found": SEVERITY.WARNING,
   "entity.foreign_measurement": SEVERITY.WARNING,

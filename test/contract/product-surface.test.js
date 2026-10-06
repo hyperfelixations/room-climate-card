@@ -22,6 +22,7 @@ let zones;
 let actions;
 let show;
 let topLevelKeys;
+let deprecations;
 
 test.before(async () => {
   i18nRegistry = await import("../../src/i18n/registry.js");
@@ -33,6 +34,7 @@ test.before(async () => {
   actions = await import("../../src/config/actions.js");
   show = await import("../../src/config/show.js");
   topLevelKeys = await import("../../src/config/top-level-keys.js");
+  deprecations = await import("../../src/config/deprecations.js");
 });
 
 // ------------------------------------------------------------------- languages --
@@ -168,6 +170,22 @@ test("the keys the card accepts are the ones the manifest claims", () => {
   // And the two lists stay apart: a key Home Assistant writes is not one the card owns.
   const owned = [...topLevelKeys.FRAMEWORK_KEYS].filter((key) => topLevelKeys.TOP_LEVEL_KEYS.has(key));
   assert.deepEqual(owned, [], `these are claimed both as the card's own and as the framework's: ${owned.join(", ")}`);
+});
+
+test("the older spellings the card recognizes but no longer applies are those the manifest claims", () => {
+  const place = (entry) => {
+    if (entry.key) return entry.key;
+    const retired = entry.matches ? [false, true].filter((value) => entry.matches(value)) : null;
+    return `${entry.view}.${entry.option}${retired ? `: ${retired.join(" | ")}` : ""}`;
+  };
+  const removed = deprecations.DEPRECATIONS.filter((entry) => entry.stage === deprecations.DEPRECATION_STAGE.REMOVED);
+  assert.deepEqual(
+    Object.fromEntries(removed.map((entry) => [place(entry), entry.replacement])),
+    surface.REMOVED_SPELLINGS
+  );
+  for (const key of Object.keys(surface.REMOVED_SPELLINGS)) {
+    assert.equal(surface.TOP_LEVEL_CONFIG_KEYS.includes(key), false, `${key} is no longer one of the card's options`);
+  }
 });
 
 test("the parts of the show block are exactly those the manifest claims", () => {

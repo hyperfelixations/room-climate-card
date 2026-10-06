@@ -28,14 +28,13 @@ test("the card defaults match the public contract", () => {
     hold_action: { action: "more-info" },
     auto_slide: true,
     swipe: true,
-    hide_footer: false,
   });
 });
 
 test("no default of a `show:` decision is stated a second time here", () => {
   // SHOW_SWITCHES owns every one of them; a key here for one of those decisions would be a
   // second statement of the same default.
-  for (const key of ["show", "show_rooms", "unavailable_values", "rooms"]) {
+  for (const key of ["show", "rooms"]) {
     assert.equal(key in defaults.DEFAULT_CONFIG, false, `DEFAULT_CONFIG must not restate ${key}`);
   }
 });
@@ -108,8 +107,7 @@ test("enumOption() defaults and validates against its closed set", () => {
   }
 });
 
-test("enumOption() supports a non-string member, as the footer option needs", () => {
-  // The range_scale footer option is "detailed" | "compact" | false.
+test("enumOption() supports a non-string member", () => {
   const option = optionSchemas.enumOption("detailed", ["compact", "detailed", false]);
   assert.equal(option.validate(false), true);
   assert.equal(option.validate("compact"), true);

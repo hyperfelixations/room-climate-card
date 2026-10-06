@@ -3,7 +3,7 @@
 // The four source topologies as a user meets them in a real browser. The topology is
 // resolved from config and tested elsewhere; what only a browser shows is the consequence —
 // whether the headline is clickable, whether removing its label removes its space, and
-// whether room chips appear under each show_rooms policy. The last test earns the file: a
+// whether room chips appear under each show.rooms policy. The last test earns the file: a
 // mistyped room entity must not turn a one-room card into a two-room card.
 
 const { test, expect } = require("../../helpers/playwright.js");
@@ -12,7 +12,7 @@ const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const TEMP = TEMPERATURE_C;
 
-test("one room without a primary is a clickable headline and follows the show_rooms policy", async ({ page }) => {
+test("one room without a primary is a clickable headline and follows the show.rooms policy", async ({ page }) => {
   await gotoHarness(page);
   const states = { "sensor.kitchen": mkStateObj("sensor.kitchen", 21, TEMP) };
   const cardId = await createCard(page, {
@@ -56,7 +56,7 @@ test("one room without a primary is a clickable headline and follows the show_ro
 
   await page.evaluate((id) => {
     const el = document.getElementById(id);
-    el.setConfig({ rooms: [{ entity: "sensor.kitchen", name: "Kitchen", short: "KI" }], show_rooms: true });
+    el.setConfig({ rooms: [{ entity: "sensor.kitchen", name: "Kitchen", short: "KI" }], show: { rooms: true } });
   }, cardId);
   expect(await page.locator(`#${cardId}`).evaluate((el) => el.shadowRoot.querySelectorAll(".rtc-room-chip").length)).toBe(1);
   expect(await page.locator(`#${cardId}`).evaluate((el) => el.shadowRoot.querySelectorAll(".rtc-room-grid").length)).toBe(1);

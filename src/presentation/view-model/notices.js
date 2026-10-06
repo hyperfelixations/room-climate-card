@@ -49,6 +49,8 @@ const MESSAGE_FOR_CODE = {
   "config.foreign_key": (diagnostic) => message("warning.foreignKey", { key: diagnostic.path }),
   "config.deprecated": (diagnostic) =>
     message("warning.deprecated", { written: diagnostic.params.written, replacement: diagnostic.params.replacement }),
+  "config.removed": (diagnostic) =>
+    message("warning.removed", { written: diagnostic.params.written, replacement: diagnostic.params.replacement }),
   "sources.mixed": () => message("warning.mixedMeasurements"),
   "entity.not_found": entityWarning("warning.entityNotFound"),
   "entity.foreign_measurement": entityWarning("warning.foreignMeasurement"),

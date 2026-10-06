@@ -19,7 +19,7 @@ function buildFooterText(shared) {
 }
 
 export function buildScaleViewContent(shared, options) {
-  const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind, hideFooter } = shared;
+  const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind } = shared;
   const markersMode = options.markers;
   // Emphasize average among all-room markers.
   const emphasizeAverage = markersMode === "all" && Boolean(extremes);
@@ -31,8 +31,8 @@ export function buildScaleViewContent(shared, options) {
       texts,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
-      // Room-dependent footer also respects global and per-view visibility.
-      footerText: rooms.comparable && !hideFooter && options.show_footer ? buildFooterText(shared) : null,
+      // Room-dependent footer also respects per-view visibility.
+      footerText: rooms.comparable && options.show_footer ? buildFooterText(shared) : null,
     }),
     // Layout selects long or short comfort text from measured width.
     comfortLabel: options.show_comfort_band

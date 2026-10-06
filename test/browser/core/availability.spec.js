@@ -20,7 +20,7 @@ test("unavailable room values stay visible, actionable and outside calculations"
   await gotoHarness(page);
   const config = {
     entity: "sensor.primary",
-    show_rooms: true,
+    show: { rooms: true },
     rooms: [
       room("sensor.unavailable", "Unavailable", { tap_action: { action: "navigate", navigation_path: "/unavailable" } }),
       room("sensor.usable", "Usable"),
@@ -60,7 +60,7 @@ test("unavailable room values stay visible, actionable and outside calculations"
   expect(action.config.tap_action.navigation_path).toBe("/unavailable");
 
   await page.evaluate(({ cardId, config }) => {
-    document.getElementById(cardId).setConfig({ ...config, unavailable_values: "hide" });
+    document.getElementById(cardId).setConfig({ ...config, show: { ...config.show, unavailable_rooms: false } });
   }, { cardId, config });
   await expect(card.locator(".rtc-room-chip")).toHaveCount(1);
   await expect(card.locator(".rtc-room-short")).toHaveText(["US"]);
@@ -155,14 +155,14 @@ test("a direct single room keeps its label and action while availability changes
   expect(action.config.tap_action.navigation_path).toBe("/kitchen");
 
   await page.evaluate(({ cardId, config }) => {
-    document.getElementById(cardId).setConfig({ ...config, show_rooms: true });
+    document.getElementById(cardId).setConfig({ ...config, show: { rooms: true } });
   }, { cardId, config });
   await expect(card.locator(".rtc-room-unavailable")).toHaveCount(1);
 });
 
 test("room consensus survives partial and total outages, restores focus and fits narrow and wide cards", async ({ page }) => {
   await gotoHarness(page);
-  const config = { rooms: [room("sensor.alpha", "Alpha"), room("sensor.beta", "Beta")], show_rooms: true };
+  const config = { rooms: [room("sensor.alpha", "Alpha"), room("sensor.beta", "Beta")], show: { rooms: true } };
   const usable = {
     "sensor.alpha": mkStateObj("sensor.alpha", 20, TEMP),
     "sensor.beta": mkStateObj("sensor.beta", 24, TEMP),

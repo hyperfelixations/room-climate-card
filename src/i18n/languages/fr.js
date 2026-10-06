@@ -124,6 +124,7 @@ export const fr = {
   "fallback.cardAction": "L’action de la carte est utilisée.",
   "fallback.option": (v) => `Valeur utilisée pour ${v.key} : ${v.value}.`,
   "warning.deprecated": (v) => `${v.written} est obsolète et sera supprimé. Utilisez ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} n’a plus d’effet. Utilisez ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} n’existe pas dans Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} a le device_class ${v.deviceClass}, que cette carte n’affiche pas.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} a le device_class ${v.deviceClass}, que Home Assistant ne définit pas.`,

@@ -121,6 +121,7 @@ export const nl = {
   "fallback.cardAction": "De actie van de kaart wordt gebruikt.",
   "fallback.option": (v) => `Voor ${v.key} wordt ${v.value} gebruikt.`,
   "warning.deprecated": (v) => `${v.written} is verouderd en verdwijnt. Gebruik ${v.replacement}.`,
+  "warning.removed": (v) => `${v.written} heeft geen effect meer. Gebruik ${v.replacement}.`,
   "warning.entityNotFound": (v) => `${v.entity} bestaat niet in Home Assistant.`,
   "warning.foreignMeasurement": (v) => `${v.entity} heeft device_class ${v.deviceClass}; die grootheid toont de kaart niet.`,
   "warning.unknownDeviceClass": (v) => `${v.entity} heeft device_class ${v.deviceClass}, die Home Assistant niet definieert.`,

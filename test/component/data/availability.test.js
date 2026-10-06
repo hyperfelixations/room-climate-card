@@ -126,7 +126,7 @@ test("a no-data mixed-kind configuration exposes incompatibility, not placeholde
 test("only unavailable and invalid rooms become neutral placeholders after all usable rooms", () => {
   const config = {
     entity: "sensor.primary",
-    show_rooms: true,
+    show: { rooms: true },
     rooms: [
       { ...room("sensor.unavailable", "Unavailable"), tap_action: { action: "navigate", navigation_path: "/unavailable" } },
       room("sensor.usable", "Usable"),
@@ -175,13 +175,13 @@ test("only unavailable and invalid rooms become neutral placeholders after all u
   }
 });
 
-test("unavailable_values hide removes optional placeholders but never the no-data headline", () => {
+test("show.unavailable_rooms false removes optional placeholders but never the no-data headline", () => {
   const states = {
     "sensor.a": state("sensor.a", "unavailable"),
     "sensor.b": state("sensor.b", "unavailable"),
   };
   const shown = env.createCard({ rooms: [room("sensor.a", "Alpha"), room("sensor.b", "Beta")] }, mkHass(states));
-  const hidden = env.createCard({ rooms: [room("sensor.a", "Alpha"), room("sensor.b", "Beta")], unavailable_values: "hide" }, mkHass(states));
+  const hidden = env.createCard({ rooms: [room("sensor.a", "Alpha"), room("sensor.b", "Beta")], show: { unavailable_rooms: false } }, mkHass(states));
   try {
     assert.equal(shown.shadowRoot.querySelectorAll(".rtc-room-unavailable").length, 2);
     assert.equal(hidden.shadowRoot.querySelector(".rtc-room-grid"), null);
@@ -196,7 +196,7 @@ test("unavailable_values hide removes optional placeholders but never the no-dat
 test("single-room placeholder policy keeps the configured room identity", () => {
   const states = { "sensor.room": state("sensor.room", "unavailable") };
   const automatic = env.createCard({ rooms: [room("sensor.room", "Kitchen")] }, mkHass(states));
-  const explicit = env.createCard({ rooms: [room("sensor.room", "Kitchen")], show_rooms: true }, mkHass(states));
+  const explicit = env.createCard({ rooms: [room("sensor.room", "Kitchen")], show: { rooms: true } }, mkHass(states));
   try {
     const headline = automatic.shadowRoot.querySelector(".rtc-avg-button");
     assert.equal(headline.tagName, "BUTTON");
@@ -290,7 +290,7 @@ test("no-data updates patch stable text and rebuild only real structure changes"
 });
 
 test("focus falls back safely when a no-data placeholder disappears", () => {
-  const config = { rooms: [room("sensor.a", "Alpha"), room("sensor.b", "Beta")], show_rooms: true };
+  const config = { rooms: [room("sensor.a", "Alpha"), room("sensor.b", "Beta")], show: { rooms: true } };
   const el = env.createCard(config, mkHass({
     "sensor.a": state("sensor.a", "unavailable"),
     "sensor.b": state("sensor.b", "unavailable"),

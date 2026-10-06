@@ -43,7 +43,7 @@ test("every misspelling the property generator writes is answered with the optio
     vieuws: "views",
     decimal: "decimals",
     rotation_second: "rotation_seconds",
-    hide_foter: "hide_footer",
+    start_veiw: "start_view",
     "tap-action": "tap_action",
     tapAction: "tap_action",
   };

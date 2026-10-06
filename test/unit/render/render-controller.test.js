@@ -364,7 +364,6 @@ test("entityDataSignature tolerates a missing state object", () => {
 
 test("structuralConfigSignature changes for every option that cannot be patched", () => {
   const config = {
-    hide_footer: false,
     rotation_seconds: 8,
     slide_seconds: 0.4,
     auto_slide: true,
@@ -372,7 +371,6 @@ test("structuralConfigSignature changes for every option that cannot be patched"
   };
   const base = structuralConfigSignature(config);
   for (const change of [
-    { hide_footer: true },
     { rotation_seconds: 9 },
     { slide_seconds: 0.5 },
     { auto_slide: false },
@@ -383,6 +381,6 @@ test("structuralConfigSignature changes for every option that cannot be patched"
 });
 
 test("structuralConfigSignature is stable for a change that CAN be patched", () => {
-  const config = { hide_footer: false, rotation_seconds: 8, slide_seconds: 0.4, auto_slide: true, views: null };
+  const config = { rotation_seconds: 8, slide_seconds: 0.4, auto_slide: true, views: null };
   assert.equal(structuralConfigSignature({ ...config, entity: "sensor.other" }), structuralConfigSignature(config));
 });

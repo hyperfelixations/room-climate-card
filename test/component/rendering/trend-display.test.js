@@ -344,7 +344,7 @@ test("trend footer: visibility options and RangeScale keep the rate out of every
   const hidden = trendCard(
     "temperature",
     0.2,
-    { rooms, views: [{ type: "scale" }], hide_footer: true },
+    { rooms, views: [{ type: "scale", options: { show_footer: false } }] },
     roomStates
   );
   assert.equal(hidden.shadowRoot.querySelector(".rtc-scale-footer"), null);

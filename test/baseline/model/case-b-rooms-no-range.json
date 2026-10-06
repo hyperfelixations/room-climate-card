@@ -258,7 +258,6 @@
       "show_optimal_band": true
     },
     "scale": {
-      "footer": true,
       "markers": "extremes",
       "show_comfort_band": true,
       "show_footer": true,

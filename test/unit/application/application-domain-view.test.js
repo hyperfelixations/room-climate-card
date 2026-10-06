@@ -38,7 +38,6 @@ function cfg(overrides = {}) {
     room_rows: null,
     room_sort: "value_asc",
     room_label: "auto",
-    show_rooms: "auto",
     views: null,
     title: null,
     entity_label: null,
@@ -319,7 +318,6 @@ test("every view's options are resolved, active or not", () => {
     show_comfort_band: true,
     show_optimal_band: true,
     show_footer: true,
-    footer: true,
     markers: "extremes",
   });
   assert.deepEqual(state.options.range_scale, {
@@ -340,34 +338,28 @@ test("a configured option overrides its default and the rest keep theirs", () =>
     show_comfort_band: true,
     show_optimal_band: true,
     show_footer: false,
-    footer: true,
     markers: "all",
   });
 });
 
-test("the older footer:false folds onto show_footer, and the newer key wins when both are written", () => {
-  // The one legacy fold in this layer: config/views.js is schema-driven and knows nothing
-  // about what an option means; the definitions do.
+test("whether a footer is drawn and which form it takes are two options, read apart", () => {
   const resolve = (key, options) =>
     viewState.resolveViewOptions(
       viewState.VIEW_DEFINITIONS.find((definition) => definition.key === key),
       options
     );
 
-  const folded = resolve("range_scale", { footer: false });
-  assert.equal(folded.show_footer, false, "the older word still turns the footer off");
-  assert.equal(folded.footer, "detailed", "and stops being read as a form");
-
-  const explicit = resolve("range_scale", { show_footer: true, footer: false });
-  assert.equal(explicit.show_footer, true, "the newer key decides when both are written");
-  assert.equal(explicit.footer, "detailed");
-
   const form = resolve("range_scale", { footer: "compact" });
   assert.equal(form.show_footer, true, "a form alone says nothing about whether");
   assert.equal(form.footer, "compact");
 
-  // The view with no footer at all is untouched by any of this.
+  const hidden = resolve("range_scale", { show_footer: false });
+  assert.equal(hidden.show_footer, false);
+  assert.equal(hidden.footer, "detailed", "hiding keeps the form at its default");
+
+  // Only schema keys are resolved; anything else was dropped before this layer.
   assert.deepEqual(resolve("extremes", { footer: false }), { show_value: true });
+  assert.equal(Object.hasOwn(resolve("scale", { footer: false }), "footer"), false);
 });
 
 test("the view definitions carry no render or update callback", () => {

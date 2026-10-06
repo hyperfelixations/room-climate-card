@@ -295,9 +295,9 @@ test("one timestamp present gives one bracket", () => {
   env.cleanup(el);
 });
 
-test("hide_footer suppresses the RangeScale footer", () => {
+test("show_footer: false suppresses the RangeScale footer", () => {
   const el = rangeScaleFooterFixture(
-    { hide_footer: true },
+    { views: [{ type: "range_scale", enabled: true, options: { show_footer: false } }] },
     {
       "sensor.avg": mkState("sensor.avg", 21, TEMPERATURE_C),
       "sensor.range": mkState("sensor.range", 5, { unit_of_measurement: "°C", minimum: 18, maximum: 23 }),
