@@ -37,11 +37,12 @@ function fromEntityAttributes(entity, level) {
 export function resolveClassificationProfile(registryForKind, policy, metricKind, { lenient = false } = {}) {
   if (!registryForKind) throw new Error(`No classification profiles registered for metric kind "${metricKind}"`);
   if (policy.source === "custom") {
-    if (policy.custom.metricKind !== metricKind) {
+    const profile = Object.hasOwn(policy.custom.profiles, metricKind) ? policy.custom.profiles[metricKind] : null;
+    if (!profile) {
       if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
-      throw new Error(`custom classification unit belongs to "${policy.custom.metricKind}", not detected metric kind "${metricKind}".`);
+      throw new Error(`custom classification unit belongs to "${policy.custom.unit}", not detected metric kind "${metricKind}".`);
     }
-    return policy.custom;
+    return profile;
   }
   const profileId = policy.profile || registryForKind.defaultProfile;
   const profile = registryForKind.profiles[profileId];

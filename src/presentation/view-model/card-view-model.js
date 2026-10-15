@@ -2,7 +2,7 @@
 // Renderers receive no config or hass and perform none of those decisions themselves.
 // `texts` is the only collaborator: translation plus number, unit and time formatting.
 
-import { metricMetaFor } from "./metric-meta.js";
+import { metricMetaFor, metricFormattingFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
 import { buildViewContent, buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
@@ -280,7 +280,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   }
 
   const unit = domainModel.metric.unit;
-  const formatBoundary = (value) => texts.fmtWithUnit(value, 0, false);
+  const boundaryDigits = metricFormattingFor(metricKind, domainModel.metric.displayUnitProfile.key).boundaryDecimals;
+  const formatBoundary = (value) => texts.fmtWithUnit(value, boundaryDigits, false);
   const classification = domainModel.classification.average;
   const tone = buildTone({
     classification,
@@ -392,6 +393,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   // Shared finished inputs keep builders independent of domain/config/formatters.
   // Range-scale geometry stays lazy when the view is available but unrequested.
   const shared = {
+    boundaryDigits,
     metricKind,
     unit,
     texts,

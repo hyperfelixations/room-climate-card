@@ -30,6 +30,7 @@ export function buildScaleViewContent(shared, options) {
     ...buildScaleBarContent({
       geometry: scale,
       texts,
+      boundaryDigits: shared.boundaryDigits,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Room-dependent footer also respects per-view visibility.
@@ -38,7 +39,7 @@ export function buildScaleViewContent(shared, options) {
     // Layout selects long or short comfort text from measured width.
     comfortLabel: options.show_comfort_band
       ? (() => {
-          const range = buildBandRangeText(texts, comfort.min, comfort.max);
+          const range = buildBandRangeText(texts, comfort.min, comfort.max, shared.boundaryDigits);
           return {
             long: texts.t("scale.comfortLabel", { range }),
             short: texts.t("scale.comfortLabelShort", { range }),

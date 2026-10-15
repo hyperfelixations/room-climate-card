@@ -71,7 +71,7 @@ const COLLABORATORS = {
           legacy: { default: null },
         }
       : undefined,
-  metricKindForUnit: (unit) => ({ "°C": "temperature", "°F": "temperature", "%": "humidity" })[unit],
+  metricKindsForUnit: (unit) => ({ "°C": ["temperature"], "°F": ["temperature"], "%": ["humidity"] })[unit] || [],
   unitProfileForUnit: (kind, unit) => {
     if (kind !== "temperature") return unit === "%" ? CELSIUS : null;
     if (unit === "°C") return CELSIUS;
@@ -500,7 +500,7 @@ test("a tier with a colour may carry any finite score, as it always could", () =
       }),
       COLLABORATORS
     );
-    assert.deepEqual(result.tiers.map((tier) => tier.score), [score, score], String(score));
+    assert.deepEqual(result.profiles.temperature.tiers.map((tier) => tier.score), [score, score], String(score));
   }
 });
 
@@ -597,6 +597,6 @@ test("a mixed profile applies the distance rule only to the tiers that take a pa
     }),
     COLLABORATORS
   );
-  assert.deepEqual(result.tiers.map((tier) => tier.color), [null, "#cc4444", null]);
-  assert.deepEqual(result.tiers.map((tier) => tier.score), [2, 0.5, -3]);
+  assert.deepEqual(result.profiles.temperature.tiers.map((tier) => tier.color), [null, "#cc4444", null]);
+  assert.deepEqual(result.profiles.temperature.tiers.map((tier) => tier.score), [2, 0.5, -3]);
 });

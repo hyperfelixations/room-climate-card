@@ -16,12 +16,16 @@ let zones;
 let icons;
 let classify;
 
-const KINDS = ["temperature", "humidity", "co2", "pm25"];
+const KINDS = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
 const EXPECTED_PROFILE_IDS = {
   temperature: ["indoor", "outdoor", "fridge", "freezer"],
   humidity: ["indoor"],
   co2: ["indoor"],
   pm25: ["indoor"],
+  pm1: ["indoor"],
+  pm4: ["indoor"],
+  pm10: ["indoor"],
+  co: ["indoor"],
 };
 
 test.before(async () => {
@@ -496,6 +500,30 @@ test("pm25/indoor reads its thresholds the way every other built-in profile does
 // below it: any profile whose icons move shows up here. The three PM2.5 thresholds sit one
 // row higher than then because the profile now reads them inclusively like its neighbours.
 const SHIPPED_ICONS = {
+  "pm1/indoor": [
+    [[-1, 0, 4.99], "mdi:molecule"],
+    [[5, 24.99], "mdi:weather-hazy"],
+    [[25, 49.99], "mdi:weather-dust"],
+    [[50, 50.01], "mdi:alert-circle-outline"],
+  ],
+  "pm4/indoor": [
+    [[-1, 0, 4.99], "mdi:molecule"],
+    [[5, 24.99], "mdi:weather-hazy"],
+    [[25, 49.99], "mdi:weather-dust"],
+    [[50, 50.01], "mdi:alert-circle-outline"],
+  ],
+  "pm10/indoor": [
+    [[-1, 0, 14.99], "mdi:molecule"],
+    [[15, 74.99], "mdi:weather-hazy"],
+    [[75, 149.99], "mdi:weather-dust"],
+    [[150, 150.01], "mdi:alert-circle-outline"],
+  ],
+  "co/indoor": [
+    [[-1, 0, 3.99], "mdi:molecule-co"],
+    [[4, 34.99], "mdi:alert-outline"],
+    [[35, 100], "mdi:alert-circle-outline"],
+  ],
+
   "temperature/indoor": [
     [[-100, 0, 15, 15.99, 16, 16.01, 17, 17.99], "mdi:snowflake"],
     [[18, 18.01, 18.99, 19, 19.01, 19.99], "mdi:thermometer-low"],
@@ -577,7 +605,7 @@ test("every built-in profile shows its recorded icon table", () => {
       }
     }
   }
-  assert.equal(probes, 287, "the whole recorded table was replayed");
+  assert.equal(probes, 321, "the whole recorded table was replayed");
 });
 
 // One icon-tier shape for every measurement.

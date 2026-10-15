@@ -3,7 +3,7 @@
 // another measurement's unit, or one the display unit cannot represent. Then the measurement's
 // default profile, with a warning. See internal dev doc §5 "Klassifikations-Rückfall".
 
-import { createDiagnostic } from "../../core/diagnostics.js";
+import { createDiagnostic, fallbackOption } from "../../core/diagnostics.js";
 import { CLASSIFICATION_PROFILE_REGISTRY } from "../../domain/classification/registry.js";
 import { projectProfile } from "../../domain/classification/projection.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
@@ -17,14 +17,18 @@ export function resolveEffectivePolicy({ policy, metricKind, displayUnitProfile 
 
   if (policy.source === "custom") {
     const { custom } = policy;
-    if (custom.metricKind !== metricKind) {
+    if (Object.hasOwn(custom.faults, metricKind)) {
+      return fellBack({ ...AUTO }, "value.invalid", { ...custom.faults[metricKind], fallback: fallbackOption("classification", "auto") });
+    }
+    const profile = Object.hasOwn(custom.profiles, metricKind) ? custom.profiles[metricKind] : null;
+    if (!profile) {
       return fellBack({ ...AUTO }, "classification.unit_mismatch", {
         path: "classification.unit",
         value: custom.unit,
         params: { measurement: metricKind, fallback },
       });
     }
-    if (projectProfile(custom, METRIC_DEFINITIONS[metricKind], displayUnitProfile).fault) {
+    if (projectProfile(profile, METRIC_DEFINITIONS[metricKind], displayUnitProfile).fault) {
       return fellBack({ ...AUTO }, "classification.not_representable", {
         params: { unit: displayUnitProfile.displayUnit || displayUnitProfile.key, fallback },
       });

@@ -45,11 +45,14 @@ test("every metric the card handles has a named pair, in its canonical unit and 
   }
 });
 
-test("only temperature has a second unit, and both of its others are named", () => {
+test("temperature and CO have alternative units, each named", () => {
   // Asserted rather than assumed: a metric that gained a unit profile would need a constant
   // here, and nothing else in the suite would say so.
   const withAlternatives = METRIC_KINDS.filter((metric) => METRICS[metric].unitProfiles.length > 1);
-  assert.deepEqual(withAlternatives, ["temperature"]);
+  assert.deepEqual(withAlternatives, ["temperature", "co"]);
+  assert.equal(A.CO_PPM.unit_of_measurement, "ppm");
+  assert.equal(A.CO_PPB.unit_of_measurement, "ppb");
+  assert.equal(A.CO_MICROGRAM.unit_of_measurement, "µg/m³");
   assert.equal(A.TEMPERATURE_F.unit_of_measurement, "°F");
   assert.equal(A.TEMPERATURE_K.unit_of_measurement, "K");
   assert.equal(METRICS.temperature.unitProfiles.length, 3, "celsius, fahrenheit, kelvin — one constant each");
@@ -71,7 +74,7 @@ test("a deliberately mismatched fixture is not given a name", () => {
   const named = Object.entries(A.ALL).filter(([, attributes]) => {
     if (!("unit_of_measurement" in attributes)) return false;
     const metric = METRIC_KINDS.find((kind) => METRICS[kind].deviceClass === attributes.device_class);
-    const allowed = [METRICS[metric].canonicalUnit, "°F", "K"];
+    const allowed = { temperature: ["°C", "°F", "K"], co: ["mg/m³", "µg/m³", "ppm", "ppb"] }[metric] || [METRICS[metric].canonicalUnit];
     return !allowed.includes(attributes.unit_of_measurement);
   });
   assert.deepEqual(named, [], "a mismatched pair was given a name; write it inline with the reason instead");

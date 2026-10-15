@@ -15,7 +15,7 @@ let homeAssistant;
 let conversion;
 let unitToken;
 
-const METRIC_KINDS = ["temperature", "humidity", "co2", "pm25"];
+const METRIC_KINDS = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
 
 test.before(async () => {
   definitions = await import("../../../src/domain/metrics/definitions.js");
@@ -27,12 +27,12 @@ test.before(async () => {
 
 // ------------------------------------------------------------- definitions --
 
-test("exactly the four supported metric kinds are registered", () => {
+test("exactly the eight supported metric kinds are registered", () => {
   assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS).sort(), [...METRIC_KINDS].sort());
 });
 
 test("the kinds keep one order, the one they are registered in", () => {
-  assert.deepEqual([...definitions.METRIC_KIND_ORDER], ["temperature", "humidity", "co2", "pm25"]);
+  assert.deepEqual([...definitions.METRIC_KIND_ORDER], ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"]);
   assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS), [...definitions.METRIC_KIND_ORDER]);
   assert.ok(Object.isFrozen(definitions.METRIC_KIND_ORDER));
 });
@@ -276,6 +276,10 @@ test("each card kind is reached through its own device class, derived from its d
     humidity: "humidity",
     carbon_dioxide: "co2",
     pm25: "pm25",
+    pm1: "pm1",
+    pm4: "pm4",
+    pm10: "pm10",
+    carbon_monoxide: "co",
   });
   assert.ok(Object.isFrozen(resolution.METRIC_TYPE_BY_DEVICE_CLASS));
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
@@ -287,7 +291,10 @@ test("the unit index lists every registered alias under the kinds registering it
   const expected = {};
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
     for (const profile of Object.values(definition.unitProfiles)) {
-      for (const unit of profile.units) expected[unitToken.normalizeUnitToken(unit)] = [kind];
+      for (const unit of profile.units) {
+        const token = unitToken.normalizeUnitToken(unit);
+        expected[token] = [...new Set([...(expected[token] || []), kind])];
+      }
     }
   }
   assert.deepEqual(resolution.METRIC_KINDS_BY_UNIT, expected);
@@ -320,13 +327,33 @@ test("Home Assistant's unit table is inverted by unit token, every reporting cla
 });
 
 test("a registered unit names the one kind registering it", () => {
-  assert.equal(resolution.metricKindOfUnit("ppm"), "co2", "a profile written in ppm is a CO2 profile");
+  assert.equal(resolution.metricKindOfUnit("ppm"), null, "a shared unit needs the card context");
   assert.equal(resolution.metricKindOfUnit(" °F "), "temperature");
-  assert.equal(resolution.metricKindOfUnit("ug/m3"), "pm25");
+  assert.equal(resolution.metricKindOfUnit("ug/m3"), null);
   assert.equal(resolution.metricKindOfUnit("hPa"), null);
   for (const nothing of [undefined, null, "", 5]) {
     assert.equal(resolution.metricKindOfUnit(nothing), null, JSON.stringify(nothing));
   }
+});
+
+test("unit candidates are immutable, ordered and deduplicate aliases of the same kind", () => {
+  assert.deepEqual(resolution.metricKindsOfUnit("ppm"), ["co2", "co"]);
+  assert.deepEqual(resolution.metricKindsOfUnit("μg/m^3"), ["pm25", "pm1", "pm4", "pm10", "co"]);
+  for (const raw of [undefined, "hPa", "constructor", "__proto__"]) {
+    assert.deepEqual(resolution.metricKindsOfUnit(raw), []);
+    assert.ok(Object.isFrozen(resolution.metricKindsOfUnit(raw)));
+  }
+  const synthetic = resolution.createMetricResolution({
+    definitions: { dust: { metricKind: "dust", deviceClass: "dust", unitProfiles: { mass: { units: ["µg/m³", "μg/m3"] } } } },
+    haDeviceClasses: ["dust"],
+    haDeviceClassUnits: { dust: ["µg/m³", "μg/m3"] },
+  });
+  const candidates = synthetic.metricKindsOfUnit("ug/m3");
+  assert.deepEqual(candidates, ["dust"]);
+  assert.ok(Object.isFrozen(candidates));
+  assert.throws(() => candidates.push("other"), TypeError);
+  assert.equal(synthetic.metricKindOfUnit("ug/m3"), "dust");
+  assert.deepEqual(synthetic.identifyMeasurement(undefined, "ug/m3"), { metricKind: "dust", basis: "unit", unknownDeviceClass: false });
 });
 
 // -------------------------------------------- how a sensor's measurement is identified --
@@ -363,8 +390,8 @@ test("a declared class decides; a unit decides only without one, and only when o
     [[undefined, "μg/m³"], identity(null, "unit_ambiguous")],
     [["co2", "ppm"], identity(null, "unit_ambiguous", true)],
     [[undefined, "lx"], identity(null, "unit_unknown")],
-    // ppb is several classes' unit, but none of the card's, so it identifies nothing either way.
-    [["co2", "ppb"], identity(null, "unit_unknown", true)],
+    // CO registers ppb, but several HA classes share it.
+    [["co2", "ppb"], identity(null, "unit_ambiguous", true)],
     [[undefined, undefined], identity(null, "nothing")],
     [["   ", "   "], identity(null, "nothing")],
     [[5, 7], identity(null, "nothing")],
@@ -422,10 +449,9 @@ test("units two kinds share decide nothing, while a unit one Home Assistant clas
 
 // ------------------------------------------ the unit a declared class leaves no choice in --
 
-// Home Assistant allows humidity only in %, CO2 only in ppm, PM2.5 only in µg/m³; temperature
-// has three units, so a thermometer without one still says nothing about its scale.
+// Humidity, CO2 and particles each have one HA unit; temperature and CO need a unit.
 test("a kind whose device class allows exactly one unit implies that unit's profile", () => {
-  assert.deepEqual(resolution.IMPLIED_UNIT_PROFILE, { humidity: "percent", co2: "ppm", pm25: "microgram_per_m3" });
+  assert.deepEqual(resolution.IMPLIED_UNIT_PROFILE, { humidity: "percent", co2: "ppm", pm25: "microgram_per_m3", pm1: "microgram_per_m3", pm4: "microgram_per_m3", pm10: "microgram_per_m3" });
   assert.ok(Object.isFrozen(resolution.IMPLIED_UNIT_PROFILE));
 });
 
@@ -450,6 +476,10 @@ test("a declared device class of the card names its measurement, whatever the sp
     humidity: "humidity",
     carbon_dioxide: "co2",
     pm25: "pm25",
+    pm1: "pm1",
+    pm4: "pm4",
+    pm10: "pm10",
+    carbon_monoxide: "co",
     " Temperature ": "temperature",
     HUMIDITY: "humidity",
   };

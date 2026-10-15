@@ -111,7 +111,7 @@ test(`every one of ${CASES} generated installations yields a start configuration
   assert.ok(share(census.naming.area) >= 0.15, `area names ${share(census.naming.area)}`);
   assert.ok(share(census.naming.name) >= 0.28, `sensor names ${share(census.naming.name)}`);
   assert.ok(census.pass.declared >= 1, "no installation reached the declared-only pass");
-  for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
+  for (const kind of ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"]) {
     assert.ok((census.kind[kind] || 0) >= 1, `${kind} was never chosen`);
   }
 });

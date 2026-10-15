@@ -40,7 +40,7 @@ test.before(async () => {
     isSupportedLanguage: (code) => code === "en",
     viewTypes: viewState.VIEW_DEFINITIONS.map((definition) => definition.key),
     optionSchemaForView: viewState.optionSchemaForView,
-    metricKindForUnit: (unit) => (unit === "°C" ? "temperature" : undefined),
+    metricKindsForUnit: (unit) => (unit === "°C" ? ["temperature"] : []),
     unitProfileForUnit: () => ({ key: "celsius", toCanonical: (v) => v, deltaToCanonical: (v) => v }),
   };
 });

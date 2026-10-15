@@ -129,6 +129,10 @@ const MISSPELLED_DEVICE_CLASS_VALUES = {
   temperature: ["temperatur", "Temperature", "TEMPERATURE", "temp", "temperature "],
   humidity: ["humidty", "Humidity", "relative_humidity", "humidite", "rel_humidity"],
   co2: ["carbon_dioxid", "co2", "CO2", "carbondioxide", "carbon-dioxide"],
+  pm1: ["pm_1", "pm-1"],
+  pm4: ["pm_4", "pm-4"],
+  pm10: ["pm_10", "pm-10"],
+  co: ["carbon_monoxid", "co", "carbon-monoxide"],
   pm25: ["pm2_5", "pm2.5", "PM25", "particulate_matter_25", "pm_25"],
 };
 

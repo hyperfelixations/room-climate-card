@@ -31,7 +31,7 @@ const COLLABORATORS = {
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   viewTypes: VIEWS,
   optionSchemaForView: () => undefined,
-  metricKindForUnit: (unit) => (unit === "°C" ? "temperature" : undefined),
+  metricKindsForUnit: (unit) => (unit === "°C" ? ["temperature"] : []),
   unitProfileForUnit: () => ({ key: "celsius", toCanonical: (v) => v, deltaToCanonical: (v) => v }),
 };
 

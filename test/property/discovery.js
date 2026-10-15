@@ -3,7 +3,7 @@
 // Randomly described Home Assistant installations for the card picker's browse path, and the
 // invariants its start configuration must satisfy over any of them. A description is plain JSON
 // in the shape test/fixtures/installation.js builds: areas in registry order, devices (some
-// nested under a parent), sensors of the four measurements — 0 to 5 each, declared correctly,
+// nested under a parent), sensors sampled from eight measurements — 0 to 5 each, declared correctly,
 // misspelled, undeclared or foreign, usable or not, named or not, placed or not — and
 // distractors that must never be found. DISCOVERY_WEIGHTS is measured by discovery.test.js.
 // See internal dev doc §4 "Die Property-Schicht" and "Card-Picker-Vertrag".
@@ -117,11 +117,15 @@ const USABLE_VALUES = {
   humidity: { "%": [30, 70] },
   co2: { ppm: [400, 1600] },
   pm25: { "µg/m³": [1, 40] },
+  pm1: { "µg/m³": [1, 40] },
+  pm4: { "µg/m³": [1, 40] },
+  pm10: { "µg/m³": [1, 100] },
+  co: { "mg/m³": [0, 10], "µg/m³": [0, 10000], ppm: [0, 8], ppb: [0, 8000] },
 };
-const ALTERNATIVE_UNITS = { temperature: ["°F", "K"], humidity: ["%"], co2: ["ppm"], pm25: ["µg/m³"] };
+const ALTERNATIVE_UNITS = { temperature: ["°F", "K"], humidity: ["%"], co2: ["ppm"], pm25: ["µg/m³"], pm1: ["µg/m³"], pm4: ["µg/m³"], pm10: ["µg/m³"], co: ["µg/m³", "ppm", "ppb"] };
 
 // A value below what the measurement can physically be, in the canonical unit.
-const IMPOSSIBLE_VALUES = { temperature: -400, humidity: -5, co2: -5, pm25: -1 };
+const IMPOSSIBLE_VALUES = { temperature: -400, humidity: -5, co2: -5, pm25: -1, pm1: -1, pm4: -1, pm10: -1, co: -1 };
 
 // Entities that are never found, whatever else the installation holds. Each shares something
 // with a real find: a unit, a device class, an area, a domain.
@@ -309,7 +313,10 @@ function generateInstallation(seedOrRng) {
   const context = { areas, devices, names: [] };
   const sensors = [];
   const withClimateSensors = weighted(rng, DISCOVERY_WEIGHTS.installation) === "withClimateSensors";
-  for (const metric of METRIC_KINDS) {
+  const candidates = [...METRIC_KINDS];
+  // Four candidate kinds keep sparse installations represented as the vocabulary grows.
+  const activeKinds = Array.from({ length: 4 }, () => candidates.splice(rng.int(0, candidates.length - 1), 1)[0]);
+  for (const metric of activeKinds) {
     const total = withClimateSensors ? count(weighted(rng, DISCOVERY_WEIGHTS.sensorsPerKind)) : 0;
     for (let index = 0; index < total; index++) sensors.push(generateSensor(rng, metric, index, context));
   }
@@ -325,9 +332,9 @@ function generateInstallation(seedOrRng) {
 
 // ------------------------------------------------------------------- the reference --
 
-// The card's four device classes and their measurements, from the manifest.
+// Device classes and measurements from the independent manifest.
 const KIND_BY_CLASS = Object.fromEntries(METRIC_KINDS.map((kind) => [METRICS[kind].deviceClass, kind]));
-const PRIORITY = ["temperature", "humidity", "co2", "pm25"];
+const PRIORITY = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
 
 function declaredKind(hass, entityId) {
   const raw = hass.states[entityId]?.attributes?.device_class;

@@ -6,6 +6,10 @@ export const it = {
   "title.humidity": "Umidità",
   "title.co2": "CO₂",
   "title.pm25": "PM2,5",
+  "title.pm1": "PM1",
+  "title.pm4": "PM4",
+  "title.pm10": "PM10",
+  "title.co": "CO",
 
   "level.veryHot": "Molto caldo",
   "level.hot": "Caldo",

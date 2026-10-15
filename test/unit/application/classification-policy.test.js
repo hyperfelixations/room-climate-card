@@ -76,7 +76,7 @@ test("a named profile the measurement does not have falls back to its default pr
 test("a custom profile written in another measurement's unit falls back to automatic", () => {
   const custom = { ...collapsingInFahrenheit(), metricKind: "humidity", unit: "%" };
   const result = policies.resolveEffectivePolicy({
-    policy: { source: "custom", profile: null, custom },
+    policy: { source: "custom", profile: null, custom: { unit: custom.unit, profiles: { [custom.metricKind]: custom }, faults: {} } },
     metricKind: "temperature",
     displayUnitProfile: unitOf("temperature", "celsius"),
   });
@@ -91,7 +91,7 @@ test("a custom profile written in another measurement's unit falls back to autom
 });
 
 test("a custom profile the display unit cannot represent falls back to automatic, and holds where it can", () => {
-  const policy = { source: "custom", profile: null, custom: collapsingInFahrenheit() };
+  const policy = { source: "custom", profile: null, custom: { profiles: { temperature: collapsingInFahrenheit() }, faults: {} } };
   const inFahrenheit = policies.resolveEffectivePolicy({ policy, metricKind: "temperature", displayUnitProfile: unitOf("temperature", "fahrenheit") });
   assert.deepEqual(inFahrenheit.policy, AUTO);
   assert.deepEqual(inFahrenheit.diagnostics, [

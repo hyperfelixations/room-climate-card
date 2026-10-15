@@ -28,7 +28,7 @@ export const MEASUREMENT_BASIS = Object.freeze({
 function groupPairs(pairs) {
   const groups = {};
   for (const [key, value] of pairs) groups[key] = [...(Object.hasOwn(groups, key) ? groups[key] : []), value];
-  return Object.freeze(Object.fromEntries(Object.entries(groups).map(([key, values]) => [key, Object.freeze(values)])));
+  return Object.freeze(Object.fromEntries(Object.entries(groups).map(([key, values]) => [key, Object.freeze([...new Set(values)])])));
 }
 
 export function createMetricResolution({ definitions, haDeviceClasses, haDeviceClassUnits }) {
@@ -53,8 +53,7 @@ export function createMetricResolution({ definitions, haDeviceClasses, haDeviceC
     return haDeviceClassSet.has(deviceClass) ? foreignMeasurement : nothingDeclared;
   }
 
-  // Which Home Assistant device classes report each unit token. °C is always temperature;
-  // ppm and µg/m³ are reported by several classes and so say nothing on their own.
+  // HA climate-context classes per token; temperature_delta is excluded from this table.
   const deviceClassesByUnit = groupPairs(
     Object.entries(haDeviceClassUnits).flatMap(([deviceClass, units]) => units.map((unit) => [normalizeUnitToken(unit), deviceClass]))
   );
@@ -67,12 +66,15 @@ export function createMetricResolution({ definitions, haDeviceClasses, haDeviceC
     )
   );
 
-  // The card kind a registered unit string belongs to — "a profile written in ppm is a CO2
-  // profile" — or null when no kind or more than one registers it.
-  function metricKindOfUnit(rawUnit) {
+  const noKinds = Object.freeze([]);
+  function metricKindsOfUnit(rawUnit) {
     const token = normalizeUnitToken(rawUnit);
-    if (!Object.hasOwn(metricKindsByUnit, token)) return null;
-    const kinds = metricKindsByUnit[token];
+    return Object.hasOwn(metricKindsByUnit, token) ? metricKindsByUnit[token] : noKinds;
+  }
+
+  // A unit with exactly one registered card kind; shared units require context.
+  function metricKindOfUnit(rawUnit) {
+    const kinds = metricKindsOfUnit(rawUnit);
     return kinds.length === 1 ? kinds[0] : null;
   }
 
@@ -91,7 +93,7 @@ export function createMetricResolution({ definitions, haDeviceClasses, haDeviceC
     const kinds = metricKindsByUnit[token];
     const sharedByClasses = Object.hasOwn(deviceClassesByUnit, token) && deviceClassesByUnit[token].length > 1;
     if (kinds.length > 1 || sharedByClasses) return identity(null, MEASUREMENT_BASIS.UNIT_AMBIGUOUS, unknownDeviceClass);
-    return identity(kinds[0], MEASUREMENT_BASIS.UNIT, unknownDeviceClass);
+    return identity(metricKindOfUnit(rawUnit), MEASUREMENT_BASIS.UNIT, unknownDeviceClass);
   }
 
   // Maps one entity's raw unit_of_measurement to a unitProfile key (e.g. "°F" ->
@@ -135,6 +137,7 @@ export function createMetricResolution({ definitions, haDeviceClasses, haDeviceC
     IMPLIED_UNIT_PROFILE: impliedUnitProfile,
     classifyDeviceClass,
     metricKindOfUnit,
+    metricKindsOfUnit,
     identifyMeasurement,
     resolveUnitProfileKey,
     sensorUnitProfileKey,
@@ -148,6 +151,7 @@ export const {
   IMPLIED_UNIT_PROFILE,
   classifyDeviceClass,
   metricKindOfUnit,
+  metricKindsOfUnit,
   identifyMeasurement,
   resolveUnitProfileKey,
   sensorUnitProfileKey,

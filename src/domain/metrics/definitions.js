@@ -3,6 +3,10 @@ import { temperature } from "./kinds/temperature.js";
 import { humidity } from "./kinds/humidity.js";
 import { co2 } from "./kinds/co2.js";
 import { pm25 } from "./kinds/pm25.js";
+import { pm1 } from "./kinds/pm1.js";
+import { pm4 } from "./kinds/pm4.js";
+import { pm10 } from "./kinds/pm10.js";
+import { co } from "./kinds/co.js";
 
 // MetricDefinition / UnitProfile / QuantityKind registry, assembled from one module per
 // measurement kind under kinds/.
@@ -19,7 +23,7 @@ import { pm25 } from "./kinds/pm25.js";
 // touch. See domain/units/conversion.js. Conversion and derivation never branch on a specific
 // metricKind; tests exercise them with a synthetic, unregistered profile. Adding a kind: see
 // internal dev doc §6 "Neue Messart".
-const KINDS = [temperature, humidity, co2, pm25];
+const KINDS = [temperature, humidity, co2, pm25, pm1, pm4, pm10, co];
 
 // The card's measurement kinds in the order the card offers them.
 export const METRIC_KIND_ORDER = Object.freeze(KINDS.map((kind) => kind.metricKind));

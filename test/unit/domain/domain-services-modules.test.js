@@ -56,7 +56,7 @@ test("a custom policy wins over the built-in profiles", () => {
   const custom = { id: "custom", metricKind: "temperature", comparison: ">=", tiers: [] };
   const profile = resolveModule.resolveClassificationProfile(
     temperatureRegistry(),
-    { source: "custom", profile: null, custom },
+    { source: "custom", profile: null, custom: { unit: custom.metricKind, profiles: { [custom.metricKind]: custom }, faults: {} } },
     "temperature"
   );
   assert.equal(profile, custom);
@@ -74,7 +74,7 @@ test("an unknown profile name has nothing to resolve to", () => {
 test("a custom profile scoped to another metric kind has nothing to resolve to", () => {
   const custom = { id: "custom", metricKind: "humidity" };
   assert.throws(
-    () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "custom", profile: null, custom }, "temperature"),
+    () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "custom", profile: null, custom: { unit: custom.metricKind, profiles: { [custom.metricKind]: custom }, faults: {} } }, "temperature"),
     { message: 'custom classification unit belongs to "humidity", not detected metric kind "temperature".' }
   );
 });
@@ -90,7 +90,7 @@ test("lenient resolution falls back to the default instead of throwing", () => {
   assert.equal(unknown.id, "indoor");
   const foreign = resolveModule.resolveClassificationProfile(
     temperatureRegistry(),
-    { source: "custom", profile: null, custom: { id: "custom", metricKind: "humidity" } },
+    { source: "custom", profile: null, custom: { profiles: { humidity: { id: "custom", metricKind: "humidity" } }, faults: {} } },
     "temperature",
     { lenient: true }
   );

@@ -258,3 +258,19 @@ test("every relation is fully described", () => {
   }
   assert.ok(RELATIONS.length >= 5, `only ${RELATIONS.length} relations`);
 });
+
+test("CO unit equivalence applies to real source sets and preserves the mean", () => {
+  const relation = RELATIONS.find((entry) => entry.name.includes("another unit"));
+  const rng = new SeededRandom(0xc018);
+  for (let index = 0; index < 40; index++) {
+    const values = Array.from({ length: rng.int(2, 8) }, () => rng.number(0, 40, 3));
+    const description = { metric: "co", primary: null, rooms: values.map((state) => ({ state })) };
+    const result = withQuietConsole(() => checkRelation(relation, description));
+    assert.equal(result.applied, true, `case ${index}`);
+    assert.deepEqual(result.violations, []);
+    const base = withQuietConsole(() => runBase(description)).observation;
+    const sequence = relation.derive(description, base);
+    const derived = withQuietConsole(() => runSequence(sequence)).observation;
+    assert.ok(Math.abs(derived.average.value * 1.164409225500478 - base.average.value) < 1e-10);
+  }
+});

@@ -29,7 +29,7 @@ let formatNumber;
 let formatTimeOfDay;
 let metricMetaFor;
 let CLASSIFICATION_ZONES;
-let metricKindOfUnit;
+let metricKindsOfUnit;
 let METRIC_DEFINITIONS;
 let resolveUnitProfileKey;
 let palettes;
@@ -52,7 +52,7 @@ test.before(async () => {
   ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
   ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
   ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
-  ({ metricKindOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
+  ({ metricKindsOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
   palettes = await import("../../src/domain/classification/palettes/registry.js");
   const { SURFACE_BACKGROUNDS } = await import("../../src/domain/classification/surface.js");
@@ -68,7 +68,7 @@ function configCollaborators() {
     isSupportedLanguage,
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
-    metricKindForUnit: metricKindOfUnit,
+    metricKindsForUnit: metricKindsOfUnit,
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;

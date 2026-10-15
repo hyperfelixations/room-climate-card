@@ -33,6 +33,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
     ...buildScaleBarContent({
       geometry: axis,
       texts,
+      boundaryDigits: shared.boundaryDigits,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Daily span remains available with zero comparable rooms.

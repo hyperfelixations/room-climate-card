@@ -9,16 +9,16 @@
 
 A custom dashboard card for [Home Assistant](https://www.home-assistant.io/)
 that shows the climate of one room or of your whole home: temperature,
-humidity, CO₂, or PM2.5. It reads the current value from your sensors, puts it
-on a scale with comfort and optimal ranges, and lists the individual rooms
+humidity, CO₂, PM1, PM2.5, PM4, PM10, or CO. It reads the current value from
+your sensors, puts it on a scale with comfort and optimal ranges, and lists the individual rooms
 below. The card follows your dashboard's light or dark theme.
 
 ![Room Climate Card with four modes and in dark and light mode](room-climate-card-four-modes.png)
 
 ## Features
 
-- Four modes in one card: temperature, humidity, CO₂, and PM2.5, picked
-  automatically from your sensors
+- Eight modes in one card: temperature, humidity, CO₂, PM1, PM2.5, PM4, PM10,
+  and CO, picked automatically from your sensors
 - A whole-home value, either from one sensor of your own or averaged from the
   rooms you list
 - A scale bar with comfort and optimal bands that stretches to fit the current
@@ -46,10 +46,35 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 - **At least one sensor**: a main `entity`, one or more `rooms`, or both. The
   card reads the mode from a `device_class` of `temperature`, `humidity`,
-  `carbon_dioxide`, or `pm25`. In practice these are `sensor.*` entities.
+  `carbon_dioxide`, `pm1`, `pm25`, `pm4`, `pm10`, or `carbon_monoxide`. In practice
+  these are `sensor.*` entities.
 - **A current browser.** There is no backend part and no minimum Home Assistant
   version — but the layout uses CSS container queries, so any currently
   supported version of Chrome, Edge, Firefox, or Safari.
+
+### Supported measurements
+
+| Measurement | Sensor `device_class` | Units |
+| --- | --- | --- |
+| Temperature | `temperature` | °C, °F, K |
+| Relative humidity | `humidity` | % |
+| Carbon dioxide | `carbon_dioxide` | ppm |
+| PM1 | `pm1` | µg/m³ |
+| PM2.5 | `pm25` | µg/m³ |
+| PM4 | `pm4` | µg/m³ |
+| PM10 | `pm10` | µg/m³ |
+| Carbon monoxide | `carbon_monoxide` | mg/m³, µg/m³, ppm, ppb |
+
+Set the sensor's `device_class` in Home Assistant, then select it in the card:
+
+```yaml
+type: custom:room-climate-card
+entity: sensor.living_room_carbon_monoxide
+```
+
+CO unit conversions use the [Home Assistant reference](https://github.com/home-assistant/core/blob/dev/homeassistant/util/unit_conversion.py) of 20 °C and 101325 Pa.
+For a rooms-only CO card, sensors in a common unit use that unit; mixed units
+use mg/m³. Put different particle sizes or gases on separate cards.
 
 ## Installation
 
@@ -77,12 +102,12 @@ manually:
 ## Quickstart
 
 The card picker knows this card. Start from **Add card**, pick a temperature,
-humidity, CO₂, or PM2.5 entity, and the Room Climate Card appears under
+humidity, CO₂, particle, or CO entity, and the Room Climate Card appears under
 **Community**, already set to the entity you picked and previewing your own
 reading. You can also select the card from the full list, where it starts with up
 to three rooms from your system: one sensor per area, named after the area, all
 measuring the same thing. It finds sensors whose `device_class` is
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`.
+`temperature`, `humidity`, `carbon_dioxide`, `pm1`, `pm25`, `pm4`, `pm10`, or `carbon_monoxide`.
 
 From there the YAML below is what you edit. Pick the shape that matches what you
 have — you need at least one sensor.
@@ -161,7 +186,7 @@ it.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `entity` | none | Your main or whole-home sensor. Its `device_class` decides whether this is a temperature, humidity, CO₂, or PM2.5 card; for a sensor without a `device_class`, a unit of `°C`, `°F`, `K` or `%` is enough. A humidity, CO₂ or PM2.5 sensor that has its `device_class` but no unit is read in `%`, `ppm` or `µg/m³`, the only unit Home Assistant allows for it; a temperature sensor needs its unit. Leave it out and the rooms take over: one room is used directly, several are averaged. |
+| `entity` | none | Your main or whole-home sensor. Its `device_class` selects the measurement listed under [Supported measurements](#supported-measurements); for a sensor without a `device_class`, a unit of `°C`, `°F`, `K` or `%` is enough. Humidity, CO₂ and particle sensors with a `device_class` may omit their unit and use `%`, `ppm` or `µg/m³`; temperature and CO sensors need their unit. Leave it out and the rooms take over: one room is used directly, several are averaged. |
 | `rooms` | `[]` | Your room sensors. From two rooms with values on, you get the comparison features and the `extremes` view. Each room needs its own `entity` — see [Room entries](#room-entries). |
 | `range_entity` | none | A sensor holding today's range as its state, with `minimum` and `maximum` attributes for the two values. Add `minimum_timestamp` and `maximum_timestamp` if you also want the times — `minimum_zeitpunkt` and `maximum_zeitpunkt` work too. Only `minimum` and `maximum` are needed; where a time is missing, the card just shows the value. |
 | `trend_entity` | none | A rate-of-change sensor in a unit that matches, for example `°C/h`. You get a rising, stable, or falling arrow above the large value, plus the rate in the scale footer. |
@@ -179,7 +204,7 @@ scale footer when at least two rooms have values.
 | `subtitle` | automatic | Replaces the line under the title, in the same shape. `subtitle: ""` removes the line. See [The two header lines](#the-two-header-lines). |
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
-| `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
+| `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂ and CO in ppb or µg/m³; `1` for the other measurements and units. CO scale and band labels use one decimal in ppm; other boundary labels use whole numbers. |
 | `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
 
 #### What the card shows
@@ -402,7 +427,8 @@ to `-6 °C`.
 The header icon follows the active profile unless you set `icon` yourself:
 temperature moves through thermometer, fire, and snowflake icons; humidity
 through the water-percent variants; CO₂ switches to an alert icon at its
-highest tier; and PM2.5 goes from molecule through haze and dust to alert.
+highest tier; particles go from molecule through haze and dust to alert;
+CO uses molecule and alert icons.
 
 The object form selects the classification source. `auto` accepts complete
 entity attributes and uses the selected built-in profile for other readings:
@@ -430,9 +456,23 @@ classification:
 
 `auto` and `profile` use the metric's default profile when `profile` is
 omitted. `outdoor`, `fridge`, and `freezer` exist for temperature only;
-`indoor` is the default profile for temperature, humidity, CO₂, and PM2.5. A
+`indoor` is the default profile for all eight measurements. A
 profile named for a measurement it does not exist for shows a warning, and the
 card uses that measurement's default profile.
+
+The particle and CO profiles use these bands:
+
+| Measurement | Optimal band | Comfort band |
+| --- | --- | --- |
+| PM1, PM2.5, PM4 | 0–5 µg/m³ | 0–15 µg/m³ |
+| PM10 | 0–15 µg/m³ | 0–45 µg/m³ |
+| CO | 0–1 mg/m³ | 0–4 mg/m³ |
+
+These are orientation bands for current readings. PM1 and PM4 use the PM2.5
+mass thresholds; they have no separate numerical guideline in the
+[WHO reference table](https://cdn.who.int/media/docs/default-source/environmental-health-impact/who_compendium_air_pollution_01042022_eo_final.pdf). The card does
+not calculate exposure averages or an AQI. For CO, use a dedicated CO alarm
+for safety decisions; the card's levels do not indicate safe exposure.
 
 A custom profile defines its tiers, bands, scale, and icons together.
 
@@ -498,7 +538,8 @@ Custom-profile rules:
 
 - `unit` must be a unit the card knows for this measurement. Temperature takes
   Celsius, Fahrenheit, or Kelvin, and the whole profile is converted to
-  whatever unit your sensors use.
+  whatever unit your sensors use. For shared units such as ppm or µg/m³, the
+  detected measurement selects how the profile is interpreted.
 - `comparison` is `>=` by default and may be `>`.
 - Tier `min` values must be unique and strictly descending. Exactly one final
   `{default: true}` tier is required.
@@ -815,15 +856,15 @@ different situations:
   is left out of this card, and a warning names it.
 
 If everything looks right, check that your sensors have a `device_class` of
-`temperature`, `humidity`, `carbon_dioxide`, or `pm25`.
+`temperature`, `humidity`, `carbon_dioxide`, `pm1`, `pm25`, `pm4`, `pm10`, or `carbon_monoxide`.
 
-**"… needs a device_class", and the sensor reads ppm or µg/m³.**
-Those two units belong to several measurements in Home Assistant — `ppm` to CO₂
+**"… needs a device_class", and the sensor reads ppm, ppb, mg/m³ or µg/m³.**
+These units belong to several measurements in Home Assistant — `ppm` to CO₂
 but also to carbon monoxide and volatile organic compounds, `µg/m³` to PM1,
 PM2.5, PM4, PM10 and more — so the card will not guess which one it is looking
-at. Add the matching `device_class` to the sensor (`carbon_dioxide` or `pm25`)
-and the card picks it up. Temperature and humidity sensors are unaffected:
-their units belong to one measurement each.
+at. Add the matching `device_class` from the [measurement table](#supported-measurements)
+to the sensor. A sensor without a `device_class` uses the climate-context fallback:
+`°C`, `°F` or `K` selects temperature, and `%` selects relative humidity.
 
 **"… has device_class "battery", which this card does not show."**
 The `device_class` names another measurement — `battery`, `moisture` or
@@ -834,13 +875,13 @@ temperature or humidity itself.
 **"… which Home Assistant does not define."**
 The `device_class` is not one Home Assistant knows, usually a typo or a
 shortened name such as `co2`. Use Home Assistant's own name: `temperature`,
-`humidity`, `carbon_dioxide` or `pm25`.
+`humidity`, `carbon_dioxide`, `pm1`, `pm25`, `pm4`, `pm10` or `carbon_monoxide`.
 
 **"… has no unit_of_measurement".**
-A temperature sensor needs its unit, because `°C`, `°F` and `K` all exist; so
-does a `range_entity` or `trend_entity`. Give the sensor a `unit_of_measurement`
+Temperature and CO sensors need their unit because each supports several units,
+as do `range_entity` and `trend_entity` sensors. Give the sensor a `unit_of_measurement`
 in Home Assistant, for example in its template definition. Humidity, CO₂ and
-PM2.5 sensors with a `device_class` work without one.
+all particle sensors with a `device_class` work without one.
 
 **Something broke after updating the card.**
 Hard-reload the dashboard first (see above — a stale cached version is the

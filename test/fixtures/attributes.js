@@ -23,13 +23,25 @@ function classOnly(metric) {
   return Object.freeze({ device_class: METRICS[metric].deviceClass });
 }
 
-// The four metrics with their canonical units.
+// Metrics with their canonical units.
 const TEMPERATURE_C = attributesFor("temperature");
 const HUMIDITY = attributesFor("humidity");
 const CO2 = attributesFor("co2");
 const PM25 = attributesFor("pm25");
+const PM1 = attributesFor("pm1");
+const PM1_CLASS_ONLY = classOnly("pm1");
+const PM4 = attributesFor("pm4");
+const PM4_CLASS_ONLY = classOnly("pm4");
+const PM10 = attributesFor("pm10");
+const PM10_CLASS_ONLY = classOnly("pm10");
+const CO = attributesFor("co");
+const CO_CLASS_ONLY = classOnly("co");
+const CO_PPM = attributesFor("co", "ppm");
+const CO_PPB = attributesFor("co", "ppb");
+const CO_MICROGRAM = attributesFor("co", "µg/m³");
 
-// The other units the card converts between; only temperature has any (asserted, not assumed).
+
+// Alternative temperature units.
 const TEMPERATURE_F = attributesFor("temperature", "°F");
 const TEMPERATURE_K = attributesFor("temperature", "K");
 
@@ -51,6 +63,17 @@ const ALL = Object.freeze({
   CO2,
   CO2_CLASS_ONLY,
   PM25,
+  PM1,
+  PM1_CLASS_ONLY,
+  PM4,
+  PM4_CLASS_ONLY,
+  PM10,
+  PM10_CLASS_ONLY,
+  CO,
+  CO_CLASS_ONLY,
+  CO_PPM,
+  CO_PPB,
+  CO_MICROGRAM,
   PM25_CLASS_ONLY,
 });
 
@@ -67,5 +90,16 @@ module.exports = {
   CO2,
   CO2_CLASS_ONLY,
   PM25,
+  PM1,
+  PM1_CLASS_ONLY,
+  PM4,
+  PM4_CLASS_ONLY,
+  PM10,
+  PM10_CLASS_ONLY,
+  CO,
+  CO_CLASS_ONLY,
+  CO_PPM,
+  CO_PPB,
+  CO_MICROGRAM,
   PM25_CLASS_ONLY,
 };

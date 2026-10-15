@@ -206,14 +206,14 @@ test("all four classification sources reach the domain model", () => {
       classification: {
         source: "custom",
         profile: null,
-        custom: {
+        custom: { faults: {}, profiles: { temperature: {
           id: "custom", metricKind: "temperature", comparison: ">=",
           tiers: [{ min: 24, score: 2, level: "Custom warm", color: "#cc4444", zone: "outside" }, { min: -Infinity, score: 1, level: "Custom cold", color: "#4488cc", zone: "outside" }],
           comfort: { min: 19, max: 25 }, optimal: { min: 21, max: 23 }, scale: { min: 16, max: 28 }, step: 2,
           invalidWhen: null, validRange: null,
           invalidClassification: { score: null, levelKey: "level.invalidReading", color: "#B4B2A9", zone: "invalid" },
           iconTiers: [{ min: 30, icon: "mdi:fire-alert" }, { min: -Infinity, icon: "mdi:snowflake" }],
-        },
+        } } },
       },
     }),
     { "sensor.avg": st(26, C) }

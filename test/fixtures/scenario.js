@@ -18,10 +18,10 @@ const UNIT_KEY = "unit_of_measurement";
 
 // A value in the middle of each metric's comfortable range: what a test means when it does
 // not care about the number.
-const TYPICAL_VALUE = { temperature: 21, humidity: 45, co2: 700, pm25: 8 };
+const TYPICAL_VALUE = { temperature: 21, humidity: 45, co2: 700, pm25: 8, pm1: 8, pm4: 8, pm10: 20, co: 2 };
 
 // Room values spread around the typical one so coldest and warmest actually differ.
-const ROOM_SPREAD = { temperature: 1.5, humidity: 6, co2: 180, pm25: 3 };
+const ROOM_SPREAD = { temperature: 1.5, humidity: 6, co2: 180, pm25: 3, pm1: 3, pm4: 3, pm10: 6, co: 0.5 };
 
 function withoutUndefined(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));

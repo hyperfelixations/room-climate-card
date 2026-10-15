@@ -5,18 +5,18 @@
 // negative ("-24–-15"), so such a band switches to the language's own range wording and
 // signs both bounds; a band that stays at or above zero keeps the dash.
 // See internal dev doc §6 "i18n und sprachabhängige Formatierung".
-export function buildBandRangeText(texts, min, max) {
+export function buildBandRangeText(texts, min, max, digits = 0) {
   if (min < 0 || max < 0) {
     return texts.t("scale.bandRangeSigned", {
-      min: texts.fmtSigned(min, 0),
-      max: texts.fmtSignedWithUnit(max, 0, false),
+      min: texts.fmtSigned(min, digits),
+      max: texts.fmtSignedWithUnit(max, digits, false),
     });
   }
-  return `${texts.fmt(min, 0)}–${texts.fmtWithUnit(max, 0, false)}`;
+  return `${texts.fmt(min, digits)}–${texts.fmtWithUnit(max, digits, false)}`;
 }
 
-export function buildScaleBarContent({ geometry, texts, showComfortBand, showOptimalBand, footerText }) {
-  const range = buildBandRangeText(texts, geometry.optimalMin, geometry.optimalMax);
+export function buildScaleBarContent({ geometry, texts, showComfortBand, showOptimalBand, footerText, boundaryDigits = 0 }) {
+  const range = buildBandRangeText(texts, geometry.optimalMin, geometry.optimalMax, boundaryDigits);
   return {
     geometry,
     showComfortBand,

@@ -45,7 +45,7 @@ const COLLABORATORS = {
   isSupportedLanguage: (code) => SUPPORTED.has(code),
   viewTypes: VIEWS,
   optionSchemaForView: () => undefined,
-  metricKindForUnit: (unit) => ({ "°C": "temperature", "°F": "temperature", "%": "humidity" })[unit],
+  metricKindsForUnit: (unit) => ({ "°C": ["temperature"], "°F": ["temperature"], "%": ["humidity"] })[unit] || [],
   unitProfileForUnit: (kind, unit) => {
     if (kind !== "temperature") return unit === "%" ? CELSIUS : null;
     if (unit === "°C") return CELSIUS;
@@ -103,10 +103,15 @@ function policyOf(value) {
   return { policy: classification.normalizeClassificationConfig(value, COLLABORATORS, diagnostics), diagnostics };
 }
 
+function selectedCustom(value, collaborators) {
+  const custom = classification.normalizeCustomClassification(value, collaborators);
+  return Object.values(custom.profiles)[0];
+}
+
 // A custom-profile rule refuses the value it found at the path it found it.
 function refusedAt(profile, path, value) {
   assert.throws(
-    () => classification.normalizeCustomClassification(profile, COLLABORATORS),
+    () => selectedCustom(profile, COLLABORATORS),
     (error) => error instanceof errors.ConfigValueError && error.path === path && isDeepStrictEqual(error.value, value),
     `${path} = ${JSON.stringify(value)}`
   );
@@ -180,7 +185,7 @@ test("a block carrying tiers is inferred as custom even without an explicit sour
 });
 
 test("a valid custom profile is converted into the canonical unit", () => {
-  const result = classification.normalizeCustomClassification(validCustom(), COLLABORATORS);
+  const result = selectedCustom(validCustom(), COLLABORATORS);
   assert.equal(result.metricKind, "temperature");
   assert.equal(result.unit, "°C", "as written, for a message that has to name it");
   assert.equal(result.comparison, ">=");
@@ -201,7 +206,7 @@ test("a valid custom profile is converted into the canonical unit", () => {
 });
 
 test("a Fahrenheit custom profile converts absolutes and deltas differently", () => {
-  const result = classification.normalizeCustomClassification(fahrenheitCustom(), COLLABORATORS);
+  const result = selectedCustom(fahrenheitCustom(), COLLABORATORS);
   // 68 °F = 20 °C absolute; a 2 °F step is 1.11 °C, NOT -16.67 °C.
   assert.ok(Math.abs(result.tiers[1].min - 20) < 1e-9, `got ${result.tiers[1].min}`);
   assert.ok(Math.abs(result.step - (2 * 5) / 9) < 1e-9, `got ${result.step}`);
@@ -232,15 +237,15 @@ test("a custom value its unit cannot convert into the canonical unit is refused 
     ["classification.icons.fire", huge, { icons: { fire: huge, high: 80, normal: 70, low: 60 } }],
   ];
   for (const [path, value, overrides] of cases) refusedAt(fahrenheitCustom(overrides), path, value);
-  assert.doesNotThrow(() => classification.normalizeCustomClassification(fahrenheitCustom(), COLLABORATORS));
+  assert.doesNotThrow(() => selectedCustom(fahrenheitCustom(), COLLABORATORS));
   // The same magnitude written in the canonical unit converts to itself and is accepted.
   assert.doesNotThrow(() =>
-    classification.normalizeCustomClassification(validCustom({ scale: { min: -1e308, max: 1e308, step: 5 } }), COLLABORATORS)
+    selectedCustom(validCustom({ scale: { min: -1e308, max: 1e308, step: 5 } }), COLLABORATORS)
   );
 });
 
 test("custom scale switches and headroom are carried through", () => {
-  const result = classification.normalizeCustomClassification(
+  const result = selectedCustom(
     validCustom({ scale: { min: 16, max: 28, step: 2, headroom: 4, one_sided: true } }),
     COLLABORATORS
   );
@@ -252,7 +257,7 @@ test("custom scale switches and headroom are carried through", () => {
 // range and an axis that follows the readings (what `outdoor` does). They are alternatives,
 // so declaring both is refused.
 test("a custom profile can hand the axis to the data by declaring no range at all", () => {
-  const following = classification.normalizeCustomClassification(
+  const following = selectedCustom(
     validCustom({ scale: { step: 2, anchor_scale: false }, icons: ICON_THRESHOLDS }),
     COLLABORATORS
   );
@@ -260,7 +265,7 @@ test("a custom profile can hand the axis to the data by declaring no range at al
   assert.equal(following.scale, null, "no declared range means none is carried, not an invented one");
   assert.equal(following.step, 2, "the rounding step is still needed for the axis labels");
 
-  const anchored = classification.normalizeCustomClassification(
+  const anchored = selectedCustom(
     validCustom({ scale: { min: 16, max: 28, step: 2, anchor_scale: true } }),
     COLLABORATORS
   );
@@ -269,13 +274,13 @@ test("a custom profile can hand the axis to the data by declaring no range at al
 });
 
 test("an omitted anchor_scale keeps the anchored axis every other built-in profile uses", () => {
-  assert.equal(classification.normalizeCustomClassification(validCustom(), COLLABORATORS).anchorScale, true);
+  assert.equal(selectedCustom(validCustom(), COLLABORATORS).anchorScale, true);
 });
 
 // A band reaching past the declared range is drawn as far as the axis goes and no further,
 // the same as an anchored axis that has not yet grown to meet a band, so it is not refused.
 test("a scale narrower than the comfort band is accepted and carried through unchanged", () => {
-  const result = classification.normalizeCustomClassification(
+  const result = selectedCustom(
     validCustom({
       bands: { comfort: { min: 18, max: 26 }, optimal: { min: 21, max: 23 } },
       scale: { min: 20, max: 24, step: 2 },
@@ -314,13 +319,13 @@ test("normalizeScale returns the range and every switch in its resolved form", (
 });
 
 test("a custom valid_range becomes a predicate honouring both inclusivity flags", () => {
-  const inclusive = classification.normalizeCustomClassification(validCustom({ valid_range: { min: 0, max: 50 } }), COLLABORATORS);
+  const inclusive = selectedCustom(validCustom({ valid_range: { min: 0, max: 50 } }), COLLABORATORS);
   assert.equal(inclusive.invalidWhen(0), false, "inclusive by default");
   assert.equal(inclusive.invalidWhen(50), false);
   assert.equal(inclusive.invalidWhen(-0.1), true);
   assert.equal(inclusive.invalidWhen(50.1), true);
 
-  const exclusive = classification.normalizeCustomClassification(
+  const exclusive = selectedCustom(
     validCustom({ valid_range: { min: 0, max: 50, min_inclusive: false, max_inclusive: false } }),
     COLLABORATORS
   );
@@ -328,7 +333,7 @@ test("a custom valid_range becomes a predicate honouring both inclusivity flags"
   assert.equal(exclusive.invalidWhen(50), true);
   assert.equal(exclusive.invalidWhen(0.1), false);
 
-  const onlyMin = classification.normalizeCustomClassification(validCustom({ valid_range: { min: 0 } }), COLLABORATORS);
+  const onlyMin = selectedCustom(validCustom({ valid_range: { min: 0 } }), COLLABORATORS);
   assert.equal(onlyMin.invalidWhen(1e9), false, "an omitted bound is unbounded");
   assert.equal(onlyMin.invalidWhen(-1), true);
 });
@@ -339,14 +344,14 @@ test("omitting icons declares none, whatever the profile measures", () => {
     {},
     { unit: "%", bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } }, scale: { min: 30, max: 70, step: 5 } },
   ]) {
-    assert.equal(classification.normalizeCustomClassification(validCustom(overrides), COLLABORATORS).iconTiers, null, JSON.stringify(overrides));
+    assert.equal(selectedCustom(validCustom(overrides), COLLABORATORS).iconTiers, null, JSON.stringify(overrides));
   }
 });
 
 // The fire/high/normal/low object is an input spelling only; it normalizes into the same
 // {min, icon} list every profile carries, with the five icons it implies.
 test("the temperature threshold object normalizes into the shared icon list", () => {
-  const result = classification.normalizeCustomClassification(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
+  const result = selectedCustom(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
   assert.deepEqual(result.iconTiers, [
     { min: 30, icon: "mdi:fire-alert" },
     { min: 26, icon: "mdi:thermometer-high" },
@@ -358,8 +363,8 @@ test("the temperature threshold object normalizes into the shared icon list", ()
 
 // The same icons written in list form come out identical.
 test("both spellings of the same temperature icons produce the same profile", () => {
-  const asObject = classification.normalizeCustomClassification(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
-  const asList = classification.normalizeCustomClassification(
+  const asObject = selectedCustom(validCustom({ icons: { fire: 30, high: 26, normal: 20, low: 14 } }), COLLABORATORS);
+  const asList = selectedCustom(
     validCustom({
       icons: [
         { min: 30, icon: "mdi:fire-alert" },
@@ -376,7 +381,7 @@ test("both spellings of the same temperature icons produce the same profile", ()
 
 // A temperature profile may choose its own icons, in the list form.
 test("a temperature profile can choose icons of its own", () => {
-  const result = classification.normalizeCustomClassification(
+  const result = selectedCustom(
     validCustom({ icons: [{ min: 30, icon: "mdi:sun-thermometer" }, { default: true, icon: "mdi:home-thermometer" }] }),
     COLLABORATORS
   );
@@ -387,7 +392,7 @@ test("a temperature profile can choose icons of its own", () => {
 });
 
 test("a non-temperature custom profile uses the shared icon list", () => {
-  const result = classification.normalizeCustomClassification(
+  const result = selectedCustom(
     validCustom({
       unit: "%",
       bands: { comfort: { min: 40, max: 60 }, optimal: { min: 45, max: 55 } },

@@ -20,6 +20,10 @@ const METRICS = {
   humidity: { deviceClass: "humidity", canonicalUnit: "%", unitProfiles: ["percent"] },
   co2: { deviceClass: "carbon_dioxide", canonicalUnit: "ppm", unitProfiles: ["ppm"] },
   pm25: { deviceClass: "pm25", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
+  pm1: { deviceClass: "pm1", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
+  pm4: { deviceClass: "pm4", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
+  pm10: { deviceClass: "pm10", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
+  co: { deviceClass: "carbon_monoxide", canonicalUnit: "mg/m³", unitProfiles: ["milligram_per_m3", "microgram_per_m3", "ppm", "ppb"] },
 };
 const METRIC_KINDS = Object.keys(METRICS);
 

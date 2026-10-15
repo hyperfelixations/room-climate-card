@@ -15,7 +15,7 @@
 // "Custom-Profile-Vertrag".
 
 import { createDiagnostic, fallbackOption, fallbackValue, FALLBACK } from "../../core/diagnostics.js";
-import { isOutsideRange } from "../../core/numbers.js";
+import { convertCustomProfile } from "./profile-conversion.js";
 import { ConfigValueError, rejectValue } from "../errors.js";
 import { assertKnownKeys, isPlainObject, isUnwritten } from "../primitives.js";
 import {
@@ -103,11 +103,10 @@ function assertCustomProfileKeys(value) {
   else keysOf(value.icons, LEGACY_TEMPERATURE_ICON_KEYS, "classification.icons");
 }
 
-export function normalizeCustomClassification(value, { metricKindForUnit, unitProfileForUnit, classificationZones }) {
+export function normalizeCustomClassification(value, { metricKindsForUnit, unitProfileForUnit, classificationZones }) {
   if (typeof value.unit !== "string" || !value.unit.trim()) rejectValue("classification.unit", value.unit);
-  const metricKind = metricKindForUnit(value.unit);
-  const sourceUnitProfile = metricKind ? unitProfileForUnit(metricKind, value.unit) : null;
-  if (!sourceUnitProfile) rejectValue("classification.unit", value.unit);
+  const metricKinds = metricKindsForUnit(value.unit);
+  if (metricKinds.length === 0) rejectValue("classification.unit", value.unit);
 
   const comparison = value.comparison ?? ">=";
   if (comparison !== ">=" && comparison !== ">") rejectValue("classification.comparison", value.comparison);
@@ -122,69 +121,33 @@ export function normalizeCustomClassification(value, { metricKindForUnit, unitPr
   } = normalizeScale(value.scale);
   const sourceTiers = normalizeTiers(value.tiers, classificationZones);
   const sourceValidRange = normalizeValidRange(value.valid_range);
-  const { iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKind);
+  const { iconTiers: sourceIconTiers } = normalizeIcons(value.icons, metricKinds.length === 1 ? metricKinds[0] : null);
 
-  // Everything above is in the user's unit; from here it is canonical. Absolute readings
-  // via toCanonical(), step and headroom via deltaToCanonical() (a difference takes no offset).
-  // A finite value written in a scaling unit can overflow on the way; it is refused at the
-  // path it was written under. The open ends of tier and icon lists (-Infinity) are not written.
-  const unit = value.unit.trim();
-  const converting = (convert) => (written, path) => {
-    const converted = convert(written);
-    if (!Number.isFinite(converted)) rejectValue(path, written);
-    return converted;
-  };
-  const toCanonical = converting(sourceUnitProfile.toCanonical);
-  const deltaToCanonical = converting(sourceUnitProfile.deltaToCanonical);
-  const convertBand = (band, path) => ({ min: toCanonical(band.min, `${path}.min`), max: toCanonical(band.max, `${path}.max`) });
-  const convertTierMins = (tiers, pathOf) =>
-    tiers.map((tier, index) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min, pathOf(index)) : tier.min }));
-
-  const comfort = convertBand(sourceComfort, "classification.bands.comfort");
-  const optimal = convertBand(sourceOptimal, "classification.bands.optimal");
-  // null all the way through when there is no reference range: nothing to convert, and
-  // an invented range would be indistinguishable from a declared one downstream.
-  const scale = sourceScale && convertBand(sourceScale, "classification.scale");
-  const step = deltaToCanonical(sourceStep, "classification.scale.step");
-  const headroom = sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom, "classification.scale.headroom");
-  const tiers = convertTierMins(sourceTiers, (index) => `classification.tiers[${index}].min`);
-  const canonicalValidRange = sourceValidRange && {
-    min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min, "classification.valid_range.min"),
-    max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max, "classification.valid_range.max"),
-    minInclusive: sourceValidRange.minInclusive,
-    maxInclusive: sourceValidRange.maxInclusive,
-  };
-  // The legacy temperature object names its thresholds by key, the list by index.
-  const iconTiers =
-    sourceIconTiers &&
-    convertTierMins(sourceIconTiers, (index) =>
-      Array.isArray(value.icons) ? `classification.icons[${index}].min` : `classification.icons.${LEGACY_TEMPERATURE_ICON_KEYS[index]}`
-    );
-  // The same comparison (isOutsideRange) the built-in profiles use, so a written window
-  // and a declared one cannot disagree about their edges.
-  const invalidWhen = canonicalValidRange ? (reading) => isOutsideRange(reading, canonicalValidRange) : null;
-
-  return {
-    id: "custom",
-    metricKind,
-    // As written, for a message that has to name it.
-    unit,
+  const source = {
+    sourceComfort,
+    sourceOptimal,
+    sourceScale,
+    sourceStep,
+    sourceHeadroom,
+    sourceTiers,
+    sourceValidRange,
+    sourceIconTiers,
     comparison,
-    tiers,
-    comfort,
-    optimal,
-    scale,
-    step,
-    headroom,
     oneSided,
-    // Needs no conversion — it says whether the axis is pinned to `scale`, not where — and
-    // reaches the axis maths untouched.
     anchorScale,
-    invalidWhen,
-    validRange: canonicalValidRange,
-    // Colourless: a custom profile takes tier colours from the palette, and an invalid
-    // reading takes the palette's own invalid colour.
-    invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
-    iconTiers,
   };
+  const profiles = {};
+  const faults = {};
+  let firstFault;
+  for (const metricKind of metricKinds) {
+    try {
+      profiles[metricKind] = convertCustomProfile(value, source, unitProfileForUnit(metricKind, value.unit), metricKind);
+    } catch (error) {
+      if (!(error instanceof ConfigValueError)) throw error;
+      faults[metricKind] = { path: error.path, value: error.value };
+      firstFault ??= error;
+    }
+  }
+  if (Object.keys(profiles).length === 0) throw firstFault;
+  return { id: "custom", unit: value.unit.trim(), profiles, faults };
 }

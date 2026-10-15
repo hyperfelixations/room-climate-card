@@ -318,13 +318,10 @@ const RELATIONS = [
   {
     name: "the same readings in another unit describe the same rooms",
     why:
-      "21 °C and 69.8 °F are one temperature. The number on the card differs and the unit " +
-      "label differs; which sensors the card shows, and which of them is the warmest, do not.",
+      "Equivalent temperature or CO readings change the number and unit label, but not " +
+      "which sources participate or which rooms have the lowest and highest values.",
     needsRenderedBase: true,
-    // Stated on the built scenario, not the description: what must hold is a fact about the
-    // entities (every one the card reads reports °C, canonical spelling, finite state), which
-    // a description cannot express. An earlier description-level form never applied across the
-    // generated cases; the runner's coverage assertion caught that.
+    // Preconditions inspect the built entities, including scenario-wide attribute defaults.
     derive(description) {
       const scenario = buildScenario(description);
       const states = scenario.hass && scenario.hass.states;
@@ -332,9 +329,16 @@ const RELATIONS = [
 
       const ids = Object.keys(states);
       if (!ids.length) return null;
+      const sourceUnit = states[ids[0]]?.attributes?.unit_of_measurement;
+      const conversion = sourceUnit === "°C"
+        ? { target: "°F", convert: (value) => Math.round(((value * 9) / 5 + 32) * 100) / 100 }
+        : sourceUnit === "mg/m³"
+          ? { target: "ppm", convert: (value) => value / 1.164409225500478 }
+          : null;
+      if (!conversion) return null;
       const readable = ids.every((id) => {
         const attributes = states[id] && states[id].attributes;
-        if (!attributes || attributes.unit_of_measurement !== "°C") return false;
+        if (!attributes || attributes.unit_of_measurement !== sourceUnit) return false;
         return PLAIN_DECIMAL.test(String(states[id].state));
       });
       if (!readable) return null;
@@ -343,18 +347,17 @@ const RELATIONS = [
       const config = scenario.config || {};
       if (config.classification || config.optimal || config.comfort || config.range_entity) return null;
 
-      const toFahrenheit = (celsius) => Math.round(((celsius * 9) / 5 + 32) * 100) / 100;
       const converted = {};
       for (const id of ids) {
         const entity = states[id];
-        const fahrenheit = toFahrenheit(Number(entity.state));
+        const value = conversion.convert(Number(entity.state));
         // -1e308 °C overflows to -Infinity °F; the card refuses it, but that would be a number
         // this file invented, so the relation stands down.
-        if (!Number.isFinite(fahrenheit)) return null;
+        if (!Number.isFinite(value)) return null;
         converted[id] = {
           ...entity,
-          state: String(fahrenheit),
-          attributes: { ...entity.attributes, unit_of_measurement: "°F" },
+          state: String(value),
+          attributes: { ...entity.attributes, unit_of_measurement: conversion.target },
         };
       }
       return [scenario, { config: scenario.config, hass: { ...scenario.hass, states: converted } }];
@@ -362,22 +365,22 @@ const RELATIONS = [
     compare(base, derived) {
       const violations = [];
       if (base.empty !== derived.empty) {
-        violations.push(`the same readings in °F ${derived.empty ? "emptied" : "filled"} a card that °C did not`);
+        violations.push(`the same readings in ${derived.unit} ${derived.empty ? "emptied" : "filled"} a card that ${base.unit} did not`);
         return violations;
       }
       if (base.empty) return null;
-      if (base.unit === derived.unit) violations.push(`the card still reports ${base.unit} after every reading was restated in °F`);
+      if (base.unit === derived.unit) violations.push(`the card still reports ${base.unit} after every reading was restated in another unit`);
       for (const entity of base.markersByEntity.keys()) {
-        if (!derived.markersByEntity.has(entity)) violations.push(`${entity} is on the °C card and not on the °F one`);
+        if (!derived.markersByEntity.has(entity)) violations.push(`${entity} is on the ${base.unit} card and not on the ${derived.unit} one`);
       }
       // The order, not the positions: the card rounds scale bounds to a whole step in the
       // displayed unit, so end padding differs between °C and °F and every marker shifts a
       // little. What cannot change is which room is colder than which.
       if (base.markerOrder.join(",") !== derived.markerOrder.join(",")) {
-        violations.push(`the rooms changed order between °C and °F: ${base.markerOrder.join(",")} -> ${derived.markerOrder.join(",")}`);
+        violations.push(`the rooms changed order between ${base.unit} and ${derived.unit}: ${base.markerOrder.join(",")} -> ${derived.markerOrder.join(",")}`);
       }
       if (!agree(base.extremes, derived.extremes)) {
-        violations.push(`the extremes changed between °C and °F: ${JSON.stringify(base.extremes)} -> ${JSON.stringify(derived.extremes)}`);
+        violations.push(`the extremes changed between ${base.unit} and ${derived.unit}: ${JSON.stringify(base.extremes)} -> ${JSON.stringify(derived.extremes)}`);
       }
       // Zone and comfort counts are deliberately not asserted: the card rounds projected
       // thresholds into the displayed unit, so a Fahrenheit household can get a different

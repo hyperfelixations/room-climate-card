@@ -32,16 +32,16 @@ for (const place of Object.keys(REMOVED_SPELLINGS).filter((entry) => entry.inclu
 // --------------------------------------------------------------------- the tables --
 
 // Alternative units that are still valid for the same measurement.
-const SAME_METRIC_UNITS = { temperature: ["°F", "K"], humidity: [], co2: [], pm25: [] };
+const SAME_METRIC_UNITS = { temperature: ["°F", "K"], humidity: [], co2: [], pm25: [], pm1: [], pm4: [], pm10: [], co: ["µg/m³", "ppm", "ppb"] };
 
 // The canonical unit of each OTHER metric the card knows: a plausible copy-paste error.
 function otherMetricUnits(metric) {
-  return METRIC_KINDS.filter((kind) => kind !== metric).map((kind) => METRICS[kind].canonicalUnit);
+  return METRIC_KINDS.filter((kind) => kind !== metric).map((kind) => METRICS[kind].canonicalUnit).filter((unit) => ![METRICS[metric].canonicalUnit, ...SAME_METRIC_UNITS[metric]].includes(unit));
 }
 
 // Every unit from a Home Assistant domain the card does NOT handle. Flattened once.
 const OTHER_DOMAIN_UNITS = Object.entries(V.HA_UNITS)
-  .filter(([domain]) => !["temperature", "humidity", "carbon_dioxide", "pm25"].includes(domain))
+  .filter(([domain]) => !Object.values(METRICS).some((metric) => metric.deviceClass === domain))
   .flatMap(([, units]) => units);
 
 // Where each metric actually lives, where it plausibly lives, and where it cannot.
@@ -49,6 +49,10 @@ const VALUE_BANDS = {
   temperature: { typical: [-20, 45], wide: [-60, 100], impossible: [-400, -274] },
   humidity: { typical: [0, 100], wide: [0, 100], impossible: [-50, -0.01] },
   co2: { typical: [350, 2500], wide: [1, 50000], impossible: [-1000, -0.01] },
+  pm1: { typical: [0, 60], wide: [0, 1000], impossible: [-100, -0.01] },
+  pm4: { typical: [0, 60], wide: [0, 1000], impossible: [-100, -0.01] },
+  pm10: { typical: [0, 160], wide: [0, 2000], impossible: [-100, -0.01] },
+  co: { typical: [0, 40], wide: [0, 1000], impossible: [-100, -0.01] },
   pm25: { typical: [0, 60], wide: [0, 1000], impossible: [-100, -0.01] },
 };
 
@@ -58,6 +62,10 @@ const THRESHOLDS = {
   humidity: [25, 30, 35, 40, 42, 58, 60, 65, 70, 75],
   co2: [400, 800, 1000, 1200, 1600, 2000],
   pm25: [5, 15, 25, 35, 50],
+  pm1: [5, 15, 25, 35, 50],
+  pm4: [5, 15, 25, 35, 50],
+  pm10: [15, 45, 75, 100, 150],
+  co: [1, 4, 7, 10, 35],
 };
 
 // The enumerated options with their real domains. Each is also generated slightly wrong via

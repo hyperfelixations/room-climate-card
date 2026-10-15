@@ -9,7 +9,7 @@
 
 const { test, expect } = require("../../helpers/playwright.js");
 const { gotoHarness, createCard, mkStateObj, setCardWidth } = require("../../helpers/browser-helpers");
-const { CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { attributesFor, CO2, HUMIDITY, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 async function shot(page, cardId, name, width = 400) {
   // Waits on the layout mechanism, not a duration (see setCardWidth) — a frame-early
@@ -1038,6 +1038,40 @@ test.describe("visual golden: the parts a card can leave out", () => {
         }
       );
       await shot(page, cardId, `show-${name}.png`, 400);
+    });
+  }
+});
+
+// Two new visual contracts: fractional CO boundaries and grouped values with the longest
+// mass unit. Particle profiles share PM2.5's rendering; their differences are numeric.
+// Generic theme goldens already cover light/dark paint. Unit/geometry tests cover the
+// remaining CO units, widths and locales without duplicating these screenshots.
+test.describe("visual golden: CO formatting", () => {
+  const cases = [
+    { name: "fractional ppm bands", unit: "ppm", value: 2.1, trend: 0.2, screenshot: "co-ppm-fractional-bands-320.png" },
+    { name: "grouped mass values and long unit", unit: "µg/m³", value: 2400, trend: 200, screenshot: "co-mass-grouped-values-320.png" },
+  ];
+  for (const entry of cases) {
+    test(entry.name, async ({ page }) => {
+      await gotoHarness(page);
+      const attributes = attributesFor("co", entry.unit);
+      const states = {
+        "sensor.avg": mkStateObj("sensor.avg", entry.value, attributes),
+        "sensor.r1": mkStateObj("sensor.r1", entry.value * 0.6, attributes),
+        "sensor.r2": mkStateObj("sensor.r2", entry.value * 1.4, attributes),
+        "sensor.trend": mkStateObj("sensor.trend", entry.trend, { unit_of_measurement: `${entry.unit}/h` }),
+      };
+      const cardId = await createCard(page, {
+        entity: "sensor.avg", trend_entity: "sensor.trend", auto_slide: false,
+        rooms: [{ entity: "sensor.r1", name: "Living room", short: "LR" }, { entity: "sensor.r2", name: "Bedroom", short: "BR" }],
+        views: [{ type: "scale" }],
+      }, states);
+      const card = page.locator(`#${cardId}`);
+      await expect(card.locator(".rtc-title")).toHaveText("CO");
+      await expect(card.locator(".rtc-avg-button")).toHaveAttribute("data-trend-direction", "rising");
+      await expect(card.locator(".rtc-avg-value-num")).toHaveText(entry.unit === "ppm" ? "2.1" : "2,400");
+      await expect(card.locator(".rtc-scale-label-center")).toContainText(entry.unit === "ppm" ? "0.8ppm" : "1,000µg/m³");
+      await shot(page, cardId, entry.screenshot, 320);
     });
   }
 });

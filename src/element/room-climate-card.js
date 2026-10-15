@@ -33,7 +33,7 @@ import {
 import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { surfaceOf } from "../domain/classification/paint-roles.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
-import { metricKindOfUnit, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
+import { metricKindsOfUnit, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
 import { effectiveMetricKind, resolveMeasurementContext } from "../application/model/measurement-context.js";
 import { buildCardDomainModel } from "../application/model/card-domain-model.js";
 import {
@@ -42,7 +42,7 @@ import {
   resolveSourceTopology,
 } from "../application/model/source-topology.js";
 import { stubConfigFor } from "../application/model/card-suggestions.js";
-import { autoRoomColumnsFor, metricMetaFor } from "../presentation/view-model/metric-meta.js";
+import { autoRoomColumnsFor, metricFormattingFor } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
 import { VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
@@ -79,7 +79,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     isSupportedLanguage,
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
-    metricKindForUnit: metricKindOfUnit,
+    metricKindsForUnit: metricKindsOfUnit,
     unitProfileForUnit: (metricKind, unit) => {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
@@ -483,23 +483,14 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return translate(this._language(), key, vars);
     }
 
-    _metricMetaFor(metricType) {
-      // Shared fallback: unknown/missing metric types resolve to temperature.
-      return metricMetaFor(metricType);
-    }
-
     _autoRoomColumnsFor(metricType) {
       return autoRoomColumnsFor(metricType);
-    }
-
-    _metricMeta() {
-      return this._metricMetaFor(this._metricType());
     }
 
     _fmt(value, digits) {
       // The digit count is resolved here, where the config override and the
       // metric's own default are known; the formatting itself is locale work.
-      const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
+      const d = digits ?? this._config.decimals ?? metricFormattingFor(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key).decimals;
       return formatNumber(this._language(), value, d);
     }
 
@@ -522,7 +513,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     _unit() {
       // Always a real unit string, never null — even in the "mixed_metric_kinds" state,
-      // where _resolveMetricContext() falls back via _metricMetaFor()'s temperature
+      // where _resolveMetricContext() falls back via the temperature
       // default. Kept consistent with _metricType() there.
       return this._resolveMetricContext().unit;
     }
@@ -542,7 +533,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // Same pair, with an explicit sign on positive values; a signed band range uses it so
     // both of its bounds read as signed quantities.
     _fmtSigned(value, digits) {
-      const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
+      const d = digits ?? this._config.decimals ?? metricFormattingFor(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key).decimals;
       return formatNumber(this._language(), value, d, "exceptZero");
     }
 

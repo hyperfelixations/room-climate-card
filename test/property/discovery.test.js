@@ -69,7 +69,8 @@ test("every measurement reaches every count from zero to five, and some installa
   for (const kind of METRIC_KINDS) {
     for (const [, label] of DISCOVERY_WEIGHTS.sensorsPerKind) {
       const share = population.filter((description) => description.sensors.filter((sensor) => !isDistractor(sensor) && kindOf(sensor) === kind).length === Number(label)).length / SAMPLE;
-      const expected = (1 - without) * weightShare(DISCOVERY_WEIGHTS.sensorsPerKind, label) + (label === "0" ? without : 0);
+      const active = (1 - without) * 4 / METRIC_KINDS.length;
+      const expected = active * weightShare(DISCOVERY_WEIGHTS.sensorsPerKind, label) + (label === "0" ? 1 - active : 0);
       assertNear(share, expected, 0.03, `${kind}: ${label} sensors`);
     }
   }

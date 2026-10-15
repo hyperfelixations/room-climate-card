@@ -12,6 +12,10 @@ import { freezer as temperatureFreezer } from "./profiles/temperature/freezer.js
 import { indoor as humidityIndoor } from "./profiles/humidity/indoor.js";
 import { indoor as co2Indoor } from "./profiles/co2/indoor.js";
 import { indoor as pm25Indoor } from "./profiles/pm25/indoor.js";
+import { indoor as pm1Indoor } from "./profiles/pm1/indoor.js";
+import { indoor as pm4Indoor } from "./profiles/pm4/indoor.js";
+import { indoor as pm10Indoor } from "./profiles/pm10/indoor.js";
+import { indoor as coIndoor } from "./profiles/co/indoor.js";
 
 export const CLASSIFICATION_PROFILE_REGISTRY = {
   temperature: {
@@ -41,4 +45,8 @@ export const CLASSIFICATION_PROFILE_REGISTRY = {
       indoor: pm25Indoor,
     },
   },
+  pm1: { defaultProfile: "indoor", profiles: { indoor: pm1Indoor } },
+  pm4: { defaultProfile: "indoor", profiles: { indoor: pm4Indoor } },
+  pm10: { defaultProfile: "indoor", profiles: { indoor: pm10Indoor } },
+  co: { defaultProfile: "indoor", profiles: { indoor: coIndoor } },
 };

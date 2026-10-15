@@ -14,7 +14,7 @@
 //   isSupportedLanguage   whether a language code has translations
 //   optionSchemaForView   a view type's option schema, or undefined
 //   viewTypes             every registered view type, for views and start_view
-//   metricKindForUnit     a unit string -> metric kind
+//   metricKindsForUnit    a unit string -> candidate metric kinds
 //   unitProfileForUnit    a metric kind + unit string -> unit profile
 
 import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
