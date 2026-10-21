@@ -23,7 +23,8 @@ const cardMetadata = {
   // Live preview from getStubConfig(), which names up to three real rooms from the
   // user's system when there are any (see card-suggestions.js).
   preview: true,
-  description: "Standalone climate card (temperature, humidity, CO2, or PM2.5) with an average value, comfort range, optional room extremes/chips, and HA actions.",
+  // Generic on purpose: a list of measurements here would go stale with the next one added.
+  description: "Standalone climate and air quality card with an average value, comfort range, optional room extremes/chips, and HA actions.",
   documentationURL: "https://github.com/hyperfelixations/room-climate-card",
   // Answers HA's "what do you want to show" picker flow: a pure, total function over
   // hass.states (see card-suggestions.js), so no guard is needed here.

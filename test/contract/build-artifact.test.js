@@ -13,6 +13,7 @@ const { JSDOM } = require("jsdom");
 const { SHIPPED_CARD_SOURCE } = require("../helpers/load-card.jsdom.js");
 const packageJson = require("../../package.json");
 const { CO2, TEMPERATURE_C } = require("../fixtures/attributes.js");
+const { METRIC_KINDS } = require("../manifests/product-surface.js");
 
 const CARD_TAG = "room-climate-card";
 const source = SHIPPED_CARD_SOURCE;
@@ -81,6 +82,21 @@ test("evaluating the artifact registers exactly one Home Assistant card-picker e
   assert.equal(entries[0].preview, true);
   // The registration baseline records this as "[Function]"; the actual type is asserted here.
   assert.equal(typeof entries[0].getEntitySuggestion, "function");
+});
+
+// The picker text is read by every user choosing a card; a list of measurements in it goes
+// stale with the next one added, so it names every measurement or none.
+test("the card-picker description names every measurement or none of them", async () => {
+  const window = evaluateInBareRealm();
+  const { description } = window.customCards.find((card) => card.type === CARD_TAG);
+  const { en } = await import("../../src/i18n/languages/en.js");
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const named = METRIC_KINDS.filter((kind) => {
+    const title = en[`title.${kind}`];
+    const spellings = [title, title.replace("₂", "2")].map(escape).join("|");
+    return new RegExp(`(?<![\\w.])(?:${spellings})(?![\\w.])`, "i").test(description);
+  });
+  assert.ok(named.length === 0 || named.length === METRIC_KINDS.length, `names only ${named.join(", ")}: "${description}"`);
 });
 
 // The suggestion hook must survive bundling and run against the real registry — a reordered
