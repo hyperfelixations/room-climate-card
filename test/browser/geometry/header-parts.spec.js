@@ -95,7 +95,7 @@ test("a header with nothing in it is not laid out at all", async ({ page }) => {
   await setCardWidth(page, cardId, 400);
   expect(await headerLayout(page, cardId)).toBeNull();
 
-  // And what follows it starts where the header used to, rather than 11px lower.
+  // The main panel then starts at the root padding, with no empty header row above it.
   const panelTop = await page.evaluate((id) => {
     const shadow = document.getElementById(id).shadowRoot;
     const root = shadow.querySelector(".rtc-root");

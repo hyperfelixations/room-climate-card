@@ -101,7 +101,7 @@ export function buildRangeModel({ states, config, policy, palette, metricKind, d
   if (max !== null && !isValuePhysicallyValid(policy, metricKind, displayUnitProfile, max)) max = null;
 
   const attributes = hasRange ? states?.[config.range_entity]?.attributes : undefined;
-  // English names win; legacy German names remain optional fallbacks.
+  // English names win; the German names are fallbacks.
   const minTimestamp = hasRange ? readFirstAttribute(attributes, ["minimum_timestamp", "minimum_zeitpunkt"]) : null;
   const maxTimestamp = hasRange ? readFirstAttribute(attributes, ["maximum_timestamp", "maximum_zeitpunkt"]) : null;
 

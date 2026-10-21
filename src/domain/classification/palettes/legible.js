@@ -114,8 +114,8 @@ function wingIsUsable(colors, demand) {
 // choice as the background allows, or null when a wing has nowhere to go. The deep wing (which
 // carries "more") is chosen first; the pale wing may flip downwards when it has nowhere paler,
 // but a flipped wing may not overtake the deep one — unconstrained, `palette: teal` on mid
-// grey ran its pale wing past the deep wing into near-black and the ramp read backwards. When
-// no endpoint satisfies that, the middle moves instead.
+// grey would run its pale wing past the deep wing into near-black and the ramp would read
+// backwards. When no endpoint satisfies that, the middle moves instead.
 function rampForBase(base, palette, demand, allowFlip) {
   const coordinates = hexToOklch(base);
   const preferred = monochromeAnchors(coordinates);
@@ -303,7 +303,7 @@ function* fromFinishedSteps(palette, demand) {
   const geometry = describePalette(palette);
   // Nothing here moves a step off its own hue and chroma, so a step with no legible lightness
   // is unreachable by any method in this section — bail before walking 400 shifts to
-  // rediscover that (most of the old give-up cost on a white-to-black card).
+  // rediscover that (most of the give-up cost on a white-to-black card).
   const reachable = geometry.steps.every(
     (step) => legibleVariant(step.color, demand.backgrounds, demand.required) !== null
   );

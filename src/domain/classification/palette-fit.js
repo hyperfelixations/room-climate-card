@@ -4,7 +4,7 @@
 //
 // What comes back is a FINDING, not a yes/no: a method that moves lightness needs to know which
 // steps collide and by how much, one that moves chroma needs it cut differently. The instrument
-// is screenDistance() (core/oklch.js). Rationale, and why this replaced a declared `tunedFor`:
+// is screenDistance() (core/oklch.js). Rationale:
 // see internal dev doc §5 "Sichtbarkeitsprüfung einer Palette".
 
 import { createLruCache } from "../../core/lru.js";

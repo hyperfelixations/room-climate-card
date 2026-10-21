@@ -3,7 +3,7 @@
 // Takes an already-projected display profile and pulls out the fields the scale maths
 // needs, with both defaults made explicit here instead of in scattered `undefined` checks:
 //
-//   oneSided     the metric has no "too low" end (CO2, PM2.5): the lower bound never
+//   oneSided     the metric has no "too low" end (CO2, particulates, CO): the lower bound never
 //                grows away from the reference scale
 //   anchorScale  true unless a profile opts out (outdoor temperature does)
 //

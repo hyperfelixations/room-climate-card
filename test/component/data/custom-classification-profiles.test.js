@@ -149,7 +149,7 @@ test("declaring a range instead keeps the anchored axis a profile has by default
 });
 
 // The bar is a window onto the value range; bands are clipped into it, exactly as for an
-// anchored profile whose axis has not yet grown to meet a band. This used to be refused.
+// anchored profile whose axis has not yet grown to meet a band.
 test("a comfort band wider than the declared axis is clipped into it, not rejected", () => {
   const card = createTemperatureCard(
     {

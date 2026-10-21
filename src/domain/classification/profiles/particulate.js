@@ -3,8 +3,8 @@
 // One atomic profile: tiers (threshold/score/zone), comfort/optimal/scale bands, physical
 // validity, icons. `score` is the signed distance from optimal that the palette turns into a
 // colour. The optimal and comfort edges are the WHO 2021 annual and 24-hour guideline values;
-// PM1 and PM4 have no guideline of their own and take the PM2.5 set. The tiers above are
-// product decisions — do not reorder or "tidy".
+// PM1 and PM4 have no guideline of their own and take the PM2.5 set. The tier thresholds
+// are product decisions — do not reorder or "tidy".
 
 import { physicalRange } from "../validity.js";
 

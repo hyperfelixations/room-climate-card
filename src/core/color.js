@@ -22,7 +22,7 @@ const CSS_VARIABLE_PATTERN = /^var\(--[A-Za-z0-9_-]+\)$/;
 // A colour at a given opacity, from a hex colour of any of the four CSS lengths or from one
 // custom-property reference (`var(--name)`). The given alpha always wins over an alpha
 // embedded in the hex ("this colour at this opacity"). The result reaches inline styles, so
-// any other input falls back to white at that opacity instead of passing through.
+// any other input falls back to white at that opacity.
 export function rgba(color, alpha) {
   const fallback = `rgba(255,255,255,${alpha})`;
   if (typeof color !== "string") return fallback;

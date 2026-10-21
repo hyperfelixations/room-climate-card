@@ -80,7 +80,7 @@ export function normalizeScale(value) {
 //
 // assertRampOrder(): two rules over the WHOLE list (neither is a per-tier property),
 // checked on colourless tiers only. Without them `[1, 5, -1]` with `zone: optimal` in the
-// middle was accepted and painted the optimum in the palette's most extreme colour.
+// middle would be accepted and paint the optimum in the palette's most extreme colour.
 function assertRampOrder(tiers) {
   let previous = null;
   tiers.forEach((tier, index) => {

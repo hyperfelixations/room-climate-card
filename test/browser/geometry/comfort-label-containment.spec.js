@@ -2,7 +2,7 @@
 
 // The comfort label is centred on the comfort band's centre and must stay inside its own
 // view: a band pushed to one end of the axis would otherwise carry the label past the
-// edge, clipped in a solo view or painted across the next carousel slide. All four metrics
+// edge, clipped in a solo view or painted across the next carousel slide. Several metrics
 // reach that with ordinary readings (CO2 from ~1200 ppm, PM2.5 from ~24 µg/m³, temperature
 // at both ends).
 

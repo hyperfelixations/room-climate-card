@@ -149,7 +149,7 @@ test("every one of the 148 names produces a ramp of eleven steps that never turn
 
 test("a ramp spends the room it has evenly, rather than jumping and then crawling", () => {
   // The gamut-corner defect: sRGB holds more chroma at some hues than others, and `blue`
-  // (#0000FF) sits on a corner, so equal-parameter steps used to cost most of its chroma in
+  // (#0000FF) sits on a corner, so equal-parameter steps would cost most of its chroma in
   // the first step. The generator places steps at even shares of the painted path
   // (placeAlong in geometry.js) and aims wings at colours the gamut can hold.
   let worst = { ratio: 0, name: null };

@@ -3,8 +3,8 @@
 // The label is centred on a percentage, but text width is fixed in pixels while the
 // bar's rendered width varies with the card and the viewport — a percentage alone
 // cannot guarantee it will not visually collide with the min/max edge labels in the
-// same row. That is most acute for CO2 and PM2.5, whose optimal band starts at the
-// bar's left edge.
+// same row. That is most acute for the one-sided metrics (CO2, particulates, CO), whose optimal
+// band starts at the bar's left edge.
 //
 // The desired position is always derived fresh from the geometry — the one
 // authoritative source — never read back from this function's own previous (already

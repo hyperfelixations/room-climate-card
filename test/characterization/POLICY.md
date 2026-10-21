@@ -43,7 +43,7 @@ retiring once what they anchor is settled:
 
 - **`model/`** records the view model through a flat DTO. It can be retired when that DTO is
   gone from the suite entirely — the adapter is test-only and allowlisted (see
-  `architecture/architecture-imports.test.js`).
+  `architecture/element-ownership.test.js`).
 - **`carousel/`** anchors one rework. It can be retired once the timing contracts it records
   are stated as ordinary tests with reasons, rather than as recorded numbers.
 

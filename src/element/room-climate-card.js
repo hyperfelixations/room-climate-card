@@ -4,7 +4,7 @@
 // accessors onto them, never copies. Owner/runtime split: see internal dev doc §4
 // "Owner- und Runtime-Verträge".
 //
-// Import direction, enforced by test/unit/architecture-imports.test.js (a cycle or
+// Import direction, enforced by test/architecture/architecture-imports.test.js (a cycle or
 // unresolved specifier is also a Rollup build failure):
 //
 //   core -> config / i18n / domain -> application/model
@@ -423,7 +423,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // ==== Auto-slide, track and accessibility controller boundary ====
     // Stateless named entry points onto this._carousel, called by the render and
     // lifecycle paths above. An element member without a production caller fails an
-    // architecture test (architecture-imports.test.js).
+    // architecture test (element-ownership.test.js).
     _startRotation() {
       this._carousel.start();
     }

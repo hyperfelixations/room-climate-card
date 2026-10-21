@@ -194,9 +194,9 @@ test("visual golden: narrow width (320px)", async ({ page }) => {
   await shot(page, cardId, "narrow-320.png", 320);
 });
 
-// The card exactly as the README's screenshot.png / screenshot-dark.png advertise it:
-// primary value, five rooms all inside the comfort band, default sort and views. Re-record
-// only together with the README images.
+// The card exactly as screenshot.png / screenshot-dark.png show it: primary value, five
+// rooms all inside the comfort band, default sort and views. Re-record only together with
+// those images.
 test.describe("visual golden: the card the README advertises", () => {
   const HERO_ROOMS = [
     { name: "Bedroom", short: "BE", entity: "sensor.bedroom", value: 20.6 },

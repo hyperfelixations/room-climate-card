@@ -2,7 +2,7 @@
 // one ramp for protan, deutan and tritan alike (aliases route all three here, `tritan`
 // included — measured, not a leftover).
 //
-// Derived with a Brettel 1997 dichromacy simulation, now an anchored hex set like any other.
+// Derived with a Brettel 1997 dichromacy simulation, stored as an anchored hex set like any other.
 // Derivation and the measured tables: RCC changelog. Reach, separation, order and contrast
 // under all four ways of seeing: pinned by classification-palettes.test.js. Rationale:
 // see internal dev doc §5 "Die color-vision-Palette".

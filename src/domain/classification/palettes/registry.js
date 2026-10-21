@@ -38,8 +38,8 @@ function assertColor(value, path) {
   }
 }
 
-// A wing may be missing (CO2/PM2.5 have no "too little", a single-colour palette has neither
-// direction). What it may NOT be is present-but-malformed, which is what this still catches.
+// A wing may be missing (CO2, particulates and CO have no "too little", a single-colour palette
+// has neither direction). What it may NOT be is present-but-malformed, which is what this still catches.
 function assertWing(wing, path) {
   if (wing === undefined || wing === null) return;
   if (!Array.isArray(wing)) {

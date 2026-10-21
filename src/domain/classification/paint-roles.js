@@ -17,7 +17,7 @@ import { compositeOver } from "../../core/color.js";
 // How much more separation a role needs than the baseline (VISIBILITY_THRESHOLD), which is
 // calibrated for a large solid area. Set by rendering each role AT ITS REAL SIZE AND WEIGHT
 // and looking (test/browser/visual/paint-role-calibration.spec.js), not by formula. Bracket
-// cases are kept beside the numbers because that is how they were fixed.
+// cases are kept beside the numbers because the numbers are fixed by them.
 const ROLE_FACTORS = {
   accent: 1.0,
   marker: 1.0,

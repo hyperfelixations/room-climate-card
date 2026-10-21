@@ -21,7 +21,7 @@ const DIAGNOSTIC_FOR_STAGE = Object.freeze({
 
 const asBoolean = (value) => (typeof value === "boolean" ? value : undefined);
 
-// The spellings the show: block and per-view show_footer replaced in 2.39.0; one switch for all.
+// The spellings the show: block and per-view show_footer replaced; one switch for all.
 const SHOW_BLOCK_SPELLINGS = DEPRECATION_STAGE.REMOVED;
 
 // One entry per place: a top-level `key`, or a `view` and its `option`. `matches` narrows an entry

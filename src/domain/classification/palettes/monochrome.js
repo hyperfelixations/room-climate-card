@@ -57,7 +57,7 @@ export function monochromeWing(base, side, endLightness) {
   return placeAlong(base, end, WING_STEPS).map((t) => oklchToHex(mix(base, end, t)));
 }
 
-// monochromeAnchors() below is now a DEFAULT, not the only possibility: a caller that knows an
+// monochromeAnchors() below is a DEFAULT, not the only possibility: a caller that knows an
 // unusual background may aim the wings elsewhere (palettes/legible.js). Kept as one function so
 // an adapted ramp is visibly the same construction with different endpoints.
 
