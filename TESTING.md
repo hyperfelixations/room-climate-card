@@ -21,6 +21,9 @@ npm run test:node
 The non-browser half: build plus every Node layer. Use `npm run test:unit` only for the direct
 ES-module unit layer; its name is deliberately narrower than `test:node`.
 
+The tooling runs on the Node.js versions in `engines` in `package.json`; `.nvmrc` names the major
+version CI uses. `npm ci` fetches every dependency over HTTPS, so no GitHub SSH key is needed.
+
 Install the browser binaries once with `npm run test:install`. The command installs Chromium,
 Firefox and WebKit without trying to mutate operating-system packages; CI runner images own
 their system dependencies. A `spawn UNKNOWN` when a project starts means that engine arrived

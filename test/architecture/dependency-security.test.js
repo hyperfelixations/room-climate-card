@@ -76,3 +76,33 @@ test("Dependabot watches npm and the workflow actions", () => {
     assert.match(config, new RegExp(`- package-ecosystem: ${ecosystem}\\n    directory: /\\n    schedule:\\n      interval: weekly`), ecosystem);
   }
 });
+
+// `npm ci` must work without a GitHub SSH key (devcontainers, firewalled networks, new
+// contributors); a git dependency is fetched as an HTTPS tarball pinned to a full commit.
+test("every locked package is fetched over HTTPS, a GitHub one as a tarball of a full commit", () => {
+  const { packages } = JSON.parse(read("package-lock.json"));
+  for (const [where, entry] of Object.entries(packages)) {
+    if (!entry.resolved) continue;
+    assert.match(entry.resolved, /^https:\/\//, `${where} resolves to ${entry.resolved}`);
+    assert.ok(entry.integrity, `${where} carries no integrity hash`);
+    if (entry.resolved.includes("github.com")) {
+      assert.match(entry.resolved, /^https:\/\/codeload\.github\.com\/[\w.-]+\/[\w.-]+\/tar\.gz\/[0-9a-f]{40}$/, where);
+    }
+  }
+});
+
+// jsdom sets the floor: the tooling declares exactly the Node versions it supports, and the
+// version CI runs (named once more in .nvmrc for local version managers) is one of them.
+test("the declared Node versions are jsdom's, and CI and .nvmrc run one of them", () => {
+  const jsdom = JSON.parse(read("node_modules", "jsdom", "package.json"));
+  assert.equal(pkg.engines?.node, jsdom.engines.node);
+  const nvmrc = read(".nvmrc").trim();
+  assert.match(nvmrc, /^\d+$/, ".nvmrc names a major version");
+  const ranges = pkg.engines.node.split("||").map((range) => range.trim());
+  assert.ok(ranges.some((range) => range.startsWith(`^${nvmrc}.`)), `engines must include Node ${nvmrc}: ${ranges.join(", ")}`);
+  for (const name of WORKFLOWS) {
+    const workflow = read(".github", "workflows", name);
+    for (const [, version] of workflow.matchAll(/node-version: (\d+)\s*$/gm)) assert.equal(version, nvmrc, `${name}: node-version ${version}`);
+    for (const [, version] of workflow.matchAll(/NODE_VERSION: "(\d+)\.[\d.]+"/g)) assert.equal(version, nvmrc, `${name}: NODE_VERSION`);
+  }
+});

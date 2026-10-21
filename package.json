@@ -4,6 +4,9 @@
   "private": true,
   "description": "Build and test tooling for the Room Climate Card Home Assistant custom card. Sources live in src/ (ES modules); the card ships as a single, dependency-free bundle, built to dist/room-climate-card.js and published as the GitHub release asset HACS installs. It does not require any of this tooling to run in Home Assistant.",
   "type": "commonjs",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
     "build": "rollup -c",
     "build:dev": "node scripts/build-dev.mjs",
@@ -57,7 +60,7 @@
     "@playwright/test": "^1.64.0",
     "@stryker-mutator/core": "10.0.0",
     "c8": "12.0.0",
-    "card-mod": "github:thomasloven/lovelace-card-mod#11005313b240da0f7880b95aedc5a9876c293b83",
+    "card-mod": "https://codeload.github.com/thomasloven/lovelace-card-mod/tar.gz/11005313b240da0f7880b95aedc5a9876c293b83",
     "istanbul-lib-coverage": "3.2.2",
     "istanbul-lib-report": "3.0.1",
     "istanbul-reports": "3.2.0",
