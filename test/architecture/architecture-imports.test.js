@@ -10,6 +10,8 @@
 //   4 render/{primitives,layout}|styles   5 views|render/composition
 //   6 controllers/{runtime,render}   7 element   8 index.js
 //
+// Inside domain/: units <- metrics <- trend; classification and scale import no other area.
+//
 // A file under src/ matching no prefix fails, so a new directory forces a
 // decision here. Boundary: src/ import direction only — suite-structure checks
 // the test tree, environment-boundaries and element-ownership the global and
@@ -17,7 +19,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { BROWSER_ADAPTER, ENTRY, classify, files, graph, resolveSpecifier } = require("./source-architecture.js");
+const { BROWSER_ADAPTER, ENTRY, classify, domainAreaOf, files, graph, resolveSpecifier } = require("./source-architecture.js");
 
 test("every source file is assigned to exactly one architectural layer", () => {
   for (const file of files) {
@@ -92,6 +94,27 @@ test("same-layer imports stay inside one group (config, i18n and domain must not
     }
   }
   assert.deepEqual(violations, [], `sideways imports:\n  ${violations.join("\n  ")}`);
+});
+
+test("every domain file belongs to exactly one domain area", () => {
+  for (const file of files.filter((candidate) => candidate.startsWith("domain/"))) {
+    assert.notEqual(domainAreaOf(file), null, `${file} is in no domain area — add it to DOMAIN_AREAS in source-architecture.js`);
+  }
+});
+
+test("domain areas import only the areas they build on", () => {
+  const violations = [];
+  for (const file of files) {
+    const from = domainAreaOf(file);
+    if (!from) continue;
+    for (const specifier of graph.get(file).specifiers) {
+      const to = domainAreaOf(resolveSpecifier(file, specifier));
+      if (to && to !== from && !from.mayImport.includes(to.area)) {
+        violations.push(`${file} (${from.area}) imports ${resolveSpecifier(file, specifier)} (${to.area})`);
+      }
+    }
+  }
+  assert.deepEqual(violations, [], `domain area violations:\n  ${violations.join("\n  ")}`);
 });
 
 test("core has no project-internal dependencies", () => {

@@ -5,22 +5,31 @@ import { boolOption, enumOption } from "../../../config/option-schemas.js";
 import { UNAVAILABLE_TEXT } from "../../../core/text.js";
 import { extremeRoomLabel } from "../metric-meta.js";
 import { buildMarker } from "../marker.js";
-import { buildBandRangeText, buildScaleBarContent } from "./scale-bar.js";
+import { buildBandLabelForms, buildScaleBarContent, hasCompactForm } from "./scale-bar.js";
 
 // Room footer combines comfort count, spread and an optional reporting trend. A spread no
-// double can hold is null and shown as the card's no-number text.
-function buildFooterText(shared) {
+// double can hold is null and shown as the card's no-number text. `spreadText` writes the
+// spread, so the compact form differs only there.
+function buildFooterText(shared, spreadText) {
   const { texts, comfort, rooms, spread, trend } = shared;
   const segments = [
     texts.t("footer.comfort", { count: comfort.inComfort, total: rooms.count }),
-    texts.t("footer.spread", { value: spread === null ? UNAVAILABLE_TEXT : texts.fmtWithUnit(spread) }),
+    texts.t("footer.spread", { value: spread === null ? UNAVAILABLE_TEXT : spreadText(spread) }),
   ];
   if (trend.model) segments.push(texts.t("footer.trend", { value: trend.text }));
   return segments.join(" · ");
 }
 
+// The footer with a short-scale spread, or null when the spread has none.
+function buildCompactFooterText(shared) {
+  const { texts, spread, unit } = shared;
+  if (spread === null || !hasCompactForm(spread)) return null;
+  return buildFooterText(shared, (value) => `${texts.fmtCompact(value)} ${unit}`);
+}
+
 export function buildScaleViewContent(shared, options) {
-  const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind } = shared;
+  const { texts, comfort, average, rooms, extremes, roomMarkers, scale, metricKind, unit } = shared;
+  const showFooter = rooms.comparable && options.show_footer;
   const markersMode = options.markers;
   // Emphasize average among all-room markers.
   const emphasizeAverage = markersMode === "all" && Boolean(extremes);
@@ -30,23 +39,25 @@ export function buildScaleViewContent(shared, options) {
     ...buildScaleBarContent({
       geometry: scale,
       texts,
-      boundaryDigits: shared.boundaryDigits,
+      unit,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Room-dependent footer also respects per-view visibility.
-      footerText: rooms.comparable && options.show_footer ? buildFooterText(shared) : null,
+      footerText: showFooter ? buildFooterText(shared, (value) => texts.fmtWithUnit(value)) : null,
+      compactFooterText: showFooter ? buildCompactFooterText(shared) : null,
     }),
-    // Layout selects long or short comfort text from measured width.
+    // Layout keeps the first comfort form that fits its measured width.
     comfortLabel: options.show_comfort_band
-      ? (() => {
-          const range = buildBandRangeText(texts, comfort.min, comfort.max, shared.boundaryDigits);
-          return {
-            long: texts.t("scale.comfortLabel", { range }),
-            short: texts.t("scale.comfortLabelShort", { range }),
-            center: scale.comfortCenter,
-            visible: scale.comfortVisible,
-          };
-        })()
+      ? {
+          ...buildBandLabelForms(texts, unit, {
+            min: comfort.min,
+            max: comfort.max,
+            longKey: "scale.comfortLabel",
+            shortKey: "scale.comfortLabelShort",
+          }),
+          center: scale.comfortCenter,
+          visible: scale.comfortVisible,
+        }
       : null,
     emphasizeAverage,
     markers: {

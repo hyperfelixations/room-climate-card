@@ -1,87 +1,52 @@
 import { isOutsideRange } from "../../core/numbers.js";
 import { rejectValue } from "../errors.js";
+import { isPlainObject } from "../primitives.js";
 import { LEGACY_TEMPERATURE_ICON_KEYS } from "./profile-parts.js";
 
-export function convertCustomProfile(value, source, sourceUnitProfile, metricKind) {
-  const {
-    sourceComfort,
-    sourceOptimal,
-    sourceScale,
-    sourceStep,
-    sourceHeadroom,
-    sourceTiers,
-    sourceValidRange,
-    sourceIconTiers,
-    comparison,
-    oneSided,
-    anchorScale,
-  } = source;
-  const refuse = (path) => {
-    const parts = path.replaceAll("[", ".").replaceAll("]", "").split(".").slice(1);
-    rejectValue(path, parts.reduce((part, key) => part[key], value));
-  };
-  // Absolutes use offsets; steps/headroom use deltas. Only written bounds must stay finite.
-  const converting = (convert) => (written, path) => {
-    const converted = convert(written);
-    if (!Number.isFinite(converted)) refuse(path);
-    return converted;
-  };
-  const toCanonical = converting(sourceUnitProfile.toCanonical);
-  const deltaToCanonical = converting(sourceUnitProfile.deltaToCanonical);
-  const convertBand = (band, path) => {
-    const converted = { min: toCanonical(band.min, `${path}.min`), max: toCanonical(band.max, `${path}.max`) };
-    if (converted.min >= converted.max) refuse(`${path}.max`);
-    return converted;
-  };
-  const convertTierMins = (tiers, pathOf) => {
-    const converted = tiers.map((tier, index) => ({ ...tier, min: Number.isFinite(tier.min) ? toCanonical(tier.min, pathOf(index)) : tier.min }));
-    converted.forEach((tier, index) => {
-      if (index > 0 && tier.min >= converted[index - 1].min) refuse(pathOf(index));
-    });
-    return converted;
-  };
+// The value written at a re-expression fault's YAML path, read through own keys only.
+function writtenValueAt(value, path) {
+  const keys = path.match(/[^.[\]]+/g).slice(1);
+  return keys.reduce((node, key) => (node !== null && typeof node === "object" && Object.hasOwn(node, key) ? node[key] : undefined), value);
+}
 
-  const comfort = convertBand(sourceComfort, "classification.bands.comfort");
-  const optimal = convertBand(sourceOptimal, "classification.bands.optimal");
-  const scale = sourceScale && convertBand(sourceScale, "classification.scale");
-  const step = deltaToCanonical(sourceStep, "classification.scale.step");
-  if (step <= 0) refuse("classification.scale.step");
-  const headroom = sourceHeadroom === null ? undefined : deltaToCanonical(sourceHeadroom, "classification.scale.headroom");
-  const tiers = convertTierMins(sourceTiers, (index) => `classification.tiers[${index}].min`);
-  const canonicalValidRange = sourceValidRange && {
-    min: sourceValidRange.min === null ? null : toCanonical(sourceValidRange.min, "classification.valid_range.min"),
-    max: sourceValidRange.max === null ? null : toCanonical(sourceValidRange.max, "classification.valid_range.max"),
-    minInclusive: sourceValidRange.minInclusive,
-    maxInclusive: sourceValidRange.maxInclusive,
-  };
-  if (canonicalValidRange && canonicalValidRange.min !== null && canonicalValidRange.max !== null && canonicalValidRange.min >= canonicalValidRange.max) {
-    refuse("classification.valid_range.max");
-  }
-  // The legacy temperature object names its thresholds by key, the list by index.
-  const iconTiers =
-    sourceIconTiers &&
-    convertTierMins(sourceIconTiers, (index) =>
-      Array.isArray(value.icons) ? `classification.icons[${index}].min` : `classification.icons.${LEGACY_TEMPERATURE_ICON_KEYS[index]}`
-    );
-  const invalidWhen = canonicalValidRange ? (reading) => isOutsideRange(reading, canonicalValidRange) : null;
+// The legacy temperature icon object names its thresholds by key, the list by index.
+function writtenPath(value, field) {
+  const legacyIcon = isPlainObject(value.icons) && /^classification\.icons\[(\d+)\]\.min$/.exec(field);
+  return legacyIcon ? `classification.icons.${LEGACY_TEMPERATURE_ICON_KEYS[legacyIcon[1]]}` : field;
+}
 
-  return {
+// The custom profile as written, and re-expressed in the metric's canonical unit. The
+// re-expression is injected (config/ does not import the domain); see internal dev doc §5
+// "Einheitenregel". A boundary the canonical unit cannot hold refuses the written value.
+export function convertCustomProfile(value, source, sourceUnitProfile, metricKind, profileReexpression) {
+  const validRange = source.sourceValidRange;
+  const authored = {
     id: "custom",
     metricKind,
     // As written, for a message that has to name it.
     unit: value.unit.trim(),
-    comparison,
-    tiers,
-    comfort,
-    optimal,
-    scale,
-    step,
-    headroom,
-    oneSided,
-    anchorScale,
-    invalidWhen,
-    validRange: canonicalValidRange,
+    comparison: source.comparison,
+    tiers: source.sourceTiers,
+    comfort: source.sourceComfort,
+    optimal: source.sourceOptimal,
+    scale: source.sourceScale,
+    step: source.sourceStep,
+    headroom: source.sourceHeadroom === null ? undefined : source.sourceHeadroom,
+    oneSided: source.oneSided,
+    anchorScale: source.anchorScale,
+    invalidWhen: validRange ? (reading) => isOutsideRange(reading, validRange) : null,
+    validRange,
     invalidClassification: { score: null, levelKey: "level.invalidReading", zone: "invalid" },
-    iconTiers,
+    iconTiers: source.sourceIconTiers,
   };
+  const canonical = profileReexpression.reexpress(authored, {
+    absolute: sourceUnitProfile.toCanonical,
+    delta: sourceUnitProfile.deltaToCanonical,
+  });
+  const fault = profileReexpression.findFault(authored, canonical);
+  if (fault) {
+    const path = writtenPath(value, fault.field);
+    rejectValue(path, writtenValueAt(value, path));
+  }
+  return { ...canonical, authored: { unitProfileKey: sourceUnitProfile.key, profile: authored } };
 }

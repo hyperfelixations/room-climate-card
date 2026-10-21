@@ -13,17 +13,19 @@
 const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
 const DEFAULT_LANGUAGE = "en";
 
-// The four things the card can measure, with the units each one accepts. `canonicalUnit`
-// is the unit the card computes in; the others are converted on the way in.
+// What the card can measure, in the order the card offers it, with the units each one
+// accepts. `canonicalUnit` is the unit the card computes in; the others are converted on the
+// way in. `physicalRange` is the span of possible readings in the canonical unit, both ends
+// included (null: unbounded).
 const METRICS = {
-  temperature: { deviceClass: "temperature", canonicalUnit: "°C", unitProfiles: ["celsius", "fahrenheit", "kelvin"] },
-  humidity: { deviceClass: "humidity", canonicalUnit: "%", unitProfiles: ["percent"] },
-  co2: { deviceClass: "carbon_dioxide", canonicalUnit: "ppm", unitProfiles: ["ppm"] },
-  pm25: { deviceClass: "pm25", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
-  pm1: { deviceClass: "pm1", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
-  pm4: { deviceClass: "pm4", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
-  pm10: { deviceClass: "pm10", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"] },
-  co: { deviceClass: "carbon_monoxide", canonicalUnit: "mg/m³", unitProfiles: ["milligram_per_m3", "microgram_per_m3", "ppm", "ppb"] },
+  temperature: { deviceClass: "temperature", canonicalUnit: "°C", unitProfiles: ["celsius", "fahrenheit", "kelvin"], physicalRange: { min: -273.15, max: null } },
+  humidity: { deviceClass: "humidity", canonicalUnit: "%", unitProfiles: ["percent"], physicalRange: { min: 0, max: 100 } },
+  co2: { deviceClass: "carbon_dioxide", canonicalUnit: "ppm", unitProfiles: ["ppm"], physicalRange: { min: 0, max: null } },
+  pm25: { deviceClass: "pm25", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"], physicalRange: { min: 0, max: null } },
+  pm1: { deviceClass: "pm1", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"], physicalRange: { min: 0, max: null } },
+  pm4: { deviceClass: "pm4", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"], physicalRange: { min: 0, max: null } },
+  pm10: { deviceClass: "pm10", canonicalUnit: "µg/m³", unitProfiles: ["microgram_per_m3"], physicalRange: { min: 0, max: null } },
+  co: { deviceClass: "carbon_monoxide", canonicalUnit: "mg/m³", unitProfiles: ["milligram_per_m3", "microgram_per_m3", "ppm", "ppb"], physicalRange: { min: 0, max: null } },
 };
 const METRIC_KINDS = Object.keys(METRICS);
 

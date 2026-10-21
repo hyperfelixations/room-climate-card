@@ -10,6 +10,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { PROFILE_REEXPRESSION } = require("../../helpers/profile-reexpression.js");
 const { isDeepStrictEqual } = require("node:util");
 const { VIEWS } = require("../../manifests/product-surface.js");
 
@@ -52,6 +53,7 @@ const COLLABORATORS = {
     if (unit === "°F") return FAHRENHEIT;
     return null;
   },
+  profileReexpression: PROFILE_REEXPRESSION,
 };
 
 function validCustom(overrides = {}) {

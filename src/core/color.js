@@ -17,36 +17,21 @@ export function isHexColor(value) {
   return HEX_COLOR_PATTERN.test(value);
 }
 
-// How bright a colour is to the eye, on the 0..1 scale WCAG's contrast ratio uses. Not
-// the same as the lightness values elsewhere — this one is about light, not appearance.
-export function relativeLuminance(hex) {
-  const value = String(hex).replace("#", "").trim();
-  const full = value.length <= 4 ? value.slice(0, 3).split("").map((digit) => digit + digit).join("") : value.slice(0, 6);
-  const [r, g, b] = [0, 2, 4].map((index) => {
-    const channel = parseInt(full.slice(index, index + 2), 16) / 255;
-    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
+const CSS_VARIABLE_PATTERN = /^var\(--[A-Za-z0-9_-]+\)$/;
 
-// Builds a semi-transparent colour from a hex, rgb(), or CSS variable input. Accepts all
-// four CSS hex lengths; for 4/8-digit input only the RGB part is used, and the given
-// alpha always wins over any alpha embedded in the source ("this colour at this opacity").
+// A colour at a given opacity, from a hex colour of any of the four CSS lengths or from one
+// custom-property reference (`var(--name)`). The given alpha always wins over an alpha
+// embedded in the hex ("this colour at this opacity"). The result reaches inline styles, so
+// any other input falls back to white at that opacity instead of passing through.
 export function rgba(color, alpha) {
-  if (typeof color !== "string") return `rgba(255,255,255,${alpha})`;
-  if (color.startsWith("rgba") || color.startsWith("rgb")) return color;
-  if (color.startsWith("var(")) return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
-  const hex = color.replace("#", "").trim();
-  let rgbHex;
-  if (hex.length === 3 || hex.length === 4) {
-    rgbHex = hex.slice(0, 3).split("").map((c) => c + c).join("");
-  } else if (hex.length === 6 || hex.length === 8) {
-    rgbHex = hex.slice(0, 6);
-  } else {
-    return `rgba(255,255,255,${alpha})`;
-  }
+  const fallback = `rgba(255,255,255,${alpha})`;
+  if (typeof color !== "string") return fallback;
+  const value = color.trim();
+  if (CSS_VARIABLE_PATTERN.test(value)) return `color-mix(in srgb, ${value} ${Math.round(alpha * 100)}%, transparent)`;
+  if (!isHexColor(value)) return fallback;
+  const hex = value.slice(1);
+  const rgbHex = hex.length <= 4 ? hex.slice(0, 3).split("").map((c) => c + c).join("") : hex.slice(0, 6);
   const int = Number.parseInt(rgbHex, 16);
-  if (!Number.isFinite(int)) return `rgba(255,255,255,${alpha})`;
   const r = (int >> 16) & 255;
   const g = (int >> 8) & 255;
   const b = int & 255;
@@ -241,11 +226,6 @@ export function cssColorToHex(value) {
   return { hex: parsed.length === 9 ? parsed.slice(0, 7) : parsed, alpha: 1 };
 }
 
-export function luminanceOfCssColor(value) {
-  const parsed = cssColorToHex(value);
-  return parsed ? relativeLuminance(parsed.hex) : null;
-}
-
 // ---------------------------------------------------------- compositing and blending --
 
 const channelsOf = (hex) => [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
@@ -339,8 +319,7 @@ export function parseColorToken(value) {
   if (typeof value !== "string") return null;
   const token = value.trim().toLowerCase();
   if (!token) return null;
-  const named = CSS_COLOR_NAMES[token];
-  if (named) return named;
+  if (Object.hasOwn(CSS_COLOR_NAMES, token)) return CSS_COLOR_NAMES[token];
   const hex = token.startsWith("#") ? token : `#${token}`;
   if (!isHexColor(hex)) return null;
   // One output form for every input form: shorthand is doubled (CSS's own definition of

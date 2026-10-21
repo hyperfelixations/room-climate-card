@@ -266,8 +266,8 @@ test("_buildScaleModel(): identical input produces identical geometry for both t
   assert.ok(first.scaleMin < first.scaleMax);
   assert.equal(first.displayStep, 1, "Celsius uses the fixed static step (1), not a dynamic Fahrenheit tier");
   assert.ok(Number.isFinite(first.markerPositions.avg) && first.markerPositions.avg > 0 && first.markerPositions.avg < 100);
-  assert.equal(first.boundaryLabels.min, el._fmtWithUnit(first.scaleMin, 0, false));
-  assert.equal(first.boundaryLabels.max, el._fmtWithUnit(first.scaleMax, 0, false));
+  assert.equal(first.boundaryLabels.min, `${el._fmtBoundary(first.scaleMin)}°C`);
+  assert.equal(first.boundaryLabels.max, `${el._fmtBoundary(first.scaleMax)}°C`);
   env.cleanup(el);
 });
 

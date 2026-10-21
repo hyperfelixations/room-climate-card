@@ -24,7 +24,7 @@ export function paletteOf(config) {
   return config?.palette || DEFAULT_PALETTE;
 }
 
-// The profile in its authored (canonical) unit.
+// The profile in the metric's canonical unit (a custom one carries its written form along).
 export function resolveCanonicalProfile(policy, metricKind, { lenient = false } = {}) {
   return resolveClassificationProfile(CLASSIFICATION_PROFILE_REGISTRY[metricKind], policy, metricKind, { lenient });
 }

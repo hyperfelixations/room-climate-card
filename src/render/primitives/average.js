@@ -2,6 +2,7 @@
 // Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
+import { setAttr, setHidden, setStyleProperty, setText } from "./dom.js";
 import { applyFocusFallback } from "./focus.js";
 
 function contentHtml(average) {
@@ -57,34 +58,33 @@ export function renderAverage(viewModel) {
 // Mirror renderAverage() field-for-field without reparsing value updates as HTML.
 export function patchAverage(element, viewModel) {
   const average = viewModel.average;
-  element.setAttribute("title", average.tooltip);
+  setAttr(element, "title", average.tooltip);
   if (average.entity) {
-    element.setAttribute("data-entity", average.entity);
+    setAttr(element, "data-entity", average.entity);
   }
   // Remove stale room action ownership as well as setting it.
   if (average.roomIndex !== null) {
-    element.setAttribute("data-room-index", String(average.roomIndex));
+    setAttr(element, "data-room-index", average.roomIndex);
   } else {
     element.removeAttribute("data-room-index");
   }
-  element.setAttribute("aria-label", average.ariaLabel);
+  setAttr(element, "aria-label", average.ariaLabel);
   // Caption presence is structural; patch only an existing node.
   const labelEl = element.querySelector(".rtc-avg-label");
-  if (labelEl) labelEl.textContent = average.label;
-  const valueEl = element.querySelector(".rtc-avg-value");
-  valueEl.style.marginTop = average.hasLabel ? "" : "0px";
-  element.querySelector(".rtc-avg-value-num").textContent = average.valueText;
-  element.querySelector(".rtc-avg-value-unit").textContent = average.unitText;
+  if (labelEl) setText(labelEl, average.label);
+  setStyleProperty(element.querySelector(".rtc-avg-value"), "margin-top", average.hasLabel ? "" : "0px");
+  setText(element.querySelector(".rtc-avg-value-num"), average.valueText);
+  setText(element.querySelector(".rtc-avg-value-unit"), average.unitText);
   const hasTrend = Boolean(average.trendDirection);
   element.classList.toggle("rtc-has-trend", hasTrend);
   element.classList.toggle("rtc-no-label", !average.hasLabel);
   element.classList.toggle("rtc-unavailable", Boolean(average.unavailable));
   if (hasTrend) {
-    element.setAttribute("data-trend-direction", average.trendDirection);
+    setAttr(element, "data-trend-direction", average.trendDirection);
   } else {
     element.removeAttribute("data-trend-direction");
   }
-  element.querySelector(".rtc-avg-trend-arrow").hidden = !hasTrend;
+  setHidden(element.querySelector(".rtc-avg-trend-arrow"), !hasTrend);
 }
 
 // Patch stable shape; replace only for first render or interactive/non-interactive shape change.

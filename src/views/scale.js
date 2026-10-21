@@ -2,9 +2,12 @@
 // Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../core/text.js";
+import { setHidden, setText } from "../render/primitives/dom.js";
 import { patchMarker, renderMarker } from "../render/primitives/marker.js";
 import { patchScaleBar, renderScaleBar } from "../render/primitives/scale-bar.js";
 import { resolveComfortLabelPosition } from "../render/layout/comfort-label.js";
+import { resolveEdgeLabels } from "../render/layout/edge-labels.js";
+import { resolveFooterForm } from "../render/layout/footer-form.js";
 import { resolveOptimalLabelPosition } from "../render/layout/optimal-label.js";
 
 const VIEW_CLASS = "rtc-scale-view";
@@ -99,12 +102,15 @@ export const scaleView = {
   patch(context, viewEl, content) {
     const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     patchScaleBar(containerEl, content);
+    resolveEdgeLabels(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
+    resolveFooterForm(containerEl, content);
 
-    // Set visibility first; measured layout exclusively owns comfort-label form/position.
+    // Visibility and the long form first; measured layout owns the shorter forms and the position.
     const comfortLabelEl = containerEl.querySelector(".rtc-scale-comfort-label");
     if (comfortLabelEl && content.comfortLabel) {
-      comfortLabelEl.hidden = !content.comfortLabel.visible;
+      setHidden(comfortLabelEl, !content.comfortLabel.visible);
+      setText(comfortLabelEl, content.comfortLabel.long);
     }
     resolveComfortLabelPosition(containerEl, content);
 
@@ -125,6 +131,8 @@ export const scaleView = {
   resolveLayout(context, viewEl, content) {
     const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     resolveComfortLabelPosition(containerEl, content);
+    resolveEdgeLabels(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
+    resolveFooterForm(containerEl, content);
   },
 };

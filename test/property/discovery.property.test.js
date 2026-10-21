@@ -14,6 +14,7 @@ const { SeededRandom } = require("../helpers/seeded-random.js");
 const { createTestEnvironment } = require("../helpers/load-card.jsdom.js");
 const { installation } = require("../fixtures/installation.js");
 const { generateInstallation, checkDiscovery, shrinkInstallation } = require("./discovery.js");
+const { METRIC_KINDS } = require("../manifests/product-surface.js");
 const { readCount, readSeed, formatSeed, writePropertyReport } = require("./run-config.js");
 
 const SEED = readSeed("ROOM_CLIMATE_CARD_DISCOVERY_SEED", 0xd15c0);
@@ -111,7 +112,7 @@ test(`every one of ${CASES} generated installations yields a start configuration
   assert.ok(share(census.naming.area) >= 0.15, `area names ${share(census.naming.area)}`);
   assert.ok(share(census.naming.name) >= 0.28, `sensor names ${share(census.naming.name)}`);
   assert.ok(census.pass.declared >= 1, "no installation reached the declared-only pass");
-  for (const kind of ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"]) {
+  for (const kind of METRIC_KINDS) {
     assert.ok((census.kind[kind] || 0) >= 1, `${kind} was never chosen`);
   }
 });

@@ -174,6 +174,7 @@ test("a table is built once for a palette and reused by value", () => {
   assert.equal(tone.tintRecipesFor([...colors], surface), first, "the same colours and surface must not rebuild");
   assert.notEqual(tone.tintRecipesFor(colors, roles.surfaceOf([DARK], "#E1E1E1")), first, "a different background must");
   assert.notEqual(tone.tintRecipesFor([...colors, "#000000"], surface), first, "a different palette must");
+  assert.equal(tone.tintRecipesFor(colors, surface), first, "another card asking in between does not evict it");
 });
 
 test("a colour nobody prepared a recipe for is left exactly as it is", () => {

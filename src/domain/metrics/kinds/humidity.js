@@ -1,6 +1,6 @@
 // Relative humidity in %, one identity unit profile.
 
-import { CLASSIFICATION_PROFILE_REGISTRY } from "../../classification/registry.js";
+import { linearUnitProfile } from "../../units/linear-unit-profile.js";
 
 export const humidity = {
   metricKind: "humidity",
@@ -8,16 +8,7 @@ export const humidity = {
   canonicalUnit: "%",
   canonicalProfileKey: "percent",
   unitProfiles: {
-    percent: {
-      key: "percent",
-      units: ["%"],
-      displayUnit: "%",
-      toCanonical: (v) => v,
-      fromCanonical: (v) => v,
-      deltaToCanonical: (v) => v,
-      deltaFromCanonical: (v) => v,
-      baseDisplayStep: CLASSIFICATION_PROFILE_REGISTRY.humidity.profiles.indoor.step,
-    },
+    percent: linearUnitProfile({ key: "percent", displayUnit: "%" }),
   },
   trend: { fallingBelow: -0.5, risingAbove: 0.5 },
 };

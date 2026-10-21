@@ -54,8 +54,9 @@ test("no language code is listed twice", () => {
 
 // --------------------------------------------------------------------- metrics --
 
-test("the card measures exactly the metrics the manifest claims", () => {
+test("the card measures exactly the metrics the manifest claims, in its order", () => {
   assert.deepEqual(Object.keys(metricDefinitions.METRIC_DEFINITIONS).sort(), [...surface.METRIC_KINDS].sort());
+  assert.deepEqual([...metricDefinitions.METRIC_KIND_ORDER], surface.METRIC_KINDS);
 });
 
 test("each metric's canonical unit and unit profiles match the manifest", () => {
@@ -67,6 +68,15 @@ test("each metric's canonical unit and unit profiles match the manifest", () => 
       [...expected.unitProfiles].sort(),
       `${kind}: unit profiles`
     );
+  }
+});
+
+test("every built-in profile accepts exactly the physical range the manifest names", async () => {
+  const { CLASSIFICATION_PROFILE_REGISTRY } = await import("../../src/domain/classification/registry.js");
+  for (const [kind, expected] of Object.entries(surface.METRICS)) {
+    for (const [id, profile] of Object.entries(CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
+      assert.deepEqual(profile.validRange, { ...expected.physicalRange, minInclusive: true, maxInclusive: true }, `${kind}/${id}`);
+    }
   }
 });
 

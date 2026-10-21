@@ -72,7 +72,7 @@ function captureShadowMarkup(el) {
     return { markup: html, css: "", cssSha256: null };
   }
   const css = html.slice(open + "<style>".length, close);
-  const markup = `${html.slice(0, open)}<style>[[css sha256:${sha256(css)}]]</style>${html.slice(close)}`;
+  const markup = `${html.slice(0, open)}<style>[[css sha256:${sha256(css)}]]</style>${html.slice(close + "</style>".length)}`;
   return { markup, css, cssSha256: sha256(css) };
 }
 

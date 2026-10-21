@@ -36,6 +36,17 @@ for (const scenario of SCENARIOS) {
   });
 }
 
+test("the captured markup keeps exactly the one style block the card renders", () => {
+  const scenario = SCENARIOS[0];
+  const el = env.createCard(scenario.config, buildHass(scenario));
+  const { markup } = captureShadowMarkup(el);
+  const rendered = el.shadowRoot.innerHTML;
+  const count = (text, needle) => text.split(needle).length - 1;
+  assert.equal(count(markup, "</style>"), count(rendered, "</style>"));
+  assert.equal(markup.slice(markup.indexOf("</style>")), rendered.slice(rendered.indexOf("</style>")));
+  env.cleanup(el);
+});
+
 test("the partial-update path (_updateContent) converges on the same DOM as the full render path", () => {
   for (const scenario of SCENARIOS) {
     const rendered = env.createCard(scenario.config, buildHass(scenario));

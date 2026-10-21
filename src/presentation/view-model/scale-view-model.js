@@ -9,7 +9,8 @@ import { markerPositions, scaleGeometry } from "../../domain/scale/geometry.js";
 export const MARKER_OVERLAP_PCT = 1.6;
 export const MARKER_NUDGE_PX = 4;
 
-export function buildScaleAxis({ scaleConfig, displayUnitProfile, comfort, optimal, low, high, markers, formatBoundary }) {
+// `formatCompactBoundary` gives a boundary's short-scale fallback, or null when it has none.
+export function buildScaleAxis({ scaleConfig, displayUnitProfile, comfort, optimal, low, high, markers, formatBoundary, formatCompactBoundary = () => null }) {
   const axis = dynamicScale(low, high, scaleConfig, displayUnitProfile?.dynamicDisplaySteps);
   return {
     ...scaleGeometry(comfort.min, comfort.max, optimal.min, optimal.max, axis.min, axis.max),
@@ -18,6 +19,10 @@ export function buildScaleAxis({ scaleConfig, displayUnitProfile, comfort, optim
     boundaryLabels: {
       min: formatBoundary(axis.min),
       max: formatBoundary(axis.max),
+    },
+    compactBoundaryLabels: {
+      min: formatCompactBoundary(axis.min),
+      max: formatCompactBoundary(axis.max),
     },
   };
 }

@@ -64,8 +64,7 @@ export const SCALE_BAR_CSS = `        .rtc-scale-bar {
         .rtc-scale-labels span {
           position: absolute;
           top: 0;
-          /* Ellipsis engages only when measured layout caps the center label;
-             min/max never receive max-width. */
+          /* Ellipsis engages only where measured layout caps a label. */
           overflow: hidden;
           text-overflow: ellipsis;
         }

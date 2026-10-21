@@ -5,7 +5,7 @@
 // card's input and presentation axes:
 //
 //   configuration cases   A (minimal) / B (rooms) / C (range) / D (full)
-//   metric kinds          temperature, humidity, CO2, PM2.5
+//   metric kinds          temperature, humidity, CO2, PM2.5, CO in ppm (a projected unit)
 //   unit profiles         °C, °F, K, and a mixed-unit room consensus
 //   classification        auto/builtin, indoor, outdoor, fridge, freezer, entity, custom
 //   measurement states    empty, missing rooms, mixed metric kinds
@@ -17,7 +17,7 @@
 // Timestamps are fixed: the render signature incorporates last_updated, so a live
 // `new Date()` would make the captured markup depend on when the suite ran.
 
-const { CO2, HUMIDITY, PM25, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../fixtures/attributes.js");
+const { CO2, CO_PPM, HUMIDITY, PM25, TEMPERATURE_C, TEMPERATURE_F, TEMPERATURE_K } = require("../fixtures/attributes.js");
 const FIXED_TS = "2026-07-24T05:00:00Z";
 
 function st(entityId, state, attributes) {
@@ -176,6 +176,22 @@ const SCENARIOS = [
       "sensor.avg": st("sensor.avg", 12.4, PM),
       "sensor.r1": st("sensor.r1", 27.8, PM),
       "sensor.r2": st("sensor.r2", 4.1, PM),
+    },
+  },
+  {
+    // The profile is written in mg/m³: ppm shows its floored boundaries and 1-2-5 axis steps.
+    name: "metric-co-ppm",
+    config: {
+      entity: "sensor.avg",
+      rooms: [
+        { name: "Garage", short: "GA", entity: "sensor.r1" },
+        { name: "Hall", short: "HA", entity: "sensor.r2" },
+      ],
+    },
+    states: {
+      "sensor.avg": st("sensor.avg", 1.7, CO_PPM),
+      "sensor.r1": st("sensor.r1", 3.9, CO_PPM),
+      "sensor.r2": st("sensor.r2", 0.6, CO_PPM),
     },
   },
   {

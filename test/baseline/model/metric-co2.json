@@ -31,16 +31,8 @@
   "coolestShift": 0,
   "displayStep": 200,
   "displayUnitProfile": {
-    "baseDisplayStep": 200,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "ppm",
-    "fromCanonical": "[Function]",
-    "key": "ppm",
-    "toCanonical": "[Function]",
-    "units": [
-      "ppm"
-    ]
+    "key": "ppm"
   },
   "empty": false,
   "hasRange": false,

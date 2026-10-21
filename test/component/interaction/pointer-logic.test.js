@@ -93,3 +93,23 @@ test("pointercancel while NOT dragging (a tap that never became a swipe) does no
   assert.equal(el._interaction.pointer, null, "the pointer itself is still cleared");
   env.cleanup(el);
 });
+
+// The cancellations a real browser delivers, through the card's own listeners: a lost capture
+// bubbles out of the shadow root, and leaving the card is seen only by the host.
+test("a lost pointer capture ends a confirmed drag", () => {
+  const el = threeViewCard();
+  beginConfirmedDrag(el, 1);
+  el.shadowRoot.querySelector(".rtc-rotator").dispatchEvent(new env.window.PointerEvent("lostpointercapture", { pointerId: 1, bubbles: true, composed: true }));
+  assert.equal(el._isDragging, false);
+  assert.equal(el._interaction.pointer, null);
+  assert.equal(el._activeView, 1);
+  env.cleanup(el);
+});
+
+test("a pointer that leaves the card is no longer tracked", () => {
+  const el = threeViewCard();
+  beginTouch(el);
+  el.dispatchEvent(new env.window.PointerEvent("pointerleave", { pointerId: 1 }));
+  assert.equal(el._interaction.isInteracting(), false);
+  env.cleanup(el);
+});

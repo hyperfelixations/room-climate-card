@@ -12,7 +12,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment, normalize } = require("../../helpers/load-card.jsdom.js");
 
 // Direct imports make the owner of each unit and metric contract explicit.
-let access, conversion;
+let access, conversion, projection, registry;
 
 let env;
 let el;
@@ -20,6 +20,8 @@ let el;
 test.before(async () => {
   access = await import("../../../src/domain/metrics/access.js");
   conversion = await import("../../../src/domain/units/conversion.js");
+  projection = await import("../../../src/domain/classification/projection.js");
+  registry = await import("../../../src/domain/classification/registry.js");
   env = createTestEnvironment();
   el = env.document.createElement("room-climate-card"); // bare element, no setConfig() needed for pure-function calls
 });
@@ -99,9 +101,16 @@ test("delta: Kelvin delta equals Celsius delta exactly (pure offset relationship
 
 // ---- Deterministic, integer Fahrenheit classification thresholds ----
 
+// The temperature indoor profile as the card projects it into a display unit.
+function projectedIndoor(profileKey) {
+  const definition = access.getMetricDefinition("temperature");
+  const canonical = registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor;
+  return projection.projectProfile(canonical, definition, access.getUnitProfile("temperature", profileKey)).projected;
+}
+
 test("Fahrenheit classification thresholds are the exact required integers, derived from the single Celsius source", () => {
-  const celsiusTiers = access.deriveThresholdsForProfile("temperature", "celsius");
-  const fahrenheitTiers = access.deriveThresholdsForProfile("temperature", "fahrenheit");
+  const celsiusTiers = projectedIndoor("celsius").tiers;
+  const fahrenheitTiers = projectedIndoor("fahrenheit").tiers;
 
   // Source (CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor.tiers):
   // 28,26,25,24,23,21,20,19,18,16,-Infinity
@@ -118,22 +127,19 @@ test("Fahrenheit classification thresholds are the exact required integers, deri
   }
 });
 
-test("the -Infinity tier survives Fahrenheit derivation unchanged (no NaN/edge-case bug)", () => {
-  const fahrenheitTiers = access.deriveThresholdsForProfile("temperature", "fahrenheit");
-  const lowest = fahrenheitTiers.find((t) => t.min === -Infinity);
-  assert.ok(lowest, "the -Infinity tier must still be present after Fahrenheit derivation");
+test("the -Infinity tier survives Fahrenheit projection unchanged (no NaN/edge-case bug)", () => {
+  const lowest = projectedIndoor("fahrenheit").tiers.find((t) => t.min === -Infinity);
+  assert.ok(lowest, "the -Infinity tier must still be present after Fahrenheit projection");
   assert.equal(lowest.levelKey, "level.veryCold");
 });
 
-test("Celsius profile derivation is a true identity: returns the indoor profile tiers unchanged, proving there is no second manually-maintained Celsius table", () => {
-  const derivedCelsius = access.deriveThresholdsForProfile("temperature", "celsius");
-  const sourceTiers = access.getMetricDefinition("temperature").canonicalClassificationTiers;
-  assert.deepEqual(normalize(derivedCelsius), normalize(sourceTiers));
+test("the canonical unit is the profile itself: Celsius returns the indoor profile, not a copy", () => {
+  assert.equal(projectedIndoor("celsius"), registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor);
 });
 
-test("levelKey/color are carried through unchanged for every generated Fahrenheit tier (only min is converted)", () => {
-  const celsiusTiers = access.deriveThresholdsForProfile("temperature", "celsius");
-  const fahrenheitTiers = access.deriveThresholdsForProfile("temperature", "fahrenheit");
+test("levelKey/color are carried through unchanged for every projected Fahrenheit tier (only min is converted)", () => {
+  const celsiusTiers = projectedIndoor("celsius").tiers;
+  const fahrenheitTiers = projectedIndoor("fahrenheit").tiers;
   assert.equal(fahrenheitTiers.length, celsiusTiers.length);
   for (let i = 0; i < celsiusTiers.length; i++) {
     assert.equal(fahrenheitTiers[i].levelKey, celsiusTiers[i].levelKey);
@@ -143,33 +149,18 @@ test("levelKey/color are carried through unchanged for every generated Fahrenhei
 
 // ---- Fahrenheit comfort, optimal and base-scale bands ----
 
-test("Fahrenheit base scale is exactly 66-77 °F", () => {
-  const band = access.deriveBandForProfile("temperature", "fahrenheit", "baseScale");
-  assert.deepEqual(normalize(band), { min: 66, max: 77 });
+test("Fahrenheit bands are exactly 66-77 (scale), 68-75 (comfort) and 70-73 °F (optimal)", () => {
+  const fahrenheit = projectedIndoor("fahrenheit");
+  assert.deepEqual(normalize(fahrenheit.scale), { min: 66, max: 77 });
+  assert.deepEqual(normalize(fahrenheit.comfort), { min: 68, max: 75 });
+  assert.deepEqual(normalize(fahrenheit.optimal), { min: 70, max: 73 });
 });
 
-test("Fahrenheit comfort band is exactly 68-75 °F", () => {
-  const band = access.deriveBandForProfile("temperature", "fahrenheit", "comfort");
-  assert.deepEqual(normalize(band), { min: 68, max: 75 });
-});
-
-test("Fahrenheit optimal band is exactly 70-73 °F", () => {
-  const band = access.deriveBandForProfile("temperature", "fahrenheit", "optimal");
-  assert.deepEqual(normalize(band), { min: 70, max: 73 });
-});
-
-test("Celsius bands are returned unrounded/untouched (identity profile)", () => {
-  assert.deepEqual(normalize(access.deriveBandForProfile("temperature", "celsius", "comfort")), { min: 20, max: 24 });
-  assert.deepEqual(normalize(access.deriveBandForProfile("temperature", "celsius", "optimal")), { min: 21, max: 23 });
-  assert.deepEqual(normalize(access.deriveBandForProfile("temperature", "celsius", "baseScale")), { min: 19, max: 25 });
-});
-
-// ---- baseDisplayStep contract (data only, no consuming logic in this block) ----
-
-test("baseDisplayStep is defined per profile: celsius 1, fahrenheit 2, kelvin 1", () => {
-  assert.equal(access.getUnitProfile("temperature", "celsius").baseDisplayStep, 1);
-  assert.equal(access.getUnitProfile("temperature", "fahrenheit").baseDisplayStep, 2);
-  assert.equal(access.getUnitProfile("temperature", "kelvin").baseDisplayStep, 1);
+test("Celsius bands are the written ones", () => {
+  const celsius = projectedIndoor("celsius");
+  assert.deepEqual(normalize(celsius.comfort), { min: 20, max: 24 });
+  assert.deepEqual(normalize(celsius.optimal), { min: 21, max: 23 });
+  assert.deepEqual(normalize(celsius.scale), { min: 19, max: 25 });
 });
 
 // ---- Error paths: fail fast on internal contract violations, never NaN/undefined ----
@@ -189,13 +180,9 @@ test("_convertMetricValue throws for an unknown quantityKind instead of silently
   );
 });
 
-test("_deriveBandForProfile throws a descriptive error for an unknown band name", () => {
-  assert.throws(() => access.deriveBandForProfile("temperature", "celsius", "notaband"), /notaband/);
-});
-
 // ---- Extension-point proof: the underlying pure functions are generic, not hardcoded to temperature ----
 
-test("extension point: convertUnitValue/deriveThresholdsForProfile/deriveBandForProfile work against a purely test-local synthetic profile, never registered in METRIC_DEFINITIONS", () => {
+test("extension point: convertUnitValue/projectProfile work against a purely test-local synthetic profile, never registered in METRIC_DEFINITIONS", () => {
   // A synthetic metric kind (g/m3 <-> mg/m3, x1000, no offset) outside the real registry,
   // proving the generic functions assume neither "temperature" nor Fahrenheit behaviour.
   const gramProfile = {
@@ -218,11 +205,19 @@ test("extension point: convertUnitValue/deriveThresholdsForProfile/deriveBandFor
   assert.equal(conversion.convertUnitValue(5000, "absolute", milligramProfile, gramProfile), 5);
   assert.equal(conversion.convertUnitValue(2, "delta", gramProfile, milligramProfile), 2000);
 
-  const syntheticTiers = [{ min: 0.5, levelKey: "test.low" }, { min: -Infinity, levelKey: "test.floor" }];
-  const derived = conversion.deriveThresholdsForProfile(syntheticTiers, milligramProfile);
-  assert.equal(derived[0].min, 500);
-  assert.equal(derived[1].min, -Infinity);
-
-  const derivedBand = conversion.deriveBandForProfile({ min: 0.1, max: 0.5 }, milligramProfile);
-  assert.deepEqual(normalize(derivedBand), { min: 100, max: 500 });
+  const definition = { canonicalProfileKey: "gram_per_m3", unitProfiles: { gram_per_m3: gramProfile, milligram_per_m3: milligramProfile } };
+  const synthetic = {
+    tiers: [{ min: 0.5, levelKey: "test.low" }, { min: -Infinity, levelKey: "test.floor" }],
+    comfort: { min: 0.1, max: 0.5 },
+    optimal: { min: 0.2, max: 0.4 },
+    scale: { min: 0, max: 1 },
+    step: 0.1,
+    validRange: null,
+    invalidWhen: null,
+  };
+  const { projected, fault } = projection.projectProfile(synthetic, definition, milligramProfile);
+  assert.equal(fault, null);
+  assert.deepEqual(projected.tiers.map((tier) => tier.min), [500, -Infinity]);
+  assert.deepEqual(normalize(projected.comfort), { min: 100, max: 500 });
+  assert.equal(projected.step, 100);
 });

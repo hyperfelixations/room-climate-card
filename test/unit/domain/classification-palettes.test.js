@@ -11,6 +11,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { measureRamp } = require("../../helpers/color-measurement.js");
+const { METRIC_KINDS, METRICS } = require("../../manifests/product-surface.js");
 
 let palettes;
 let geometry;
@@ -333,8 +334,10 @@ const SHIPPED_INVALID = "#B4B2A9";
 
 test("every built-in tier maps to the established pastel colour for its deviation", () => {
   let tiers = 0;
-  for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
+  let expectedTiers = 0;
+  for (const kind of METRIC_KINDS) {
     for (const [id, profile] of Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
+      expectedTiers += profile.tiers.length;
       // A value inside the tier (its own threshold for every built-in profile). The
       // open-ended tier is probed just below the one above it, not at -Infinity, because a
       // far-out reading would classify as physically invalid.
@@ -357,9 +360,8 @@ test("every built-in tier maps to the established pastel colour for its deviatio
         tiers++;
       }
       {
-        // One reading past each measurement's own limit. Temperature's is absolute zero, so
-        // -1 there is an ordinary winter reading.
-        const invalidProbe = kind === "temperature" ? -274 : -1;
+        // One reading past each measurement's own lower limit.
+        const invalidProbe = METRICS[kind].physicalRange.min - 1;
         const result = classify.classifyNumericValue(profile, invalidProbe);
         assert.equal(result.invalid, true, `${kind}/${id}: ${invalidProbe} is invalid`);
         assert.equal(
@@ -370,8 +372,8 @@ test("every built-in tier maps to the established pastel colour for its deviatio
       }
     }
   }
-  // 11 + 11 + 11 + 11 (temperature) + 11 (humidity) + 6 (CO2) + 6 (PM2.5).
-  assert.equal(tiers, 67, "every tier of every built-in profile was checked");
+  assert.ok(expectedTiers > 0);
+  assert.equal(tiers, expectedTiers, "every tier of every built-in profile was checked");
 });
 
 test("the same profiles under the second palette differ everywhere and stay coherent", () => {
@@ -482,7 +484,7 @@ test("a wing with no colours in it answers with the middle", () => {
 // The ramp contract the configuration layer enforces on user profiles, turned on the card's
 // own — built-in profiles do not pass through that layer.
 test("every built-in profile obeys the ramp contract it imposes on custom ones", () => {
-  for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
+  for (const kind of METRIC_KINDS) {
     for (const [id, profile] of Object.entries(registry.CLASSIFICATION_PROFILE_REGISTRY[kind].profiles)) {
       let previous = null;
       for (const [index, tier] of profile.tiers.entries()) {

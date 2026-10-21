@@ -399,3 +399,77 @@ test("custom profile with gaps just wide enough to survive Fahrenheit rounding a
   env.cleanup(card);
 });
 
+// Rounding belongs to a projection into another unit; in the unit a profile is written in,
+// it applies exactly as written.
+function fahrenheitProfile(optimal, comfort) {
+  return {
+    source: "custom",
+    unit: "°F",
+    bands: { comfort, optimal },
+    scale: { min: 60, max: 80, step: 2 },
+    tiers: [
+      { min: optimal.max, score: 1, level: "Above", color: "#AA0000", zone: "outside" },
+      { min: optimal.min, score: 0, level: "Ideal", color: "#00AA00", zone: "optimal" },
+      { default: true, score: -1, level: "Below", color: "#0000AA", zone: "outside" },
+    ],
+  };
+}
+
+test("a custom profile applies exactly as written on a sensor in its own unit", () => {
+  const profile = fahrenheitProfile({ min: 68.5, max: 72.5 }, { min: 66.5, max: 75.5 });
+  for (const [reading, label] of [[68.4, "Below"], [68.5, "Ideal"], [72.4, "Ideal"], [72.5, "Above"]]) {
+    const card = env.createCard({ entity: "sensor.avg", classification: profile }, fahrenheitHass(reading));
+    const data = card._computeViewModel();
+    assert.equal(data.tone.label, label, `${reading} °F`);
+    assert.deepEqual({ min: data.comfort.min, max: data.comfort.max }, { min: 66.5, max: 75.5 });
+    assert.deepEqual({ min: data.scale.optimalMin, max: data.scale.optimalMax }, { min: 68.5, max: 72.5 });
+    env.cleanup(card);
+  }
+});
+
+test("boundaries finer than Fahrenheit's rounding grid hold when the profile is written in °F", () => {
+  // 68.2 and 68.4 °F would both round to 68 on their way through Celsius.
+  const profile = fahrenheitProfile({ min: 68.2, max: 68.4 }, { min: 68, max: 69 });
+  const card = env.createCard({ entity: "sensor.avg", classification: profile }, fahrenheitHass(68.3));
+  assert.equal(card.shadowRoot.querySelector(".rtc-warning"), null);
+  assert.equal(card._computeViewModel().tone.label, "Ideal");
+  env.cleanup(card);
+  // On a Celsius sensor the same profile converts exactly: 68.3 °F is 20.1667 °C.
+  const celsius = createTemperatureCard(profile, 20.1667);
+  assert.equal(celsius.shadowRoot.querySelector(".rtc-warning"), null);
+  assert.equal(celsius._computeViewModel().tone.label, "Ideal");
+  env.cleanup(celsius);
+});
+
+// The printed band is the applied band: a boundary carries the digits the unit's readings
+// have, whatever `decimals` asks of the readings themselves, and drops trailing zeros.
+test("the scale prints a profile's fractional boundaries as written, whatever the reading decimals", () => {
+  const profile = {
+    ...customProfile,
+    bands: { comfort: { min: 18.5, max: 26.5 }, optimal: { min: 20.5, max: 23.5 } },
+    scale: { min: 16.5, max: 28.5, step: 0.5 },
+    tiers: [
+      { min: 23.5, score: 1, level: "Above", color: "#AA0000", zone: "outside" },
+      { min: 20.5, score: 0, level: "Ideal", color: "#00AA00", zone: "optimal" },
+      { default: true, score: -1, level: "Below", color: "#0000AA", zone: "outside" },
+    ],
+  };
+  for (const decimals of [undefined, 0, 2]) {
+    const config = { entity: "sensor.avg", classification: profile };
+    if (decimals !== undefined) config.decimals = decimals;
+    const card = env.createCard(config, temperatureHass(21));
+    const text = (selector) => card.shadowRoot.querySelector(selector).textContent;
+    assert.deepEqual(
+      {
+        comfort: text(".rtc-scale-comfort-label"),
+        optimal: text(".rtc-scale-label-center"),
+        min: text(".rtc-scale-label-min"),
+        max: text(".rtc-scale-label-max"),
+      },
+      { comfort: "18.5–26.5°C comfort", optimal: "20.5–23.5°C optimal", min: "16.5°C", max: "28.5°C" },
+      `decimals: ${decimals}`
+    );
+    env.cleanup(card);
+  }
+});
+

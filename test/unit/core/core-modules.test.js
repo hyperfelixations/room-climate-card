@@ -15,14 +15,18 @@ let color;
 let easing;
 let metadata;
 let diagnostics;
+let records;
+let lru;
 
 test.before(async () => {
+  lru = await import("../../../src/core/lru.js");
   diagnostics = await import("../../../src/core/diagnostics.js");
   color = await import("../../../src/core/color.js");
   numbers = await import("../../../src/core/numbers.js");
   text = await import("../../../src/core/text.js");
   easing = await import("../../../src/core/easing.js");
   metadata = await import("../../../src/core/card-metadata.js");
+  records = await import("../../../src/core/records.js");
 });
 
 // ------------------------------------------------------------ diagnostics --
@@ -97,6 +101,7 @@ test("parseNumericState() accepts the numeric shapes Home Assistant actually del
   assert.equal(parseNumericState("  -3.25  "), -3.25, "surrounding whitespace");
   assert.equal(parseNumericState("+7"), 7);
   assert.equal(parseNumericState(".5"), 0.5);
+  assert.equal(parseNumericState(",55"), 0.55);
   assert.equal(parseNumericState("1e3"), 1000, "exponent notation");
   assert.equal(parseNumericState("0"), 0);
 });
@@ -109,6 +114,7 @@ test("parseNumericState() rejects every non-measurement, including numeric-looki
   // parseFloat() would return 25 and 12 here — the reason for the strict format check.
   assert.equal(parseNumericState("25 °C"), null, "a unit suffix must not be silently dropped");
   assert.equal(parseNumericState("12abc"), null);
+  assert.equal(parseNumericState("0x10"), null, "Number() would read 16");
   assert.equal(parseNumericState("1.2.3"), null);
   assert.equal(parseNumericState("Infinity"), null);
   assert.equal(parseNumericState("NaN"), null);
@@ -132,6 +138,8 @@ test("parseConfigNumber() refuses the type coercions Number() would allow", () =
   assert.equal(parseConfigNumber(3), 3);
   assert.equal(parseConfigNumber("3"), 3);
   assert.equal(parseConfigNumber(" -2.5 "), -2.5);
+  assert.equal(parseConfigNumber("1.25"), 1.25);
+  assert.equal(parseConfigNumber(".25"), 0.25);
   // Number(true) === 1 — a typo'd `room_columns: true` must not become 1.
   assert.equal(parseConfigNumber(true), null);
   assert.equal(parseConfigNumber(false), null);
@@ -371,10 +379,10 @@ test("rgba() applies the requested alpha to every accepted colour form", () => {
   assert.equal(rgba("#ffffff", 1), "rgba(255,255,255,1)");
 });
 
-test("rgba() passes through already-transparent inputs and CSS variables", () => {
+test("rgba() expresses a CSS variable's transparency in CSS and passes nothing else through", () => {
   const { rgba } = color;
-  assert.equal(rgba("rgb(1,2,3)", 0.5), "rgb(1,2,3)", "an rgb() input keeps its own definition");
-  assert.equal(rgba("rgba(1,2,3,0.9)", 0.5), "rgba(1,2,3,0.9)");
+  assert.equal(rgba("rgb(1,2,3)", 0.5), "rgba(255,255,255,0.5)", "only hex colours are parsed");
+  assert.equal(rgba("var(--a);color:red", 0.5), "rgba(255,255,255,0.5)", "only a bare var(--name) is a reference");
   assert.equal(
     rgba("var(--primary-color)", 0.2),
     "color-mix(in srgb, var(--primary-color) 20%, transparent)",
@@ -438,4 +446,99 @@ test("card metadata matches the package version", () => {
   assert.equal(metadata.CARD_NAME, "Room Climate Card");
   assert.equal(metadata.CARD_VERSION, packageJson.version);
   assert.equal(metadata.CARD_VERSION_GLOBAL, "roomClimateCardVersion");
+});
+
+test("ownValue() answers only with a table's own entries", () => {
+  const table = { indoor: 1, falsy: 0 };
+  assert.equal(records.ownValue(table, "indoor"), 1);
+  assert.equal(records.ownValue(table, "falsy"), 0);
+  for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty", "missing"]) {
+    assert.equal(records.ownValue(table, key), undefined, key);
+  }
+});
+
+test("niceStepAtLeast() rounds a step up to the next 1, 2 or 5 of its decade", () => {
+  const { niceStepAtLeast } = numbers;
+  const cases = [
+    [0.8588, 1],
+    [1, 1],
+    [1.8, 2],
+    [2, 2],
+    [2.0000000001, 2],
+    [2.1, 5],
+    [5, 5],
+    [7, 10],
+    [858.8, 1000],
+    [1000, 1000],
+    [0.03, 0.05],
+    [0.1, 0.1],
+    [0.30000000000000004, 0.5],
+    [1200, 2000],
+    // Each candidate is exact for its decade, below 1 and above it.
+    [3e-6, 5e-6],
+    [150000, 200000],
+    // The tolerance is inclusive.
+    [1 * (1 + 1e-9), 1],
+  ];
+  for (const [step, expected] of cases) assert.equal(niceStepAtLeast(step), expected, String(step));
+  for (const invalid of [0, -1, NaN, Infinity]) assert.ok(Number.isNaN(niceStepAtLeast(invalid)), String(invalid));
+});
+
+test("floorToDigits() floors to a digit count without falling below a value it already is", () => {
+  const { floorToDigits } = numbers;
+  assert.equal(floorToDigits(0.8588, 1), 0.8);
+  assert.equal(floorToDigits(3.435, 1), 3.4);
+  assert.equal(floorToDigits(858.8, 0), 858);
+  // A product like 9 / f * f lands a hair under 9; that is still 9, not 8.9.
+  assert.equal(floorToDigits(8.999999999999998, 1), 9);
+  assert.equal(floorToDigits(1 - 4 * Number.EPSILON, 0), 1, "the snap tolerance is inclusive");
+  assert.equal(floorToDigits(-0.04, 1), -0.1);
+  assert.ok(Object.is(floorToDigits(-0, 1), 0), "never -0");
+  assert.equal(floorToDigits(1e308, 2), 1e308, "a value the scaling would overflow is kept");
+});
+
+// -------------------------------------------------------------------- lru --
+
+test("an LRU cache answers a miss with undefined and a hit with the stored value", () => {
+  const cache = lru.createLruCache(2);
+  assert.equal(cache.get("a"), undefined);
+  const value = { a: 1 };
+  cache.set("a", value);
+  assert.equal(cache.get("a"), value);
+  cache.set("a", "replaced");
+  assert.equal(cache.get("a"), "replaced", "setting a key again replaces its value");
+});
+
+test("an LRU cache evicts the entry used longest ago, and a read counts as use", () => {
+  const cache = lru.createLruCache(2);
+  cache.set("a", 1);
+  cache.set("b", 2);
+  cache.get("a");
+  cache.set("c", 3);
+  assert.deepEqual([cache.get("a"), cache.get("b"), cache.get("c")], [1, undefined, 3], "b was used longest ago");
+  cache.set("a", 10);
+  cache.set("d", 4);
+  assert.deepEqual([cache.get("a"), cache.get("c"), cache.get("d")], [10, undefined, 4], "writing a key counts as use too");
+});
+
+test("an LRU cache miss stores nothing, so it cannot evict an entry", () => {
+  const cache = lru.createLruCache(2);
+  cache.set("a", 1);
+  assert.equal(cache.get("missing"), undefined);
+  cache.set("b", 2);
+  assert.deepEqual([cache.get("a"), cache.get("b")], [1, 2], "two keys fit a capacity of two");
+});
+
+test("an LRU cache holds sixteen entries unless told otherwise", () => {
+  const cache = lru.createLruCache();
+  for (let index = 0; index < 17; index += 1) cache.set(`k${index}`, index);
+  assert.equal(cache.get("k0"), undefined);
+  assert.equal(cache.get("k1"), 1);
+  assert.equal(cache.get("k16"), 16);
+  assert.throws(() => lru.createLruCache(0), { name: "RangeError", message: /positive integer, got 0$/ });
+  assert.throws(() => lru.createLruCache(1.5), RangeError);
+  const single = lru.createLruCache(1);
+  single.set("a", 1);
+  single.set("b", 2);
+  assert.deepEqual([single.get("a"), single.get("b")], [undefined, 2], "a capacity of one is valid");
 });

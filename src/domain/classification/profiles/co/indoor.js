@@ -1,3 +1,11 @@
+// Indoor carbon monoxide in mg/m³ — the default CO profile.
+//
+// One atomic profile: tiers (threshold/score/zone), comfort/optimal/scale bands,
+// physical validity, icons. `score` is the signed distance from optimal that the
+// palette turns into a colour. 35, 10 and 4 mg/m³ are the WHO guideline values for 1 h,
+// 8 h and 24 h; 7 mg/m³ is the WHO 24-hour indoor guideline of 2010; 1 mg/m³ is the card's
+// own optimal edge. Values are product decisions — do not reorder or "tidy".
+
 import { physicalRange } from "../../validity.js";
 
 export const indoor = {
@@ -18,9 +26,7 @@ export const indoor = {
   optimal: { min: 0, max: 1 },
   scale: { min: 0, max: 12 },
   step: 1,
-  headroom: 1,
   oneSided: true,
-  anchorScale: true,
   iconTiers: [
     { min: 35, icon: "mdi:alert-circle-outline" },
     { min: 4, icon: "mdi:alert-outline" },

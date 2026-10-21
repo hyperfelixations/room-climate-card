@@ -410,3 +410,40 @@ test("the render pipeline is not left waiting on a pending flag after a reconnec
   assert.match(el.shadowRoot.querySelector(".rtc-avg-value-num").textContent, /30/);
   env.cleanup(el);
 });
+
+// HA can build a card, configure it and hand it states without ever attaching it. Such a card
+// renders its markup but must hold nothing outside itself: no document listener, no observer
+// and no carousel timer that would keep it, and the hass it carries, alive.
+test("a card that is never attached registers nothing outside itself", () => {
+  const doc = env.document;
+  const original = doc.addEventListener;
+  const documentListeners = [];
+  doc.addEventListener = function (type, ...rest) {
+    documentListeners.push(type);
+    return original.call(this, type, ...rest);
+  };
+  const el = doc.createElement("room-climate-card");
+  try {
+    el.setConfig({ entity: "sensor.avg", range_entity: "sensor.range", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], auto_slide: true });
+    el.hass = states(22);
+    el.hass = states(24, 1000);
+    assert.ok(el.shadowRoot.querySelector(".rtc-avg-value-num"), "the markup is rendered");
+    assert.deepEqual(documentListeners, []);
+    assert.equal(el._eventsBound, false);
+    assert.equal(el._carousel.resumeTimerHandle, null);
+    assert.equal(el._carousel.accessibilityTimerHandle, null);
+
+    doc.body.appendChild(el);
+    assert.equal(el._eventsBound, true, "attaching starts the runtime");
+    assert.ok(documentListeners.includes("visibilitychange"));
+    el.remove();
+    assert.equal(el._eventsBound, false);
+    assert.equal(el._carousel.resumeTimerHandle, null);
+    assert.equal(el._carousel.accessibilityTimerHandle, null);
+  } finally {
+    doc.addEventListener = original;
+    el.remove();
+    // A red run must not hang on what the card left behind.
+    el.disconnectedCallback();
+  }
+});

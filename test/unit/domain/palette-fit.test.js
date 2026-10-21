@@ -378,6 +378,17 @@ test("the whole report is cached on what it was computed from, and never served 
   assert.deepEqual(fit.evaluatePaletteFit(pastel, ["#1C1C1C"]).fits, onDark.fits);
 });
 
+test("cards asking in turn on one dashboard are each answered from the cache", () => {
+  // The memo is module-wide, shared by every card on the page; one card's question must not
+  // evict the other's answer.
+  const pastel = palettes.paletteForName("pastel");
+  const black = palettes.paletteForColor("black");
+  const first = fit.evaluatePaletteFit(pastel, ["#1C1C1C"]);
+  const second = fit.evaluatePaletteFit(black, ["#808080"]);
+  assert.equal(fit.evaluatePaletteFit(pastel, ["#1C1C1C"]), first);
+  assert.equal(fit.evaluatePaletteFit(black, ["#808080"]), second);
+});
+
 test("a cached report cannot be altered by whoever received it", () => {
   // The same object is handed out next call, so a consumer sorting `failing` in place would
   // change what every later render is told.
@@ -819,13 +830,13 @@ test("the answer is memoized on the question, so a searching method is not paid 
   // never hit an identity check.
   assert.equal(adaptation.adaptPalette(palettes.paletteForColor("lime"), ["#FFFFFF"]), first);
 
-  // One slot, evicted by a second question: a card has one palette on one surface at a time
-  // and asks the same question every render. The memo must never answer the wrong question,
-  // so the answer changes when the background does and is right again on the way back.
+  // The memo must never answer the wrong question: the answer changes with the background,
+  // and a second card asking in between does not evict the first card's answer.
   const elsewhere = adaptation.adaptPalette(palette, ["#1C1C1C"]);
   assert.notEqual(elsewhere, first, "a different background is a different question");
   assert.notDeepEqual(elsewhere, first, "and a different answer");
-  assert.deepEqual(adaptation.adaptPalette(palette, ["#FFFFFF"]), first, "coming back gives the first answer again");
+  assert.equal(adaptation.adaptPalette(palette, ["#FFFFFF"]), first, "coming back is answered from the memo");
+  assert.equal(adaptation.adaptPalette(palette, ["#1C1C1C"]), elsewhere);
 });
 
 test("an unknown strategy name falls back to the default rather than throwing", () => {

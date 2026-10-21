@@ -25,6 +25,7 @@ const custom = (unit, overrides = {}) => ({
   ...overrides,
 });
 
+// curated: the kinds that share a unit with an older measurement
 for (const kind of ["pm1", "pm4", "pm10", "co"]) {
   for (const source of ["auto", "entity", "profile", "custom"]) {
     test(`${kind}: ${source} binds in either lifecycle order and recovers from invalid data`, () => {
@@ -70,6 +71,7 @@ test("CO: all source/display unit pairs convert ranges and rates under the uncha
 
 test("shared custom units bind to each detected kind and survive changes between gas kinds", () => {
   for (const unit of ["ppm", "µg/m³"]) {
+    // curated: the measurements Home Assistant reports in each shared unit
     const kinds = unit === "ppm" ? ["co2", "co"] : ["pm25", "pm1", "pm4", "pm10", "co"];
     const card = env.createCard({ entity: "sensor.main", classification: custom(unit) });
     for (const kind of [...kinds, ...kinds.reverse()]) {
@@ -90,6 +92,22 @@ test("a CO conversion fault in ppm leaves the same profile usable for CO2", () =
     assert.equal(vm.warning.visible, kind === "co");
     if (kind === "co") assert.match(vm.warning.text, /classification.scale.max/);
     else assert.equal(vm.tone.label, "Above target");
+  }
+});
+
+test("a CO profile written in ppm keeps its fine boundaries on a ppm sensor", () => {
+  // 0.85 ppm would be floored to 0.8 on its way back from mg/m³.
+  const profile = custom("ppm", {
+    bands: { comfort: { min: 0, max: 0.85 }, optimal: { min: 0, max: 0.35 } },
+    scale: { min: 0, max: 2, step: 0.5 },
+    tiers: [{ min: 0.85, score: 1, level: "Above target", zone: "outside" }, { default: true, score: 0, level: "Target", zone: "optimal" }],
+  });
+  for (const [reading, label] of [[0.84, "Target"], [0.85, "Above target"]]) {
+    const card = env.createCard({ entity: "sensor.main", classification: profile }, mkHass({ "sensor.main": mkState("sensor.main", reading, attributesFor("co", "ppm")) }));
+    const vm = card._computeViewModel();
+    assert.equal(vm.tone.label, label, `${reading} ppm`);
+    assert.deepEqual({ min: vm.scale.optimalMin, max: vm.scale.optimalMax }, { min: 0, max: 0.35 });
+    assert.equal(vm.warning.visible, false);
   }
 });
 

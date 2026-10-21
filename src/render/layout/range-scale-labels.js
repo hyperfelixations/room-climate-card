@@ -2,7 +2,7 @@
 // Moving the live label away from its marker would misattribute it to a neighbouring marker.
 
 import { clamp } from "../../core/numbers.js";
-import { measuredWidth } from "../primitives/dom.js";
+import { measuredWidth, setStyleProperty } from "../primitives/dom.js";
 import { resolveLabelForm } from "./label-form.js";
 import { LABEL_GAP_PX, layoutSideLabelGroup } from "./side-labels.js";
 
@@ -20,30 +20,34 @@ export function resolveRangeScaleLabels(containerEl, content) {
   const sideElements = content.topLabels.sides.map((side) => containerEl.querySelector(SIDE_LABEL_SELECTOR[side.role]));
   if (sideElements.some((element) => !element)) return;
   const barWidth = measuredWidth(bar);
-  if (!barWidth) return;
+  // Before the bar has a width, the percentage anchors stand in for measured positions.
+  if (!barWidth) {
+    setStyleProperty(currentEl, "left", `${content.topLabels.current.position}%`);
+    content.topLabels.sides.forEach((side, index) => setStyleProperty(sideElements[index], "left", `${side.position}%`));
+    return;
+  }
 
   const gap = LABEL_GAP_PX;
   // Reset previous caps before measuring natural widths; measure-before-shrink is idempotent.
-  for (const element of [currentEl, ...sideElements]) element.style.maxWidth = "";
+  for (const element of [currentEl, ...sideElements]) setStyleProperty(element, "max-width", "");
 
   // Step 1: fix current's centre after long/short selection. Its reserved span must leave
   // room for both side labels in the worst case where both fall on one side; side-label
   // collisions remain layoutSideLabelGroup()'s concern. Lazy measurement avoids needless reflow.
   let currentWidth = resolveLabelForm(
     currentEl,
-    content.topLabels.current.long,
-    content.topLabels.current.short,
+    [content.topLabels.current.long, content.topLabels.current.short],
     (width) => barWidth - width - 2 * gap >= measuredWidth(sideElements[0]) + gap + measuredWidth(sideElements[1])
   );
   if (currentWidth > barWidth) {
-    currentEl.style.maxWidth = `${barWidth}px`;
+    setStyleProperty(currentEl, "max-width", `${barWidth}px`);
     currentWidth = measuredWidth(currentEl);
   }
   const currentAnchor = (barWidth * content.topLabels.current.position) / 100;
   const currentCenter = clamp(currentAnchor, currentWidth / 2, barWidth - currentWidth / 2);
   const currentLeft = currentCenter - currentWidth / 2;
   const currentRight = currentCenter + currentWidth / 2;
-  currentEl.style.left = `${currentCenter}px`;
+  setStyleProperty(currentEl, "left", `${currentCenter}px`);
 
   // Step 2: assign sides around the fixed pivot. Compare formatted sortKey only for equality;
   // parsing grouped display text (for example "1,200") produces NaN. Raw values order non-ties,
@@ -96,6 +100,6 @@ export function resolveRangeScaleLabels(containerEl, content) {
   layoutSideLabelGroup(upperItems, 0, barWidth, gap);
 
   for (const item of sideItems) {
-    item.el.style.left = `${item.left + item.width / 2}px`;
+    setStyleProperty(item.el, "left", `${item.left + item.width / 2}px`);
   }
 }

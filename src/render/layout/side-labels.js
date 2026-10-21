@@ -1,7 +1,7 @@
 // Deterministically anchor, forward-pack, right-clamp, backward-pack and left-clamp labels.
 // Mutates item left/width; only unavoidable width caps touch DOM before callers apply positions.
 
-import { measuredWidth } from "../primitives/dom.js";
+import { measuredWidth, setStyleProperty } from "../primitives/dom.js";
 
 export function layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
   if (items.length === 0) return;
@@ -10,7 +10,7 @@ export function layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
   if (requiredWidth > available) {
     const maxWidthEach = Math.max(0, (available - gap * (items.length - 1)) / items.length);
     for (const item of items) {
-      item.el.style.maxWidth = `${maxWidthEach}px`;
+      setStyleProperty(item.el, "max-width", `${maxWidthEach}px`);
       item.width = Math.min(item.width, measuredWidth(item.el));
     }
   }

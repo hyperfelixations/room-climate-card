@@ -16,6 +16,7 @@
 //   viewTypes             every registered view type, for views and start_view
 //   metricKindsForUnit    a unit string -> candidate metric kinds
 //   unitProfileForUnit    a metric kind + unit string -> unit profile
+//   profileReexpression   { reexpress, findFault }: a custom profile in the canonical unit
 
 import { createDiagnostic, fallbackValue, FALLBACK } from "../core/diagnostics.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
@@ -101,7 +102,8 @@ export function normalizeStartView(value, viewTypes, diagnostics) {
 // like the YAML it describes. The sort is stable: within one key, reading order stays.
 function inWrittenOrder(diagnostics, userConfig) {
   const position = new Map(Object.keys(userConfig).map((key, index) => [key, index]));
-  const rank = (diagnostic) => position.get(diagnostic.path.match(/^[^.[]+/)[0]) ?? position.size;
+  // A written key may itself contain "." or "["; the whole path is tried before its head.
+  const rank = (diagnostic) => position.get(diagnostic.path) ?? position.get(/^[^.[]*/.exec(diagnostic.path)[0]) ?? position.size;
   return [...diagnostics].sort((one, other) => rank(one) - rank(other));
 }
 

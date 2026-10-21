@@ -31,16 +31,8 @@
   "coolestShift": 0,
   "displayStep": 5,
   "displayUnitProfile": {
-    "baseDisplayStep": 5,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "%",
-    "fromCanonical": "[Function]",
-    "key": "percent",
-    "toCanonical": "[Function]",
-    "units": [
-      "%"
-    ]
+    "key": "percent"
   },
   "empty": false,
   "hasRange": false,

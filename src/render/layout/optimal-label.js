@@ -15,7 +15,7 @@
 // query would only ever find the first.
 
 import { clamp } from "../../core/numbers.js";
-import { measuredWidth } from "../primitives/dom.js";
+import { measuredWidth, setStyleProperty } from "../primitives/dom.js";
 import { resolveLabelForm } from "./label-form.js";
 import { LABEL_GAP_PX } from "./side-labels.js";
 
@@ -33,7 +33,7 @@ export function resolveOptimalLabelPosition(containerEl, content) {
   // box, wrongly conclude it now fits, clear maxWidth again, and let the text spring
   // back — an infinite narrow/widen loop between repeated calls, which the resize
   // observer can legitimately trigger.
-  centerEl.style.maxWidth = "";
+  setStyleProperty(centerEl, "max-width", "");
 
   const barWidth = measuredWidth(bar);
   if (!barWidth) return;
@@ -43,10 +43,10 @@ export function resolveOptimalLabelPosition(containerEl, content) {
 
   // "Fits" is the exact same lowLimit <= highLimit criterion computed below, just
   // evaluated for whichever candidate form actually measures at that width.
+  const { long, short, compact } = content.optimalLabel;
   const centerWidth = resolveLabelForm(
     centerEl,
-    content.optimalLabel.long,
-    content.optimalLabel.short,
+    [long, short, compact],
     (width) => minWidth + gap + width / 2 <= barWidth - maxWidth - gap - width / 2
   );
 
@@ -59,11 +59,11 @@ export function resolveOptimalLabelPosition(containerEl, content) {
   // truncating in place — rather than detaching to the bar's midpoint.
   const fits = lowLimit <= highLimit;
   if (fits) {
-    centerEl.style.left = `${clamp(desiredPx, lowLimit, highLimit)}px`;
-    centerEl.style.maxWidth = "";
+    setStyleProperty(centerEl, "left", `${clamp(desiredPx, lowLimit, highLimit)}px`);
+    setStyleProperty(centerEl, "max-width", "");
   } else {
     const spanWidth = Math.max(0, barWidth - minWidth - maxWidth - 2 * gap);
-    centerEl.style.left = `${minWidth + gap + spanWidth / 2}px`;
-    centerEl.style.maxWidth = `${spanWidth}px`;
+    setStyleProperty(centerEl, "left", `${minWidth + gap + spanWidth / 2}px`);
+    setStyleProperty(centerEl, "max-width", `${spanWidth}px`);
   }
 }

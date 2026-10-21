@@ -31,33 +31,8 @@
   "coolestShift": 0,
   "displayStep": 2,
   "displayUnitProfile": {
-    "baseDisplayStep": 2,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "°F",
-    "dynamicDisplaySteps": [
-      {
-        "maxSpan": 20,
-        "step": 2
-      },
-      {
-        "maxSpan": 40,
-        "step": 5
-      },
-      {
-        "maxSpan": "[Infinity]",
-        "step": 10
-      }
-    ],
-    "fromCanonical": "[Function]",
-    "key": "fahrenheit",
-    "thresholdRounding": "[Function]",
-    "toCanonical": "[Function]",
-    "units": [
-      "°f",
-      "f",
-      "fahrenheit"
-    ]
+    "key": "fahrenheit"
   },
   "empty": false,
   "hasRange": true,

@@ -1,6 +1,6 @@
 // Carbon dioxide in ppm, one identity unit profile.
 
-import { CLASSIFICATION_PROFILE_REGISTRY } from "../../classification/registry.js";
+import { linearUnitProfile } from "../../units/linear-unit-profile.js";
 
 export const co2 = {
   metricKind: "co2",
@@ -8,16 +8,7 @@ export const co2 = {
   canonicalUnit: "ppm",
   canonicalProfileKey: "ppm",
   unitProfiles: {
-    ppm: {
-      key: "ppm",
-      units: ["ppm"],
-      displayUnit: "ppm",
-      toCanonical: (v) => v,
-      fromCanonical: (v) => v,
-      deltaToCanonical: (v) => v,
-      deltaFromCanonical: (v) => v,
-      baseDisplayStep: CLASSIFICATION_PROFILE_REGISTRY.co2.profiles.indoor.step,
-    },
+    ppm: linearUnitProfile({ key: "ppm", displayUnit: "ppm" }),
   },
   trend: { fallingBelow: -25, risingAbove: 25 },
 };

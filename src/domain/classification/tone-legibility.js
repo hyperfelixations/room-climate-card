@@ -12,6 +12,7 @@
 // "Tönungsanpassung von Pille, Icon und Chipmarke".
 
 import { compositeOver } from "../../core/color.js";
+import { createLruCache } from "../../core/lru.js";
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
 import { TINT_ALPHAS } from "./paint-roles.js";
 import { requiredSeparationOf } from "./palette-fit.js";
@@ -119,21 +120,20 @@ export function legibleTintRecipe(color, card, search = TINT_SEARCH) {
 // A recipe for every colour this configuration can classify with (the adapted ramp, invalid,
 // neutral, and any colour a custom tier named), worked out together so a score change is a
 // LOOKUP — the search is far too expensive to run inside a render. Memoized on the colours and
-// surface together, one slot like `adaptPalette()`.
-let memoKey = null;
-let memoValue = null;
+// surface together, like `adaptPalette()`.
+const recipesCache = createLruCache();
 
 export function tintRecipesFor(colors, surface) {
   const card = surface?.samples?.[0] ?? null;
   const key = `${colors.join(",")}|${card || ""}`;
-  if (memoKey === key) return memoValue;
+  const cached = recipesCache.get(key);
+  if (cached) return cached;
   const recipes = new Map();
   for (const color of colors) {
     if (!color || recipes.has(color)) continue;
     recipes.set(color, legibleTintRecipe(color, card));
   }
-  memoKey = key;
-  memoValue = recipes;
+  recipesCache.set(key, recipes);
   return recipes;
 }
 

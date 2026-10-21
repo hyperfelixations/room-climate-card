@@ -15,7 +15,7 @@
 // The two controller groups sit on one layer and may not import each other:
 // controllers/render decides WHETHER and HOW MUCH, controllers/runtime decides WHEN.
 
-import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
+import { formatBoundary, formatCompact, formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
 import { isSupportedLanguage, resolveLanguage, resolveMessageLanguage, translate } from "../i18n/translate.js";
 import { DEFAULT_LANGUAGE } from "../i18n/locales.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
@@ -32,6 +32,7 @@ import {
 } from "../domain/classification/palettes/registry.js";
 import { SURFACE_BACKGROUNDS } from "../domain/classification/surface.js";
 import { surfaceOf } from "../domain/classification/paint-roles.js";
+import { findReexpressionFault, reexpressProfile } from "../domain/classification/reexpression.js";
 import { METRIC_DEFINITIONS } from "../domain/metrics/definitions.js";
 import { metricKindsOfUnit, resolveUnitProfileKey } from "../domain/metrics/resolution.js";
 import { effectiveMetricKind, resolveMeasurementContext } from "../application/model/measurement-context.js";
@@ -42,7 +43,7 @@ import {
   resolveSourceTopology,
 } from "../application/model/source-topology.js";
 import { stubConfigFor } from "../application/model/card-suggestions.js";
-import { autoRoomColumnsFor, metricFormattingFor } from "../presentation/view-model/metric-meta.js";
+import { autoRoomColumnsFor, boundaryDigits, readingDigits } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
 import { VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
@@ -84,6 +85,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
+    profileReexpression: { reexpress: reexpressProfile, findFault: findReexpressionFault },
     paletteForName: (name) => (name === null ? DEFAULT_PALETTE : paletteForName(name)),
     paletteForColor,
     paletteForGradient,
@@ -487,11 +489,26 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return autoRoomColumnsFor(metricType);
     }
 
+    // The digit counts are resolved here, where the config override and the unit's own
+    // default are known; the formatting itself is locale work.
     _fmt(value, digits) {
-      // The digit count is resolved here, where the config override and the
-      // metric's own default are known; the formatting itself is locale work.
-      const d = digits ?? this._config.decimals ?? metricFormattingFor(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key).decimals;
-      return formatNumber(this._language(), value, d);
+      return formatNumber(this._language(), value, digits ?? this._readingDigits());
+    }
+
+    _readingDigits() {
+      return readingDigits(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key, this._config.decimals);
+    }
+
+    // A band or axis boundary, as it applies; `signed` marks a positive one explicitly, which a
+    // signed band range uses so both of its bounds read as signed quantities.
+    _fmtBoundary(value, { signed = false } = {}) {
+      const digits = boundaryDigits(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key, this._config.decimals);
+      return formatBoundary(this._language(), value, digits, signed ? "exceptZero" : "auto");
+    }
+
+    // The short-scale form a label falls back to when the full number does not fit.
+    _fmtCompact(value, { signed = false } = {}) {
+      return formatCompact(this._language(), value, signed ? "exceptZero" : "auto");
     }
 
     _formatTime(isoString) {
@@ -525,21 +542,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return effectiveMetricKind(this._resolveMetricContext());
     }
 
-    _fmtWithUnit(value, digits, withSpace = true) {
-      const separator = withSpace ? " " : "";
-      return `${this._fmt(value, digits)}${separator}${this._unit()}`;
-    }
-
-    // Same pair, with an explicit sign on positive values; a signed band range uses it so
-    // both of its bounds read as signed quantities.
-    _fmtSigned(value, digits) {
-      const d = digits ?? this._config.decimals ?? metricFormattingFor(this._metricType(), this._resolveMetricContext().displayUnitProfile?.key).decimals;
-      return formatNumber(this._language(), value, d, "exceptZero");
-    }
-
-    _fmtSignedWithUnit(value, digits, withSpace = true) {
-      const separator = withSpace ? " " : "";
-      return `${this._fmtSigned(value, digits)}${separator}${this._unit()}`;
+    _fmtWithUnit(value, digits) {
+      return `${this._fmt(value, digits)} ${this._unit()}`;
     }
 
     _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
@@ -598,9 +602,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         language: this._language(),
         t: (key, vars) => this._t(key, vars),
         fmt: (value, digits) => this._fmt(value, digits),
-        fmtWithUnit: (value, digits, withSpace) => this._fmtWithUnit(value, digits, withSpace),
-        fmtSigned: (value, digits) => this._fmtSigned(value, digits),
-        fmtSignedWithUnit: (value, digits, withSpace) => this._fmtSignedWithUnit(value, digits, withSpace),
+        fmtWithUnit: (value, digits) => this._fmtWithUnit(value, digits),
+        fmtBoundary: (value, options) => this._fmtBoundary(value, options),
+        fmtCompact: (value, options) => this._fmtCompact(value, options),
         formatTime: (isoString) => this._formatTime(isoString),
       };
     }
@@ -722,21 +726,26 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         if (matchingSource) matchingSource.focus();
         else applyFocusFallback(this.shadowRoot);
       }
-      this._bindEvents();
-      if (!isFirstRender && !viewModel.empty) {
-        // A non-first, non-empty rebuild freezes visually on the just-resolved
-        // this._activeView, then schedules the same phase-aware resume as a manual
-        // swipe. Applying auto-slide styles here instead would re-engage the synced
-        // animation and ignore this._activeView. The first render has no previous view
-        // to protect, so it goes straight into synced auto-slide (the else branch).
-        this._updateTrackTransform(false);
-        // After _updateTrackTransform(): a freshly rebuilt track has no "rtc-manual"
-        // class yet, so computing accessibility earlier would treat it as auto-engaged.
-        // The else branch does not need this — _applyAutoSlideStyles() schedules it.
-        this._scheduleAccessibilitySync();
-        this._resumeSynchronizedSlideWhenAligned(this._activeView, 10000);
-      } else {
-        this._applyAutoSlideStyles();
+      // A card that is not attached keeps only its markup; listeners and timers would hold it
+      // alive. connectedCallback() starts both. See internal dev doc §5 "Lifecycle, Disconnect
+      // und Reconnect".
+      if (this.isConnected) {
+        this._bindEvents();
+        if (!isFirstRender && !viewModel.empty) {
+          // A non-first, non-empty rebuild freezes visually on the just-resolved
+          // this._activeView, then schedules the same phase-aware resume as a manual
+          // swipe. Applying auto-slide styles here instead would re-engage the synced
+          // animation and ignore this._activeView. The first render has no previous view
+          // to protect, so it goes straight into synced auto-slide (the else branch).
+          this._updateTrackTransform(false);
+          // After _updateTrackTransform(): a freshly rebuilt track has no "rtc-manual"
+          // class yet, so computing accessibility earlier would treat it as auto-engaged.
+          // The else branch does not need this — _applyAutoSlideStyles() schedules it.
+          this._scheduleAccessibilitySync();
+          this._resumeSynchronizedSlideWhenAligned(this._activeView, 10000);
+        } else {
+          this._applyAutoSlideStyles();
+        }
       }
       this._resolveViewLayouts(viewModel);
       // On a cold reload the measurement above can run before the page web font loads
@@ -778,7 +787,10 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this.shadowRoot.addEventListener("pointermove", this._boundPointerMove);
       this.shadowRoot.addEventListener("pointerup", this._boundPointerUp);
       this.shadowRoot.addEventListener("pointercancel", this._boundPointerCancel);
-      this.shadowRoot.addEventListener("pointerleave", this._boundPointerCancel);
+      // A captured drag ends with a lost capture; an uncaptured pointer by leaving the card,
+      // which only the host sees (pointerleave does not bubble).
+      this.shadowRoot.addEventListener("lostpointercapture", this._boundPointerCancel);
+      this.addEventListener("pointerleave", this._boundPointerCancel);
       this.shadowRoot.addEventListener("contextmenu", this._boundContextMenu);
       // Document-scoped (visibilitychange only fires there): resyncs the accessibility
       // timer when the tab becomes visible again. The platform returns the unsubscribe.
@@ -797,7 +809,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this.shadowRoot.removeEventListener("pointermove", this._boundPointerMove);
       this.shadowRoot.removeEventListener("pointerup", this._boundPointerUp);
       this.shadowRoot.removeEventListener("pointercancel", this._boundPointerCancel);
-      this.shadowRoot.removeEventListener("pointerleave", this._boundPointerCancel);
+      this.shadowRoot.removeEventListener("lostpointercapture", this._boundPointerCancel);
+      this.removeEventListener("pointerleave", this._boundPointerCancel);
       this.shadowRoot.removeEventListener("contextmenu", this._boundContextMenu);
       this._unlistenVisibility?.();
       this._unlistenVisibility = null;

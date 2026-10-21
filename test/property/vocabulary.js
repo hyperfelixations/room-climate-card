@@ -265,6 +265,10 @@ const TIMESTAMP_SHAPES = Object.freeze(["normal", "identical", "missing", "futur
 // setup with no themes, a restoring dashboard passing an empty `states`.
 const HASS_GAPS = Object.freeze(["locale", "language", "themes", "callService", "states"]);
 
+// Names every plain object inherits. A table lookup that is not an own-key lookup finds them,
+// so each is a value the card must treat as unknown wherever a name is looked up.
+const OBJECT_MEMBER_NAMES = ["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty", "isPrototypeOf"];
+
 module.exports = {
   IMPOSSIBLE_ENTITY_IDS,
   AWKWARD_EXTRA_ATTRIBUTES,
@@ -280,6 +284,7 @@ module.exports = {
   ABSURD_NUMBERS,
   MALFORMED_STATES,
   AWKWARD_TEXT,
+  OBJECT_MEMBER_NAMES,
   VALID_ACTIONS,
   typo,
 };

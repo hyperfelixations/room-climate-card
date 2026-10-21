@@ -11,6 +11,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { PROFILE_REEXPRESSION } = require("../../helpers/profile-reexpression.js");
 const { VIEWS } = require("../../manifests/product-surface.js");
 
 let showModule;
@@ -33,6 +34,7 @@ const COLLABORATORS = {
   optionSchemaForView: () => undefined,
   metricKindsForUnit: (unit) => (unit === "°C" ? ["temperature"] : []),
   unitProfileForUnit: () => ({ key: "celsius", toCanonical: (v) => v, deltaToCanonical: (v) => v }),
+  profileReexpression: PROFILE_REEXPRESSION,
 };
 
 const configure = (overrides) => normalizeConfigModule.normalizeConfig({ entity: "sensor.a", ...overrides }, COLLABORATORS);

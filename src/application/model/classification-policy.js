@@ -4,6 +4,7 @@
 // default profile, with a warning. See internal dev doc §5 "Klassifikations-Rückfall".
 
 import { createDiagnostic, fallbackOption } from "../../core/diagnostics.js";
+import { ownValue } from "../../core/records.js";
 import { CLASSIFICATION_PROFILE_REGISTRY } from "../../domain/classification/registry.js";
 import { projectProfile } from "../../domain/classification/projection.js";
 import { METRIC_DEFINITIONS } from "../../domain/metrics/definitions.js";
@@ -20,7 +21,7 @@ export function resolveEffectivePolicy({ policy, metricKind, displayUnitProfile 
     if (Object.hasOwn(custom.faults, metricKind)) {
       return fellBack({ ...AUTO }, "value.invalid", { ...custom.faults[metricKind], fallback: fallbackOption("classification", "auto") });
     }
-    const profile = Object.hasOwn(custom.profiles, metricKind) ? custom.profiles[metricKind] : null;
+    const profile = ownValue(custom.profiles, metricKind) ?? null;
     if (!profile) {
       return fellBack({ ...AUTO }, "classification.unit_mismatch", {
         path: "classification.unit",
@@ -35,7 +36,7 @@ export function resolveEffectivePolicy({ policy, metricKind, displayUnitProfile 
     }
     return { policy, diagnostics: [] };
   }
-  if (policy.profile && !registry.profiles[policy.profile]) {
+  if (policy.profile && !ownValue(registry.profiles, policy.profile)) {
     return fellBack({ ...policy, profile: null }, "classification.profile_unavailable", {
       path: "classification.profile",
       value: policy.profile,

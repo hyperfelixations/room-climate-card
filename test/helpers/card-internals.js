@@ -145,7 +145,7 @@ async function loadCardInternals() {
         low,
         high,
         markers,
-        formatBoundary: (value) => el._fmtWithUnit(value, 0, false),
+        formatBoundary: (value) => `${el._fmtBoundary(value)}${el._unit()}`,
       });
     },
 

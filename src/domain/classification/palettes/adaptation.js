@@ -6,6 +6,7 @@
 // preservation is deliberately NOT in the contract. `identity` stays registered as the
 // "do not adapt" reference. See internal dev doc §5 "Anpassungs-Einstiegspunkt und Strategievertrag".
 
+import { createLruCache } from "../../../core/lru.js";
 import { VISIBILITY_THRESHOLD, evaluatePaletteFit, fitKeyFor } from "../palette-fit.js";
 import { surfaceOf } from "../paint-roles.js";
 import { legibleStrategy } from "./legible.js";
@@ -31,11 +32,10 @@ export function isAdaptable(palette) {
 }
 
 // Memoized on the question, not droppable: a real strategy searches, evaluating the fit report
-// many times, so the report memo in ../palette-fit.js ends up holding the last candidate, not
-// the starting palette. Without this memo every render pays the whole search again (tens of ms
-// for the hardest). Keyed on the same values as the report; one slot (one palette on one
-// surface at a time).
-let lastAdaptation = null;
+// many times, so the report memo in ../palette-fit.js fills with candidates, not the starting
+// palette. Without this memo every render pays the whole search again (tens of ms for the
+// hardest). Keyed on the same values as the report.
+const adaptationCache = createLruCache();
 
 // The one call site is buildCardDomainModel(), behind paletteOf(config). `surface` is whatever
 // the card is painted on (a colour, a gradient's stops, or the theme background) plus the
@@ -45,10 +45,11 @@ export function adaptPalette(palette, surface, strategyId = DEFAULT_ADAPTATION_S
 
   const resolved = surfaceOf(surface);
   const key = `${strategyId}|${fitKeyFor(palette, resolved, VISIBILITY_THRESHOLD)}`;
-  if (lastAdaptation && lastAdaptation.key === key) return lastAdaptation.value;
+  const cached = adaptationCache.get(key);
+  if (cached) return cached;
 
   const value = adaptedFor(palette, resolved, strategyId);
-  lastAdaptation = { key, value };
+  adaptationCache.set(key, value);
   return value;
 }
 

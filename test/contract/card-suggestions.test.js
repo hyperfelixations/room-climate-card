@@ -228,9 +228,8 @@ test("CO2 and PM2.5 are found like the others, after temperature and humidity", 
   assert.deepEqual(suggestions.stubConfigFor(mixed), { rooms: [{ name: "A", entity: "sensor.c1" }, { name: "B", entity: "sensor.c2" }] });
 });
 
-test("the kind priority covers all eight measurements in registration order", () => {
-  assert.deepEqual([...suggestions.BROWSE_KIND_PRIORITY], ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"]);
-  assert.deepEqual([...suggestions.BROWSE_KIND_PRIORITY].sort(), [...METRIC_KINDS].sort());
+test("the kind priority covers every measurement in the order the card offers them", () => {
+  assert.deepEqual([...suggestions.BROWSE_KIND_PRIORITY], METRIC_KINDS);
   assert.ok(Object.isFrozen(suggestions.BROWSE_KIND_PRIORITY));
   assert.equal(suggestions.BROWSE_ROOM_LIMIT, 3);
 });

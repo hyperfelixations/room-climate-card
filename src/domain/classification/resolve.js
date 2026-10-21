@@ -8,6 +8,7 @@
 // The numeric path is passed as a THUNK: it projects the profile and can throw on a
 // degenerate custom profile, so an `entity`-mode card must not evaluate it eagerly.
 
+import { ownValue } from "../../core/records.js";
 import { readEntityClassification } from "./entity-attributes.js";
 
 const NO_LEVEL = "—";
@@ -37,15 +38,15 @@ function fromEntityAttributes(entity, level) {
 export function resolveClassificationProfile(registryForKind, policy, metricKind, { lenient = false } = {}) {
   if (!registryForKind) throw new Error(`No classification profiles registered for metric kind "${metricKind}"`);
   if (policy.source === "custom") {
-    const profile = Object.hasOwn(policy.custom.profiles, metricKind) ? policy.custom.profiles[metricKind] : null;
+    const profile = ownValue(policy.custom.profiles, metricKind) ?? null;
     if (!profile) {
       if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
-      throw new Error(`custom classification unit belongs to "${policy.custom.unit}", not detected metric kind "${metricKind}".`);
+      throw new Error(`custom classification unit "${policy.custom.unit}" does not fit metric kind "${metricKind}".`);
     }
     return profile;
   }
   const profileId = policy.profile || registryForKind.defaultProfile;
-  const profile = registryForKind.profiles[profileId];
+  const profile = ownValue(registryForKind.profiles, profileId);
   if (!profile) {
     if (lenient) return registryForKind.profiles[registryForKind.defaultProfile];
     throw new Error(`classification profile "${profileId}" is not available for metric kind "${metricKind}".`);

@@ -204,7 +204,7 @@ scale footer when at least two rooms have values.
 | `subtitle` | automatic | Replaces the line under the title, in the same shape. `subtitle: ""` removes the line. See [The two header lines](#the-two-header-lines). |
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
-| `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂ and CO in ppb or µg/m³; `1` for the other measurements and units. CO scale and band labels use one decimal in ppm; other boundary labels use whole numbers. |
+| `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂ and CO in ppb or µg/m³; `1` for the other measurements and units. Scale and band labels show each limit as it is set, without trailing zeros, with at most this many decimals or the unit's default, whichever is more. |
 | `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
 
 #### What the card shows
@@ -467,6 +467,8 @@ The particle and CO profiles use these bands:
 | PM1, PM2.5, PM4 | 0–5 µg/m³ | 0–15 µg/m³ |
 | PM10 | 0–15 µg/m³ | 0–45 µg/m³ |
 | CO | 0–1 mg/m³ | 0–4 mg/m³ |
+| CO in ppm | 0–0.8 ppm | 0–3.4 ppm |
+| CO in ppb | 0–858 ppb | 0–3435 ppb |
 
 These are orientation bands for current readings. PM1 and PM4 use the PM2.5
 mass thresholds; they have no separate numerical guideline in the
@@ -536,9 +538,11 @@ classification:
 
 Custom-profile rules:
 
-- `unit` must be a unit the card knows for this measurement. Temperature takes
-  Celsius, Fahrenheit, or Kelvin, and the whole profile is converted to
-  whatever unit your sensors use. For shared units such as ppm or µg/m³, the
+- `unit` must be a unit the card knows for this measurement. When your sensors
+  report in that unit, the profile applies exactly as written. Temperature takes
+  Celsius, Fahrenheit, or Kelvin, and CO takes mg/m³, µg/m³, ppm, or ppb; for
+  sensors in another of these units the whole profile is converted. For shared
+  units such as ppm or µg/m³, the
   detected measurement selects how the profile is interpreted.
 - `comparison` is `>=` by default and may be `>`.
 - Tier `min` values must be unique and strictly descending. Exactly one final

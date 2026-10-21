@@ -14,6 +14,7 @@ let resolveModule;
 let classify;
 let entityAttributes;
 let projection;
+let reexpression;
 let icons;
 let validity;
 
@@ -27,6 +28,7 @@ test.before(async () => {
   classify = await import("../../../src/domain/classification/classify.js");
   entityAttributes = await import("../../../src/domain/classification/entity-attributes.js");
   projection = await import("../../../src/domain/classification/projection.js");
+  reexpression = await import("../../../src/domain/classification/reexpression.js");
   icons = await import("../../../src/domain/classification/icons.js");
   validity = await import("../../../src/domain/classification/validity.js");
 });
@@ -74,8 +76,8 @@ test("an unknown profile name has nothing to resolve to", () => {
 test("a custom profile scoped to another metric kind has nothing to resolve to", () => {
   const custom = { id: "custom", metricKind: "humidity" };
   assert.throws(
-    () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "custom", profile: null, custom: { unit: custom.metricKind, profiles: { [custom.metricKind]: custom }, faults: {} } }, "temperature"),
-    { message: 'custom classification unit belongs to "humidity", not detected metric kind "temperature".' }
+    () => resolveModule.resolveClassificationProfile(temperatureRegistry(), { source: "custom", profile: null, custom: { unit: "%", profiles: { [custom.metricKind]: custom }, faults: {} } }, "temperature"),
+    { message: 'custom classification unit "%" does not fit metric kind "temperature".' }
   );
 });
 
@@ -483,8 +485,8 @@ test("projecting to Fahrenheit converts the step as a delta, not an absolute", (
     tempUnit("fahrenheit"),
     "temperature"
   );
-  // 1 °C step is 1.8 °F, not 33.8 °F.
-  assert.ok(Math.abs(projected.step - 1.8) < 1e-9, `got ${projected.step}`);
+  // 1 °C step is a 1.8 °F delta, widened to the 1-2-5 step 2; as an absolute (33.8 °F) it would be 50.
+  assert.equal(projected.step, 2);
 });
 
 test("projecting to Kelvin shifts by the offset and leaves deltas alone", () => {
@@ -607,6 +609,94 @@ test("the built-in profiles survive projection into every temperature unit", () 
       );
     }
   }
+});
+
+// A custom profile written in °F, as config/classification/profile-conversion.js hands it on:
+// re-expressed in the canonical unit, carrying the form it was written in.
+function fahrenheitAuthored(bands) {
+  const fahrenheit = tempUnit("fahrenheit");
+  const authored = {
+    id: "custom",
+    metricKind: "temperature",
+    comparison: ">=",
+    tiers: [
+      { min: bands.optimal.max, score: 1, level: "Above", color: "#cc4444", zone: "outside" },
+      { min: bands.optimal.min, score: 0, level: "Ideal", color: "#44cc66", zone: "optimal" },
+      { min: -Infinity, score: -1, level: "Below", color: "#4488cc", zone: "outside" },
+    ],
+    ...bands,
+    scale: { min: 60, max: 80 },
+    step: 2,
+    validRange: null,
+    invalidWhen: null,
+    iconTiers: null,
+  };
+  const canonical = reexpression.reexpressProfile(authored, { absolute: fahrenheit.toCanonical, delta: fahrenheit.deltaToCanonical });
+  return { authored, canonical: { ...canonical, authored: { unitProfileKey: "fahrenheit", profile: authored } } };
+}
+
+test("a profile applies exactly as authored in its own unit, and is projected from canonical in any other", () => {
+  const temperature = definitions.METRIC_DEFINITIONS.temperature;
+  const { authored, canonical } = fahrenheitAuthored({ comfort: { min: 66.5, max: 75.5 }, optimal: { min: 68.5, max: 72.5 } });
+  assert.deepEqual(projection.projectProfile(canonical, temperature, tempUnit("fahrenheit")), { projected: authored, fault: null });
+  assert.equal(projection.projectProfile(canonical, temperature, tempUnit("celsius")).projected, canonical);
+  const kelvin = projection.projectProfile(canonical, temperature, tempUnit("kelvin")).projected;
+  assert.ok(Math.abs(kelvin.optimal.min - ((68.5 - 32) * 5) / 9 - 273.15) < 1e-9);
+  assert.equal("authored" in kelvin, false, "a projection is not authored in the display unit");
+});
+
+test("boundaries finer than the display unit's rounding hold in the unit they were written in", () => {
+  const temperature = definitions.METRIC_DEFINITIONS.temperature;
+  // 68.2 and 68.4 °F both round to 68 once they pass through Celsius.
+  const { authored, canonical } = fahrenheitAuthored({ comfort: { min: 66, max: 70 }, optimal: { min: 68.2, max: 68.4 } });
+  assert.deepEqual(projection.projectProfile(canonical, temperature, tempUnit("fahrenheit")), { projected: authored, fault: null });
+  const { authored: _written, ...withoutAuthoredForm } = canonical;
+  assert.deepEqual(projection.projectProfile(withoutAuthoredForm, temperature, tempUnit("fahrenheit")).fault, {
+    kind: "collapse",
+    field: "classification.bands.optimal.max",
+  });
+});
+
+test("a projected step widens to the next 1-2-5 value; headroom stays the exact delta", () => {
+  const co = definitions.METRIC_DEFINITIONS.co;
+  const indoor = registry.CLASSIFICATION_PROFILE_REGISTRY.co.profiles.indoor;
+  const steps = Object.fromEntries(
+    Object.entries(co.unitProfiles).map(([key, unit]) => [key, projection.projectProfile(indoor, co, unit).projected.step])
+  );
+  // 1 mg/m³ is 0.8588 ppm and 858.8 ppb.
+  assert.deepEqual(steps, { milligram_per_m3: 1, microgram_per_m3: 1000, ppm: 1, ppb: 1000 });
+  const withHeadroom = projection.projectProfile({ ...indoor, headroom: 1 }, co, co.unitProfiles.ppm).projected;
+  assert.equal(withHeadroom.headroom, co.unitProfiles.ppm.deltaFromCanonical(1));
+  assert.equal(projection.projectProfile(temperatureRegistry().profiles.indoor, definitions.METRIC_DEFINITIONS.temperature, tempUnit("kelvin")).projected.step, 1);
+});
+
+test("a step that underflows in the display unit is a collapse at the step", () => {
+  // Synthetic unit: absolutes unchanged, every difference shrunk below the smallest double.
+  const vanishing = { key: "vanishing", fromCanonical: (value) => value, deltaFromCanonical: (value) => value * 1e-200 * 1e-200 };
+  const definition = { canonicalProfileKey: "celsius", unitProfiles: { celsius: tempUnit("celsius"), vanishing } };
+  assert.deepEqual(projection.projectProfile(temperatureRegistry().profiles.indoor, definition, vanishing).fault, {
+    kind: "collapse",
+    field: "classification.scale.step",
+  });
+});
+
+test("a valid_range that rounds shut in the display unit is a collapse at its upper bound", () => {
+  const canonical = {
+    id: "custom",
+    metricKind: "temperature",
+    comparison: ">=",
+    tiers: [{ min: 24, score: 1, level: "A", color: "#cc4444", zone: "outside" }, { min: -Infinity, score: 0, level: "B", color: "#4488cc", zone: "outside" }],
+    comfort: { min: 19, max: 25 },
+    optimal: { min: 21, max: 23 },
+    scale: { min: 16, max: 28 },
+    step: 2,
+    // 68.0 and 68.36 °F both round to 68.
+    validRange: { min: 20, max: 20.2, minInclusive: true, maxInclusive: true },
+  };
+  assert.deepEqual(projection.projectProfile(canonical, definitions.METRIC_DEFINITIONS.temperature, tempUnit("fahrenheit")).fault, {
+    kind: "collapse",
+    field: "classification.valid_range.max",
+  });
 });
 
 // ----------------------------------------------------------------- icons --

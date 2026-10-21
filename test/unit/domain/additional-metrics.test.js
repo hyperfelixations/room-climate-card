@@ -8,7 +8,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-let metrics, registry, classification, projection, conversion, trend;
+let metrics, registry, classification, projection, conversion, trend, scaleConfig, dynamicScale;
 test.before(async () => {
   metrics = await import("../../../src/domain/metrics/definitions.js");
   registry = await import("../../../src/domain/classification/registry.js");
@@ -16,6 +16,8 @@ test.before(async () => {
   projection = await import("../../../src/domain/classification/projection.js");
   conversion = await import("../../../src/domain/units/conversion.js");
   trend = await import("../../../src/domain/trend.js");
+  scaleConfig = await import("../../../src/domain/scale/scale-config.js");
+  dynamicScale = await import("../../../src/domain/scale/dynamic-scale.js");
 });
 
 const EXPECTED = {
@@ -37,7 +39,9 @@ for (const [kind, expected] of Object.entries(EXPECTED)) {
     assert.deepEqual(p.optimal, { min: 0, max: expected.optimal });
     assert.deepEqual(p.scale, { min: 0, max: expected.scale });
     assert.equal(p.step, expected.step);
-    assert.equal(p.headroom, expected.step);
+    // Headroom and anchoring are the scale defaults (one step, anchored), not written out.
+    assert.equal(p.headroom, undefined);
+    assert.equal(p.anchorScale, undefined);
     assert.equal(classification.classifyNumericValue(p, -0.01).invalid, true);
     assert.equal(classification.classifyNumericValue(p, 0).score, 0);
     expected.thresholds.forEach((threshold, i) => {
@@ -98,4 +102,34 @@ test("CO: every unit projects readable distinct thresholds without losing the ph
   for (const value of [0.8, 3.4, 6, 8.5, 30]) {
     assert.equal(rounding(def.unitProfiles.ppm.fromCanonical(def.unitProfiles.ppm.toCanonical(value))), value);
   }
+});
+
+test("CO: every unit draws its axis in whole 1-2-5 steps", () => {
+  const def = metrics.METRIC_DEFINITIONS.co;
+  const p = registry.CLASSIFICATION_PROFILE_REGISTRY.co.profiles.indoor;
+  // The same readings, 1.5-3.4 mg/m³, in each unit; the reference axis is 0-12 mg/m³.
+  const expected = {
+    milligram_per_m3: [1.5, 3.4, { min: 0, max: 12, step: 1 }],
+    microgram_per_m3: [1500, 3400, { min: 0, max: 12000, step: 1000 }],
+    ppm: [1.3, 2.9, { min: 0, max: 11, step: 1 }],
+    ppb: [1300, 2900, { min: 0, max: 11000, step: 1000 }],
+  };
+  for (const [key, [low, high, axis]] of Object.entries(expected)) {
+    const projected = projection.projectProfile(p, def, def.unitProfiles[key]).projected;
+    assert.deepEqual(dynamicScale.dynamicScale(low, high, scaleConfig.scaleConfigFor(projected)), axis, key);
+  }
+});
+
+// A projected CO boundary is floored, so in ppm the optimum ends at 0.8 instead of 0.859: the
+// same air is "optimal" on a mg/m³ card and one level worse on a ppm card, on purpose.
+test("CO: a floored ppm boundary makes the level depend on the display unit, towards caution", () => {
+  const def = metrics.METRIC_DEFINITIONS.co;
+  const p = registry.CLASSIFICATION_PROFILE_REGISTRY.co.profiles.indoor;
+  const ppm = projection.projectProfile(p, def, def.unitProfiles.ppm).projected;
+  const reading = 0.85;
+  const asMass = def.unitProfiles.ppm.toCanonical(reading);
+  assert.ok(asMass > 0.98 && asMass < p.optimal.max, `0.85 ppm is ${asMass} mg/m³`);
+  assert.equal(classification.classifyNumericValue(p, asMass).levelKey, "level.optimal");
+  assert.equal(classification.classifyNumericValue(ppm, reading).levelKey, "level.slightlyElevated");
+  assert.equal(ppm.optimal.max, 0.8);
 });

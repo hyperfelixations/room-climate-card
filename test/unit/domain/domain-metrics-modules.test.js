@@ -8,45 +8,45 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { METRIC_KINDS, METRICS } = require("../../manifests/product-surface.js");
 
 let definitions;
 let resolution;
 let homeAssistant;
 let conversion;
+let projection;
+let registry;
 let unitToken;
-
-const METRIC_KINDS = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
+let linearUnit;
 
 test.before(async () => {
   definitions = await import("../../../src/domain/metrics/definitions.js");
   resolution = await import("../../../src/domain/metrics/resolution.js");
   homeAssistant = await import("../../../src/domain/metrics/home-assistant.js");
   conversion = await import("../../../src/domain/units/conversion.js");
+  projection = await import("../../../src/domain/classification/projection.js");
+  registry = await import("../../../src/domain/classification/registry.js");
   unitToken = await import("../../../src/domain/units/unit-token.js");
+  linearUnit = await import("../../../src/domain/units/linear-unit-profile.js");
 });
 
 // ------------------------------------------------------------- definitions --
 
-test("exactly the eight supported metric kinds are registered", () => {
+test("exactly the manifest's metric kinds are registered", () => {
   assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS).sort(), [...METRIC_KINDS].sort());
 });
 
 test("the kinds keep one order, the one they are registered in", () => {
-  assert.deepEqual([...definitions.METRIC_KIND_ORDER], ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"]);
+  assert.deepEqual([...definitions.METRIC_KIND_ORDER], METRIC_KINDS);
   assert.deepEqual(Object.keys(definitions.METRIC_DEFINITIONS), [...definitions.METRIC_KIND_ORDER]);
   assert.ok(Object.isFrozen(definitions.METRIC_KIND_ORDER));
 });
 
-// References, not copies: a profile edited in classification/ is what the kind classifies by.
-test("each kind's canonical tiers and bands are its default built-in profile's own", async () => {
-  const { CLASSIFICATION_PROFILE_REGISTRY } = await import("../../../src/domain/classification/registry.js");
+// A kind says how it is measured; how it is classified lives in the profile registry alone.
+test("a metric definition carries no classification data", () => {
+  const allowed = ["metricKind", "deviceClass", "canonicalUnit", "canonicalProfileKey", "unitProfiles", "trend"];
   for (const [kind, definition] of Object.entries(definitions.METRIC_DEFINITIONS)) {
-    const registry = CLASSIFICATION_PROFILE_REGISTRY[kind];
-    const profile = registry.profiles[registry.defaultProfile];
-    assert.equal(definition.canonicalClassificationTiers, profile.tiers, `${kind}: tiers`);
-    assert.equal(definition.canonicalComfortBand, profile.comfort, `${kind}: comfort`);
-    assert.equal(definition.canonicalOptimalBand, profile.optimal, `${kind}: optimal`);
-    assert.equal(definition.canonicalBaseScaleBand, profile.scale, `${kind}: scale`);
+    assert.deepEqual(Object.keys(definition).sort(), [...allowed].sort(), kind);
   }
 });
 
@@ -64,12 +64,6 @@ test("every metric definition is internally consistent", () => {
       definition.canonicalUnit,
       `${key}: the canonical profile's displayUnit must equal canonicalUnit`
     );
-    for (const band of ["canonicalComfortBand", "canonicalOptimalBand", "canonicalBaseScaleBand"]) {
-      assert.equal(typeof definition[band]?.min, "number", `${key}.${band}.min`);
-      assert.equal(typeof definition[band]?.max, "number", `${key}.${band}.max`);
-    }
-    assert.ok(Array.isArray(definition.canonicalClassificationTiers), `${key}: canonicalClassificationTiers`);
-    assert.ok(definition.canonicalClassificationTiers.length > 0, `${key}: tiers must not be empty`);
   }
 });
 
@@ -89,8 +83,12 @@ test("every unit profile implements the full conversion contract", () => {
       for (const fn of ["toCanonical", "fromCanonical", "deltaToCanonical", "deltaFromCanonical"]) {
         assert.equal(typeof profile[fn], "function", `${kind}/${key}: ${fn}`);
       }
-      assert.equal(typeof profile.baseDisplayStep, "number", `${kind}/${key}: baseDisplayStep`);
-      assert.ok(profile.baseDisplayStep > 0, `${kind}/${key}: baseDisplayStep must be positive`);
+      if (profile.thresholdRounding !== undefined) {
+        assert.equal(typeof profile.thresholdRounding, "function", `${kind}/${key}: thresholdRounding`);
+      }
+      if (key === definition.canonicalProfileKey) {
+        assert.equal(profile.thresholdRounding, undefined, `${kind}/${key}: the canonical unit is never projected`);
+      }
     }
   }
 });
@@ -104,8 +102,10 @@ test("temperature registers exactly celsius, fahrenheit and kelvin", () => {
   assert.equal(definitions.METRIC_DEFINITIONS.temperature.canonicalProfileKey, "celsius");
 });
 
-test("humidity, co2 and pm25 each register one identity unit profile", () => {
-  for (const kind of ["humidity", "co2", "pm25"]) {
+test("every measurement with a single unit registers it as one identity unit profile", () => {
+  const singleUnit = METRIC_KINDS.filter((kind) => METRICS[kind].unitProfiles.length === 1);
+  assert.ok(singleUnit.length > 0);
+  for (const kind of singleUnit) {
     const definition = definitions.METRIC_DEFINITIONS[kind];
     const keys = Object.keys(definition.unitProfiles);
     assert.equal(keys.length, 1, `${kind}: exactly one profile`);
@@ -118,6 +118,23 @@ test("humidity, co2 and pm25 each register one identity unit profile", () => {
       assert.equal(profile.deltaFromCanonical(value), value, `${kind}: deltaFromCanonical is identity`);
     }
   }
+});
+
+test("a linear unit profile converts absolutes and deltas alike, and rounds only when told", () => {
+  const exact = linearUnit.linearUnitProfile({ key: "gram", displayUnit: "g", factor: 1000 });
+  assert.deepEqual(exact.units, ["g"], "a profile answers to its display unit unless told otherwise");
+  for (const value of [0, 0.25, -3, 1e300]) {
+    assert.equal(exact.toCanonical(value), value * 1000);
+    assert.equal(exact.deltaToCanonical(value), value * 1000);
+    assert.equal(exact.fromCanonical(value * 1000), value);
+    assert.equal(exact.deltaFromCanonical(value * 1000), value);
+  }
+  assert.equal("thresholdRounding" in exact, false, "no rounding unless digits are given");
+  const floored = linearUnit.linearUnitProfile({ key: "tenth", displayUnit: "t", units: ["t", "T"], thresholdDigits: 1 });
+  assert.deepEqual(floored.units, ["t", "T"]);
+  assert.equal(floored.toCanonical(7), 7, "factor 1 is the canonical unit");
+  assert.equal(floored.thresholdRounding(0.859), 0.8);
+  assert.equal(floored.thresholdRounding(0.3 * 3), 0.9, "a floating-point near miss is not floored a step too far");
 });
 
 // ------------------------------------------------------------ conversion ----
@@ -210,23 +227,28 @@ test("non-finite values pass through conversion without becoming NaN-by-accident
   assert.ok(Number.isNaN(conversion.convertUnitValue(NaN, "absolute", c, f)));
 });
 
-// ------------------------------------------------- threshold derivation ----
+// ------------------------------------------------- threshold projection ----
+
+// The temperature indoor profile, and its projection into one of the kind's display units.
+function indoorTemperature() {
+  return registry.CLASSIFICATION_PROFILE_REGISTRY.temperature.profiles.indoor;
+}
+function projectedTemperature(key) {
+  return projection.projectProfile(indoorTemperature(), definitions.METRIC_DEFINITIONS.temperature, tempProfile(key)).projected;
+}
 
 test("Fahrenheit classification thresholds are always whole numbers", () => {
   // A displayed boundary and the boundary used for classification must never disagree.
-  const derived = conversion.deriveThresholdsForProfile(
-    definitions.METRIC_DEFINITIONS.temperature.canonicalClassificationTiers,
-    tempProfile("fahrenheit")
-  );
+  const derived = projectedTemperature("fahrenheit").tiers;
   for (const tier of derived) {
     if (!Number.isFinite(tier.min)) continue;
     assert.equal(Number.isInteger(tier.min), true, `tier min ${tier.min} must be a whole °F value`);
   }
 });
 
-test("threshold derivation preserves tier metadata, order and infinite bounds", () => {
-  const canonical = definitions.METRIC_DEFINITIONS.temperature.canonicalClassificationTiers;
-  const derived = conversion.deriveThresholdsForProfile(canonical, tempProfile("fahrenheit"));
+test("threshold projection preserves tier metadata, order and infinite bounds", () => {
+  const canonical = indoorTemperature().tiers;
+  const derived = projectedTemperature("fahrenheit").tiers;
   assert.equal(derived.length, canonical.length);
   derived.forEach((tier, i) => {
     assert.equal(tier.levelKey, canonical[i].levelKey, `tier ${i} levelKey`);
@@ -240,18 +262,14 @@ test("threshold derivation preserves tier metadata, order and infinite bounds", 
   }
 });
 
-test("threshold derivation into the canonical profile is the identity", () => {
-  const canonical = definitions.METRIC_DEFINITIONS.temperature.canonicalClassificationTiers;
-  const derived = conversion.deriveThresholdsForProfile(canonical, tempProfile("celsius"));
-  assert.deepEqual(derived.map((t) => t.min), canonical.map((t) => t.min));
+test("threshold projection into the canonical profile is the identity", () => {
+  assert.equal(projectedTemperature("celsius"), indoorTemperature());
 });
 
-test("band derivation converts both edges and rounds like the tiers", () => {
-  const band = { min: 20, max: 24 };
-  assert.deepEqual(conversion.deriveBandForProfile(band, tempProfile("celsius")), { min: 20, max: 24 });
-  assert.deepEqual(conversion.deriveBandForProfile(band, tempProfile("fahrenheit")), { min: 68, max: 75 });
+test("band projection converts both edges and rounds like the tiers", () => {
   // 20 °C = 68.0 °F exactly, 24 °C = 75.2 °F -> rounded to 75.
-  const kelvin = conversion.deriveBandForProfile(band, tempProfile("kelvin"));
+  assert.deepEqual(projectedTemperature("fahrenheit").comfort, { min: 68, max: 75 });
+  const kelvin = projectedTemperature("kelvin").comfort;
   assert.ok(Math.abs(kelvin.min - 293.15) < 1e-9);
   assert.ok(Math.abs(kelvin.max - 297.15) < 1e-9);
 });
@@ -338,6 +356,7 @@ test("a registered unit names the one kind registering it", () => {
 
 test("unit candidates are immutable, ordered and deduplicate aliases of the same kind", () => {
   assert.deepEqual(resolution.metricKindsOfUnit("ppm"), ["co2", "co"]);
+  // curated: the measurements that share µg/m³, in registration order
   assert.deepEqual(resolution.metricKindsOfUnit("μg/m^3"), ["pm25", "pm1", "pm4", "pm10", "co"]);
   for (const raw of [undefined, "hPa", "constructor", "__proto__"]) {
     assert.deepEqual(resolution.metricKindsOfUnit(raw), []);

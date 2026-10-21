@@ -2,6 +2,7 @@
 // Disabled bands omit their markup; template-literal indentation is shipped and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
+import { setHidden, setStyleProperty, setText } from "./dom.js";
 
 export function renderScaleBar({ content, viewClass, topRowHtml, markersHtml }) {
   const geometry = content.geometry;
@@ -46,28 +47,32 @@ export function patchScaleBar(containerEl, content) {
 
   const comfortBandEl = containerEl.querySelector(".rtc-comfort-band");
   if (comfortBandEl) {
-    comfortBandEl.style.left = `${geometry.comfortLeft}%`;
-    comfortBandEl.style.width = `${geometry.comfortWidth}%`;
-    comfortBandEl.hidden = !geometry.comfortVisible;
+    setStyleProperty(comfortBandEl, "left", `${geometry.comfortLeft}%`);
+    setStyleProperty(comfortBandEl, "width", `${geometry.comfortWidth}%`);
+    setHidden(comfortBandEl, !geometry.comfortVisible);
   }
 
   const optimalBandEl = containerEl.querySelector(".rtc-optimal-band");
   if (optimalBandEl) {
-    optimalBandEl.style.left = `${geometry.optimalLeft}%`;
-    optimalBandEl.style.width = `${geometry.optimalWidth}%`;
-    optimalBandEl.hidden = !geometry.optimalVisible;
+    setStyleProperty(optimalBandEl, "left", `${geometry.optimalLeft}%`);
+    setStyleProperty(optimalBandEl, "width", `${geometry.optimalWidth}%`);
+    setHidden(optimalBandEl, !geometry.optimalVisible);
   }
 
   // Missing footer node means this view omitted it structurally.
   const footerEl = containerEl.querySelector(".rtc-scale-footer");
-  if (footerEl) footerEl.textContent = content.footerText;
+  if (footerEl) setText(footerEl, content.footerText);
 
+  // The long form; the layout swaps in a shorter one where the measured width needs it.
   const optimalLabelEl = containerEl.querySelector(".rtc-scale-label-center");
-  if (optimalLabelEl) optimalLabelEl.hidden = !geometry.optimalVisible;
+  if (optimalLabelEl) {
+    setHidden(optimalLabelEl, !geometry.optimalVisible);
+    if (content.optimalLabel) setText(optimalLabelEl, content.optimalLabel.long);
+  }
 
   const labelMinEl = containerEl.querySelector(".rtc-scale-label-min");
-  if (labelMinEl) labelMinEl.textContent = content.boundaryLabels.min;
+  if (labelMinEl) setText(labelMinEl, content.boundaryLabels.min);
 
   const labelMaxEl = containerEl.querySelector(".rtc-scale-label-max");
-  if (labelMaxEl) labelMaxEl.textContent = content.boundaryLabels.max;
+  if (labelMaxEl) setText(labelMaxEl, content.boundaryLabels.max);
 }

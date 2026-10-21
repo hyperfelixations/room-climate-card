@@ -45,6 +45,33 @@ export function createInteractionRuntime({
     return viewIndexFromTranslate(startTranslate, carousel.viewWidthPct(), maxIndex());
   }
 
+  // Ends the tracked gesture without a pointerup: a confirmed drag settles where it was frozen.
+  function abortGesture() {
+    const aborted = pointer;
+    pointer = null;
+    if (dragging) {
+      carousel.activeIndex = resolveAbortedIndex(aborted.startTranslate);
+      dragging = false;
+      carousel.updateTrackTransform(true);
+      carousel.scheduleAccessibilitySync();
+      carousel.resumeAfterInteraction(RESUME_AFTER_CANCEL_MS);
+      requestRender({ viewChanged: false });
+      return;
+    }
+    if (aborted?.rotator) resumeIfTrackIsManual(0);
+  }
+
+  // A mouse pointer is not captured implicitly; without this a release outside the card never
+  // arrives. Capture is best effort: a pointer the browser no longer knows throws.
+  function capturePointer(element, pointerId) {
+    if (typeof element?.setPointerCapture !== "function") return;
+    try {
+      element.setPointerCapture(pointerId);
+    } catch {
+      // The gesture still works for as long as the pointer stays over the card.
+    }
+  }
+
   return {
     // Read-only owner state; only pointer handlers begin or end gestures.
     get pointer() {
@@ -63,6 +90,8 @@ export function createInteractionRuntime({
       // Do not pause yet: this may become vertical dashboard scrolling.
       if (event.button !== undefined && event.button !== 0) return;
       if (event.isPrimary === false) return;
+      // A pointer whose pointerup or pointercancel never arrived must not outlive this one.
+      if (pointer) abortGesture();
       const rotator = getRotator(event);
       // `swipe:false` affects rotator tracking only; tap/hold remain available.
       pointer = {
@@ -71,6 +100,7 @@ export function createInteractionRuntime({
         y: event.clientY,
         time: platform.now(),
         rotator: Boolean(rotator) && isSwipeEnabled(),
+        rotatorElement: rotator,
         entityTarget: findInPath(event, "[data-entity]"),
         startTranslate: -(carousel.activeIndex || 0) * carousel.viewWidthPct(),
         dragging: false,
@@ -90,6 +120,7 @@ export function createInteractionRuntime({
         pointer.startTranslate = carousel.freezeTrackAtCurrentPosition();
         // Clear an earlier resume through its carousel owner.
         carousel.stop();
+        capturePointer(pointer.rotatorElement, event.pointerId);
       }
       event.preventDefault();
       event.stopPropagation();
@@ -148,22 +179,9 @@ export function createInteractionRuntime({
     },
 
     handlePointerCancel(event) {
-      // Browser/dashboard cancellation and pointerleave affect only the tracked pointer.
+      // pointercancel, a lost capture and leaving the card affect only the tracked pointer.
       if (!pointer || pointer.id !== event.pointerId) return;
-      const aborted = pointer;
-      const wasRotator = Boolean(aborted.rotator);
-      pointer = null;
-      if (dragging) {
-        carousel.activeIndex = resolveAbortedIndex(aborted.startTranslate);
-        dragging = false;
-        carousel.updateTrackTransform(true);
-        carousel.scheduleAccessibilitySync();
-        carousel.resumeAfterInteraction(RESUME_AFTER_CANCEL_MS);
-        requestRender({ viewChanged: false });
-        return;
-      }
-      if (!wasRotator) return;
-      resumeIfTrackIsManual(0);
+      abortGesture();
     },
 
     // End all gesture state on detach; settling/resume would target dead markup. Idempotent.

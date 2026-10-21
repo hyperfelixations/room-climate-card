@@ -116,20 +116,31 @@ function fakeCarousel({ viewCount = 3, trackManual = false } = {}) {
   };
 }
 
-function makeRuntime({ carousel = fakeCarousel(), platform = createFakePlatform(), swipeEnabled = true, holdSeconds = 0.5, rotatorWidth = 300, entityTarget = null } = {}) {
+// The rotator element the runtime measures and, once a drag is confirmed, captures the pointer on.
+function fakeRotator(width = 300) {
+  return {
+    captured: [],
+    getBoundingClientRect: () => ({ width }),
+    setPointerCapture(pointerId) {
+      this.captured.push(pointerId);
+    },
+  };
+}
+
+function makeRuntime({ carousel = fakeCarousel(), platform = createFakePlatform(), swipeEnabled = true, holdSeconds = 0.5, rotatorWidth = 300, entityTarget = null, rotator = fakeRotator(rotatorWidth) } = {}) {
   const fired = [];
   const renders = [];
   const runtime = interaction.createInteractionRuntime({
     platform,
     carousel,
     findInPath: (event, selector) => (selector === "[data-entity]" ? event.__entity ?? entityTarget : event.__rotator ?? null),
-    getRotator: (event) => (event.__rotator ? { getBoundingClientRect: () => ({ width: rotatorWidth }) } : null),
+    getRotator: (event) => (event.__rotator ? rotator : null),
     isSwipeEnabled: () => swipeEnabled,
     getHoldSeconds: () => holdSeconds,
     fireAction: (target, action) => fired.push(action),
     requestRender: (info) => renders.push(info),
   });
-  return { runtime, carousel, platform, fired, renders };
+  return { runtime, carousel, platform, fired, renders, rotator };
 }
 
 const noop = () => {};
@@ -528,4 +539,60 @@ test("a pointer event from the previous life is ignored after a disconnect", () 
   runtime.handlePointerCancel({ pointerId: 1 });
   assert.equal(carousel.calls.length, before, "no stale gesture may touch the new track");
   assert.equal(runtime.pointer, null);
+});
+
+// A mouse pointer is not captured implicitly: released outside the card, its pointerup never
+// reaches the shadow root. Capturing on the rotator once the drag is confirmed routes it back.
+test("a confirmed drag captures its pointer on the rotator, once, and a tap never does", () => {
+  const { runtime, rotator } = makeRuntime();
+  runtime.handlePointerDown(down());
+  runtime.handlePointerMove(move(-4));
+  assert.deepEqual(rotator.captured, [], "nothing is captured before the drag is confirmed");
+  runtime.handlePointerMove(move(-40));
+  runtime.handlePointerMove(move(-80));
+  assert.deepEqual(rotator.captured, [1]);
+
+  const tap = makeRuntime();
+  tap.runtime.handlePointerDown(down());
+  tap.runtime.handlePointerUp(up(0));
+  assert.deepEqual(tap.rotator.captured, []);
+});
+
+test("a rotator that cannot capture the pointer still drags", () => {
+  const plain = { getBoundingClientRect: () => ({ width: 300 }) };
+  const refusing = { getBoundingClientRect: () => ({ width: 300 }), setPointerCapture: () => { throw new Error("InvalidPointerId"); } };
+  for (const rotator of [plain, refusing]) {
+    const { runtime, carousel } = makeRuntime({ rotator });
+    runtime.handlePointerDown(down());
+    runtime.handlePointerMove(move(-40));
+    runtime.handlePointerUp(up(-200));
+    assert.equal(carousel.activeIndex, 1);
+    assert.equal(runtime.isInteracting(), false);
+  }
+});
+
+test("a new pointerdown first settles a drag whose pointer never came back", () => {
+  const { runtime, carousel, renders } = makeRuntime();
+  runtime.handlePointerDown(down());
+  runtime.handlePointerMove(move(-40));
+  assert.equal(runtime.isDragging, true);
+
+  const before = carousel.calls.length;
+  runtime.handlePointerDown(down({ pointerId: 2 }));
+  assert.equal(runtime.isDragging, false, "the stale drag is over");
+  assert.equal(carousel.activeIndex, 0, "it lands where it was frozen");
+  assert.deepEqual(carousel.calls.slice(before), ["transform:true", "a11y", "resume:1200"]);
+  assert.deepEqual(renders.at(-1), { viewChanged: false });
+  assert.equal(runtime.pointer.id, 2, "the new gesture is tracked");
+
+  runtime.handlePointerUp(up(0, 0, { pointerId: 2 }));
+  assert.equal(runtime.isInteracting(), false);
+});
+
+test("a new pointerdown drops a tap whose pointerup never came back", () => {
+  const { runtime, carousel } = makeRuntime({ carousel: fakeCarousel({ trackManual: true }) });
+  runtime.handlePointerDown(down());
+  runtime.handlePointerDown(down({ pointerId: 2, __rotator: null }));
+  assert.deepEqual(carousel.calls, ["resume:0"], "the abandoned rotator pointer resumes a detached track");
+  assert.equal(runtime.pointer.id, 2);
 });

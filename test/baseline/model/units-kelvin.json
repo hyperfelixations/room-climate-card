@@ -21,17 +21,8 @@
   "coolestShift": 0,
   "displayStep": 1,
   "displayUnitProfile": {
-    "baseDisplayStep": 1,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "K",
-    "fromCanonical": "[Function]",
-    "key": "kelvin",
-    "toCanonical": "[Function]",
-    "units": [
-      "k",
-      "kelvin"
-    ]
+    "key": "kelvin"
   },
   "empty": false,
   "hasRange": false,

@@ -2,6 +2,7 @@
 // Ordinary markers retain the shipped plain-percentage style.
 
 import { escapeHtml } from "../../core/text.js";
+import { setAttr } from "./dom.js";
 
 export function markerStyle(marker, { useShift = false } = {}) {
   const left = useShift ? `calc(${marker.position}% + ${marker.shiftPx}px)` : `${marker.position}%`;
@@ -15,6 +16,6 @@ export function renderMarker(marker, { classNames, extraAttributes = "", useShif
 
 export function patchMarker(element, marker, { useShift = false } = {}) {
   if (!element) return;
-  element.setAttribute("style", markerStyle(marker, { useShift }));
-  element.setAttribute("title", marker.title);
+  setAttr(element, "style", markerStyle(marker, { useShift }));
+  setAttr(element, "title", marker.title);
 }

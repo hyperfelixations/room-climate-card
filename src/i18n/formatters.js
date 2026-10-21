@@ -1,5 +1,5 @@
 // Locale-aware formatting, plus the plural helpers the language files use. One Intl
-// formatter is cached per locale/digits combination: a multi-room render formats a
+// formatter is cached per locale and option combination: a multi-room render formats a
 // dozen-plus numbers, and a fresh Intl instance per call would be built each time.
 
 import { withoutNegativeZero } from "../core/numbers.js";
@@ -9,11 +9,11 @@ const NUMBER_FORMAT_CACHE = new Map();
 const TIME_FORMAT_CACHE = new Map();
 const PLURAL_RULES_CACHE = new Map();
 
-export function getNumberFormat(locale, digits, signDisplay = "auto") {
-  const key = `${locale}|${digits}|${signDisplay}`;
+export function getNumberFormat(locale, { minimumFractionDigits, maximumFractionDigits, signDisplay = "auto", notation = "standard" }) {
+  const key = `${locale}|${minimumFractionDigits}|${maximumFractionDigits}|${signDisplay}|${notation}`;
   let fmt = NUMBER_FORMAT_CACHE.get(key);
   if (!fmt) {
-    fmt = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits, signDisplay });
+    fmt = new Intl.NumberFormat(locale, { minimumFractionDigits, maximumFractionDigits, signDisplay, notation });
     NUMBER_FORMAT_CACHE.set(key, fmt);
   }
   return fmt;
@@ -48,8 +48,24 @@ export function selectPlural(language, count, forms) {
 // presentation decision this module has no way to resolve. `signDisplay` follows
 // Intl; "exceptZero" is what a signed band range uses to mark its positive bound.
 export function formatNumber(language, value, digits, signDisplay) {
+  return format(language, value, { minimumFractionDigits: digits, maximumFractionDigits: digits, signDisplay });
+}
+
+// A band or axis boundary: up to `maxDigits` decimals, without trailing zeros, so a boundary
+// reads exactly as it applies. See internal dev doc §5 "Grenzbeschriftungen".
+export function formatBoundary(language, value, maxDigits, signDisplay) {
+  return format(language, value, { minimumFractionDigits: 0, maximumFractionDigits: maxDigits, signDisplay });
+}
+
+// The language's short scale ("3.4K", "1 Mio."): the form a label falls back to when the
+// full number does not fit.
+export function formatCompact(language, value, signDisplay) {
+  return format(language, value, { minimumFractionDigits: 0, maximumFractionDigits: 1, signDisplay, notation: "compact" });
+}
+
+function format(language, value, options) {
   const number = withoutNegativeZero(Number(value));
-  return getNumberFormat(NUMBER_LOCALE_BY_LANGUAGE[language], digits, signDisplay).format(number);
+  return getNumberFormat(NUMBER_LOCALE_BY_LANGUAGE[language], options).format(number);
 }
 
 // Formats an ISO timestamp as local "HH:MM" (hour12:false keeps this

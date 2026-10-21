@@ -16,9 +16,7 @@ export const temperature = {
       fromCanonical: (v) => v,
       deltaToCanonical: (v) => v,
       deltaFromCanonical: (v) => v,
-      baseDisplayStep: 1,
-      // No thresholdRounding: derivation is a pure identity for the
-      // canonical unit itself (verified in tests).
+      // No thresholdRounding: the canonical unit is never projected.
     },
     fahrenheit: {
       key: "fahrenheit",
@@ -28,13 +26,12 @@ export const temperature = {
       fromCanonical: (v) => (v * 9) / 5 + 32,
       deltaToCanonical: (v) => (v * 5) / 9,
       deltaFromCanonical: (v) => (v * 9) / 5,
-      baseDisplayStep: 2,
       // Round projected boundaries to whole °F, so a displayed boundary and the one
       // used for classification never disagree. Math.round returns -0 for a small
       // negative boundary (-18 °C is -0.4 °F), which no boundary means.
       thresholdRounding: (v) => withoutNegativeZero(Math.round(v)),
       // Dynamic scale step by displayed span: fine for a narrow range, coarse for a
-      // wide one. Celsius/Kelvin omit this and keep a fixed baseDisplayStep of 1.
+      // wide one. Celsius and Kelvin omit this and use the profile's step.
       dynamicDisplaySteps: [
         { maxSpan: 20, step: 2 },
         { maxSpan: 40, step: 5 },
@@ -51,7 +48,6 @@ export const temperature = {
       // so a delta/rate is numerically identical in both units.
       deltaToCanonical: (v) => v,
       deltaFromCanonical: (v) => v,
-      baseDisplayStep: 1,
     },
   },
   trend: { fallingBelow: -0.1, risingAbove: 0.1 },

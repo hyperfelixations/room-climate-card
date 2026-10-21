@@ -51,9 +51,11 @@ respectively — so that a directory listing is a map rather than an inventory.
 Shared material lives in three directories and is never a test itself:
 
 - `test/manifests/product-surface.js` — the **one** hand-written statement of what the card
-  supports: fifteen languages, four metrics, four views, the palette keys. Generic matrices
-  import it; a curated subset (five typographically extreme languages, say) stays local and
-  says in a comment that it is curated.
+  supports: the languages, the measurements with their units and physical limits, the views,
+  the palette keys. Generic matrices import it; a curated subset (five typographically extreme
+  languages, say) stays local and says in a comment that it is curated. A list of three or more
+  measurements written by hand needs a `// curated: <reason>` marker
+  (`architecture/suite-structure.test.js`).
 - `test/fixtures/scenario.js` — the scenario builder. One way to describe a card situation, for
   every layer, including the environment around it: which timestamps a sensor reports, which
   fields `hass` arrives without, which theme it declares.

@@ -31,16 +31,8 @@
   "coolestShift": 0,
   "displayStep": 5,
   "displayUnitProfile": {
-    "baseDisplayStep": 5,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "µg/m³",
-    "fromCanonical": "[Function]",
-    "key": "microgram_per_m3",
-    "toCanonical": "[Function]",
-    "units": [
-      "µg/m³"
-    ]
+    "key": "microgram_per_m3"
   },
   "empty": false,
   "hasRange": false,

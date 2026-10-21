@@ -10,10 +10,14 @@ process.env.TZ = "UTC";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { cfg, minimalDomainModel, stubTexts } = require("../../fixtures/presentation-models.js");
+const { METRIC_KINDS } = require("../../manifests/product-surface.js");
 
 let metricMeta;
 let roomLayout;
 let scaleViewModel;
+let scaleBar;
+let scaleContent;
+let rangeScaleContent;
 let cardViewModel;
 let legacyData;
 let core;
@@ -26,6 +30,9 @@ test.before(async () => {
   metricMeta = await import("../../../src/presentation/view-model/metric-meta.js");
   roomLayout = await import("../../../src/presentation/view-model/room-layout.js");
   scaleViewModel = await import("../../../src/presentation/view-model/scale-view-model.js");
+  scaleBar = await import("../../../src/presentation/view-model/view-content/scale-bar.js");
+  scaleContent = await import("../../../src/presentation/view-model/view-content/scale.js");
+  rangeScaleContent = await import("../../../src/presentation/view-model/view-content/range-scale.js");
   cardViewModel = await import("../../../src/presentation/view-model/card-view-model.js");
   legacyData = require("../../helpers/legacy-dto.js");
   core = await import("../../../src/core/diagnostics.js");
@@ -34,7 +41,7 @@ test.before(async () => {
 // ------------------------------------------------------------ metric meta --
 
 test("every metric kind has complete presentation metadata", () => {
-  for (const kind of ["temperature", "humidity", "co2", "pm25"]) {
+  for (const kind of METRIC_KINDS) {
     const meta = metricMeta.METRIC_META[kind];
     assert.match(meta.titleKey, /^title\./, `${kind}: titleKey`);
     assert.match(meta.icon, /^mdi:/, `${kind}: icon`);
@@ -46,6 +53,26 @@ test("every metric kind has complete presentation metadata", () => {
     assert.match(meta.belowAdjectiveKey, /^adjective\./, `${kind}: belowAdjectiveKey`);
     assert.ok(meta.autoRoomColumns > 0, `${kind}: autoRoomColumns`);
   }
+});
+
+test("a reading shows the card's decimals when set, else its unit's own", () => {
+  assert.equal(metricMeta.readingDigits("temperature", "celsius", null), 1);
+  assert.equal(metricMeta.readingDigits("co2", "ppm", null), 0);
+  assert.equal(metricMeta.readingDigits("co", "ppb", null), 0, "a unit may override its measurement");
+  assert.equal(metricMeta.readingDigits("co", "milligram_per_m3", null), 1);
+  assert.equal(metricMeta.readingDigits("co", "ppb", 2), 2);
+  assert.equal(metricMeta.readingDigits("temperature", "celsius", 0), 0);
+});
+
+// A boundary may show more digits than the readings, never fewer than they have by default:
+// a band written as 20.5 reads as 20.5 even on a card with `decimals: 0`.
+test("a boundary shows at least as many digits as its unit's readings", () => {
+  assert.equal(metricMeta.boundaryDigits("temperature", "celsius", null), 1);
+  assert.equal(metricMeta.boundaryDigits("temperature", "celsius", 0), 1);
+  assert.equal(metricMeta.boundaryDigits("temperature", "celsius", 2), 2);
+  assert.equal(metricMeta.boundaryDigits("co", "ppm", null), 1);
+  assert.equal(metricMeta.boundaryDigits("co", "ppb", null), 0);
+  assert.equal(metricMeta.boundaryDigits("co2", "ppm", 1), 1);
 });
 
 test("an unknown metric kind resolves to temperature", () => {
@@ -207,6 +234,68 @@ test("two markers closer than the overlap threshold are nudged apart, not reposi
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(80, 20), { first: 0, second: 0 });
   // Symmetric: argument order only decides which gets the negative offset.
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(51.4, 50), { first: -4, second: 4 });
+});
+
+// ------------------------------------------------- boundary and band labels --
+
+test("a band range writes its bounds as boundaries, signed with the language's wording once one is negative", () => {
+  const texts = stubTexts();
+  assert.equal(scaleBar.buildBandRangeText(texts, "°C", 20.5, 23.5), "boundary:20.5–boundary:23.5°C");
+  assert.equal(
+    scaleBar.buildBandRangeText(texts, "°C", -24, -15),
+    'scale.bandRangeSigned({"min":"signedboundary:-24","max":"signedboundary:-15°C"})'
+  );
+  assert.equal(scaleBar.buildBandRangeText(texts, "µg/m³", 0, 4000, { compact: true }), "compact:0–compact:4000µg/m³");
+});
+
+test("a label has a compact form only where its numbers reach the thousands", () => {
+  const texts = stubTexts();
+  assert.equal(scaleBar.buildBoundaryLabel(texts, "°C", 999.5), "boundary:999.5°C");
+  assert.equal(scaleBar.buildCompactBoundaryLabel(texts, "°C", 999.5), null);
+  assert.equal(scaleBar.buildCompactBoundaryLabel(texts, "°C", 1000), "compact:1000°C");
+  assert.equal(scaleBar.buildCompactBoundaryLabel(texts, "°C", -1000), "compact:-1000°C");
+
+  const small = scaleBar.buildBandLabelForms(texts, "°C", { min: 20, max: 24, longKey: "long", shortKey: "short" });
+  assert.deepEqual(small, { long: 'long({"range":"boundary:20–boundary:24°C"})', short: 'short({"range":"boundary:20–boundary:24°C"})', compact: null });
+  const large = scaleBar.buildBandLabelForms(texts, "µg/m³", { min: 0, max: 1000, longKey: "long", shortKey: "short" });
+  assert.equal(large.compact, 'short({"range":"compact:0–compact:1000µg/m³"})', "the short wording with short-scale bounds");
+});
+
+test("the scale footer offers a compact spread only when the spread reaches the thousands", () => {
+  const texts = stubTexts();
+  const shared = (spread) => ({
+    texts,
+    unit: "µg/m³",
+    metricKind: "co",
+    spread,
+    comfort: { min: 0, max: 4000, inComfort: 1 },
+    average: { value: 2400, position: 50, color: "#79A86C", hasLabel: false, label: "" },
+    rooms: { comparable: true, count: 2, byValue: [] },
+    extremes: null,
+    roomMarkers: [],
+    trend: { model: null, text: "" },
+    scale: { optimalMin: 0, optimalMax: 1000, optimalCenter: 10, optimalVisible: true, comfortCenter: 20, comfortVisible: true, boundaryLabels: {}, compactBoundaryLabels: {} },
+  });
+  const options = { show_comfort_band: true, show_optimal_band: true, show_footer: true, markers: "extremes" };
+  const narrow = scaleContent.buildScaleViewContent(shared(960), options);
+  assert.equal(narrow.compactFooterText, null);
+  const wide = scaleContent.buildScaleViewContent(shared(1920), options);
+  assert.equal(wide.footerText, 'footer.comfort({"count":1,"total":2}) · footer.spread({"value":"unit:1920:auto"})');
+  assert.equal(wide.compactFooterText, 'footer.comfort({"count":1,"total":2}) · footer.spread({"value":"compact:1920 µg/m³"})');
+  assert.equal(scaleContent.buildScaleViewContent(shared(1920), { ...options, show_footer: false }).compactFooterText, null);
+});
+
+test("the daily-range footer offers compact numbers once any of them reaches the thousands", () => {
+  const texts = stubTexts();
+  const axis = { optimalMin: 0, optimalMax: 1000, optimalCenter: 10, optimalVisible: true, markerPositions: { current: 50, min: 10, max: 90 }, boundaryLabels: {}, compactBoundaryLabels: {} };
+  const shared = (range) => ({ texts, unit: "µg/m³", average: { value: 900, color: "#79A86C" }, range: { minTime: null, maxTime: null, minColor: "#1", maxColor: "#2", ...range } });
+  const options = { show_comfort_band: true, show_optimal_band: true, show_footer: true, footer: "compact" };
+  assert.equal(rangeScaleContent.buildRangeScaleViewContent(shared({ state: 300, min: 600, max: 900 }), options, axis).compactFooterText, null);
+  const wide = rangeScaleContent.buildRangeScaleViewContent(shared({ state: 300, min: 800, max: 1100 }), options, axis);
+  assert.equal(
+    wide.compactFooterText,
+    'rangeScale.footerCompact({"span":"compact:300 µg/m³","min":"compact:800 µg/m³","minTime":"","max":"compact:1100 µg/m³","maxTime":""})'
+  );
 });
 
 // ------------------------------------------------------- card view model --
@@ -419,7 +508,7 @@ test("a chip carries every string and custom property its renderer needs", () =>
   assert.equal(cool.color, "#4488cc");
   assert.equal(cool.valueText, "fmt:21:auto");
   assert.equal(cool.unitText, "°C");
-  assert.equal(cool.title, "A: unit:21:auto:space");
+  assert.equal(cool.title, "A: unit:21:auto");
   assert.equal(cool.ariaLabel, 'room.ariaOpen({"name":"A"})');
   // 21 is inside the 20–24 band, so the chip keeps the theme surface and the neutral mark.
   assert.equal(cool.mark, "•");
@@ -558,7 +647,7 @@ test("the legacy adapter flattens the scale model to the top level", () => {
   assert.equal(data.scaleMin, 19);
   assert.equal(data.scaleMax, 25);
   assert.equal(data.displayStep, 1);
-  assert.deepEqual(data.boundaryLabels, { min: "unit:19:0:nospace", max: "unit:25:0:nospace" });
+  assert.deepEqual(data.boundaryLabels, { min: "boundary:19°C", max: "boundary:25°C" });
   assert.equal(data.avgPos, 50);
 });
 

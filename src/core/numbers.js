@@ -82,6 +82,32 @@ export function percentInRange(value, min, max) {
   return clamp(ratio * 100, 0, 100);
 }
 
+// Floors to `digits` decimals. A value within a few ulps of a boundary counts as on it, so a
+// conversion that lands a hair below (9 / f * f) keeps its value. A value the scaling would
+// overflow is returned unchanged; the result is never -0.
+export function floorToDigits(value, digits) {
+  const factor = 10 ** digits;
+  if (Math.abs(value) > Number.MAX_VALUE / factor) return value;
+  const scaled = value * factor;
+  const nearest = Math.round(scaled);
+  const snapped = Math.abs(scaled - nearest) <= 4 * Number.EPSILON * Math.max(1, Math.abs(scaled)) ? nearest : scaled;
+  return Math.floor(snapped) / factor || 0;
+}
+
+const NICE_MANTISSAS = [1, 2, 5, 10];
+const NICE_STEP_TOLERANCE = 1e-9;
+
+// The smallest 1, 2 or 5 times a power of ten that is at least `value` (relative tolerance
+// 1e-9, so a conversion artefact above a nice value keeps it). NaN for a value that is not a
+// positive finite number.
+export function niceStepAtLeast(value) {
+  if (!(value > 0) || !Number.isFinite(value)) return NaN;
+  const exponent = Math.floor(Math.log10(value));
+  const scale = (mantissa) => (exponent < 0 ? mantissa / 10 ** -exponent : mantissa * 10 ** exponent);
+  const mantissa = NICE_MANTISSAS.find((candidate) => value <= scale(candidate) * (1 + NICE_STEP_TOLERANCE));
+  return scale(mantissa);
+}
+
 export function floorToStep(value, step) {
   return Math.floor(value / step) * step;
 }

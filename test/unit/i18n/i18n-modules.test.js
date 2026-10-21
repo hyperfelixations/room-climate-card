@@ -103,7 +103,7 @@ test("a key that is a function in the reference language is a function everywher
 
 // The variable contract of every function-valued translation, with a representative value.
 // A translation that reads a name missing here, or a name here that no translation reads,
-// fails by that name. See internal dev doc §6 "i18n und sprachabhängige Formatierung".
+// fails by that name. See internal dev doc §5 "i18n und sprachabhängige Formatierung".
 const INTERPOLATION_VARS = Object.freeze({
   label: "Test label",
   value: "22.0 °C",
@@ -322,6 +322,31 @@ test("formatNumber() can force an explicit sign on positive values", () => {
   assert.equal(formatNumber("en", 4, 0), "4", "the default keeps the plain form");
 });
 
+test("formatBoundary() shows up to the given digits and no trailing zeros", () => {
+  const { formatBoundary } = formatters;
+  assert.equal(formatBoundary("en", 20.5, 1), "20.5");
+  assert.equal(formatBoundary("en", 20, 1), "20", "a whole boundary stays whole");
+  assert.equal(formatBoundary("en", 0, 1), "0");
+  assert.equal(formatBoundary("en", 0.85, 2), "0.85");
+  assert.equal(formatBoundary("en", 293.15, 1), "293.2", "beyond the digits it rounds like a reading");
+  assert.equal(formatBoundary("de", 1234.5, 1), "1.234,5");
+  assert.equal(formatBoundary("en", -0, 1), "0");
+  assert.equal(formatBoundary("en", 3, 1, "exceptZero"), "+3");
+  assert.equal(formatBoundary("en", -2.5, 1, "exceptZero"), "-2.5");
+  assert.equal(formatBoundary("en", 0, 1, "exceptZero"), "0");
+});
+
+test("formatCompact() writes a large number in the language's short scale", () => {
+  const { formatCompact } = formatters;
+  const plain = (text) => text.replace(/\s/g, " ");
+  assert.equal(formatCompact("en", 3435), "3.4K");
+  assert.equal(formatCompact("en", 1000001), "1M");
+  assert.equal(formatCompact("en", 2500, "exceptZero"), "+2.5K");
+  assert.equal(plain(formatCompact("de", 1000001)), "1 Mio.");
+  assert.equal(plain(formatCompact("fr", 3435)), "3,4 k");
+  assert.equal(formatCompact("en", -0), "0");
+});
+
 test("formatTimeOfDay() renders 24-hour local time and rejects unusable input", () => {
   const { formatTimeOfDay } = formatters;
   // TZ is pinned to UTC above, so the rendered time equals the ISO time.
@@ -364,8 +389,20 @@ test("selectPlural() picks the matching form and falls back to `other`", () => {
 
 test("the Intl formatters are cached, not rebuilt per call", () => {
   const { getNumberFormat, getTimeFormat } = formatters;
-  assert.equal(getNumberFormat("en-US", 1), getNumberFormat("en-US", 1), "same locale+digits reuses one instance");
-  assert.notEqual(getNumberFormat("en-US", 1), getNumberFormat("en-US", 2), "digits are part of the cache key");
-  assert.notEqual(getNumberFormat("en-US", 1), getNumberFormat("de-DE", 1), "locale is part of the cache key");
+  const digits = (min, max) => ({ minimumFractionDigits: min, maximumFractionDigits: max });
+  assert.equal(getNumberFormat("en-US", digits(1, 1)), getNumberFormat("en-US", digits(1, 1)), "the same options reuse one instance");
+  assert.notEqual(getNumberFormat("en-US", digits(1, 1)), getNumberFormat("en-US", digits(0, 1)), "the minimum is part of the cache key");
+  assert.notEqual(getNumberFormat("en-US", digits(1, 1)), getNumberFormat("en-US", digits(1, 2)), "the maximum is part of the cache key");
+  assert.notEqual(getNumberFormat("en-US", digits(1, 1)), getNumberFormat("de-DE", digits(1, 1)), "locale is part of the cache key");
+  assert.notEqual(
+    getNumberFormat("en-US", digits(1, 1)),
+    getNumberFormat("en-US", { ...digits(1, 1), signDisplay: "exceptZero" }),
+    "the sign display is part of the cache key"
+  );
+  assert.notEqual(
+    getNumberFormat("en-US", digits(1, 1)),
+    getNumberFormat("en-US", { ...digits(1, 1), notation: "compact" }),
+    "the notation is part of the cache key"
+  );
   assert.equal(getTimeFormat("en-US"), getTimeFormat("en-US"));
 });

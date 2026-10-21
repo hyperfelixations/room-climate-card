@@ -11,6 +11,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { PROFILE_REEXPRESSION } = require("../../helpers/profile-reexpression.js");
 const { VIEWS } = require("../../manifests/product-surface.js");
 
 let classification;
@@ -78,6 +79,7 @@ const COLLABORATORS = {
     if (unit === "°F") return FAHRENHEIT;
     return null;
   },
+  profileReexpression: PROFILE_REEXPRESSION,
 };
 
 function validCustom(overrides = {}) {

@@ -26,12 +26,17 @@ let isSupportedLanguage;
 let translate;
 let resolveLanguage;
 let formatNumber;
+let formatBoundary;
+let formatCompact;
 let formatTimeOfDay;
-let metricMetaFor;
+let readingDigits;
+let boundaryDigits;
 let CLASSIFICATION_ZONES;
 let metricKindsOfUnit;
 let METRIC_DEFINITIONS;
 let resolveUnitProfileKey;
+let findReexpressionFault;
+let reexpressProfile;
 let palettes;
 
 // The surface the card is standing on. HA's default light background is what the element
@@ -49,11 +54,12 @@ test.before(async () => {
   ({ normalizeConfig } = await import("../../src/config/normalize-config.js"));
   ({ optionSchemaForView, VIEW_DEFINITIONS } = await import("../../src/presentation/view-model/view-state.js"));
   ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));
-  ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
-  ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
+  ({ formatBoundary, formatCompact, formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
+  ({ boundaryDigits, readingDigits } = await import("../../src/presentation/view-model/metric-meta.js"));
   ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
   ({ metricKindsOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
+  ({ findReexpressionFault, reexpressProfile } = await import("../../src/domain/classification/reexpression.js"));
   palettes = await import("../../src/domain/classification/palettes/registry.js");
   const { SURFACE_BACKGROUNDS } = await import("../../src/domain/classification/surface.js");
   const { surfaceOf } = await import("../../src/domain/classification/paint-roles.js");
@@ -73,6 +79,7 @@ function configCollaborators() {
       const profileKey = resolveUnitProfileKey(metricKind, unit);
       return profileKey ? METRIC_DEFINITIONS[metricKind].unitProfiles[profileKey] : null;
     },
+    profileReexpression: { reexpress: reexpressProfile, findFault: findReexpressionFault },
     // The full palette collaborator set, as element/room-climate-card.js wires it. A partial
     // stub would still pass every (palette-name) baseline while hiding a colour-road regression.
     paletteForName: (name) => (name === null ? palettes.DEFAULT_PALETTE : palettes.paletteForName(name)),
@@ -84,19 +91,19 @@ function configCollaborators() {
 }
 
 // The presentation collaborator, mirroring the element. Digit resolution (argument, then
-// config override, then metric default) is part of the contract.
-function buildTexts(config, hass, unit, metricKind) {
+// config override, then the display unit's default) is part of the contract.
+function buildTexts(config, hass, unit, metricKind, unitProfileKey) {
   const language = resolveLanguage(config.language, hass);
-  const digitsFor = (digits) => digits ?? config.decimals ?? metricMetaFor(metricKind).decimals;
-  const fmt = (value, digits) => formatNumber(language, value, digitsFor(digits));
-  const fmtSigned = (value, digits) => formatNumber(language, value, digitsFor(digits), "exceptZero");
+  const fmt = (value, digits) => formatNumber(language, value, digits ?? readingDigits(metricKind, unitProfileKey, config.decimals));
+  const sign = (signed) => (signed ? "exceptZero" : "auto");
   return {
     language,
     t: (key, vars) => translate(language, key, vars),
     fmt,
-    fmtWithUnit: (value, digits, withSpace = true) => `${fmt(value, digits)}${withSpace ? " " : ""}${unit}`,
-    fmtSigned,
-    fmtSignedWithUnit: (value, digits, withSpace = true) => `${fmtSigned(value, digits)}${withSpace ? " " : ""}${unit}`,
+    fmtWithUnit: (value, digits) => `${fmt(value, digits)} ${unit}`,
+    fmtBoundary: (value, { signed = false } = {}) =>
+      formatBoundary(language, value, boundaryDigits(metricKind, unitProfileKey, config.decimals), sign(signed)),
+    fmtCompact: (value, { signed = false } = {}) => formatCompact(language, value, sign(signed)),
     formatTime: (isoString) => formatTimeOfDay(language, isoString),
   };
 }
@@ -108,7 +115,7 @@ function runPipeline(scenario) {
   const context = resolveMeasurementContext(hass.states, config);
   const language = resolveLanguage(config.language, hass);
   const domainModel = buildCardDomainModel({ states: hass.states, config, context, language, surface: PAINTED_ON });
-  const texts = buildTexts(config, hass, context.unit, domainModel.metric.kind);
+  const texts = buildTexts(config, hass, context.unit, domainModel.metric.kind, domainModel.metric.displayUnitProfile?.key);
   const viewModel = buildCardViewModel({ domainModel, config, texts });
   return { context, domainModel, viewModel, data: toLegacyData(viewModel) };
 }

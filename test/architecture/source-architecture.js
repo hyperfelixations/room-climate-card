@@ -30,6 +30,17 @@ const LAYERS = [
 ];
 const COMPOSITION_ROOT = { layer: 8, name: "composition root", group: "(root)" };
 
+// The areas inside domain/ and what each may import from the others: how a reading is
+// measured (units <- metrics <- trend) and how it is judged (classification, scale) stay
+// apart; application/model joins a metric to its profile.
+const DOMAIN_AREAS = [
+  { area: "units", prefix: "domain/units/", mayImport: [] },
+  { area: "metrics", prefix: "domain/metrics/", mayImport: ["units"] },
+  { area: "trend", prefix: "domain/trend.js", mayImport: ["metrics", "units"] },
+  { area: "classification", prefix: "domain/classification/", mayImport: [] },
+  { area: "scale", prefix: "domain/scale/", mayImport: [] },
+];
+
 // Every layer at or above the rendering layers. Used by the checks that keep the
 // element out of the render path.
 const RENDER_LAYER_NAMES = ["render/primitives", "render/layout", "styles", "views", "render/composition"];
@@ -185,6 +196,10 @@ function listSourceFiles(dir, prefix = "") {
   return out.sort();
 }
 
+function domainAreaOf(relPath) {
+  return DOMAIN_AREAS.find((entry) => relPath.startsWith(entry.prefix)) ?? null;
+}
+
 function classify(relPath) {
   if (relPath === ENTRY) return COMPOSITION_ROOT;
   const found = LAYERS.find((l) => relPath.startsWith(l.prefix));
@@ -327,6 +342,7 @@ module.exports = {
   FORBIDDEN_CONTROLLER_GLOBALS,
   referencesGlobal,
   classify,
+  domainAreaOf,
   readSource,
   resolveSpecifier,
   stripCommentsAndStringText,

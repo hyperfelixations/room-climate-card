@@ -16,6 +16,12 @@ function toLegacyRoomMarker({ index, entity, name, value, position, color }) {
   return { index, entity, name, value, position, color };
 }
 
+// The unit profile by identity only; its conversion functions and helper fields are domain
+// internals the model baselines must not freeze.
+function toLegacyUnitProfile(profile) {
+  return profile ? { key: profile.key, displayUnit: profile.displayUnit } : profile;
+}
+
 function toLegacyData(viewModel) {
   if (viewModel.empty) {
     return {
@@ -27,9 +33,12 @@ function toLegacyData(viewModel) {
     };
   }
 
-  const { scale, extremes, range, trend, rooms, views } = viewModel;
+  const { extremes, range, trend, rooms, views } = viewModel;
+  // The compact boundary labels are a layout fallback the flat shape never carried.
+  const withoutCompactLabels = ({ compactBoundaryLabels, ...geometry }) => geometry;
+  const scale = withoutCompactLabels(viewModel.scale);
   // The daily-range geometry and its flag, as the earlier flat shape carried them.
-  const rangeScale = views.byKey.range_scale ? views.byKey.range_scale.geometry : null;
+  const rangeScale = views.byKey.range_scale ? withoutCompactLabels(views.byKey.range_scale.geometry) : null;
 
   return {
     empty: false,
@@ -42,7 +51,7 @@ function toLegacyData(viewModel) {
     viewOptions: views.options,
     viewAreaCollapsed: views.collapsed,
     metricType: viewModel.metric.kind,
-    displayUnitProfile: viewModel.metric.displayUnitProfile,
+    displayUnitProfile: toLegacyUnitProfile(viewModel.metric.displayUnitProfile),
     title: viewModel.title,
     avg: viewModel.average.value,
     avgLabel: viewModel.average.label,

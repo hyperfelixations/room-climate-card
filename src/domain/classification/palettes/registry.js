@@ -7,6 +7,7 @@
 // usable palette". See internal dev doc §5 "Farbpaletten".
 
 import { isHexColor, parseColorToken } from "../../../core/color.js";
+import { ownValue } from "../../../core/records.js";
 import { colorVision } from "./color-vision.js";
 import { MAX_GRADIENT_COLORS, gradientPalette } from "./gradient.js";
 import { monochromePalette } from "./monochrome.js";
@@ -93,7 +94,7 @@ export const CLASSIFICATION_PALETTE_REGISTRY = Object.freeze(
 );
 
 export function paletteForName(name) {
-  return CLASSIFICATION_PALETTE_REGISTRY[name] || null;
+  return ownValue(CLASSIFICATION_PALETTE_REGISTRY, name) || null;
 }
 
 export const DEFAULT_PALETTE = CLASSIFICATION_PALETTE_REGISTRY[DEFAULT_PALETTE_ID];

@@ -334,7 +334,7 @@ function generateInstallation(seedOrRng) {
 
 // Device classes and measurements from the independent manifest.
 const KIND_BY_CLASS = Object.fromEntries(METRIC_KINDS.map((kind) => [METRICS[kind].deviceClass, kind]));
-const PRIORITY = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
+const PRIORITY = METRIC_KINDS;
 
 function declaredKind(hass, entityId) {
   const raw = hass.states[entityId]?.attributes?.device_class;

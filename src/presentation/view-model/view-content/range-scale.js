@@ -5,7 +5,7 @@
 
 import { boolOption, enumOption } from "../../../config/option-schemas.js";
 import { buildMarker } from "../marker.js";
-import { buildScaleBarContent } from "./scale-bar.js";
+import { buildScaleBarContent, hasCompactForm } from "./scale-bar.js";
 
 // Translations own timestamp brackets and spacing; missing timestamps add nothing.
 function timeSuffix(texts, time) {
@@ -13,19 +13,27 @@ function timeSuffix(texts, time) {
 }
 
 // Uses the range entity's state as the span, never `max - min`; compact mode omits times.
-function buildFooterText(shared, mode) {
+// `valueText` writes each number, so the short-scale form differs only there.
+function buildFooterText(shared, mode, valueText) {
   const { texts, range } = shared;
   return texts.t(mode === "compact" ? "rangeScale.footerCompact" : "rangeScale.footer", {
-    span: texts.fmtWithUnit(range.state),
-    min: texts.fmtWithUnit(range.min),
+    span: valueText(range.state),
+    min: valueText(range.min),
     minTime: timeSuffix(texts, range.minTime),
-    max: texts.fmtWithUnit(range.max),
+    max: valueText(range.max),
     maxTime: timeSuffix(texts, range.maxTime),
   });
 }
 
+// The footer with short-scale numbers, or null when none of them has that form.
+function buildCompactFooterText(shared, mode) {
+  const { texts, range, unit } = shared;
+  if (!hasCompactForm(range.state, range.min, range.max)) return null;
+  return buildFooterText(shared, mode, (value) => `${texts.fmtCompact(value)} ${unit}`);
+}
+
 export function buildRangeScaleViewContent(shared, options, axis) {
-  const { texts, average, range } = shared;
+  const { texts, average, range, unit } = shared;
   const positions = axis.markerPositions;
 
   return {
@@ -33,11 +41,12 @@ export function buildRangeScaleViewContent(shared, options, axis) {
     ...buildScaleBarContent({
       geometry: axis,
       texts,
-      boundaryDigits: shared.boundaryDigits,
+      unit,
       showComfortBand: options.show_comfort_band,
       showOptimalBand: options.show_optimal_band,
       // Daily span remains available with zero comparable rooms.
-      footerText: options.show_footer ? buildFooterText(shared, options.footer) : null,
+      footerText: options.show_footer ? buildFooterText(shared, options.footer, (value) => texts.fmtWithUnit(value)) : null,
+      compactFooterText: options.show_footer ? buildCompactFooterText(shared, options.footer) : null,
     }),
     topLabels: {
       current: {

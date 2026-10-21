@@ -303,6 +303,51 @@ test("the product surface manifest is the only complete language list in the sui
   );
 });
 
+// An array literal naming three or more measurements is a matrix that silently stops covering
+// a measurement added later. Iterate the manifest instead, or mark a deliberate selection
+// with `// curated: <reason>` on the line above or on the same line.
+function uncuratedMetricKindLists(files, kinds) {
+  const offenders = [];
+  for (const file of files) {
+    const lines = read(file).split(/\r?\n/);
+    lines.forEach((line, index) => {
+      for (const literal of line.match(/\[[^[\]]*\]/g) || []) {
+        const named = new Set([...literal.matchAll(/["']([a-z0-9]+)["']/g)].map((match) => match[1]).filter((name) => kinds.includes(name)));
+        const curated = /\/\/ curated: \S/.test(line) || /\/\/ curated: \S/.test(lines[index - 1] || "");
+        if (named.size >= 3 && !curated) offenders.push(`${relative(file)}:${index + 1}`);
+      }
+    });
+  }
+  return offenders;
+}
+
+test("the metric-kind list guard finds a partial copy and accepts a curated one", () => {
+  const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "rcc-kind-guard-"));
+  try {
+    const copy = path.join(dir, "copy.test.js");
+    const curated = path.join(dir, "curated.test.js");
+    // curated: the guard's own probe
+    fs.writeFileSync(copy, 'for (const kind of ["humidity", "co2", "pm25"]) {}\n');
+    fs.writeFileSync(curated, '// curated: the kinds sharing µg/m³\nconst shared = ["pm25", "pm1", "co"];\nconst pair = ["co2", "co"];\n');
+    const kinds = ["temperature", "humidity", "co2", "pm25", "pm1", "co"]; // curated: the guard's own probe
+    assert.equal(uncuratedMetricKindLists([copy, curated], kinds).length, 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("no test writes out a list of measurements instead of iterating the manifest", () => {
+  const { METRIC_KINDS } = require("../manifests/product-surface.js");
+  const files = walk(TEST_DIR, (name) => name.endsWith(".js")).filter((full) => !relative(full).startsWith("manifests/"));
+  const offenders = uncuratedMetricKindLists(files, METRIC_KINDS);
+  assert.deepEqual(
+    offenders,
+    [],
+    "these list three or more measurements by hand — iterate METRIC_KINDS from the manifest, or " +
+      `mark a deliberate selection with "// curated: <reason>":\n  ${offenders.join("\n  ")}`
+  );
+});
+
 test("the product surface manifest is the only complete top-level configuration list", () => {
   // The costlier variant: a stale key copy does not turn red when a key is added, it
   // silently stops covering it.

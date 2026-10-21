@@ -12,7 +12,7 @@ const assert = require("node:assert/strict");
 
 let trend;
 
-const METRIC_KINDS = ["temperature", "humidity", "co2", "pm25", "pm1", "pm4", "pm10", "co"];
+const { METRIC_KINDS } = require("../../manifests/product-surface.js");
 
 test.before(async () => {
   trend = await import("../../../src/domain/trend.js");

@@ -3,7 +3,7 @@
 // One reproduction per open entry in the known-defect register (test/known-issues.js), plus
 // the checks that keep the register honest. Each reproduction asserts the behaviour the card
 // should have, so a fix flips it to passing and expectedFailure() turns that into a failing
-// run demanding the entry be retired. Fixed BUG-06..BUG-15 stay here as ordinary regression
+// run demanding the entry be retired. Fixed BUG-06..BUG-16 stay here as ordinary regression
 // tests; their history is in the RCC Changelog.
 
 const test = require("node:test");
@@ -18,6 +18,7 @@ const {
 } = require("./known-issues.js");
 const { createTestEnvironment } = require("./helpers/load-card.jsdom.js");
 const { buildScenario } = require("./fixtures/scenario.js");
+const { METRIC_KINDS, METRICS } = require("./manifests/product-surface.js");
 
 let env;
 test.before(() => {
@@ -127,29 +128,33 @@ test("every registered issue has a reproduction in this file", () => {
 
 // ------------------------------------------------------------ reproductions --
 
-// BUG-16 (open). The scale's edge labels are pinned to the bar's ends by CSS and never capped;
-// resolveOptimalLabelPosition() measures them only to place the optimal label between them.
-// Wider together than the bar, they cover each other. Widths measured in Chromium for a single
-// 1e9 °C reading on a 250 px card (bar 77 px); full analysis in RCC Backlog BUG-16.
+// BUG-16 regression. The scale's edge labels are pinned to the bar's ends by CSS;
+// resolveEdgeLabels() keeps them apart before resolveOptimalLabelPosition() places the optimal
+// label between them. Widths measured in Chromium for a single 1e9 °C reading on a 250 px card
+// (bar 77 px); no compact form here, so the pair is kept apart by the caps alone.
 async function assertEdgeLabelsApart({ barWidth, minWidth, maxWidth }) {
+  const { resolveEdgeLabels } = await import("../src/render/layout/edge-labels.js");
   const { resolveOptimalLabelPosition } = await import("../src/render/layout/optimal-label.js");
   const { container } = buildOptimalLabelContainer({ barWidth, minWidth, centerWidth: 76, maxWidth });
-  resolveOptimalLabelPosition(container, OPTIMAL_LABEL_CONTENT);
-  // As laid out: the natural width, capped by a max-width the layout sets, nothing when hidden.
-  const laidOut = (selector, natural) => {
-    const el = container.querySelector(selector);
-    if (el.hidden) return 0;
-    const cap = Number.parseFloat(el.style.maxWidth);
-    return Number.isFinite(cap) ? Math.min(natural, cap) : natural;
+  const content = {
+    ...OPTIMAL_LABEL_CONTENT,
+    boundaryLabels: { min: "10 °C", max: "200,000,001 °C" },
+    compactBoundaryLabels: { min: null, max: null },
   };
-  const overlap =
-    laidOut(".rtc-scale-label-min", minWidth) + OPTIMAL_LABEL_GAP_PX + laidOut(".rtc-scale-label-max", maxWidth) - barWidth;
+  resolveEdgeLabels(container, content);
+  resolveOptimalLabelPosition(container, content);
+  const laidOut = (selector) => {
+    const el = container.querySelector(selector);
+    return el.hidden ? 0 : el.getBoundingClientRect().width;
+  };
+  const overlap = laidOut(".rtc-scale-label-min") + OPTIMAL_LABEL_GAP_PX + laidOut(".rtc-scale-label-max") - barWidth;
   assert.ok(overlap <= 1e-9, `the edge labels overlap by ${overlap.toFixed(1)}px`);
 }
 
-expectedFailure("BUG-16", /edge labels overlap/, () => assertEdgeLabelsApart({ barWidth: 77, minWidth: 22, maxWidth: 75.5 }));
+test("edge labels wider together than the bar are capped apart instead of covering each other", () =>
+  assertEdgeLabelsApart({ barWidth: 77, minWidth: 22, maxWidth: 75.5 }));
 
-test("BUG-16's neighbourhood: edge labels that fit side by side stay apart", () =>
+test("edge labels that fit side by side stay apart at their natural width", () =>
   // The same reading on a 320 px card: a 105 px bar leaves room for both and the gap.
   assertEdgeLabelsApart({ barWidth: 105, minWidth: 22, maxWidth: 75.5 }));
 
@@ -515,14 +520,13 @@ test("each half of that trigger on its own is handled correctly", () => {
 });
 
 test("every metric refuses what it cannot be, and accepts the limit itself", () => {
-  const impossible = [
-    ["temperature", -273.16],
-    ["humidity", -1],
-    ["humidity", 101],
-    ["humidity", 800],
-    ["co2", -500],
-    ["pm25", -1],
-  ];
+  // Each limit from the manifest, in the canonical unit a scenario reports by default.
+  const limits = METRIC_KINDS.map((metric) => [metric, METRICS[metric].physicalRange]);
+  const impossible = limits.flatMap(([metric, { min, max }]) => [
+    [metric, min - 0.01],
+    [metric, min - 500],
+    ...(max === null ? [] : [[metric, max + 1], [metric, max * 8]]),
+  ]);
   for (const [metric, value] of impossible) {
     const built = buildScenario({ metric, primary: { state: value }, rooms: [] });
     env.withCard(built.config, built.hass, (card) => {
@@ -531,7 +535,8 @@ test("every metric refuses what it cannot be, and accepts the limit itself", () 
   }
 
   // The other half of the same rule, and the one that keeps it from being a rounding trap.
-  for (const [metric, value] of [["temperature", -273.15], ["humidity", 0], ["humidity", 100], ["co2", 0], ["pm25", 0]]) {
+  const atLimit = limits.flatMap(([metric, { min, max }]) => [[metric, min], ...(max === null ? [] : [[metric, max]])]);
+  for (const [metric, value] of atLimit) {
     const built = buildScenario({ metric, primary: { state: value }, rooms: [] });
     env.withCard(built.config, built.hass, (card) => {
       assert.equal(card._computeViewModel().empty, false, `${metric} ${value} is the limit itself and is a reading`);
@@ -684,9 +689,14 @@ function buildOptimalLabelContainer({ barWidth, minWidth, centerWidth, maxWidth 
     '<span class="rtc-scale-label-center">20–24 °C optimal</span>' +
     '<span class="rtc-scale-label-max">200,000,001 °C</span>' +
     "</div>";
-  const stub = (selector, width) => {
+  // A max-width the layout sets caps the measured box, as in a browser.
+  const stub = (selector, natural) => {
     const el = container.querySelector(selector);
-    el.getBoundingClientRect = () => ({ width, height: 12, top: 0, left: 0, right: width, bottom: 12, x: 0, y: 0 });
+    el.getBoundingClientRect = () => {
+      const cap = Number.parseFloat(el.style.maxWidth);
+      const width = Number.isFinite(cap) ? Math.min(natural, cap) : natural;
+      return { width, height: 12, top: 0, left: 0, right: width, bottom: 12, x: 0, y: 0 };
+    };
     return el;
   };
   stub(".rtc-scale-bar", barWidth);

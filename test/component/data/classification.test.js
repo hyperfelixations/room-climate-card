@@ -87,9 +87,12 @@ test("_rgba(): invalid length (5/7 digit) falls back to opaque-white rgba", () =
   assert.equal(color.rgba("#aabbc", 0.5), "rgba(255,255,255,0.5)");
 });
 
-test("_rgba(): rgb()/rgba() input passes through unchanged", () => {
-  assert.equal(color.rgba("rgb(1,2,3)", 0.5), "rgb(1,2,3)");
-  assert.equal(color.rgba("rgba(1,2,3,0.9)", 0.5), "rgba(1,2,3,0.9)");
+// Only a hex colour or one custom-property reference is a colour the card produces; anything
+// else would reach an inline style unchecked, so it falls back instead of passing through.
+test("_rgba(): any other string falls back to white at the given opacity", () => {
+  for (const value of ["rgb(1,2,3)", "rgba(1,2,3,0.9)", "red", "#12g", "#ff0000;background:url(x)", "var(--a);color:red", "var(--a, red)", "ff0000"]) {
+    assert.equal(color.rgba(value, 0.5), "rgba(255,255,255,0.5)", value);
+  }
 });
 
 test("_rgba(): CSS var() input becomes a color-mix() expression", () => {

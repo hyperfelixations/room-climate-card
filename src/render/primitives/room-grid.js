@@ -2,6 +2,7 @@
 // Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
+import { setAttr, setStyleProperty, setText } from "./dom.js";
 import { applyFocusFallback } from "./focus.js";
 
 export function renderRoomChip(chip) {
@@ -29,22 +30,22 @@ export function renderRoomChip(chip) {
 
 // Mirror renderRoomChip() for both reused and newly parsed chip skeletons.
 export function patchRoomChip(element, chip) {
-  element.setAttribute("data-entity", chip.entity);
-  element.setAttribute("data-room-index", String(chip.index));
-  element.style.setProperty("--room-color", chip.color);
-  element.style.setProperty("--room-mark-bg", chip.markBackground);
-  element.style.setProperty("--room-bg", chip.background);
-  element.style.setProperty("--room-border", chip.border);
-  element.setAttribute("title", chip.title);
-  element.setAttribute("aria-label", chip.ariaLabel);
+  setAttr(element, "data-entity", chip.entity);
+  setAttr(element, "data-room-index", chip.index);
+  setStyleProperty(element, "--room-color", chip.color);
+  setStyleProperty(element, "--room-mark-bg", chip.markBackground);
+  setStyleProperty(element, "--room-bg", chip.background);
+  setStyleProperty(element, "--room-border", chip.border);
+  setAttr(element, "title", chip.title);
+  setAttr(element, "aria-label", chip.ariaLabel);
   element.classList.toggle("rtc-room-unavailable", Boolean(chip.unavailable));
   const shortEl = element.querySelector(".rtc-room-short");
-  shortEl.textContent = chip.displayLabel;
+  setText(shortEl, chip.displayLabel);
   // Reused nodes must actively remove a stale short-guaranteed flag.
   shortEl.toggleAttribute("data-short-guaranteed", chip.shortGuaranteed);
-  element.querySelector(".rtc-room-mark").textContent = chip.mark;
-  element.querySelector(".rtc-room-value-num").textContent = chip.valueText;
-  element.querySelector(".rtc-room-value-unit").textContent = chip.unitText;
+  setText(element.querySelector(".rtc-room-mark"), chip.mark);
+  setText(element.querySelector(".rtc-room-value-num"), chip.valueText);
+  setText(element.querySelector(".rtc-room-value-unit"), chip.unitText);
 }
 
 export function renderRoomGridRows(viewModel) {
@@ -80,8 +81,8 @@ export function updateRoomGrid(context, root, roomGridEl, viewModel) {
 
   rows.forEach((row, rowIndex) => {
     const rowEl = roomGridEl.children[rowIndex];
-    rowEl.className = "rtc-room-row";
-    rowEl.style.gridTemplateColumns = `repeat(${row.columnCount}, minmax(0, 1fr))`;
+    setAttr(rowEl, "class", "rtc-room-row");
+    setStyleProperty(rowEl, "grid-template-columns", `repeat(${row.columnCount}, minmax(0, 1fr))`);
     row.chips.forEach((chip, indexInRow) => {
       const chipEl = existingChips.get(chip.entity) || context.htmlToElement(renderRoomChip(chip));
       patchRoomChip(chipEl, chip);

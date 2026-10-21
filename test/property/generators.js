@@ -440,6 +440,9 @@ function generatePalette(rng) {
         { optimal: "#FFF", nonsense: 1 },
         { optimal: "#FFF", above: "#000" },
         "definitely-not-a-palette",
+        rng.pick(V.OBJECT_MEMBER_NAMES),
+        `red-${rng.pick(V.OBJECT_MEMBER_NAMES)}`,
+        { optimal: rng.pick(V.OBJECT_MEMBER_NAMES) },
         [],
         1234567,
         -1,
@@ -601,6 +604,7 @@ function generateClassification(rng, metric) {
           "fridge",
           "freezer",
           42,
+          ...V.OBJECT_MEMBER_NAMES,
         ]),
       };
     case 2:
@@ -632,7 +636,7 @@ function generateLanguage(rng) {
     case "anySupported":
       return rng.pick(LANGUAGES);
     case "unsupported":
-      return rng.pick(["xx", "de-CH", "", "EN", "zz-ZZ", "de_DE", 42]);
+      return rng.pick(["xx", "de-CH", "", "EN", "zz-ZZ", "de_DE", 42, ...V.OBJECT_MEMBER_NAMES]);
     default:
       return rng.pick(["en", "de"]);
   }

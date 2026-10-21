@@ -2,6 +2,7 @@
 // Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../../core/text.js";
+import { setAttr, setStyleProperty, setText } from "./dom.js";
 
 export function renderMetricCard(model) {
   // Only real rooms carry per-room action ownership.
@@ -26,19 +27,19 @@ export function renderMetricCard(model) {
 
 // Mirror renderMetricCard(); update custom properties without reparsing a CSS string.
 export function patchMetricCard(element, model) {
-  element.setAttribute("data-entity", model.entity);
-  if (model.roomIndex !== null) element.setAttribute("data-room-index", String(model.roomIndex));
+  setAttr(element, "data-entity", model.entity);
+  if (model.roomIndex !== null) setAttr(element, "data-room-index", model.roomIndex);
   else element.removeAttribute("data-room-index");
-  element.style.setProperty("--extreme-color", model.color);
-  element.style.setProperty("--extreme-bg", model.background);
-  element.style.setProperty("--extreme-border", model.border);
-  element.style.setProperty("--extreme-line-shadow", model.lineShadow);
-  element.setAttribute("title", model.title);
-  element.setAttribute("aria-label", model.ariaLabel);
-  element.querySelector(".rtc-extreme-label").textContent = model.label;
-  element.querySelector(".rtc-extreme-name").textContent = model.nameText;
-  element.querySelector(".rtc-extreme-value-num").textContent = model.numText;
-  element.querySelector(".rtc-extreme-value-unit").textContent = model.unitText;
+  setStyleProperty(element, "--extreme-color", model.color);
+  setStyleProperty(element, "--extreme-bg", model.background);
+  setStyleProperty(element, "--extreme-border", model.border);
+  setStyleProperty(element, "--extreme-line-shadow", model.lineShadow);
+  setAttr(element, "title", model.title);
+  setAttr(element, "aria-label", model.ariaLabel);
+  setText(element.querySelector(".rtc-extreme-label"), model.label);
+  setText(element.querySelector(".rtc-extreme-name"), model.nameText);
+  setText(element.querySelector(".rtc-extreme-value-num"), model.numText);
+  setText(element.querySelector(".rtc-extreme-value-unit"), model.unitText);
 }
 
 // Stable positional slots preserve focused nodes; mismatched DOM falls back to pair re-render.

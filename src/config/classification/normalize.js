@@ -103,7 +103,7 @@ function assertCustomProfileKeys(value) {
   else keysOf(value.icons, LEGACY_TEMPERATURE_ICON_KEYS, "classification.icons");
 }
 
-export function normalizeCustomClassification(value, { metricKindsForUnit, unitProfileForUnit, classificationZones }) {
+export function normalizeCustomClassification(value, { metricKindsForUnit, unitProfileForUnit, classificationZones, profileReexpression }) {
   if (typeof value.unit !== "string" || !value.unit.trim()) rejectValue("classification.unit", value.unit);
   const metricKinds = metricKindsForUnit(value.unit);
   if (metricKinds.length === 0) rejectValue("classification.unit", value.unit);
@@ -141,7 +141,7 @@ export function normalizeCustomClassification(value, { metricKindsForUnit, unitP
   let firstFault;
   for (const metricKind of metricKinds) {
     try {
-      profiles[metricKind] = convertCustomProfile(value, source, unitProfileForUnit(metricKind, value.unit), metricKind);
+      profiles[metricKind] = convertCustomProfile(value, source, unitProfileForUnit(metricKind, value.unit), metricKind, profileReexpression);
     } catch (error) {
       if (!(error instanceof ConfigValueError)) throw error;
       faults[metricKind] = { path: error.path, value: error.value };

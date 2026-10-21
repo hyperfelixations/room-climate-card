@@ -7,6 +7,7 @@
 // is screenDistance() (core/oklch.js). Rationale, and why this replaced a declared `tunedFor`:
 // see internal dev doc §5 "Sichtbarkeitsprüfung einer Palette".
 
+import { createLruCache } from "../../core/lru.js";
 import { hexToOklch, oklchToHex, screenDistance } from "../../core/oklch.js";
 import { describePalette } from "./palettes/geometry.js";
 import { PAINT_ROLES, PALETTE_ROLES, SELF_TINTED_ROLES, backgroundsFor, foregroundFor, pointsOf, surfaceOf } from "./paint-roles.js";
@@ -198,14 +199,14 @@ const NO_CONSTRAINT = Object.freeze({
   largestUsable: Object.freeze({ min: 0, max: 1 }),
 });
 
-// Bands depend on the BACKGROUND alone, not the palette, so one slot is enough: a card has one
-// background at a time and the calls are the same samples over and over. Keeps a gradient from
-// costing three times a flat card per render.
-let lastBands = null;
+// Bands depend on the BACKGROUND alone, not the palette: the calls are the same samples over
+// and over. Keeps a gradient from costing three times a flat card per render.
+const bandsCache = createLruCache();
 
 function bandsFor(samples, threshold) {
   const key = `${threshold}|${samples.join(",")}`;
-  if (lastBands && lastBands.key === key) return lastBands.value;
+  const cached = bandsCache.get(key);
+  if (cached) return cached;
   const forbidden = forbiddenBands(samples, threshold).map((band) => Object.freeze(band));
   const usable = usableRuns(forbidden).map((run) => Object.freeze(run));
   // Frozen because the same object is handed out on the next call.
@@ -214,7 +215,7 @@ function bandsFor(samples, threshold) {
     usable: Object.freeze(usable),
     largestUsable: Object.freeze(largestRun(usable)),
   });
-  lastBands = { key, value };
+  bandsCache.set(key, value);
   return value;
 }
 
@@ -223,15 +224,15 @@ function bandsFor(samples, threshold) {
 // ahead of time is where the card rules out.
 
 // The whole report, memoized on the VALUES it was computed from (a derived palette is rebuilt
-// each call and would miss an identity check). One slot: a card has one palette on one surface
-// at a time. Frozen down to its lists, since the same object is handed out on the next call.
+// each call and would miss an identity check), one entry per palette and surface on the page.
+// Frozen down to its lists, since the same object is handed out on the next call.
 // `surface` is `{ samples, text }` from surfaceOf() or a bare colour array; `samples` is never
 // empty here (the reading ladder in the platform adapter always ends somewhere).
-let lastReport = null;
+const reportCache = createLruCache();
 
 // The values an answer about this palette on this surface depends on. Exported because
 // adaptation.js must memoize on exactly the same thing — its strategy evaluates candidates, so
-// the report memo above holds the last candidate, not the question.
+// the report memo above fills with candidates, not the question.
 export function fitKeyFor(palette, surface, threshold) {
   return [
     threshold,
@@ -274,7 +275,8 @@ export function evaluatePaletteFit(palette, surface, { threshold = VISIBILITY_TH
   }
 
   const key = fitKeyFor(palette, resolved, threshold);
-  if (lastReport && lastReport.key === key) return lastReport.value;
+  const cached = reportCache.get(key);
+  if (cached) return cached;
 
   const points = pointsOf(resolved);
   const geometry = describePalette(palette);
@@ -350,6 +352,6 @@ export function evaluatePaletteFit(palette, surface, { threshold = VISIBILITY_TH
     // fitting palette stays cheap.
     lightness: fits ? NO_CONSTRAINT : bandsFor(backgrounds, threshold),
   });
-  lastReport = { key, value };
+  reportCache.set(key, value);
   return value;
 }

@@ -2,8 +2,11 @@
 // Template-literal indentation is shipped markup and baseline-pinned.
 
 import { escapeHtml } from "../core/text.js";
+import { setText } from "../render/primitives/dom.js";
 import { patchMarker, renderMarker } from "../render/primitives/marker.js";
 import { patchScaleBar, renderScaleBar } from "../render/primitives/scale-bar.js";
+import { resolveEdgeLabels } from "../render/layout/edge-labels.js";
+import { resolveFooterForm } from "../render/layout/footer-form.js";
 import { resolveOptimalLabelPosition } from "../render/layout/optimal-label.js";
 import { resolveRangeScaleLabels } from "../render/layout/range-scale-labels.js";
 
@@ -62,26 +65,32 @@ export const rangeScaleView = {
   patch(context, viewEl, content) {
     const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     patchScaleBar(containerEl, content);
+    resolveEdgeLabels(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
-
-    const currentLabelEl = containerEl.querySelector(".rtc-range-scale-label-current");
-    if (currentLabelEl) currentLabelEl.style.left = `${content.topLabels.current.position}%`;
-    for (const side of content.topLabels.sides) {
-      const sideEl = containerEl.querySelector(`.${SIDE_LABEL_CLASS[side.role]}`);
-      if (sideEl) sideEl.style.left = `${side.position}%`;
-    }
+    resolveFooterForm(containerEl, content);
 
     patchMarker(containerEl.querySelector(".rtc-marker-cold"), content.markers.min);
     patchMarker(containerEl.querySelector(".rtc-marker-warm"), content.markers.max);
     patchMarker(containerEl.querySelector(".rtc-marker-avg"), content.markers.average);
 
+    // The long forms; the layout swaps in a shorter one where the measured width needs it.
+    const labels = [
+      [".rtc-range-scale-label-current", content.topLabels.current.long],
+      ...content.topLabels.sides.map((side) => [`.${SIDE_LABEL_CLASS[side.role]}`, side.text]),
+    ];
+    for (const [selector, text] of labels) {
+      const labelEl = containerEl.querySelector(selector);
+      if (labelEl) setText(labelEl, text);
+    }
     resolveRangeScaleLabels(containerEl, content);
   },
 
   resolveLayout(context, viewEl, content) {
     const containerEl = viewEl.querySelector(CONTAINER_SELECTOR);
     // Resolve both shared lower and view-specific upper label groups on every layout trigger.
+    resolveEdgeLabels(containerEl, content);
     resolveOptimalLabelPosition(containerEl, content);
+    resolveFooterForm(containerEl, content);
     resolveRangeScaleLabels(containerEl, content);
   },
 };

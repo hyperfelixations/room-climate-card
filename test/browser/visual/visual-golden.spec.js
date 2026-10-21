@@ -1048,8 +1048,15 @@ test.describe("visual golden: the parts a card can leave out", () => {
 // remaining CO units, widths and locales without duplicating these screenshots.
 test.describe("visual golden: CO formatting", () => {
   const cases = [
-    { name: "fractional ppm bands", unit: "ppm", value: 2.1, trend: 0.2, screenshot: "co-ppm-fractional-bands-320.png" },
-    { name: "grouped mass values and long unit", unit: "µg/m³", value: 2400, trend: 200, screenshot: "co-mass-grouped-values-320.png" },
+    {
+      name: "fractional ppm bands", unit: "ppm", value: 2.1, trend: 0.2, screenshot: "co-ppm-fractional-bands-320.png",
+      average: "2.1", labels: { min: "0ppm", center: "0–0.8ppm optimal", max: "11ppm" },
+    },
+    {
+      name: "grouped mass values and long unit", unit: "µg/m³", value: 2400, trend: 200, screenshot: "co-mass-grouped-values-320.png",
+      // The band label has run through its forms to the compact one and is ellipsized there.
+      average: "2,400", labels: { min: "0µg/m³", center: "0–1Kµg/m³ optimal", max: "12,000µg/m³" },
+    },
   ];
   for (const entry of cases) {
     test(entry.name, async ({ page }) => {
@@ -1069,8 +1076,11 @@ test.describe("visual golden: CO formatting", () => {
       const card = page.locator(`#${cardId}`);
       await expect(card.locator(".rtc-title")).toHaveText("CO");
       await expect(card.locator(".rtc-avg-button")).toHaveAttribute("data-trend-direction", "rising");
-      await expect(card.locator(".rtc-avg-value-num")).toHaveText(entry.unit === "ppm" ? "2.1" : "2,400");
-      await expect(card.locator(".rtc-scale-label-center")).toContainText(entry.unit === "ppm" ? "0.8ppm" : "1,000µg/m³");
+      await expect(card.locator(".rtc-avg-value-num")).toHaveText(entry.average);
+      await setCardWidth(page, cardId, 320);
+      for (const [edge, text] of Object.entries(entry.labels)) {
+        await expect(card.locator(`.rtc-scale-label-${edge}`)).toHaveText(text);
+      }
       await shot(page, cardId, entry.screenshot, 320);
     });
   }

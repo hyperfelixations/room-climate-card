@@ -36,7 +36,7 @@ function fakeLabelEl() {
 test("_resolveLabelForm: identical long/short forms always resolve to the long form, without ever calling fitsWithWidth", () => {
   const node = fakeLabelEl();
   let fitsCalled = false;
-  const width = labelForm.resolveLabelForm(node, "now", "now", () => {
+  const width = labelForm.resolveLabelForm(node, ["now", "now"], () => {
     fitsCalled = true;
     return false;
   });
@@ -47,33 +47,46 @@ test("_resolveLabelForm: identical long/short forms always resolve to the long f
 
 test("_resolveLabelForm: distinct forms, long form fits -> stays on the long form", () => {
   const node = fakeLabelEl();
-  labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);
+  labelForm.resolveLabelForm(node, ["maintenant", "act."], () => true);
   assert.equal(node.textContent, "maintenant");
 });
 
 test("_resolveLabelForm: distinct forms, long form does not fit -> substitutes the short form", () => {
   const node = fakeLabelEl();
-  labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
+  labelForm.resolveLabelForm(node, ["maintenant", "act."], () => false);
   assert.equal(node.textContent, "act.");
 });
 
 test("_resolveLabelForm: fitsWithWidth is called with the long form's measured width, not the short form's", () => {
   const node = fakeLabelEl();
   const seenWidths = [];
-  labelForm.resolveLabelForm(node, "maintenant", "act.", (width) => {
+  labelForm.resolveLabelForm(node, ["maintenant", "act."], (width) => {
     seenWidths.push(width);
     return false;
   });
   assert.equal(seenWidths.length, 1, "fitsWithWidth is consulted exactly once per resolve, not once per candidate form");
 });
 
+test("_resolveLabelForm: a third, compact form is tried only after the short one fails, and a missing one is skipped", () => {
+  const node = fakeLabelEl();
+  const tried = [];
+  labelForm.resolveLabelForm(node, ["1,000–4,000µg/m³ optimal", "1,000–4,000µg/m³", "1K–4Kµg/m³"], () => {
+    tried.push(node.textContent);
+    return false;
+  });
+  assert.equal(node.textContent, "1K–4Kµg/m³");
+  assert.deepEqual(tried, ["1,000–4,000µg/m³ optimal", "1,000–4,000µg/m³"], "the last form is kept without asking");
+  labelForm.resolveLabelForm(node, ["long", "short", null], () => false);
+  assert.equal(node.textContent, "short");
+});
+
 test("_resolveLabelForm: reverts a previously-shortened element back to the long form once it fits again (idempotent across repeated calls)", () => {
   const node = fakeLabelEl();
-  labelForm.resolveLabelForm(node, "maintenant", "act.", () => false);
+  labelForm.resolveLabelForm(node, ["maintenant", "act."], () => false);
   assert.equal(node.textContent, "act.");
   // A later pass (card grew wider) must re-derive from the long form, not stay stuck on
   // the short form an earlier pass left.
-  labelForm.resolveLabelForm(node, "maintenant", "act.", () => true);
+  labelForm.resolveLabelForm(node, ["maintenant", "act."], () => true);
   assert.equal(node.textContent, "maintenant");
 });
 

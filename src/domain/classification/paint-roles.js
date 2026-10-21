@@ -150,8 +150,6 @@ PAINT_ROLES.forEach((role, index) => {
   if (source.selfTinted !== role.selfTinted) throw new Error(`paint role "${role.id}" mirrors "${role.mirrors}" across the two kinds of role`);
 });
 
-export const PAINT_ROLE_IDS = Object.freeze(PAINT_ROLES.map((role) => role.id));
-
 // The roles that answer the palette question, and the ones that answer the recipe question.
 export const PALETTE_ROLES = Object.freeze(PAINT_ROLES.filter((role) => !role.selfTinted));
 export const SELF_TINTED_ROLES = Object.freeze(PAINT_ROLES.filter((role) => role.selfTinted));

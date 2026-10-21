@@ -5,11 +5,7 @@
 // THROW rather than return undefined: an unknown kind here is a caller error, and a
 // silent undefined would surface much later as a NaN in a rendered value.
 
-import {
-  convertUnitValue,
-  deriveBandForProfile as deriveBandForProfileFromBand,
-  deriveThresholdsForProfile as deriveThresholdsForProfileFromTiers,
-} from "../units/conversion.js";
+import { convertUnitValue } from "../units/conversion.js";
 import { METRIC_DEFINITIONS } from "./definitions.js";
 
 export function getMetricDefinition(metricKind) {
@@ -31,23 +27,4 @@ export function convertMetricValue(value, { metricKind, quantityKind, fromProfil
     getUnitProfile(metricKind, fromProfileKey),
     getUnitProfile(metricKind, toProfileKey)
   );
-}
-
-// The kind's canonical classification tiers, re-expressed in one of its display
-// units.
-export function deriveThresholdsForProfile(metricKind, profileKey) {
-  return deriveThresholdsForProfileFromTiers(
-    getMetricDefinition(metricKind).canonicalClassificationTiers,
-    getUnitProfile(metricKind, profileKey)
-  );
-}
-
-// One of the kind's canonical bands ("comfort", "optimal", "baseScale"),
-// re-expressed in one of its display units.
-export function deriveBandForProfile(metricKind, profileKey, bandName) {
-  const definition = getMetricDefinition(metricKind);
-  const bandKey = `canonical${bandName[0].toUpperCase()}${bandName.slice(1)}Band`;
-  const band = definition[bandKey];
-  if (!band) throw new Error(`Unknown band "${bandName}" for metricKind "${metricKind}"`);
-  return deriveBandForProfileFromBand(band, getUnitProfile(metricKind, profileKey));
 }

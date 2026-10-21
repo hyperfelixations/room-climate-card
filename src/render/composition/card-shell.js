@@ -3,6 +3,7 @@
 
 import { escapeHtml } from "../../core/text.js";
 import { renderAverage, updateAverage } from "../primitives/average.js";
+import { setAttr, setText } from "../primitives/dom.js";
 import { renderRoomGridRows, updateRoomGrid } from "../primitives/room-grid.js";
 
 // Requested-none collapses; requested-but-unavailable renders a localized hint.
@@ -198,40 +199,46 @@ function patchShell(context, root, viewModel) {
 
   const contentRoot = root.querySelector(".rtc-root");
   if (contentRoot) {
-    contentRoot.setAttribute("style", viewModel.toneStyle);
-    contentRoot.setAttribute("data-state", viewModel.empty ? "no-data" : "data");
-    contentRoot.setAttribute("data-metric", viewModel.metric.kind || "");
-    if (viewModel.accentLinePosition === "bottom") contentRoot.setAttribute("data-accent-line", "bottom");
+    setAttr(contentRoot, "style", viewModel.toneStyle);
+    setAttr(contentRoot, "data-state", viewModel.empty ? "no-data" : "data");
+    setAttr(contentRoot, "data-metric", viewModel.metric.kind || "");
+    if (viewModel.accentLinePosition === "bottom") setAttr(contentRoot, "data-accent-line", "bottom");
     else contentRoot.removeAttribute("data-accent-line");
-    if (viewModel.header.subtitleOverflow === "wrap") contentRoot.setAttribute("data-subtitle", "wrap");
+    if (viewModel.header.subtitleOverflow === "wrap") setAttr(contentRoot, "data-subtitle", "wrap");
     else contentRoot.removeAttribute("data-subtitle");
-    if (viewModel.header.titleOverflow === "clip") contentRoot.setAttribute("data-title", "clip");
+    if (viewModel.header.titleOverflow === "clip") setAttr(contentRoot, "data-title", "clip");
     else contentRoot.removeAttribute("data-title");
   }
 
   const iconEl = root.querySelector(".rtc-icon-badge ha-icon");
-  if (iconEl) iconEl.setAttribute("icon", viewModel.header.icon);
+  if (iconEl) setAttr(iconEl, "icon", viewModel.header.icon);
 
   const titleEl = root.querySelector(".rtc-title");
-  if (titleEl) titleEl.textContent = viewModel.header.title;
+  if (titleEl) setText(titleEl, viewModel.header.title);
 
   const subtitleEl = root.querySelector(".rtc-subtitle");
-  if (subtitleEl) subtitleEl.textContent = viewModel.header.subtitle;
+  if (subtitleEl) setText(subtitleEl, viewModel.header.subtitle);
 
   const statusEl = root.querySelector(".rtc-status-pill");
-  if (statusEl) statusEl.textContent = viewModel.header.statusLabel;
+  if (statusEl) setText(statusEl, viewModel.header.statusLabel);
 
   const warningTextEl = root.querySelector(".rtc-warning-text");
-  if (warningTextEl) warningTextEl.textContent = viewModel.warning.text;
+  if (warningTextEl) setText(warningTextEl, viewModel.warning.text);
 
   const warningIconEl = root.querySelector(".rtc-warning-icon");
-  if (warningIconEl) warningIconEl.setAttribute("aria-label", viewModel.warning.label);
+  if (warningIconEl) setAttr(warningIconEl, "aria-label", viewModel.warning.label);
 
   const rotatorEl = root.querySelector(".rtc-rotator");
   if (rotatorEl) {
-    if (viewModel.carousel.hint) rotatorEl.setAttribute("title", viewModel.carousel.hint);
+    if (viewModel.carousel.hint) setAttr(rotatorEl, "title", viewModel.carousel.hint);
     else rotatorEl.removeAttribute("title");
   }
+
+  const noViewsEl = root.querySelector(".rtc-no-views");
+  if (noViewsEl) setText(noViewsEl, viewModel.carousel.noActiveViewsHint);
+
+  const nothingShownEl = root.querySelector(".rtc-nothing-shown");
+  if (nothingShownEl) setText(nothingShownEl, viewModel.hiddenHint);
 
   updateAverage(context, root, root.querySelector(".rtc-average"), viewModel);
   updateRoomGrid(context, root, root.querySelector(".rtc-room-grid"), viewModel);

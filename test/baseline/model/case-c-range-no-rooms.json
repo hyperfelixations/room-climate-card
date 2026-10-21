@@ -21,18 +21,8 @@
   "coolestShift": 0,
   "displayStep": 1,
   "displayUnitProfile": {
-    "baseDisplayStep": 1,
-    "deltaFromCanonical": "[Function]",
-    "deltaToCanonical": "[Function]",
     "displayUnit": "°C",
-    "fromCanonical": "[Function]",
-    "key": "celsius",
-    "toCanonical": "[Function]",
-    "units": [
-      "°c",
-      "c",
-      "celsius"
-    ]
+    "key": "celsius"
   },
   "empty": false,
   "hasRange": true,

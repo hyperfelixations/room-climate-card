@@ -1,6 +1,18 @@
 // Presentation-only metadata for titles, icons, formatting and chip density, one entry per
 // metric kind; classification bands remain in the semantic profiles.
 
+// PM1, PM2.5, PM4 and PM10 differ only in their title.
+const PARTICULATE_META = {
+  icon: "mdi:molecule",
+  emptyIcon: "mdi:molecule",
+  decimals: 1,
+  lowRoomKey: "card.lowestRoom",
+  highRoomKey: "card.highestRoom",
+  aboveAdjectiveKey: "adjective.elevated",
+  belowAdjectiveKey: "adjective.low",
+  autoRoomColumns: 5,
+};
+
 export const METRIC_META = {
   temperature: {
     titleKey: "title.temperature",
@@ -35,61 +47,16 @@ export const METRIC_META = {
     belowAdjectiveKey: "adjective.low",
     autoRoomColumns: 5,
   },
-  pm25: {
-    titleKey: "title.pm25",
-    icon: "mdi:molecule",
-    emptyIcon: "mdi:molecule",
-    decimals: 1,
-    lowRoomKey: "card.lowestRoom",
-    highRoomKey: "card.highestRoom",
-    aboveAdjectiveKey: "adjective.elevated",
-    belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
-  },
-  pm1: {
-    titleKey: "title.pm1",
-    icon: "mdi:molecule",
-    emptyIcon: "mdi:molecule",
-    decimals: 1,
-    lowRoomKey: "card.lowestRoom",
-    highRoomKey: "card.highestRoom",
-    aboveAdjectiveKey: "adjective.elevated",
-    belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
-  },
-  pm4: {
-    titleKey: "title.pm4",
-    icon: "mdi:molecule",
-    emptyIcon: "mdi:molecule",
-    decimals: 1,
-    lowRoomKey: "card.lowestRoom",
-    highRoomKey: "card.highestRoom",
-    aboveAdjectiveKey: "adjective.elevated",
-    belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
-  },
-  pm10: {
-    titleKey: "title.pm10",
-    icon: "mdi:molecule",
-    emptyIcon: "mdi:molecule",
-    decimals: 1,
-    lowRoomKey: "card.lowestRoom",
-    highRoomKey: "card.highestRoom",
-    aboveAdjectiveKey: "adjective.elevated",
-    belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
-  },
+  pm25: { ...PARTICULATE_META, titleKey: "title.pm25" },
+  pm1: { ...PARTICULATE_META, titleKey: "title.pm1" },
+  pm4: { ...PARTICULATE_META, titleKey: "title.pm4" },
+  pm10: { ...PARTICULATE_META, titleKey: "title.pm10" },
   co: {
     titleKey: "title.co",
     icon: "mdi:molecule-co",
     emptyIcon: "mdi:molecule-co",
     decimals: 1,
-    unitFormatting: {
-      ppm: { decimals: 1, boundaryDecimals: 1 },
-      ppb: { decimals: 0, boundaryDecimals: 0 },
-      milligram_per_m3: { decimals: 1, boundaryDecimals: 0 },
-      microgram_per_m3: { decimals: 0, boundaryDecimals: 0 },
-    },
+    unitDecimals: { ppm: 1, ppb: 0, milligram_per_m3: 1, microgram_per_m3: 0 },
     lowRoomKey: "card.lowestRoom",
     highRoomKey: "card.highestRoom",
     aboveAdjectiveKey: "adjective.elevated",
@@ -114,7 +81,20 @@ export function extremeRoomLabel(role, metricKind, texts) {
   return texts.t(role === "cold" ? meta.lowRoomKey : meta.highRoomKey);
 }
 
-export function metricFormattingFor(metricKind, unitProfileKey) {
+// The decimals a reading of this kind shows in this unit by default.
+function unitDecimalsFor(metricKind, unitProfileKey) {
   const meta = metricMetaFor(metricKind);
-  return meta.unitFormatting?.[unitProfileKey] || { decimals: meta.decimals, boundaryDecimals: 0 };
+  return meta.unitDecimals?.[unitProfileKey] ?? meta.decimals;
+}
+
+// The digits a reading is shown with: the card's `decimals` when set, else its unit's own.
+export function readingDigits(metricKind, unitProfileKey, decimals) {
+  return decimals ?? unitDecimalsFor(metricKind, unitProfileKey);
+}
+
+// The most digits a band or axis boundary is shown with (trailing zeros dropped): never fewer
+// than its unit's readings, so a boundary reads as it applies. See internal dev doc §5
+// "Grenzbeschriftungen".
+export function boundaryDigits(metricKind, unitProfileKey, decimals) {
+  return Math.max(unitDecimalsFor(metricKind, unitProfileKey), decimals ?? 0);
 }

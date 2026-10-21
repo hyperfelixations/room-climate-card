@@ -18,7 +18,7 @@ export function resolveLanguage(configLanguage, hass) {
   if (configLanguage && configLanguage !== "auto") return configLanguage;
   const raw = hass?.locale?.language || hass?.language || hass?.selectedLanguage || DEFAULT_LANGUAGE;
   const base = String(raw).toLowerCase().split("-")[0];
-  return TRANSLATIONS[base] ? base : DEFAULT_LANGUAGE;
+  return isSupportedLanguage(base) ? base : DEFAULT_LANGUAGE;
 }
 
 // The language a refused configuration is worded in, before any hass exists: the card's own

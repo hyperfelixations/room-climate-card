@@ -175,3 +175,46 @@ test("an HA update arriving mid-drag is applied once the drag ends, not silently
   const avgText = await card.locator(".rtc-avg-value").first().innerText();
   expect(avgText).toContain("25.5");
 });
+
+// A mouse is not captured implicitly: without capture, a release outside the card never
+// reaches it, the drag stays open and every later update is deferred behind it.
+test("a mouse drag released outside the card ends, and later updates render", async ({ page }) => {
+  await gotoHarness(page);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, threeViewStates());
+  await page.evaluate((id) => { document.getElementById(id).style.width = "400px"; }, cardId);
+  await page.waitForTimeout(100);
+  const card = page.locator(`#${cardId}`);
+  const cardBox = await card.boundingBox();
+  const box = await card.locator(".rtc-rotator").boundingBox();
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - 40, startY, { steps: 4 });
+  expect(await card.evaluate((el) => el._isDragging)).toBe(true);
+  await page.mouse.move(startX - 40, cardBox.y + cardBox.height + 120, { steps: 4 });
+  await page.mouse.up();
+
+  await expect.poll(() => card.evaluate((el) => el._interaction.isInteracting())).toBe(false);
+  const updatedStates = { ...threeViewStates(), "sensor.avg": mkStateObj("sensor.avg", 26.5, TEMPERATURE_C) };
+  await updateHass(page, cardId, updatedStates);
+  await expect(card.locator(".rtc-avg-value").first()).toContainText("26.5");
+});
+
+test("a mouse press that leaves the card without dragging is not left tracked", async ({ page }) => {
+  await gotoHarness(page);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }] }, threeViewStates());
+  await page.evaluate((id) => { document.getElementById(id).style.width = "400px"; }, cardId);
+  await page.waitForTimeout(100);
+  const card = page.locator(`#${cardId}`);
+  const cardBox = await card.boundingBox();
+  const box = await card.locator(".rtc-rotator").boundingBox();
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, cardBox.y + cardBox.height + 120, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(() => card.evaluate((el) => el._interaction.isInteracting())).toBe(false);
+});
