@@ -41,6 +41,7 @@ test("a refusal is worded in the card's own valid language, else the page's, els
   assert.equal(resolveMessageLanguage("xx", "ja"), "ja", "a language the card does not have leaves it to the page");
   assert.equal(resolveMessageLanguage("de-AT", null), "en", "the option accepts no region, so neither does this");
   assert.equal(resolveMessageLanguage(42, "zh-Hans"), "zh");
+  assert.equal(resolveMessageLanguage(undefined, "hu-HU"), "hu", "a regional page language resolves to its base language");
   assert.equal(resolveMessageLanguage(undefined, "pt-BR"), "en", "a page language without words falls back to English");
   assert.equal(resolveMessageLanguage(undefined, null), "en");
 });
@@ -270,7 +271,7 @@ test("resolveLanguage() reads Home Assistant's settings in priority order", () =
 
 test("resolveLanguage() reduces a regional locale to its base language", () => {
   const { resolveLanguage } = translateModule;
-  for (const [locale, expected] of [["de-AT", "de"], ["es-MX", "es"], ["ZH-Hans", "zh"], ["nb-NO", "nb"]]) {
+  for (const [locale, expected] of [["de-AT", "de"], ["es-MX", "es"], ["ZH-Hans", "zh"], ["nb-NO", "nb"], ["hu-HU", "hu"]]) {
     assert.equal(resolveLanguage(null, { locale: { language: locale } }), expected, locale);
   }
 });
@@ -290,6 +291,8 @@ test("formatNumber() follows each language's own decimal and group separators", 
   assert.equal(formatNumber("en", 1234.5, 1), "1,234.5");
   assert.equal(formatNumber("de", 1234.5, 1), "1.234,5");
   assert.equal(formatNumber("es", 1234.5, 1), "1234,5");
+  assert.equal(formatNumber("hu", 1234.5, 1), "1234,5", "Hungarian groups only from five digits");
+  assert.equal(formatNumber("hu", 12345.5, 1), "12\u00a0345,5");
   assert.equal(formatNumber("ru", 1234.5, 1), "1 234,5");
 });
 
@@ -344,6 +347,8 @@ test("formatCompact() writes a large number in the language's short scale", () =
   assert.equal(formatCompact("en", 2500, "exceptZero"), "+2.5K");
   assert.equal(plain(formatCompact("de", 1000001)), "1 Mio.");
   assert.equal(plain(formatCompact("fr", 3435)), "3,4 k");
+  assert.equal(plain(formatCompact("hu", 3435)), "3,4 E");
+  assert.equal(plain(formatCompact("hu", 1000001)), "1 M");
   assert.equal(formatCompact("en", -0), "0");
 });
 
@@ -372,6 +377,8 @@ test("getPluralCategory() reports the real CLDR categories for complex languages
   assert.equal(getPluralCategory("lv", 21), "one");
   assert.equal(getPluralCategory("en", 1), "one");
   assert.equal(getPluralCategory("en", 2), "other");
+  assert.equal(getPluralCategory("hu", 1), "one");
+  assert.equal(getPluralCategory("hu", 2), "other");
 });
 
 test("selectPlural() picks the matching form and falls back to `other`", () => {
