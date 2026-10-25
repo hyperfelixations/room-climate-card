@@ -32,6 +32,7 @@ export const extremesViewDefinition = Object.freeze({
   key: "extremes",
   condition: (availability) => availability.roomsComparable,
   defaultEnabled: (availability) => availability.roomsComparable,
+  height: 70,
   // `show_value` hides only the numeric value.
   optionsSchema: { show_value: boolOption(true) },
   buildContent: buildExtremesViewContent,

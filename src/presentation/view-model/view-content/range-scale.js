@@ -89,6 +89,7 @@ export const rangeScaleViewDefinition = Object.freeze({
   condition: (availability) => availability.rangeScaleAvailable,
   // The only view disabled by default because it mirrors the main scale shape.
   defaultEnabled: () => false,
+  height: 70,
   // Band toggles suppress both band and label. `show_footer` controls presence;
   // `footer` selects compact/detailed form.
   optionsSchema: {

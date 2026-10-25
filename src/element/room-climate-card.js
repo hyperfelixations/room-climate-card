@@ -45,7 +45,7 @@ import {
 import { stubConfigFor } from "../application/model/card-suggestions.js";
 import { autoRoomColumnsFor, boundaryDigits, readingDigits } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
-import { VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
+import { FALLBACK_VIEW_AREA_HEIGHT, VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
 import { messageForConfigError, renderMessage } from "../presentation/view-model/notices.js";
 import { createRenderContext } from "../render/primitives/render-context.js";
@@ -716,7 +716,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._activeView = nextIndex === -1 ? 0 : nextIndex;
 
       const context = this._renderContext();
-      this._shadowMount.mount(context, { css: this._styles(), bodyHtml: renderCardBody(context, viewModel, VIEW_RENDERERS) });
+      this._shadowMount.mount(context, { css: this._styles(viewModel.views.height), bodyHtml: renderCardBody(context, viewModel, VIEW_RENDERERS) });
       if (hadCardFocus) {
         const matchingSource = focusedEntity
           ? Array.from(this.shadowRoot.querySelectorAll("[data-entity]")).find(
@@ -866,14 +866,15 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Styles ====
     // All CSS for the card, scoped to the shadow DOM. The stylesheet itself lives in
-    // styles/; the four values below are the only per-render inputs it has, and all
-    // four come from the carousel.
-    _styles() {
+    // styles/; the five values below are its only per-render inputs: four from the
+    // carousel, and the view-area height from the view model being mounted.
+    _styles(viewHeight = FALLBACK_VIEW_AREA_HEIGHT) {
       return buildStyles({
         keyframes: this._slideKeyframes(),
         trackAnimationCss: this._trackAnimationCss(),
         viewCount: (this._views || []).length,
         viewWidthPct: this._viewWidthPct(),
+        viewHeight,
       });
     }
   }

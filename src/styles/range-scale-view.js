@@ -3,7 +3,7 @@
 
 export const RANGE_SCALE_VIEW_CSS = `        /* Shared scale geometry with current/min/max labels resolved by JS. */
         .rtc-range-scale-view {
-          height: 70px;
+          height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           align-content: center;

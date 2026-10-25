@@ -98,6 +98,7 @@ export const scaleViewDefinition = Object.freeze({
   condition: () => true,
   // An explicit `views` list may still omit the otherwise-default scale.
   defaultEnabled: () => true,
+  height: 70,
   // Band toggles are visual only. Marker modes select average, extrema or all rooms.
   optionsSchema: {
     show_comfort_band: boolOption(true),

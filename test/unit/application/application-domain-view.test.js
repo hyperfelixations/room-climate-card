@@ -367,10 +367,53 @@ test("each view definition is one presentation module: semantics and content, no
   for (const definition of viewState.VIEW_DEFINITIONS) {
     assert.deepEqual(
       Object.keys(definition).sort(),
-      ["buildContent", "condition", "defaultEnabled", "key", "optionsSchema"],
+      ["buildContent", "condition", "defaultEnabled", "height", "key", "optionsSchema"],
       `view "${definition.key}"`
     );
     assert.equal(typeof definition.buildContent, "function", `view "${definition.key}"`);
+  }
+});
+
+test("every shipped view registers the 70px the view area has always had", () => {
+  for (const definition of viewState.VIEW_DEFINITIONS) assert.equal(definition.height, 70, `view "${definition.key}"`);
+  assert.equal(viewState.FALLBACK_VIEW_AREA_HEIGHT, 70);
+});
+
+test("the view area takes its tallest active view, else the requested ones, else every registered one", () => {
+  const definitions = [
+    { key: "short", height: 50 },
+    { key: "tall", height: 140 },
+    { key: "mid", height: 70 },
+  ];
+  const entry = (type, requested) => ({ type, requested, available: false, active: false, options: {} });
+  // Active views decide, even when a taller one is requested but unavailable.
+  assert.equal(viewState.viewAreaHeight(definitions, { keys: ["short", "mid"], entries: [entry("tall", true)] }), 70);
+  assert.equal(viewState.viewAreaHeight(definitions, { keys: ["short"], entries: [] }), 50);
+  // The "no view available" hint stands in for the requested views.
+  assert.equal(viewState.viewAreaHeight(definitions, { keys: [], entries: [entry("tall", true), entry("short", false)] }), 140);
+  assert.equal(viewState.viewAreaHeight(definitions, { keys: [], entries: [entry("short", true)] }), 50);
+  // Nothing requested: every registered view.
+  assert.equal(viewState.viewAreaHeight(definitions, { keys: [], entries: [entry("short", false)] }), 140);
+});
+
+test("a view's options never change the view-area height", () => {
+  const availability = { hasRange: true, roomsComparable: true, rangeScaleAvailable: true };
+  const height = (views) => viewState.buildViewState({ availability, config: { views } }).height;
+  const every = (options) => ["range", "range_scale", "scale", "extremes"].map((type) => ({ type, enabled: true, options: options[type] || {} }));
+  assert.equal(height(null), 70);
+  assert.equal(height(every({})), 70);
+  assert.equal(
+    height(every({ range: { show_time: false }, range_scale: { show_footer: false, footer: "compact" }, scale: { show_footer: false, markers: "all" }, extremes: { show_value: false } })),
+    70
+  );
+  assert.equal(height([]), 70, "a collapsed view area still has a defined height");
+});
+
+test("a view definition without a height in whole pixels is refused", () => {
+  const base = viewState.VIEW_DEFINITIONS[0];
+  for (const height of [undefined, 0, -70, 70.5, "70", Number.NaN, Infinity]) {
+    const definition = { ...base, key: "probe", height };
+    assert.throws(() => viewState.defineViews([definition]), /"probe" needs a height in whole pixels/, `height ${String(height)}`);
   }
 });
 

@@ -4,7 +4,7 @@
 export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
   return `        .rtc-rotator-solo {
           min-width: 0;
-          height: 70px;
+          height: var(--rtc-view-height);
           /* Extend paint upward for RangeScale's upper label while clipping horizontally;
              the directional clip does not alter layout or bar geometry. */
           overflow: visible;
@@ -19,8 +19,8 @@ export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
         }
 
         .rtc-no-views {
-          /* Requested-but-unavailable views use the existing 70px solo box for a
-             centered localized hint. */
+          /* Requested-but-unavailable views keep the view-area box for a centered
+             localized hint. */
           display: flex;
           align-items: center;
           justify-content: center;
@@ -36,7 +36,7 @@ export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
           /* Width is views.length*100% so all views sit correctly side by side. */
           display: flex;
           width: ${Math.max(1, viewCount) * 100}%;
-          height: 70px;
+          height: var(--rtc-view-height);
           align-items: stretch;
           ${trackAnimationCss}
           backface-visibility: hidden;
