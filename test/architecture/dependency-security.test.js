@@ -7,6 +7,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -70,10 +71,59 @@ test("every action is pinned to a full commit SHA, except hacs/action@main witho
   }
 });
 
-test("Dependabot watches npm and the workflow actions", () => {
-  const config = read(".github", "dependabot.yml");
-  for (const ecosystem of ["npm", "github-actions"]) {
-    assert.match(config, new RegExp(`- package-ecosystem: ${ecosystem}\\n    directory: /\\n    schedule:\\n      interval: weekly`), ecosystem);
+// The project has no YAML parser: dependabot.yml is read as text, one block per `updates` entry,
+// and each block is compared with the exact text of its contract.
+const dependabotBlocks = () => {
+  const blocks = read(".github", "dependabot.yml").split(/\n(?=  - package-ecosystem: )/).slice(1);
+  return Object.fromEntries(blocks.map((block) => [block.match(/^  - package-ecosystem: (\S+)/)[1], `${block.trimEnd()}\n`]));
+};
+const SCHEDULE = '    schedule:\n      interval: cron\n      cronjob: "0 5 1,15 * *"\n';
+const COOLDOWN = "    cooldown:\n      default-days: 7\n";
+const PATCH_IGNORE = '    ignore:\n      - dependency-name: "*"\n        update-types: ["version-update:semver-patch"]\n';
+const VERSION_GROUP = '        update-types: ["minor", "patch"]\n        applies-to: version-updates\n';
+const SECURITY_GROUP = '      security:\n        patterns: ["*"]\n        applies-to: security-updates\n';
+const GROUPS = {
+  npm: `    groups:\n      tooling:\n        dependency-type: development\n${VERSION_GROUP}${SECURITY_GROUP}`,
+  "github-actions": `    groups:\n      actions:\n        patterns: ["*"]\n${VERSION_GROUP}${SECURITY_GROUP}`,
+};
+
+test("Dependabot watches npm and the workflow actions in the repository root", () => {
+  const blocks = dependabotBlocks();
+  assert.deepEqual(Object.keys(blocks).sort(), ["github-actions", "npm"]);
+  for (const [ecosystem, block] of Object.entries(blocks)) assert.match(block, /\n    directory: \/\n/, ecosystem);
+});
+
+// Dependabot only reads the manifests of watched directories; an unwatched one is never updated.
+test("the root package.json is the only tracked manifest with dependencies", () => {
+  const tracked = execFileSync("git", ["ls-files", "--", "*package.json"], { cwd: ROOT, encoding: "utf8" }).split(/\r?\n/).filter(Boolean);
+  assert.ok(tracked.includes("package.json"));
+  for (const file of tracked.filter((candidate) => candidate !== "package.json")) {
+    const manifest = JSON.parse(read(file));
+    for (const field of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) assert.equal(manifest[field], undefined, `${file} ${field}`);
+  }
+});
+
+test("version updates run on the 1st and 15th, wait a week after a release and skip patch releases", () => {
+  for (const [ecosystem, block] of Object.entries(dependabotBlocks())) {
+    assert.ok(block.includes(SCHEDULE), `${ecosystem} schedule`);
+    assert.ok(block.includes(COOLDOWN), `${ecosystem} cooldown`);
+    assert.ok(block.includes(PATCH_IGNORE), `${ecosystem} patch rule`);
+    assert.equal(block.match(/dependency-name:/g).length, 1, `${ecosystem} has one ignore rule`);
+  }
+});
+
+test("minor updates are grouped, majors stay single pull requests and security updates come grouped", () => {
+  for (const [ecosystem, block] of Object.entries(dependabotBlocks())) assert.ok(block.endsWith(GROUPS[ecosystem]), `${ecosystem} groups`);
+});
+
+// A rule that names only a package would block its security updates as well.
+test("no ignore rule can hold back security updates", () => {
+  for (const [ecosystem, block] of Object.entries(dependabotBlocks())) {
+    const lines = block.split("\n");
+    assert.ok(lines.some((line) => line.includes("dependency-name:")), `${ecosystem} has an ignore rule`);
+    lines.forEach((line, index) => {
+      if (line.includes("dependency-name:")) assert.match(lines[index + 1], /^\s+update-types:/, ecosystem);
+    });
   }
 });
 
