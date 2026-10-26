@@ -39,6 +39,7 @@ test.before(async () => {
     assertPalette: (palette) => palette,
     completePalette: (palette) => palette,
     isSupportedLanguage: (code) => code === "en",
+    profileFormats: { numberFormats: [], timeFormats: [], timeZones: [] },
     viewTypes: viewState.VIEW_DEFINITIONS.map((definition) => definition.key),
     optionSchemaForView: viewState.optionSchemaForView,
     metricKindsForUnit: (unit) => (unit === "°C" ? ["temperature"] : []),

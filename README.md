@@ -30,6 +30,8 @@ individual rooms below. The card follows your dashboard's light or dark theme.
 - Built-in color palettes, ramps made from one to three colors, and custom
   palettes in YAML
 - Translated into 15 languages, following your Home Assistant language setting
+- Numbers, times of day and their time zone written the way your Home Assistant
+  profile says, or the way you set them per card
 - Flexible layouts through the `show:` block, from the full card to compact
   combinations of headers, values, views, and room chips
 - Optional YAML for views, bands, markers, footers, chips, the carousel, and
@@ -173,7 +175,10 @@ it.
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂ and for CO in ppb or µg/m³; `1` for the other measurements and units. |
-| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
+| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. Changes only the language: numbers and times still follow your profile, except where the profile says “Auto (use language setting)”, which then means this language. |
+| `number_format` | `auto` | How numbers are written: `language`, `system`, `comma_decimal` (1,234.5), `decimal_comma` (1.234,5), `space_comma` (1 234,5), `quote_decimal` (1’234.5) or `none` (1234.5). `auto` follows the number format in your Home Assistant profile. `decimals` still sets how many decimal places there are. |
+| `time_format` | `auto` | How times of day are written: `language`, `system`, `12` (7:12 AM) or `24` (07:12). `auto` follows the time format in your Home Assistant profile. |
+| `time_zone` | `auto` | Which time zone times of day are shown in: `local` (this device's) or `server` (the one Home Assistant is set to). `auto` follows the time zone in your Home Assistant profile. |
 
 #### What the card shows
 
@@ -681,6 +686,7 @@ title: Indoor climate
 entity_label: Home average
 decimals: 1
 language: auto
+time_format: auto
 
 rooms:
   - name: Kitchen

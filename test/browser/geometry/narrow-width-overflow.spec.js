@@ -294,6 +294,66 @@ test.describe("every view avoids unintended overflow across widths", () => {
   }
 });
 
+// A 12-hour time is the widest a time of day gets ("10:58 p. m.", "10:58 priekšp."). It never
+// leaves the card; the range view's metric card shows it whole from the width measured here and
+// ellipsizes it below, as it does any text in that slot. The range-scale footer only ever
+// ellipsizes inside the card. See internal dev doc §5 "Profilformate".
+test.describe("a 12-hour time of day stays inside the card", () => {
+  // The widest hours are two digits; the timestamps below are written for this zone.
+  test.use({ timezoneId: "UTC" });
+  const states = () => ({
+    ...baseStates(),
+    "sensor.range": mkStateObj("sensor.range", 3, {
+      unit_of_measurement: "°C",
+      minimum: 18,
+      maximum: 26,
+      minimum_timestamp: "2026-07-24T10:58:00Z",
+      maximum_timestamp: "2026-07-24T22:58:00Z",
+    }),
+  });
+
+  for (const width of [280, 320, 360]) {
+    test(`range and range_scale with a 12-hour clock at ${width}px`, async ({ page }) => {
+      await gotoHarness(page);
+      // curated: English, a long day-period word (Spanish) and the longest one (Latvian), each with
+      // the narrowest card width (px) at which the metric card shows it whole
+      for (const [language, wholeFrom] of [["en", 300], ["es", 320], ["lv", 360]]) {
+        for (const views of [soloViewConfig("range"), soloViewConfig("range_scale"), carouselConfig(["range", "range_scale", "scale", "extremes"])]) {
+          const config = { entity: "sensor.avg", rooms: ROOMS, ...RANGE_SCALE_EXTRA, ...views, language, time_format: "12" };
+          const cardId = await createCard(page, config, states(), language);
+          await setCardWidth(page, cardId, width);
+          const where = `${language}, ${views.views.map((view) => view.type).join("+")} at ${width}px`;
+          const bad = await overflowingTargetElements(page, cardId);
+          expect(bad, `${where}: ${JSON.stringify(bad)}`).toHaveLength(0);
+          const measured = await page.evaluate((cardId) => {
+            const el = document.getElementById(cardId);
+            const cardRect = el.getBoundingClientRect();
+            const visible = (node) => !node.closest(".rtc-track") || node.closest(".rtc-view.rtc-active, .rtc-view[aria-hidden='false']");
+            const inside = (node) => {
+              const r = node.getBoundingClientRect();
+              return r.width === 0 || (r.left >= cardRect.left - 0.5 && r.right <= cardRect.right + 0.5);
+            };
+            const names = [...el.shadowRoot.querySelectorAll(".rtc-range-view .rtc-extreme-name")].filter(visible);
+            const footers = [...el.shadowRoot.querySelectorAll(".rtc-range-scale-view .rtc-scale-footer")].filter(visible);
+            return {
+              cutNames: names.filter((node) => node.scrollWidth > node.clientWidth + 0.5).map((node) => node.textContent),
+              namesOutside: names.filter((node) => !inside(node)).map((node) => node.textContent),
+              footersOutside: footers.filter((node) => !inside(node)).map((node) => node.textContent),
+              times: names.map((node) => node.textContent),
+            };
+          }, cardId);
+          if (views.views.length === 1 && views.views[0].type === "range") {
+            expect(measured.times.join(" "), `${where}: the 12-hour clock is shown`).toMatch(/10:58.*10:58/);
+          }
+          if (width >= wholeFrom) expect(measured.cutNames, `${where}: a metric card's time is cut`).toEqual([]);
+          expect(measured.namesOutside, `${where}`).toEqual([]);
+          expect(measured.footersOutside, `${where}`).toEqual([]);
+        }
+      }
+    });
+  }
+});
+
 // The headline value must never paint over its neighbour. The column sizes itself to its
 // content, from the old 106px cap as a floor, growing only as far as leaving the view 40%
 // of the panel allows. These tests hold both halves: no overflow anywhere, and no change

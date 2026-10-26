@@ -29,6 +29,10 @@ let formatNumber;
 let formatBoundary;
 let formatCompact;
 let formatTimeOfDay;
+let resolveFormatProfile;
+let NUMBER_FORMATS;
+let TIME_FORMATS;
+let TIME_ZONES;
 let readingDigits;
 let boundaryDigits;
 let CLASSIFICATION_ZONES;
@@ -55,6 +59,7 @@ test.before(async () => {
   ({ optionSchemaForView, VIEW_DEFINITIONS } = await import("../../src/presentation/view-model/view-state.js"));
   ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));
   ({ formatBoundary, formatCompact, formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
+  ({ resolveFormatProfile, NUMBER_FORMATS, TIME_FORMATS, TIME_ZONES } = await import("../../src/i18n/format-profile.js"));
   ({ boundaryDigits, readingDigits } = await import("../../src/presentation/view-model/metric-meta.js"));
   ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
   ({ metricKindsOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
@@ -72,6 +77,7 @@ function configCollaborators() {
   return {
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
+    profileFormats: { numberFormats: NUMBER_FORMATS, timeFormats: TIME_FORMATS, timeZones: TIME_ZONES },
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
     metricKindsForUnit: metricKindsOfUnit,
@@ -94,7 +100,11 @@ function configCollaborators() {
 // config override, then the display unit's default) is part of the contract.
 function buildTexts(config, hass, unit, metricKind, unitProfileKey) {
   const language = resolveLanguage(config.language, hass);
-  const fmt = (value, digits) => formatNumber(language, value, digits ?? readingDigits(metricKind, unitProfileKey, config.decimals));
+  const profile = resolveFormatProfile(
+    { language, configLanguage: config.language, numberFormat: config.number_format, timeFormat: config.time_format, timeZone: config.time_zone },
+    hass
+  );
+  const fmt = (value, digits) => formatNumber(profile, value, digits ?? readingDigits(metricKind, unitProfileKey, config.decimals));
   const sign = (signed) => (signed ? "exceptZero" : "auto");
   return {
     language,
@@ -102,9 +112,9 @@ function buildTexts(config, hass, unit, metricKind, unitProfileKey) {
     fmt,
     fmtWithUnit: (value, digits) => `${fmt(value, digits)} ${unit}`,
     fmtBoundary: (value, { signed = false } = {}) =>
-      formatBoundary(language, value, boundaryDigits(metricKind, unitProfileKey, config.decimals), sign(signed)),
-    fmtCompact: (value, { signed = false } = {}) => formatCompact(language, value, sign(signed)),
-    formatTime: (isoString) => formatTimeOfDay(language, isoString),
+      formatBoundary(profile, value, boundaryDigits(metricKind, unitProfileKey, config.decimals), sign(signed)),
+    fmtCompact: (value, { signed = false } = {}) => formatCompact(profile, value, sign(signed)),
+    formatTime: (isoString) => formatTimeOfDay(profile, isoString),
   };
 }
 

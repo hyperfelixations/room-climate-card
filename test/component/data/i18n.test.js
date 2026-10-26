@@ -126,7 +126,9 @@ test("I18N-02: every new language has native representative card text instead of
   }
 });
 
-test("I18N-02: new language locales drive decimal/group separators and keep 24-hour time", () => {
+// With `language` set and no time format in the profile, the clock is the language's own:
+// Korean writes 12 hours, as Home Assistant does; the others 24.
+test("I18N-02: new language locales drive decimal/group separators and their own clock", () => {
   const expectedNumbers = {
     es: "1234,5",
     ru: "1\u00a0234,5",
@@ -138,7 +140,8 @@ test("I18N-02: new language locales drive decimal/group separators and keep 24-h
   for (const [lang, expectedNumber] of Object.entries(expectedNumbers)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
     assert.equal(el._fmt(1234.5, 1), expectedNumber, `lang=${lang}: number locale`);
-    assert.match(el._formatTime("2026-07-24T13:05:00Z"), /^\d{2}:\d{2}$/, `lang=${lang}: 24-hour time`);
+    const clock = lang === "ko" ? /^(오전|오후) \d{1,2}:\d{2}$/ : /^\d{2}:\d{2}$/;
+    assert.match(el._formatTime("2026-07-24T13:05:00Z"), clock, `lang=${lang}: the language's clock`);
     env.cleanup(el);
   }
 });
