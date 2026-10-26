@@ -16,10 +16,15 @@ const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 // Every supported language is iterated here, so the matrix imports the list rather than copying it.
 const { LANGUAGES } = require("../../manifests/product-surface.js");
 
+// The carousel phase (animation-delay, and which view is aria-hidden/inert) is `Date.now() % cycle`;
+// two cards rendered some milliseconds apart straddle a flip often enough to fail a comparison.
+const FIXED_NOW_MS = 1_750_000_000_000;
+
 let env;
 
 test.before(() => {
   env = createTestEnvironment();
+  env.window.Date.now = () => FIXED_NOW_MS;
 });
 test.after(() => {
   env.cleanupAll();
@@ -43,8 +48,14 @@ const SHAPES = {
   "everything hidden": { entity: "sensor.avg", show: { icon: false, title: false, subtitle: false, pill: false, panel: false, rooms: false } },
 };
 
-// The slide animation's delay (inline and in the instance stylesheet) follows the clock, not the language.
-const markup = (el) => el.shadowRoot.innerHTML.replace(/animation-delay:\s*-?\d+ms/g, "animation-delay: <clock>");
+test("both cards of a comparison are rendered at one wall-clock instant", () => {
+  const first = env.window.Date.now();
+  const until = performance.now() + 5;
+  while (performance.now() < until);
+  assert.equal(env.window.Date.now(), first);
+});
+
+const markup = (el) => el.shadowRoot.innerHTML;
 
 function assertPatchedLikeFresh(shape, language, patched, fresh) {
   assert.equal(markup(patched), markup(fresh), `${shape}: patched to ${language} differs from a fresh ${language} card`);
