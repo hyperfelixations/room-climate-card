@@ -90,12 +90,12 @@ test("each profile time format picks the clock Home Assistant picks", () => {
   assert.equal(at({ language: "ko", time_format: "language" }, { language: "ko" }), "오후 6:41");
 });
 
-test("a 24-hour clock writes exactly what the card wrote before the profile was followed", () => {
-  const before = (tag) => new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit", hour12: false });
+test("a 24-hour clock writes two-digit hours in every language", () => {
+  const twoDigit = (tag) => new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit", hour12: false });
   for (const language of LANGUAGES) {
     const profile = resolve(hassWith({ language, time_format: "24" }), { language });
     for (const iso of [AT_0612, AT_1841, "2026-07-24T00:05:00Z"]) {
-      assert.equal(formatters.formatTimeOfDay(profile, iso), before(locales.NUMBER_LOCALE_BY_LANGUAGE[language]).format(new Date(iso)), `${language} ${iso}`);
+      assert.equal(formatters.formatTimeOfDay(profile, iso), twoDigit(locales.NUMBER_LOCALE_BY_LANGUAGE[language]).format(new Date(iso)), `${language} ${iso}`);
     }
   }
 });
