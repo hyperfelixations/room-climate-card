@@ -116,7 +116,7 @@ test("I18N-02: every new language has native representative card text instead of
     ko: { title: "온도", avg: "집 전체 평균", noData: "데이터 없음" },
     ja: { title: "温度", avg: "住宅平均", noData: "データなし" },
     zh: { title: "温度", avg: "全屋平均", noData: "无数据" },
-    hu: { title: "Hőmérséklet", avg: "Otthon átl.", noData: "Nincs adat" },
+    hu: { title: "Hőmérséklet", avg: "Otthoni átlag", noData: "Nincs adat" },
   };
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
@@ -317,11 +317,11 @@ test("I18N-02: Hungarian keeps the noun singular after a numeral and builds no s
   }
   assert.equal(
     el._t("subtitle.aboveComfort", { diff: "1,0 °C", count: 1, total: 21, adjective: el._t("adjective.warm") }),
-    "Átl. 1,0 °C a komfortzóna felett · 1/21 szoba meleg."
+    "Átlagosan 1,0 °C a komfortzóna felett · 1/21 szoba meleg."
   );
   assert.equal(
     el._t("subtitle.belowComfort", { diff: "1,0 °C", count: 2, total: 5, adjective: el._t("adjective.cool") }),
-    "Átl. 1,0 °C a komfortzóna alatt · 2/5 szoba hűvös."
+    "Átlagosan 1,0 °C a komfortzóna alatt · 2/5 szoba hűvös."
   );
   env.cleanup(el);
 });
@@ -344,8 +344,8 @@ test("I18N-02: a Hungarian card shows its own wording in the headline, subtitle,
     mkHass(states, "de")
   );
   const text = el.shadowRoot.textContent;
-  assert.match(text, /Otthon átl\./, "headline caption");
-  assert.match(text, /Átl\. 2,0 °C a komfortzóna felett · 2\/2 szoba meleg\./, "subtitle");
+  assert.match(text, /Otthoni átlag/, "headline caption");
+  assert.match(text, /Átlagosan 2,0 °C a komfortzóna felett · 2\/2 szoba meleg\./, "subtitle");
   assert.match(text, /Hőmérséklet/, "title");
   const extremes = [...el.shadowRoot.querySelectorAll(".rtc-extreme-label")].map((node) => node.textContent.trim());
   assert.deepEqual(extremes, ["Leghidegebb", "Legmelegebb"], "extremes labels");
