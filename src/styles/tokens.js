@@ -1,13 +1,18 @@
 // SHIPPED STYLESHEET SLICE: auto-slide keyframes and design tokens.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export function tokensCss({ keyframes }) {
+// A narrow card gives its view area this much more height (responsive.js switches to it).
+export const NARROW_VIEW_HEIGHT_EXTRA_PX = 4;
+
+export function tokensCss({ keyframes, viewHeight }) {
   return `
         ${keyframes}
 
         :host {
           display: block;
           --rtc-radius: 20px;
+          --rtc-view-height: ${viewHeight}px;
+          --rtc-view-height-narrow: ${viewHeight + NARROW_VIEW_HEIGHT_EXTRA_PX}px;
           --rtc-muted: var(--secondary-text-color);
           --rtc-faint: color-mix(in srgb, var(--secondary-text-color) 72%, transparent);
           --rtc-hairline: color-mix(in srgb, var(--divider-color, var(--primary-text-color)) 42%, transparent);

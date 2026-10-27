@@ -33,6 +33,7 @@ export const rangeViewDefinition = Object.freeze({
   // Available with a usable daily range; `auto` mirrors availability.
   condition: (availability) => availability.hasRange,
   defaultEnabled: (availability) => availability.hasRange,
+  height: 70,
   // `show_time` affects timestamps only.
   optionsSchema: { show_time: boolOption(true) },
   buildContent: buildRangeViewContent,

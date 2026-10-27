@@ -268,10 +268,10 @@ test("the timestamp attributes are read in either spelling, English first", () =
   const german = footerOf({ minimum_zeitpunkt: "2026-08-23T07:12:00", maximum_zeitpunkt: "2026-08-23T17:41:00" });
   const english = footerOf({ minimum_timestamp: "2026-08-23T07:12:00", maximum_timestamp: "2026-08-23T17:41:00" });
   assert.equal(english, german, "the two spellings must produce the same sentence");
-  assert.match(english, /\(07:12\).*\(17:41\)/);
+  assert.match(english, /\(7:12\sAM\).*\(5:41\sPM\)/, "English writes the 12-hour clock");
 
   const both = footerOf({ minimum_timestamp: "2026-08-23T06:00:00", minimum_zeitpunkt: "2026-08-23T07:12:00" });
-  assert.match(both, /\(06:00\)/, "English wins when both are present");
+  assert.match(both, /\(6:00\sAM\)/, "English wins when both are present");
 });
 
 // One timestamp present must produce exactly one bracket.
@@ -291,7 +291,7 @@ test("one timestamp present gives one bracket", () => {
   );
   const text = el.shadowRoot.querySelector(".rtc-range-scale-view .rtc-scale-footer").textContent;
   assert.equal((text.match(/\(/g) || []).length, 1, text);
-  assert.match(text, /Min 18\.0 °C \(07:12\) · Max 23\.0 °C/);
+  assert.match(text, /Min 18\.0 °C \(7:12\sAM\) · Max 23\.0 °C/);
   env.cleanup(el);
 });
 

@@ -492,13 +492,35 @@ const SCENARIOS = [
       ...sevenRoomStates(),
     },
   },
+  {
+    // English words, every number and time from the profile: comma decimals, the 24-hour clock
+    // and Home Assistant's own time zone (UTC-4 in July). See internal dev doc §5 "Profilformate".
+    name: "i18n-profile-formats",
+    locale: { number_format: "decimal_comma", time_format: "24", time_zone: "server" },
+    serverTimeZone: "America/New_York",
+    config: {
+      entity: "sensor.avg",
+      range_entity: "sensor.range",
+      trend_entity: "sensor.trend",
+      rooms: sevenRoomConfig(),
+      views: ["range", "range_scale", "scale", "extremes"],
+    },
+    states: {
+      "sensor.avg": st("sensor.avg", 22.4, { ...C, spread: 6.5 }),
+      "sensor.range": st("sensor.range", 5.1, RANGE_ATTRS_C),
+      "sensor.trend": st("sensor.trend", 0.42, { ...C, unit_of_measurement: "°C/h" }),
+      ...sevenRoomStates(),
+    },
+  },
 ];
 
+// A scenario may add profile fields to hass.locale and name Home Assistant's time zone.
 function buildHass(scenario) {
   const language = scenario.language || "en";
   return {
     language,
-    locale: { language },
+    locale: { language, ...scenario.locale },
+    ...(scenario.serverTimeZone ? { config: { time_zone: scenario.serverTimeZone } } : {}),
     states: scenario.states,
     callService: () => {},
   };

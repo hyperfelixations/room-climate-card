@@ -311,7 +311,7 @@ test("the structure signature composes the shell's parts with each view's own", 
   const signature = cardShell.cardStructureSignature(model, registry.VIEW_RENDERERS);
   assert.match(
     signature,
-    /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|warning:0\|accentLine:1\|icon:1\|title:1\|pill:1\|panel:1\|views:scale\|collapsed:0\|/
+    /^state:data\|chips:1\|avgLabel:1\|subtitle:1\|warning:0\|accentLine:1\|icon:1\|title:1\|pill:1\|panel:1\|views:scale\|collapsed:0\|viewHeight:70\|/
   );
   assert.match(signature, /scale:/, "the active view contributes its own part");
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
@@ -477,7 +477,7 @@ test("every string a renderer interpolates into markup is escaped", () => {
 // ---------------------------------------------------------------------- styles --
 
 test("the stylesheet is assembled from its sections with nothing inserted between them", () => {
-  const inputs = { keyframes: "@keyframes x {}", trackAnimationCss: "animation: none;", viewCount: 3, viewWidthPct: 33.3333 };
+  const inputs = { keyframes: "@keyframes x {}", trackAnimationCss: "animation: none;", viewCount: 3, viewWidthPct: 33.3333, viewHeight: 70 };
   const css = styles.buildStyles(inputs);
   assert.match(css, /@keyframes x \{\}/);
   assert.match(css, /width: 300%;/, "the track spans viewCount * 100%");
@@ -489,13 +489,27 @@ test("the stylesheet is assembled from its sections with nothing inserted betwee
   assert.ok(css.indexOf("@container rtc-card") < css.indexOf("prefers-reduced-motion"));
 });
 
-test("the stylesheet is a pure function of its four inputs", () => {
-  const inputs = { keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100 };
+test("the stylesheet is a pure function of its five inputs", () => {
+  const inputs = { keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100, viewHeight: 70 };
   assert.equal(styles.buildStyles(inputs), styles.buildStyles({ ...inputs }));
   assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewCount: 2 }));
+  assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewHeight: 140 }));
+});
+
+test("the view-area height is written once, as two tokens, and every view slot reads it", () => {
+  const css = styles.buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 2, viewWidthPct: 50, viewHeight: 140 });
+  assert.match(css, /:host \{[^}]*--rtc-view-height: 140px;[^}]*--rtc-view-height-narrow: 144px;/);
+  // No slot keeps a height of its own: the rotator, the track, each view and the metric cards.
+  assert.doesNotMatch(css, /(?<![\w-])height: (70|74|140|144)px/);
+  for (const selector of [".rtc-rotator-solo", ".rtc-track", ".rtc-scale-view", ".rtc-range-scale-view", ".rtc-range-view", ".rtc-extreme-card"]) {
+    const block = new RegExp(`${selector.replace(".", "\\.")} \\{[^}]*height: var\\(--rtc-view-height\\);`);
+    assert.match(css, block, `${selector} fills the view area`);
+  }
+  // A narrow card switches to the narrow token, in the container query and in its fallback.
+  assert.equal(css.match(/--rtc-view-height: var\(--rtc-view-height-narrow\);/g).length, 2);
 });
 
 test("a zero view count still yields a usable track width", () => {
   // Before the first render the view list is empty; the track must not collapse to 0%.
-  assert.match(styles.buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 0, viewWidthPct: 100 }), /width: 100%;/);
+  assert.match(styles.buildStyles({ keyframes: "", trackAnimationCss: "", viewCount: 0, viewWidthPct: 100, viewHeight: 70 }), /width: 100%;/);
 });

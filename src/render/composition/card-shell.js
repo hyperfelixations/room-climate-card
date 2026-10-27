@@ -78,6 +78,8 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     `panel:${viewModel.hasPanel ? 1 : 0}`,
     `views:${viewModel.views.keys.join(",")}`,
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
+    // Baked into the stylesheet, which only a full render rewrites.
+    `viewHeight:${viewModel.views.height}`,
   ];
   if (viewModel.empty) {
     // No-data nodes are structural; the keyed grid still reconciles its chips.

@@ -1,4 +1,6 @@
-# Security updates arrive one advisory per pull request; routine tooling updates are grouped.
+# Version updates run on the 1st and 15th at 05:00 UTC: minor and major releases only, each at least
+# 7 days old; majors stay single pull requests. Security updates are alert-driven and unaffected by
+# schedule, cooldown and the patch rule. See TESTING.md "Dependency security".
 # Actions are pinned to commit SHAs; Dependabot moves the SHA and its version comment together.
 
 version: 2
@@ -6,17 +8,37 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 5 1,15 * *"
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
     groups:
       tooling:
         dependency-type: development
+        update-types: ["minor", "patch"]
         applies-to: version-updates
+      security:
+        patterns: ["*"]
+        applies-to: security-updates
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: cron
+      cronjob: "0 5 1,15 * *"
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
         applies-to: version-updates
+      security:
+        patterns: ["*"]
+        applies-to: security-updates

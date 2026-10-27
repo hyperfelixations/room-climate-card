@@ -21,8 +21,25 @@ export function defineViews(definitions) {
     if (typeof definition.optionsSchema !== "object" || definition.optionsSchema === null) {
       throw new Error(`view definitions: "${definition.key}" needs an optionsSchema object`);
     }
+    if (!Number.isInteger(definition.height) || definition.height <= 0) {
+      throw new Error(`view definitions: "${definition.key}" needs a height in whole pixels`);
+    }
   }
   return Object.freeze([...definitions]);
+}
+
+const tallest = (definitions) => Math.max(...definitions.map((definition) => definition.height));
+
+// The view area is as tall as its tallest active view; every view fills it. With no active view,
+// the requested ones size the "no view available" hint; with none requested, every registered
+// one. A view's options never change its height. See internal dev doc §5 "Die Viewfläche".
+export function viewAreaHeight(definitions, { keys, entries }) {
+  const requested = new Set(entries.filter((entry) => entry.requested).map((entry) => entry.type));
+  for (const sizing of [new Set(keys), requested]) {
+    const sized = definitions.filter((definition) => sizing.has(definition.key));
+    if (sized.length) return tallest(sized);
+  }
+  return tallest(definitions);
 }
 
 export const VIEW_DEFINITIONS = defineViews([
@@ -31,6 +48,9 @@ export const VIEW_DEFINITIONS = defineViews([
   scaleViewDefinition,
   extremesViewDefinition,
 ]);
+
+// The view area of a card without views (no data, a failed render): no view decides it.
+export const FALLBACK_VIEW_AREA_HEIGHT = tallest(VIEW_DEFINITIONS);
 
 export function optionSchemaForView(type) {
   return VIEW_DEFINITIONS.find((definition) => definition.key === type)?.optionsSchema;
@@ -87,6 +107,7 @@ export function buildViewState({ availability, config }, definitions = VIEW_DEFI
     entries,
     options,
     collapsed: keys.length === 0 && !anyRequestedButUnavailable,
+    height: viewAreaHeight(definitions, { keys, entries }),
   };
 }
 

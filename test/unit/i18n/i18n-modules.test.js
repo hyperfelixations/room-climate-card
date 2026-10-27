@@ -19,6 +19,7 @@ let formatters;
 let registry;
 let integrity;
 let translateModule;
+let formatProfile;
 
 test.before(async () => {
   locales = await import("../../../src/i18n/locales.js");
@@ -26,7 +27,11 @@ test.before(async () => {
   registry = await import("../../../src/i18n/registry.js");
   integrity = await import("../../../src/i18n/integrity.js");
   translateModule = await import("../../../src/i18n/translate.js");
+  formatProfile = await import("../../../src/i18n/format-profile.js");
 });
+
+// A card with `language` set and no profile: everything is written in that language's own locale.
+const inLanguage = (language) => formatProfile.resolveFormatProfile({ language, configLanguage: language }, undefined);
 
 // -------------------------------------------------------- message language --
 
@@ -288,80 +293,108 @@ test("resolveLanguage() falls back to English for anything unusable", () => {
 
 test("formatNumber() follows each language's own decimal and group separators", () => {
   const { formatNumber } = formatters;
-  assert.equal(formatNumber("en", 1234.5, 1), "1,234.5");
-  assert.equal(formatNumber("de", 1234.5, 1), "1.234,5");
-  assert.equal(formatNumber("es", 1234.5, 1), "1234,5");
-  assert.equal(formatNumber("hu", 1234.5, 1), "1234,5", "Hungarian groups only from five digits");
-  assert.equal(formatNumber("hu", 12345.5, 1), "12\u00a0345,5");
-  assert.equal(formatNumber("ru", 1234.5, 1), "1 234,5");
+
+  assert.equal(formatNumber(inLanguage("en"), 1234.5, 1), "1,234.5");
+  assert.equal(formatNumber(inLanguage("de"), 1234.5, 1), "1.234,5");
+  assert.equal(formatNumber(inLanguage("es"), 1234.5, 1), "1234,5");
+
+  assert.equal(
+    formatNumber(inLanguage("hu"), 1234.5, 1),
+    "1234,5",
+    "Hungarian groups only from five digits"
+  );
+  assert.equal(
+    formatNumber(inLanguage("hu"), 12345.5, 1),
+    "12\u00a0345,5"
+  );
+
+  assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1 234,5");
+
 });
 
 test("formatNumber() honours the requested digit count exactly", () => {
   const { formatNumber } = formatters;
-  assert.equal(formatNumber("en", 21, 0), "21");
-  assert.equal(formatNumber("en", 21, 1), "21.0", "trailing zeros are kept");
-  assert.equal(formatNumber("en", 21.456, 2), "21.46", "rounds, never truncates");
-  assert.equal(formatNumber("en", "21.5", 1), "21.5", "numeric strings are coerced");
+  assert.equal(formatNumber(inLanguage("en"), 21, 0), "21");
+  assert.equal(formatNumber(inLanguage("en"), 21, 1), "21.0", "trailing zeros are kept");
+  assert.equal(formatNumber(inLanguage("en"), 21.456, 2), "21.46", "rounds, never truncates");
+  assert.equal(formatNumber(inLanguage("en"), "21.5", 1), "21.5", "numeric strings are coerced");
 });
 
 test("formatNumber() never prints a negative zero", () => {
   const { formatNumber } = formatters;
   // Math.round(-0.4) is -0, and Intl renders that as "-0". Nothing the card displays may
   // read as a signed nothing, whatever produced the value.
-  assert.equal(formatNumber("en", -0, 0), "0");
-  assert.equal(formatNumber("de", -0, 1), "0,0");
-  assert.equal(formatNumber("en", Math.round(-0.4), 0), "0", "the projection rounds -0.4 °F to -0");
+  assert.equal(formatNumber(inLanguage("en"), -0, 0), "0");
+  assert.equal(formatNumber(inLanguage("de"), -0, 1), "0,0");
+  assert.equal(formatNumber(inLanguage("en"), Math.round(-0.4), 0), "0", "the projection rounds -0.4 °F to -0");
   // A value that is genuinely below zero keeps its sign; only the signless -0 is normalized.
-  assert.equal(formatNumber("en", -0.4, 1), "-0.4");
+  assert.equal(formatNumber(inLanguage("en"), -0.4, 1), "-0.4");
 });
 
 test("formatNumber() can force an explicit sign on positive values", () => {
   const { formatNumber } = formatters;
-  assert.equal(formatNumber("en", 4, 0, "exceptZero"), "+4");
-  assert.equal(formatNumber("en", -5, 0, "exceptZero"), "-5");
-  assert.equal(formatNumber("en", 0, 0, "exceptZero"), "0", "zero stays unsigned");
-  assert.equal(formatNumber("en", -0, 0, "exceptZero"), "0");
-  assert.equal(formatNumber("de", 4, 0, "exceptZero"), "+4");
-  assert.equal(formatNumber("en", 4, 0), "4", "the default keeps the plain form");
+  assert.equal(formatNumber(inLanguage("en"), 4, 0, "exceptZero"), "+4");
+  assert.equal(formatNumber(inLanguage("en"), -5, 0, "exceptZero"), "-5");
+  assert.equal(formatNumber(inLanguage("en"), 0, 0, "exceptZero"), "0", "zero stays unsigned");
+  assert.equal(formatNumber(inLanguage("en"), -0, 0, "exceptZero"), "0");
+  assert.equal(formatNumber(inLanguage("de"), 4, 0, "exceptZero"), "+4");
+  assert.equal(formatNumber(inLanguage("en"), 4, 0), "4", "the default keeps the plain form");
 });
 
 test("formatBoundary() shows up to the given digits and no trailing zeros", () => {
   const { formatBoundary } = formatters;
-  assert.equal(formatBoundary("en", 20.5, 1), "20.5");
-  assert.equal(formatBoundary("en", 20, 1), "20", "a whole boundary stays whole");
-  assert.equal(formatBoundary("en", 0, 1), "0");
-  assert.equal(formatBoundary("en", 0.85, 2), "0.85");
-  assert.equal(formatBoundary("en", 293.15, 1), "293.2", "beyond the digits it rounds like a reading");
-  assert.equal(formatBoundary("de", 1234.5, 1), "1.234,5");
-  assert.equal(formatBoundary("en", -0, 1), "0");
-  assert.equal(formatBoundary("en", 3, 1, "exceptZero"), "+3");
-  assert.equal(formatBoundary("en", -2.5, 1, "exceptZero"), "-2.5");
-  assert.equal(formatBoundary("en", 0, 1, "exceptZero"), "0");
+  assert.equal(formatBoundary(inLanguage("en"), 20.5, 1), "20.5");
+  assert.equal(formatBoundary(inLanguage("en"), 20, 1), "20", "a whole boundary stays whole");
+  assert.equal(formatBoundary(inLanguage("en"), 0, 1), "0");
+  assert.equal(formatBoundary(inLanguage("en"), 0.85, 2), "0.85");
+  assert.equal(formatBoundary(inLanguage("en"), 293.15, 1), "293.2", "beyond the digits it rounds like a reading");
+  assert.equal(formatBoundary(inLanguage("de"), 1234.5, 1), "1.234,5");
+  assert.equal(formatBoundary(inLanguage("en"), -0, 1), "0");
+  assert.equal(formatBoundary(inLanguage("en"), 3, 1, "exceptZero"), "+3");
+  assert.equal(formatBoundary(inLanguage("en"), -2.5, 1, "exceptZero"), "-2.5");
+  assert.equal(formatBoundary(inLanguage("en"), 0, 1, "exceptZero"), "0");
 });
 
 test("formatCompact() writes a large number in the language's short scale", () => {
   const { formatCompact } = formatters;
   const plain = (text) => text.replace(/\s/g, " ");
-  assert.equal(formatCompact("en", 3435), "3.4K");
-  assert.equal(formatCompact("en", 1000001), "1M");
-  assert.equal(formatCompact("en", 2500, "exceptZero"), "+2.5K");
-  assert.equal(plain(formatCompact("de", 1000001)), "1 Mio.");
-  assert.equal(plain(formatCompact("fr", 3435)), "3,4 k");
-  assert.equal(plain(formatCompact("hu", 3435)), "3,4 E");
-  assert.equal(plain(formatCompact("hu", 1000001)), "1 M");
-  assert.equal(formatCompact("en", -0), "0");
+
+  assert.equal(formatCompact(inLanguage("en"), 3435), "3.4K");
+  assert.equal(formatCompact(inLanguage("en"), 1000001), "1M");
+  assert.equal(
+    formatCompact(inLanguage("en"), 2500, "exceptZero"),
+    "+2.5K"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("de"), 1000001)),
+    "1 Mio."
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("fr"), 3435)),
+    "3,4 k"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("hu"), 3435)),
+    "3,4 E"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("hu"), 1000001)),
+    "1 M"
+  );
+  assert.equal(formatCompact(inLanguage("en"), 0), "0");
+
 });
 
-test("formatTimeOfDay() renders 24-hour local time and rejects unusable input", () => {
+test("formatTimeOfDay() renders the language's own clock in local time and rejects unusable input", () => {
   const { formatTimeOfDay } = formatters;
   // TZ is pinned to UTC above, so the rendered time equals the ISO time.
-  assert.equal(formatTimeOfDay("en", "2026-07-24T06:12:00Z"), "06:12");
-  assert.equal(formatTimeOfDay("de", "2026-07-24T18:41:00Z"), "18:41", "never 6:41 PM");
-  assert.equal(formatTimeOfDay("en", "not a timestamp"), null);
-  assert.equal(formatTimeOfDay("en", ""), null);
-  assert.equal(formatTimeOfDay("en", "   "), null);
-  assert.equal(formatTimeOfDay("en", null), null);
-  assert.equal(formatTimeOfDay("en", 1750000000000), null, "a raw epoch is not an ISO string");
+  assert.equal(formatTimeOfDay(inLanguage("en"), "2026-07-24T06:12:00Z"), "6:12 AM");
+  assert.equal(formatTimeOfDay(inLanguage("de"), "2026-07-24T18:41:00Z"), "18:41", "never 6:41 PM");
+  assert.equal(formatTimeOfDay(inLanguage("en"), "not a timestamp"), null);
+  assert.equal(formatTimeOfDay(inLanguage("en"), ""), null);
+  assert.equal(formatTimeOfDay(inLanguage("en"), "   "), null);
+  assert.equal(formatTimeOfDay(inLanguage("en"), null), null);
+  assert.equal(formatTimeOfDay(inLanguage("en"), 1750000000000), null, "a raw epoch is not an ISO string");
 });
 
 test("getPluralCategory() reports the real CLDR categories for complex languages", () => {
@@ -411,5 +444,23 @@ test("the Intl formatters are cached, not rebuilt per call", () => {
     getNumberFormat("en-US", { ...digits(1, 1), notation: "compact" }),
     "the notation is part of the cache key"
   );
-  assert.equal(getTimeFormat("en-US"), getTimeFormat("en-US"));
+  assert.notEqual(getNumberFormat("en-US", digits(1, 1)), getNumberFormat(["en-US", "en"], digits(1, 1)), "a fallback list is its own locale");
+  assert.notEqual(
+    getNumberFormat("en-US", digits(1, 1)),
+    getNumberFormat("en-US", { ...digits(1, 1), grouping: false }),
+    "grouping is part of the cache key"
+  );
+  assert.equal(getNumberFormat(undefined, digits(1, 1)), getNumberFormat(undefined, digits(1, 1)), "the runtime locale is cached too");
+  const clock = { timeLocale: "en-US", hourCycle: "h23", timeZone: undefined };
+  assert.equal(getTimeFormat(clock), getTimeFormat({ ...clock }));
+  assert.notEqual(getTimeFormat(clock), getTimeFormat({ ...clock, timeLocale: "de-DE" }), "locale is part of the cache key");
+  assert.notEqual(getTimeFormat(clock), getTimeFormat({ ...clock, hourCycle: "h12" }), "the hour cycle is part of the cache key");
+  assert.notEqual(getTimeFormat(clock), getTimeFormat({ ...clock, timeZone: "Europe/Berlin" }), "the time zone is part of the cache key");
+});
+
+test("grouping off keeps the compact notation's own grouping rule untouched when on", () => {
+  const { getNumberFormat } = formatters;
+  const compact = { minimumFractionDigits: 0, maximumFractionDigits: 1, notation: "compact" };
+  assert.equal(getNumberFormat("en-US", compact).resolvedOptions().useGrouping, new Intl.NumberFormat("en-US", { notation: "compact" }).resolvedOptions().useGrouping);
+  assert.equal(getNumberFormat("en-US", { ...compact, grouping: false }).resolvedOptions().useGrouping, false);
 });

@@ -2,7 +2,7 @@
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const SCALE_VIEW_CSS = `        .rtc-scale-view {
-          height: 70px;
+          height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           align-content: center;

@@ -2,7 +2,7 @@
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
 export const CARDS_CSS = `        .rtc-range-view {
-          height: 70px;
+          height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -13,7 +13,7 @@ export const CARDS_CSS = `        .rtc-range-view {
         .rtc-extreme-card {
           position: relative;
           min-width: 0;
-          height: 70px;
+          height: var(--rtc-view-height);
           box-sizing: border-box;
           border-radius: 14px;
           padding: 8px 9px 7px;

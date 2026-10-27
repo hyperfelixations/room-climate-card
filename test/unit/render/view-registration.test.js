@@ -3,7 +3,8 @@
 // The registration contract for a view: one presentation module (definition plus content
 // builder) and one renderer are everything a new view adds. A synthetic fifth view is
 // registered beside the four shipped ones and driven through view state, content, render,
-// structure signature, patch and layout; drift between the two lists fails at composition.
+// structure signature, patch and layout; drift between the two lists fails at composition. Its
+// registered height, twice that of the shipped views, sizes the view area while it is active.
 // Boundary: the shell's own markup is render-shell.test.js, each shipped view's markup is
 // render-views.test.js.
 
@@ -33,6 +34,7 @@ function fifthDefinition() {
     key: "fifth",
     condition: (availability) => availability.hasFifth === true,
     defaultEnabled: () => true,
+    height: 140,
     optionsSchema: { show_label: optionSchemas.boolOption(true) },
     buildContent: (shared, options) => ({ label: options.show_label ? shared.label : null }),
   };
@@ -52,13 +54,10 @@ const fifthView = {
 
 const AVAILABILITY = { hasRange: false, roomsComparable: false, rangeScaleAvailable: false, hasFifth: true };
 
-function fifthModel(definitions, label) {
-  const state = viewState.buildViewState(
-    { availability: AVAILABILITY, config: { views: [{ type: "fifth", enabled: "auto", options: {} }] } },
-    definitions
-  );
+function fifthModel(definitions, label, views = [{ type: "fifth", enabled: "auto", options: {} }]) {
+  const state = viewState.buildViewState({ availability: AVAILABILITY, config: { views } }, definitions);
   const byKey = viewState.buildViewContent({ shared: { label }, viewState: state }, definitions);
-  return viewModel({ views: { ...viewModel().views, keys: state.keys, options: state.options, byKey } });
+  return viewModel({ views: { ...viewModel().views, keys: state.keys, options: state.options, height: state.height, byKey } });
 }
 
 test("a fifth view registers with one definition and one renderer, and runs every stage", () => {
@@ -77,7 +76,8 @@ test("a fifth view registers with one definition and one renderer, and runs ever
   root.innerHTML = cardShell.renderCardBody(context, model, renderers);
   const label = root.querySelector(".rtc-rotator-solo .fifth-view");
   assert.equal(label.textContent, "Hello");
-  assert.match(cardShell.cardStructureSignature(model, renderers), /\|fifth:l$/);
+  assert.equal(model.views.height, 140);
+  assert.match(cardShell.cardStructureSignature(model, renderers), /\|viewHeight:140\|fifth:l$/);
 
   cardShell.patchCardBody(context, root, fifthModel(definitions, "Bye"), renderers);
   assert.equal(root.querySelector(".fifth-view"), label, "patched in place");
@@ -105,4 +105,21 @@ test("drift between definitions and renderers is refused at composition", () => 
     () => registry.composeViewRenderers(definitions, [...registry.VIEW_RENDERERS, { ...fifthView, structureSignature: "l" }]),
     /fifth.*structureSignature/
   );
+});
+
+test("the tallest active view sizes the view area; a view that is not shown reserves nothing", () => {
+  const definitions = viewState.defineViews([...viewState.VIEW_DEFINITIONS, fifthDefinition()]);
+  const renderers = registry.composeViewRenderers(definitions, [...registry.VIEW_RENDERERS, fifthView]);
+  const views = [{ type: "scale", enabled: true, options: {} }, { type: "fifth", enabled: true, options: {} }];
+  const state = (hasFifth) => viewState.buildViewState({ availability: { ...AVAILABILITY, hasFifth }, config: { views } }, definitions);
+
+  assert.deepEqual(state(true).keys, ["scale", "fifth"]);
+  assert.equal(state(true).height, 140, "the 70px scale fills the 140px area");
+  assert.deepEqual(state(false).keys, ["scale"]);
+  assert.equal(state(false).height, 70);
+
+  // A changed height is a changed structure: only a full render rewrites the stylesheet.
+  const model = fifthModel(definitions, "Hello");
+  const lower = { ...model, views: { ...model.views, height: 70 } };
+  assert.notEqual(cardShell.cardStructureSignature(lower, renderers), cardShell.cardStructureSignature(model, renderers));
 });

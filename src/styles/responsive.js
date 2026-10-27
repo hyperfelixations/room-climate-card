@@ -27,7 +27,6 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
           .rtc-extremes-view,
           .rtc-range-view { gap: 6px; }
           .rtc-extreme-card {
-            height: 70px;
             padding: 8px 7px 7px;
           }
           .rtc-extreme-label {
@@ -49,17 +48,10 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
           .rtc-main-panel {
             grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
           }
-          .rtc-rotator,
-          .rtc-rotator-solo,
-          .rtc-track,
-          .rtc-scale-view,
-          .rtc-range-scale-view,
-          .rtc-extremes-view,
-          .rtc-range-view {
-            height: 74px;
+          .rtc-root {
+            --rtc-view-height: var(--rtc-view-height-narrow);
           }
           .rtc-extreme-card {
-            height: 74px;
             padding-left: 6px;
             padding-right: 6px;
           }
@@ -101,7 +93,6 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
             .rtc-extremes-view,
             .rtc-range-view { gap: 6px; }
             .rtc-extreme-card {
-              height: 70px;
               padding: 8px 7px 7px;
             }
             .rtc-extreme-label {
@@ -121,17 +112,10 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: 460px) {
             .rtc-main-panel {
               grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
             }
-            .rtc-rotator,
-            .rtc-rotator-solo,
-            .rtc-track,
-            .rtc-scale-view,
-            .rtc-range-scale-view,
-            .rtc-extremes-view,
-            .rtc-range-view {
-              height: 74px;
+            .rtc-root {
+              --rtc-view-height: var(--rtc-view-height-narrow);
             }
             .rtc-extreme-card {
-              height: 74px;
               padding-left: 6px;
               padding-right: 6px;
             }

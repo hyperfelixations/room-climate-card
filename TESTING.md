@@ -358,10 +358,12 @@ The check runs two audits against the installed lockfile:
 The card has no runtime dependencies today, so the first audit guards the moment one is added.
 Build and test tooling does not ship: an advisory against it does not change the bundle and
 does not stop CI or a release. GitHub reports it through Dependabot alerts, and Dependabot opens
-a pull request for each security advisory.
+one pull request per ecosystem for the open security advisories.
 [`security.yml`](.github/workflows/security.yml) runs the check on every push and pull request and
 weekly, and the release workflow runs it before the build. Dependabot proposes npm and action
-updates weekly.
+updates on the 1st and 15th of each month: minor and major releases that are at least 7 days old,
+the minor ones in a single pull request and every major one on its own; patch releases are
+skipped. The schedule, the waiting time and the patch rule do not hold back security updates.
 
 An `overrides` entry only raises a transitive package that is in the lockfile to a caret minimum
 such as `^6.16.0`, for a fix its parent does not yet allow. An exact pin is rejected: it holds a

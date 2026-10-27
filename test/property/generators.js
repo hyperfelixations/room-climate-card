@@ -15,6 +15,7 @@ const {
   PALETTE_KEYS,
   VIEWS,
   VIEW_OPTIONS,
+  PROFILE_FORMATS,
   REMOVED_SPELLINGS,
 } = require("../manifests/product-surface.js");
 const V = require("./vocabulary.js");
@@ -242,6 +243,9 @@ const OPTION_PRESENCE = {
   classification: 0.08,
   range_entity: 0.1,
   trend_entity: 0.08,
+  number_format: 0.08,
+  time_format: 0.08,
+  time_zone: 0.06,
   // A typo of an option; the card refuses it and names the option meant.
   misspelledKey: 0.03,
   // A removed older spelling; the card names its replacement and ignores it.
@@ -671,6 +675,10 @@ function generateConfig(rng, metric) {
   if (has("classification")) config.classification = generateClassification(rng, metric);
   if (has("range_entity")) config.range_entity = rng.pick(["sensor.range", "sensor.missing", "", 42]);
   if (has("trend_entity")) config.trend_entity = rng.pick(["sensor.trend", "sensor.missing", "", 42]);
+  if (has("number_format")) config.number_format = enumValue(rng, PROFILE_FORMATS.number_format);
+  // YAML hands `time_format: 24` over as a number.
+  if (has("time_format")) config.time_format = enumValue(rng, [...PROFILE_FORMATS.time_format, 12, 24]);
+  if (has("time_zone")) config.time_zone = enumValue(rng, PROFILE_FORMATS.time_zone);
   if (has("misspelledKey")) config[rng.pick(V.MISSPELLED_CONFIG_KEYS)] = rng.pick(["vivid", true, 1, []]);
   if (has("removedSpelling")) config[rng.pick(REMOVED_TOP_LEVEL)] = rng.pick([true, false, "auto", "hide", "show", "alway", 1]);
 
@@ -721,7 +729,19 @@ function generateHassShape(rng) {
   // Theme and missing fields are independent; keeping them exclusive would make `theme + no
   // themes API` unreachable.
   if (rng.bool(0.03)) shape.theme = rng.bool(0.5) ? "dark" : "light";
+  if (rng.bool(0.1)) shape.profile = generateProfile(rng);
   return shape;
+}
+
+// The user's Home Assistant profile, each field on its own; "auto" is a card value, so in a
+// profile it is one that Home Assistant would never send.
+function generateProfile(rng) {
+  const profile = {};
+  for (const key of ["number_format", "time_format", "time_zone"]) {
+    if (rng.bool(0.7)) profile[key] = rng.pick(PROFILE_FORMATS[key]);
+  }
+  if (rng.bool(0.6)) profile.server_time_zone = rng.pick(["Europe/Berlin", "America/New_York", "Asia/Kolkata", "UTC", "Not/A_Zone", ""]);
+  return profile;
 }
 
 function generateDescription(seedOrRng) {

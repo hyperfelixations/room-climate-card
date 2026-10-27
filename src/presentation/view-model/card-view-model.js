@@ -4,7 +4,7 @@
 
 import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
-import { buildViewContent, buildViewState } from "./view-state.js";
+import { FALLBACK_VIEW_AREA_HEIGHT, buildViewContent, buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
 import { buildBoundaryLabel, buildCompactBoundaryLabel } from "./view-content/scale-bar.js";
 import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/model/source-topology.js";
@@ -261,7 +261,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     range: null,
     trend: { model: null, text: "" },
     scale: null,
-    views: { keys: [], entries: [], options: {}, collapsed: true, byKey: {} },
+    views: { keys: [], entries: [], options: {}, collapsed: true, height: FALLBACK_VIEW_AREA_HEIGHT, byKey: {} },
     carousel: { hint: null, noActiveViewsHint: "" },
   };
 }
@@ -485,6 +485,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       entries: viewState.entries,
       options: viewState.options,
       collapsed: viewState.collapsed,
+      height: viewState.height,
       byKey,
     },
     carousel: {
