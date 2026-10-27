@@ -293,23 +293,12 @@ test("resolveLanguage() falls back to English for anything unusable", () => {
 
 test("formatNumber() follows each language's own decimal and group separators", () => {
   const { formatNumber } = formatters;
-
   assert.equal(formatNumber(inLanguage("en"), 1234.5, 1), "1,234.5");
   assert.equal(formatNumber(inLanguage("de"), 1234.5, 1), "1.234,5");
   assert.equal(formatNumber(inLanguage("es"), 1234.5, 1), "1234,5");
-
-  assert.equal(
-    formatNumber(inLanguage("hu"), 1234.5, 1),
-    "1234,5",
-    "Hungarian groups only from five digits"
-  );
-  assert.equal(
-    formatNumber(inLanguage("hu"), 12345.5, 1),
-    "12\u00a0345,5"
-  );
-
+  assert.equal(formatNumber(inLanguage("hu"), 1234.5, 1), "1234,5", "Hungarian groups only from five digits");
+  assert.equal(formatNumber(inLanguage("hu"), 12345.5, 1), "12\u00a0345,5");
   assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1\u00a0234,5");
-
 });
 
 test("formatNumber() honours the requested digit count exactly", () => {
@@ -358,31 +347,14 @@ test("formatBoundary() shows up to the given digits and no trailing zeros", () =
 test("formatCompact() writes a large number in the language's short scale", () => {
   const { formatCompact } = formatters;
   const plain = (text) => text.replace(/\s/g, " ");
-
   assert.equal(formatCompact(inLanguage("en"), 3435), "3.4K");
   assert.equal(formatCompact(inLanguage("en"), 1000001), "1M");
-  assert.equal(
-    formatCompact(inLanguage("en"), 2500, "exceptZero"),
-    "+2.5K"
-  );
-  assert.equal(
-    plain(formatCompact(inLanguage("de"), 1000001)),
-    "1 Mio."
-  );
-  assert.equal(
-    plain(formatCompact(inLanguage("fr"), 3435)),
-    "3,4 k"
-  );
-  assert.equal(
-    plain(formatCompact(inLanguage("hu"), 3435)),
-    "3,4 E"
-  );
-  assert.equal(
-    plain(formatCompact(inLanguage("hu"), 1000001)),
-    "1 M"
-  );
-  assert.equal(formatCompact(inLanguage("en"), 0), "0");
-
+  assert.equal(formatCompact(inLanguage("en"), 2500, "exceptZero"), "+2.5K");
+  assert.equal(plain(formatCompact(inLanguage("de"), 1000001)), "1 Mio.");
+  assert.equal(plain(formatCompact(inLanguage("fr"), 3435)), "3,4 k");
+  assert.equal(plain(formatCompact(inLanguage("hu"), 3435)), "3,4 E");
+  assert.equal(plain(formatCompact(inLanguage("hu"), 1000001)), "1 M");
+  assert.equal(formatCompact(inLanguage("en"), -0), "0");
 });
 
 test("formatTimeOfDay() renders the language's own clock in local time and rejects unusable input", () => {
