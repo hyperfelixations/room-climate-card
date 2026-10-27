@@ -308,7 +308,7 @@ test("formatNumber() follows each language's own decimal and group separators", 
     "12\u00a0345,5"
   );
 
-  assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1 234,5");
+  assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1\u00a0234,5");
 
 });
 
