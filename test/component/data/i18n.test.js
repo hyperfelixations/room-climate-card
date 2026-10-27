@@ -100,7 +100,7 @@ test("I18N-02: all supported base languages are individually selectable via conf
 });
 
 test("I18N-02: regional HA locales resolve to the supported base language", () => {
-  for (const [locale, expected] of [["es-MX", "es"], ["ru-RU", "ru"], ["pl-PL", "pl"], ["ko-KR", "ko"], ["ja-JP", "ja"], ["zh-CN", "zh"]]) {
+  for (const [locale, expected] of [["es-MX", "es"], ["ru-RU", "ru"], ["pl-PL", "pl"], ["ko-KR", "ko"], ["ja-JP", "ja"], ["zh-CN", "zh"], ["hu-HU", "hu"]]) {
     const hass = mkHass({ "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE) }, locale);
     const el = env.createCard({ entity: "sensor.avg" }, hass);
     assert.equal(el._language(), expected, `locale=${locale}`);
@@ -116,6 +116,7 @@ test("I18N-02: every new language has native representative card text instead of
     ko: { title: "온도", avg: "집 전체 평균", noData: "데이터 없음" },
     ja: { title: "温度", avg: "住宅平均", noData: "データなし" },
     zh: { title: "温度", avg: "全屋平均", noData: "无数据" },
+    hu: { title: "Hőmérséklet", avg: "Otthoni átlag", noData: "Nincs adat" },
   };
   for (const [lang, text] of Object.entries(expected)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
@@ -136,6 +137,7 @@ test("I18N-02: new language locales drive decimal/group separators and their own
     ko: "1,234.5",
     ja: "1,234.5",
     zh: "1,234.5",
+    hu: "1234,5",
   };
   for (const [lang, expectedNumber] of Object.entries(expectedNumbers)) {
     const el = env.createCard({ entity: "sensor.avg", language: lang }, hassDe);
@@ -154,6 +156,7 @@ test("I18N-02: JS-derived classification is localized, while HA-provided value_l
     ko: "더움",
     ja: "暑い",
     zh: "炎热",
+    hu: "Forró",
   };
   const hass = mkHass({
     "sensor.avg": mkState("sensor.avg", 26, {
@@ -301,6 +304,54 @@ test("I18N-02: Latvian room grammar follows the zero/one/other plural categories
     /1\/21 telpa ir siltas\.$/,
     "total=21 must use the nominative-singular one-category noun form"
   );
+  env.cleanup(el);
+});
+
+test("I18N-02: Hungarian keeps the noun singular after a numeral and builds no suffix onto a variable", () => {
+  const el = env.createCard({ entity: "sensor.avg", language: "hu" }, hassDe);
+  for (const count of [1, 2, 5, 11, 21]) {
+    assert.equal(el._t("hint.roomsUnavailable", { count }), `${count} szoba jelenleg nem érhető el.`, `rooms=${count}`);
+    assert.equal(el._t("hint.several", { count }), `${count} forrás jelenleg nem érhető el.`, `sources=${count}`);
+    assert.equal(
+      el._t("warning.several", { count }),
+      `${count} probléma van ezzel a kártyával. Részletek a böngészőkonzolban.`,
+      `problems=${count}`
+    );
+  }
+  assert.equal(
+    el._t("subtitle.aboveComfort", { diff: "1,0 °C", count: 1, total: 21, adjective: el._t("adjective.warm") }),
+    "Átlagosan 1,0 °C a komfortzóna felett · 1/21 szoba meleg."
+  );
+  assert.equal(
+    el._t("subtitle.belowComfort", { diff: "1,0 °C", count: 2, total: 5, adjective: el._t("adjective.cool") }),
+    "Átlagosan 1,0 °C a komfortzóna alatt · 2/5 szoba hűvös."
+  );
+  env.cleanup(el);
+});
+
+test("I18N-02: Hungarian writes a signed band with a spaced en dash, a plain band stays a dash", () => {
+  const el = env.createCard({ entity: "sensor.avg", language: "hu" }, hassDe);
+  assert.equal(el._t("scale.bandRangeSigned", { min: "-24", max: "-15°C" }), "-24 – -15°C");
+  assert.equal(el._t("scale.bandRangeSigned", { min: "-11", max: "+5°F" }), "-11 – +5°F");
+  env.cleanup(el);
+});
+
+test("I18N-02: a Hungarian card shows its own wording in the headline, subtitle, footer and extremes", () => {
+  const states = {
+    "sensor.avg": mkState("sensor.avg", 26, TEMPERATURE_C),
+    "sensor.r1": mkState("sensor.r1", 25, TEMPERATURE_C),
+    "sensor.r2": mkState("sensor.r2", 27, TEMPERATURE_C),
+  };
+  const el = env.createCard(
+    { entity: "sensor.avg", rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }], language: "hu" },
+    mkHass(states, "de")
+  );
+  const text = el.shadowRoot.textContent;
+  assert.match(text, /Otthoni átlag/, "headline caption");
+  assert.match(text, /Átlagosan 2,0 °C a komfortzóna felett · 2\/2 szoba meleg\./, "subtitle");
+  assert.match(text, /Hőmérséklet/, "title");
+  const extremes = [...el.shadowRoot.querySelectorAll(".rtc-extreme-label")].map((node) => node.textContent.trim());
+  assert.deepEqual(extremes, ["Leghidegebb", "Legmelegebb"], "extremes labels");
   env.cleanup(el);
 });
 

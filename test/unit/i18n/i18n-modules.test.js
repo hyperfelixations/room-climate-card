@@ -46,6 +46,7 @@ test("a refusal is worded in the card's own valid language, else the page's, els
   assert.equal(resolveMessageLanguage("xx", "ja"), "ja", "a language the card does not have leaves it to the page");
   assert.equal(resolveMessageLanguage("de-AT", null), "en", "the option accepts no region, so neither does this");
   assert.equal(resolveMessageLanguage(42, "zh-Hans"), "zh");
+  assert.equal(resolveMessageLanguage(undefined, "hu-HU"), "hu", "a regional page language resolves to its base language");
   assert.equal(resolveMessageLanguage(undefined, "pt-BR"), "en", "a page language without words falls back to English");
   assert.equal(resolveMessageLanguage(undefined, null), "en");
 });
@@ -275,7 +276,7 @@ test("resolveLanguage() reads Home Assistant's settings in priority order", () =
 
 test("resolveLanguage() reduces a regional locale to its base language", () => {
   const { resolveLanguage } = translateModule;
-  for (const [locale, expected] of [["de-AT", "de"], ["es-MX", "es"], ["ZH-Hans", "zh"], ["nb-NO", "nb"]]) {
+  for (const [locale, expected] of [["de-AT", "de"], ["es-MX", "es"], ["ZH-Hans", "zh"], ["nb-NO", "nb"], ["hu-HU", "hu"]]) {
     assert.equal(resolveLanguage(null, { locale: { language: locale } }), expected, locale);
   }
 });
@@ -292,10 +293,23 @@ test("resolveLanguage() falls back to English for anything unusable", () => {
 
 test("formatNumber() follows each language's own decimal and group separators", () => {
   const { formatNumber } = formatters;
+
   assert.equal(formatNumber(inLanguage("en"), 1234.5, 1), "1,234.5");
   assert.equal(formatNumber(inLanguage("de"), 1234.5, 1), "1.234,5");
   assert.equal(formatNumber(inLanguage("es"), 1234.5, 1), "1234,5");
-  assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1 234,5");
+
+  assert.equal(
+    formatNumber(inLanguage("hu"), 1234.5, 1),
+    "1234,5",
+    "Hungarian groups only from five digits"
+  );
+  assert.equal(
+    formatNumber(inLanguage("hu"), 12345.5, 1),
+    "12\u00a0345,5"
+  );
+
+  assert.equal(formatNumber(inLanguage("ru"), 1234.5, 1), "1\u00a0234,5");
+
 });
 
 test("formatNumber() honours the requested digit count exactly", () => {
@@ -344,12 +358,31 @@ test("formatBoundary() shows up to the given digits and no trailing zeros", () =
 test("formatCompact() writes a large number in the language's short scale", () => {
   const { formatCompact } = formatters;
   const plain = (text) => text.replace(/\s/g, " ");
+
   assert.equal(formatCompact(inLanguage("en"), 3435), "3.4K");
   assert.equal(formatCompact(inLanguage("en"), 1000001), "1M");
-  assert.equal(formatCompact(inLanguage("en"), 2500, "exceptZero"), "+2.5K");
-  assert.equal(plain(formatCompact(inLanguage("de"), 1000001)), "1 Mio.");
-  assert.equal(plain(formatCompact(inLanguage("fr"), 3435)), "3,4 k");
-  assert.equal(formatCompact(inLanguage("en"), -0), "0");
+  assert.equal(
+    formatCompact(inLanguage("en"), 2500, "exceptZero"),
+    "+2.5K"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("de"), 1000001)),
+    "1 Mio."
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("fr"), 3435)),
+    "3,4 k"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("hu"), 3435)),
+    "3,4 E"
+  );
+  assert.equal(
+    plain(formatCompact(inLanguage("hu"), 1000001)),
+    "1 M"
+  );
+  assert.equal(formatCompact(inLanguage("en"), 0), "0");
+
 });
 
 test("formatTimeOfDay() renders the language's own clock in local time and rejects unusable input", () => {
@@ -377,6 +410,8 @@ test("getPluralCategory() reports the real CLDR categories for complex languages
   assert.equal(getPluralCategory("lv", 21), "one");
   assert.equal(getPluralCategory("en", 1), "one");
   assert.equal(getPluralCategory("en", 2), "other");
+  assert.equal(getPluralCategory("hu", 1), "one");
+  assert.equal(getPluralCategory("hu", 2), "other");
 });
 
 test("selectPlural() picks the matching form and falls back to `other`", () => {

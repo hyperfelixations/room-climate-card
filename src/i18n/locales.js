@@ -24,4 +24,5 @@ export const NUMBER_LOCALE_BY_LANGUAGE = {
   nb: "nb-NO",
   sv: "sv-SE",
   lv: "lv-LV",
+  hu: "hu-HU",
 };
