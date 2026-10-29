@@ -7,9 +7,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "rcc/release-*"]
   pull_request:
-    branches: [main]
+    branches: [main, "rcc/release-*"]
 
 # Read-only: this workflow tests, it never publishes. Releases and tags are not part of it.
 permissions:

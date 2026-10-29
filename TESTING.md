@@ -330,7 +330,8 @@ by side. It is never a release asset and never committed.
 
 ## Continuous integration
 
-[`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push and pull request —
+[`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push to and pull request
+into `main` or a release line `rcc/release-<major>.x` —
 Node tests and browser tests — deliberately without `needs:` between them, because a failure in
 one says nothing about the other. Both build the bundle themselves, so no job can report green
 against an artifact it did not produce. The browser job installs all three engines, runs the
@@ -359,8 +360,8 @@ The card has no runtime dependencies today, so the first audit guards the moment
 Build and test tooling does not ship: an advisory against it does not change the bundle and
 does not stop CI or a release. GitHub reports it through Dependabot alerts, and Dependabot opens
 one pull request per ecosystem for the open security advisories.
-[`security.yml`](.github/workflows/security.yml) runs the check on every push and pull request and
-weekly, and the release workflow runs it before the build. Dependabot proposes npm and action
+[`security.yml`](.github/workflows/security.yml) runs the check on every push to and pull request
+into `main` or a release line, weekly on `main`, and the release workflow runs it before the build. Dependabot proposes npm and action
 updates on the 1st and 15th of each month: minor and major releases that are at least 7 days old,
 the minor ones in a single pull request and every major one on its own; patch releases are
 skipped. The schedule, the waiting time and the patch rule do not hold back security updates.

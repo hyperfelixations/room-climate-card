@@ -37,9 +37,9 @@ test("check:security audits runtime at any severity and registry signatures, not
   assert.equal(pkg.scripts["check:security"], "npm audit --omit=dev --audit-level=low && npm audit signatures");
 });
 
-test("the security workflow audits every push, pull request and week", () => {
+test("the security workflow audits every push and pull request of main and the release lines, and every week", () => {
   const workflow = read(".github", "workflows", "security.yml");
-  assert.match(workflow, /^on:\n  push:\n    branches: \[main\]\n  pull_request:\n    branches: \[main\]\n  schedule:\n    - cron: "[^"]+"\n  workflow_dispatch:/m);
+  assert.match(workflow, /^on:\n  push:\n    branches: \[main, "rcc\/release-\*"\]\n  pull_request:\n    branches: \[main, "rcc\/release-\*"\]\n  schedule:\n    - cron: "[^"]+"\n  workflow_dispatch:/m);
   assert.match(workflow, /^permissions:\n  contents: read$/m);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /- run: npm ci\n\n      - name: Audit dependencies and registry signatures\n        run: npm run check:security\n/);
