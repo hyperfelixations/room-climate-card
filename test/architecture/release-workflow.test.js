@@ -132,9 +132,9 @@ function stepNames(job) {
   return [...job.matchAll(/^ {6}- name: (.+)$/gm)].map((match) => match[1]);
 }
 
-test("any commit in the history of main can be approved, and no other", () => {
+test("any commit in the history of the selected branch can be approved, and no other", () => {
   const script = stepScript(jobBlock("build-and-test"), VALIDATION_STEP);
-  assert.doesNotMatch(script, /\$expectedSha -ne \$actualSha/, "the tip of main is no longer the only approvable commit");
+  assert.doesNotMatch(script, /\$expectedSha -ne \$actualSha/, "the tip of the branch is not the only approvable commit");
   assert.ok(script.includes('git cat-file -e "$expectedSha^{commit}"'));
   assert.ok(script.includes("git merge-base --is-ancestor $expectedSha $actualSha"));
 });
@@ -203,67 +203,134 @@ function scratchDir(prefix) {
   return dir;
 }
 
-function git(cwd, ...args) {
-  const result = spawnSync("git", ["-c", `core.hooksPath=${scratchDir("no-hooks-")}`, "-c", "commit.gpgsign=false", ...args], {
+// Fixture commits are a minute apart in creation order; `author` and `committer` override one
+// commit's dates (Unix seconds). GitHub orders releases by these dates.
+let clock = 1_700_000_000;
+
+function gitWith(cwd, env, ...args) {
+  const result = spawnSync("git", ["-c", `core.hooksPath=${scratchDir("no-hooks-")}`, "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" },
+    env: { ...process.env, GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid", ...env },
   });
   assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
   return result.stdout.trim();
 }
 
-// main: one -> two (v2.38.0, v2.39.0) -> three -> four; side branches off two.
-function createHistory(extraTags = {}) {
+function git(cwd, ...args) {
+  return gitWith(cwd, {}, ...args);
+}
+
+function fixtureRepository() {
   const dir = scratchDir("release-history-");
   git(dir, "init", "-q", "-b", "main");
-  const commit = (message) => {
+  const commit = (message, { author, committer } = {}) => {
+    clock += 60;
     fs.writeFileSync(path.join(dir, "file.txt"), message);
     git(dir, "add", "file.txt");
-    git(dir, "commit", "-q", "-m", message);
+    gitWith(dir, { GIT_AUTHOR_DATE: `@${author ?? clock} +0000`, GIT_COMMITTER_DATE: `@${committer ?? clock} +0000` }, "commit", "-q", "-m", message);
     return git(dir, "rev-parse", "HEAD");
   };
+  // An annotated tag is dated long after every commit; the workflow must read its commit's dates.
+  const tag = (name, target, { annotated = false } = {}) => {
+    if (annotated) gitWith(dir, { GIT_COMMITTER_DATE: `@${clock + 1_000_000} +0000` }, "tag", "-a", name, "-m", name, target);
+    else git(dir, "tag", name, target);
+  };
+  return { dir, commit, tag };
+}
+
+// main: one -> two (v2.38.0, v2.39.0) -> three -> four; side branches off two.
+function createHistory(extraTags = {}) {
+  const { dir, commit, tag } = fixtureRepository();
   const one = commit("one");
-  git(dir, "tag", "v2.38.0");
+  tag("v2.38.0", one);
   const two = commit("two");
-  git(dir, "tag", "v2.39.0");
-  git(dir, "tag", "v2.40.0-dev.1");
+  tag("v2.39.0", two);
+  tag("v2.40.0-dev.1", two);
   git(dir, "checkout", "-q", "-b", "side");
   const side = commit("side");
   git(dir, "checkout", "-q", "main");
   const three = commit("three");
   const four = commit("four");
   const commits = { one, two, three, four, side };
-  for (const [tag, target] of Object.entries(extraTags)) git(dir, "tag", tag, commits[target]);
+  for (const [name, target] of Object.entries(extraTags)) tag(name, commits[target]);
+  return { dir, ...commits };
+}
+
+// main: one (v2.38.0) -> two (v2.39.0) -> bump -> m3 -> m4; the release line rcc/release-2.x
+// branches off bump: l1 -> l2. The line commits are dated before m3 and m4 unless `mainFirst`;
+// origin/main is m4 and origin/rcc/release-2.x is l2 unless `lineBranch` is false.
+function createLineHistory({ mainFirst = false, l2Dates = {}, lineBranch = true, annotated = false, tags = {} } = {}) {
+  const { dir, commit, tag } = fixtureRepository();
+  const one = commit("one");
+  tag("v2.38.0", one, { annotated });
+  const two = commit("two");
+  tag("v2.39.0", two, { annotated });
+  const commits = { one, two, bump: commit("bump") };
+  const mainCommits = () => {
+    commits.m3 = commit("m3");
+    commits.m4 = commit("m4");
+  };
+  const lineCommits = () => {
+    git(dir, "checkout", "-q", "-b", "rcc/release-2.x", commits.bump);
+    commits.l1 = commit("l1");
+    commits.l2 = commit("l2", l2Dates);
+    git(dir, "checkout", "-q", "main");
+  };
+  if (mainFirst) {
+    mainCommits();
+    lineCommits();
+  } else {
+    lineCommits();
+    mainCommits();
+  }
+  git(dir, "update-ref", "refs/remotes/origin/main", commits.m4);
+  if (lineBranch) git(dir, "update-ref", "refs/remotes/origin/rcc/release-2.x", commits.l2);
+  for (const [name, target] of Object.entries(tags)) tag(name, commits[target], { annotated });
   return { dir, ...commits };
 }
 
 const VALIDATION_SCRIPT = stepScript(jobBlock("build-and-test"), VALIDATION_STEP);
 
+// Runs a step as GitHub's `shell: pwsh` does: dot-sourced, with $ErrorActionPreference = 'stop'
+// before and the exit code of the last native command passed on after it. The catch prints the
+// bare exception message; PowerShell's own error view wraps and colours it by version and width.
 function runPowerShell(script, cwd, env) {
   const work = scratchDir("release-run-");
   const file = path.join(work, "step.ps1");
   const output = path.join(work, "github-output.txt");
-  fs.writeFileSync(file, script);
-  const result = spawnSync(POWERSHELL, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], {
+  fs.writeFileSync(file, `$ErrorActionPreference = 'stop'\n${script}\nif ((Test-Path -LiteralPath variable:\\LASTEXITCODE)) { exit $LASTEXITCODE }\n`);
+  const command = "try { . $env:RELEASE_STEP_FILE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }";
+  const result = spawnSync(POWERSHELL, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, ...env, GITHUB_OUTPUT: output },
+    env: { ...process.env, ...env, GITHUB_OUTPUT: output, RELEASE_STEP_FILE: file },
   });
   const outputs = fs.existsSync(output) ? fs.readFileSync(output, "utf8").trim().split(/\r?\n/).filter(Boolean) : [];
   return { status: result.status, failure: `${result.stderr}${result.stdout}`, outputs };
 }
 
-function validate(history, { expected, version, kind = "stable", actor = "owner", ref = "refs/heads/main" }) {
+function validate(history, { expected, version, kind = "stable", actor = "owner", triggeringActor = actor, ref = "refs/heads/main", actual = history.four }) {
   return runPowerShell(VALIDATION_SCRIPT, history.dir, {
-    ACTUAL_SHA: history.four,
+    ACTOR: actor,
+    ACTUAL_SHA: actual,
     EXPECTED_SHA: expected,
     RELEASE_KIND: kind,
     RELEASE_VERSION: version,
     REPOSITORY_OWNER: "owner",
     SELECTED_REF: ref,
-    TRIGGERING_ACTOR: actor,
+    TRIGGERING_ACTOR: triggeringActor,
   });
+}
+
+const LINE_REF = "refs/heads/rcc/release-2.x";
+
+function fromLine(history, options) {
+  return validate(history, { ref: LINE_REF, actual: history.l2, expected: history.l2, ...options });
+}
+
+function fromMain(history, options) {
+  return validate(history, { actual: history.m4, expected: history.m4, ...options });
 }
 
 function assertAccepted(result) {
@@ -280,13 +347,17 @@ test("the tip of main is approved and its normalized SHA is published", { skip: 
   const history = createHistory();
   const result = validate(history, { expected: `  ${history.four.toUpperCase()}  `, version: "2.41.0" });
   assertAccepted(result);
-  assert.deepEqual(result.outputs, ["tag=v2.41.0", "title=Room Climate Card 2.41.0", `sha=${history.four}`]);
+  assert.deepEqual(result.outputs, ["tag=v2.41.0", "title=Room Climate Card 2.41.0", `sha=${history.four}`, "line=", "major=2"]);
 });
 
-test("an older commit of main is approved, including one that carries an earlier release", { skip: NO_POWERSHELL }, () => {
+test("an older commit of main is approved", { skip: NO_POWERSHELL }, () => {
   const history = createHistory();
   assertAccepted(validate(history, { expected: history.three, version: "2.41.0" }));
-  assertAccepted(validate(history, { expected: history.two, version: "2.41.0" }));
+});
+
+test("a stable release on the commit of an earlier stable release is refused", { skip: NO_POWERSHELL }, () => {
+  const history = createHistory();
+  assertRefused(validate(history, { expected: history.two, version: "2.41.0" }), /not newer than release v2\.39\.0 by author and committer date/);
 });
 
 test("a commit outside the history of main, a missing commit and a short SHA are refused", { skip: NO_POWERSHELL }, () => {
@@ -296,10 +367,20 @@ test("a commit outside the history of main, a missing commit and a short SHA are
   assertRefused(validate(history, { expected: history.four.slice(0, 7), version: "2.41.0" }), /40-character/);
 });
 
-test("only the repository owner on main starts a candidate", { skip: NO_POWERSHELL }, () => {
+test("only the repository owner starts a candidate, also on a re-run", { skip: NO_POWERSHELL }, () => {
   const history = createHistory();
   assertRefused(validate(history, { expected: history.four, version: "2.41.0", actor: "someone-else" }), /Only the repository owner/);
-  assertRefused(validate(history, { expected: history.four, version: "2.41.0", ref: "refs/heads/side" }), /branch 'main'/);
+  assertRefused(validate(history, { expected: history.four, version: "2.41.0", triggeringActor: "someone-else" }), /Only the repository owner/);
+  const line = createLineHistory();
+  assertRefused(fromLine(line, { version: "2.40.0", triggeringActor: "someone-else" }), /Only the repository owner/);
+});
+
+test("only main and a release line rcc/release-<major>.x start a candidate", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  for (const ref of ["refs/heads/side", "refs/heads/rcc/release-2", "refs/heads/rcc/release-02.x", "refs/heads/rcc/release-2.x/x",
+    "refs/heads/RCC/release-2.x", "refs/heads/rcc/Release-2.x", "refs/heads/release-2.x", "refs/heads/Main", "refs/tags/v2.39.0"]) {
+    assertRefused(validate(history, { ref, actual: history.l2, expected: history.l2, version: "2.40.0" }), /branch 'main' or a release line rcc\/release-<major>\.x/);
+  }
 });
 
 test("a tag is never reused", { skip: NO_POWERSHELL }, () => {
@@ -315,14 +396,100 @@ test("a stable release must be higher than every earlier stable release", { skip
   assertAccepted(validate(history, { expected: history.four, version: "2.39.1" }));
 });
 
-test("a stable release must contain every earlier stable release", { skip: NO_POWERSHELL }, () => {
+test("a version with a number beyond nine digits is refused by its pattern", { skip: NO_POWERSHELL }, () => {
+  const history = createHistory();
+  assertRefused(validate(history, { expected: history.four, version: "2147483648.0.0" }), /A stable version must look like/);
+  assertRefused(validate(history, { expected: history.four, version: "2.41.0-dev.1234567890", kind: "dev" }), /A dev pre-release version must look like/);
+});
+
+test("main refuses a major whose release is not in its history", { skip: NO_POWERSHELL }, () => {
   const history = createHistory({ "v2.39.5": "side" });
-  assertRefused(validate(history, { expected: history.four, version: "2.40.0" }), /v2\.39\.5 is not an ancestor/);
+  assertRefused(validate(history, { expected: history.four, version: "2.40.0" }), /v2\.39\.5 is not in the history of main, so major 2 is released from its release line/);
+  assertRefused(validate(history, { expected: history.three, version: "2.38.1-dev.1", kind: "dev" }), /v2\.39\.5 is not in the history of main/);
 });
 
 test("a dev pre-release is not held to the stable ordering", { skip: NO_POWERSHELL }, () => {
-  const history = createHistory({ "v2.39.5": "side" });
+  const history = createHistory();
   assertAccepted(validate(history, { expected: history.three, version: "2.38.1-dev.1", kind: "dev" }));
+  assertAccepted(validate(history, { expected: history.two, version: "2.38.1-dev.2", kind: "dev" }));
+});
+
+test("a candidate from a release line approves any commit of that line", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  const result = fromLine(history, { version: "2.40.0" });
+  assertAccepted(result);
+  assert.deepEqual(result.outputs, ["tag=v2.40.0", "title=Room Climate Card 2.40.0", `sha=${history.l2}`, "line=2", "major=2"]);
+  assertAccepted(fromLine(history, { expected: history.l1, version: "2.40.0" }));
+  assertAccepted(fromLine(history, { expected: history.bump, version: "2.40.0" }));
+  assertAccepted(fromLine(history, { version: "2.40.0-dev.1", kind: "dev" }));
+});
+
+test("a release line refuses a commit of main that is not on the line", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  assertRefused(fromLine(history, { expected: history.m3, version: "2.40.0" }), /not part of the rcc\/release-2\.x branch history/);
+});
+
+test("a release line releases only its own major", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  assertRefused(fromLine(history, { version: "3.0.0" }), /releases only 2\.x\.y versions; 3\.0\.0 is not one/);
+  assertRefused(fromLine(history, { version: "1.9.0" }), /releases only 2\.x\.y versions/);
+  assertRefused(fromLine(history, { version: "3.0.0-dev.1", kind: "dev" }), /releases only 2\.x\.y versions/);
+});
+
+test("main refuses the major of a release line, also once the branch is deleted", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  assertRefused(fromMain(history, { version: "2.40.0" }), /belongs to the release line rcc\/release-2\.x/);
+  assertRefused(fromMain(history, { version: "2.40.0-dev.1", kind: "dev" }), /belongs to the release line rcc\/release-2\.x/);
+  assertAccepted(fromMain(history, { version: "3.0.0-dev.1", kind: "dev" }));
+
+  const released = createLineHistory({ lineBranch: false, tags: { "v2.40.0": "l2" } });
+  assertRefused(fromMain(released, { version: "2.41.0" }), /v2\.40\.0 is not in the history of main/);
+  assertRefused(fromMain(released, { version: "2.41.0-dev.1", kind: "dev" }), /v2\.40\.0 is not in the history of main/);
+});
+
+test("the first stable release of a major comes from main, not from a release line", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory();
+  assertRefused(
+    validate(history, { ref: "refs/heads/rcc/release-3.x", actual: history.l2, expected: history.l2, version: "3.0.0" }),
+    /Release line 3 has no stable release yet/
+  );
+});
+
+test("a release line ends with the first stable release of a higher major", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory({ tags: { "v3.0.0": "m4" } });
+  assertRefused(fromLine(history, { version: "2.40.0" }), /Release line 2 ended with v3\.0\.0/);
+  assertRefused(fromLine(history, { version: "2.40.0-dev.1", kind: "dev" }), /Release line 2 ended with v3\.0\.0/);
+});
+
+test("a pre-release of a higher major ends the dev releases of a line, not its stable releases", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory({ tags: { "v3.0.0-dev.1": "m4" } });
+  assertRefused(fromLine(history, { version: "2.40.0-dev.1", kind: "dev" }), /Dev releases of line 2 ended with the pre-release v3\.0\.0-dev\.1/);
+  assertAccepted(fromLine(history, { version: "2.40.0" }));
+});
+
+test("a stable release of a line contains every stable release of its major", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory({ tags: { "v2.39.5": "m3" } });
+  // A whole line: the message reaches the log unwrapped and uncoloured in every PowerShell.
+  assertRefused(fromLine(history, { version: "2.40.0" }), /^Release v2\.39\.5 is not an ancestor of [0-9a-f]{40}; a stable release must contain every earlier stable release of its major version\.$/m);
+});
+
+test("the first stable release of a new major follows a release of the line", { skip: NO_POWERSHELL }, () => {
+  const history = createLineHistory({ tags: { "v2.40.0": "l2" } });
+  assertAccepted(fromMain(history, { version: "3.0.0" }));
+});
+
+test("a stable release must be newer than every stable release by author and by committer date", { skip: NO_POWERSHELL }, () => {
+  const newer = /not newer than release v2\.40\.0 by author and committer date/;
+  assertRefused(fromMain(createLineHistory({ mainFirst: true, tags: { "v2.40.0": "l2" } }), { version: "3.0.0" }), newer);
+  const late = clock + 100_000;
+  assertRefused(fromMain(createLineHistory({ l2Dates: { author: late }, tags: { "v2.40.0": "l2" } }), { version: "3.0.0" }), newer);
+  assertRefused(fromMain(createLineHistory({ l2Dates: { committer: late + 100_000 }, tags: { "v2.40.0": "l2" } }), { version: "3.0.0" }), newer);
+});
+
+test("annotated release tags are read through to their commit", { skip: NO_POWERSHELL }, () => {
+  assertAccepted(fromLine(createLineHistory({ annotated: true }), { version: "2.40.0" }));
+  const ended = createLineHistory({ annotated: true, tags: { "v3.0.0": "m4" } });
+  assertRefused(fromLine(ended, { version: "2.40.0" }), /Release line 2 ended with v3\.0\.0/);
 });
 
 test("the approved commit is checked out detached and verified", { skip: NO_POWERSHELL }, () => {
@@ -334,4 +501,87 @@ test("the approved commit is checked out detached and verified", { skip: NO_POWE
   const missing = runPowerShell(script, history.dir, { APPROVED_SHA: "0".repeat(40) });
   assert.notEqual(missing.status, 0);
   assert.match(missing.failure, /Could not check out the approved commit/);
+});
+
+// ------------------------------------------------------------ drafts and release lines --
+
+const CROSSING_STEP = "Refuse a release that would cross a release line";
+
+// rows: [tag_name, draft, prerelease] as `gh api --jq '... | @tsv'` writes them.
+function checkReleaseList(rows, { line = "", major, kind = "stable", tag = "v0.0.0" }) {
+  const work = scratchDir("release-list-");
+  const list = path.join(work, "releases.tsv");
+  fs.writeFileSync(list, rows.map((row) => `${row.join("\t")}\n`).join(""));
+  return runPowerShell(stepScript(jobBlock("create-draft"), CROSSING_STEP), work, {
+    RELEASE_KIND: kind,
+    RELEASE_LINE: line,
+    RELEASE_LIST: list,
+    RELEASE_MAJOR: String(major),
+    RELEASE_TAG: tag,
+  });
+}
+
+test("the draft job lists drafts and checks them before it creates the draft", () => {
+  const job = jobBlock("create-draft");
+  const names = stepNames(job);
+  const order = ["List every release including drafts", CROSSING_STEP, "Create the unpublished draft against the approved commit"];
+  const positions = order.map((name) => names.indexOf(name));
+  assert.ok(positions.every((position) => position !== -1), `steps missing: ${order.filter((name, i) => positions[i] === -1).join(", ")}`);
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions);
+  assert.match(
+    stepScript(job, "List every release including drafts"),
+    /gh api --paginate "repos\/\$GITHUB_REPOSITORY\/releases\?per_page=100" \\\n\s+--jq '\.\[\] \| \[\.tag_name, \.draft, \.prerelease\] \| @tsv' > "\$RELEASE_LIST"/
+  );
+  // The runner context exists in step env, not in job env.
+  for (const step of ["List every release including drafts", CROSSING_STEP]) {
+    assert.ok(job.includes(`- name: ${step}\n        shell: ${step === CROSSING_STEP ? "pwsh" : "bash"}\n        env:\n          RELEASE_LIST: \${{ runner.temp }}/releases.tsv\n        run: |\n`), `${step} reads the list path from its own env`);
+  }
+  assert.doesNotMatch(WORKFLOW, /^ {6}\S.*\$\{\{ runner\./m, "no job-level env uses the runner context");
+  assert.match(job, /\n {4}permissions:\n {6}contents: write\n/);
+  assert.match(job, /RELEASE_LINE: \$\{\{ needs\.build-and-test\.outputs\.release_line \}\}/);
+  assert.match(job, /RELEASE_MAJOR: \$\{\{ needs\.build-and-test\.outputs\.release_major \}\}/);
+});
+
+test("a draft or release of a higher major ends a release line before its draft is created", { skip: NO_POWERSHELL }, () => {
+  assertRefused(checkReleaseList([["v3.0.0", "true", "false"]], { line: "2", major: 2 }), /The draft v3\.0\.0 of a higher major ends release line 2/);
+  assertRefused(checkReleaseList([["v3.0.0", "false", "false"]], { line: "2", major: 2 }), /The release v3\.0\.0 of a higher major ends release line 2/);
+  assertRefused(checkReleaseList([["v3.0.0-dev.1", "true", "true"]], { line: "2", major: 2, kind: "dev" }), /The draft v3\.0\.0-dev\.1 of a higher major/);
+  assertAccepted(checkReleaseList([["v3.0.0-dev.1", "false", "true"], ["v2.39.0", "false", "false"]], { line: "2", major: 2 }));
+  assertAccepted(checkReleaseList([], { line: "2", major: 2 }));
+});
+
+test("main refuses a new major while a draft of an older major is unpublished", { skip: NO_POWERSHELL }, () => {
+  assertRefused(checkReleaseList([["v2.40.1", "true", "false"]], { major: 3, tag: "v3.0.0" }), /The draft v2\.40\.1 of an older major would be ordered after v3\.0\.0/);
+  assertAccepted(checkReleaseList([["v2.40.0", "false", "false"], ["v2.39.0", "false", "false"]], { major: 3, tag: "v3.0.0" }));
+  assertAccepted(checkReleaseList([["v2.40.0-dev.2", "true", "true"]], { major: 2, tag: "v2.40.0" }));
+});
+
+// ------------------------------------------------------------------ static contract --
+
+test("the build job checks out the selected branch with every tag and remote branch", () => {
+  const build = jobBlock("build-and-test");
+  const checkout = build.match(/- name: Check out the selected branch\n {8}uses: actions\/checkout@[0-9a-f]{40} # [\w.-]+\n {8}with:\n((?: {10}.*\n)+)/);
+  assert.ok(checkout, "the first step checks out the selected branch");
+  assert.match(checkout[1], /^ {10}fetch-depth: 0$/m);
+  assert.doesNotMatch(checkout[1], /^ {10}ref:/m, "the selected branch, not a fixed ref, is checked out");
+});
+
+test("candidates of main and of every release line share one concurrency group", () => {
+  assert.match(WORKFLOW, /\nconcurrency:\n {2}group: release-candidate\n {2}cancel-in-progress: false\n/);
+});
+
+test("the draft is created without gh's no-new-commits check", () => {
+  assert.doesNotMatch(WORKFLOW, /^ +--fail-on-no-commits$/m);
+  assert.match(jobBlock("create-draft"), /\n {12}--notes-file "\$notes_file"\n {10}\)\n/, "the argument list ends with the notes file");
+});
+
+test("CI and Security run for main and every release line", () => {
+  for (const file of ["ci.yml", "security.yml"]) {
+    const text = readWorkflow(fs.readFileSync(path.join(__dirname, "..", "..", ".github", "workflows", file), "utf8"));
+    const on = text.match(/\non:\n((?: {2}.*\n)+)/);
+    assert.ok(on, `${file} declares its triggers`);
+    for (const event of ["push", "pull_request"]) {
+      assert.match(on[1], new RegExp(`^ {2}${event}:\\n {4}branches: \\[main, "rcc/release-\\*"\\]$`, "m"), `${file} ${event}`);
+    }
+  }
 });
