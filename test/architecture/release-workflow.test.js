@@ -292,15 +292,19 @@ function createLineHistory({ mainFirst = false, l2Dates = {}, lineBranch = true,
 
 const VALIDATION_SCRIPT = stepScript(jobBlock("build-and-test"), VALIDATION_STEP);
 
+// Runs a step as GitHub's `shell: pwsh` does: dot-sourced, with $ErrorActionPreference = 'stop'
+// before and the exit code of the last native command passed on after it. The catch prints the
+// bare exception message; PowerShell's own error view wraps and colours it by version and width.
 function runPowerShell(script, cwd, env) {
   const work = scratchDir("release-run-");
   const file = path.join(work, "step.ps1");
   const output = path.join(work, "github-output.txt");
-  fs.writeFileSync(file, script);
-  const result = spawnSync(POWERSHELL, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], {
+  fs.writeFileSync(file, `$ErrorActionPreference = 'stop'\n${script}\nif ((Test-Path -LiteralPath variable:\\LASTEXITCODE)) { exit $LASTEXITCODE }\n`);
+  const command = "try { . $env:RELEASE_STEP_FILE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }";
+  const result = spawnSync(POWERSHELL, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, ...env, GITHUB_OUTPUT: output },
+    env: { ...process.env, ...env, GITHUB_OUTPUT: output, RELEASE_STEP_FILE: file },
   });
   const outputs = fs.existsSync(output) ? fs.readFileSync(output, "utf8").trim().split(/\r?\n/).filter(Boolean) : [];
   return { status: result.status, failure: `${result.stderr}${result.stdout}`, outputs };
@@ -465,7 +469,8 @@ test("a pre-release of a higher major ends the dev releases of a line, not its s
 
 test("a stable release of a line contains every stable release of its major", { skip: NO_POWERSHELL }, () => {
   const history = createLineHistory({ tags: { "v2.39.5": "m3" } });
-  assertRefused(fromLine(history, { version: "2.40.0" }), /v2\.39\.5 is not an ancestor of [0-9a-f]{40}; a stable release must contain every\s+earlier stable release of its major version/);
+  // A whole line: the message reaches the log unwrapped and uncoloured in every PowerShell.
+  assertRefused(fromLine(history, { version: "2.40.0" }), /^Release v2\.39\.5 is not an ancestor of [0-9a-f]{40}; a stable release must contain every earlier stable release of its major version\.$/m);
 });
 
 test("the first stable release of a new major follows a release of the line", { skip: NO_POWERSHELL }, () => {
