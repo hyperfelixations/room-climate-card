@@ -1,10 +1,9 @@
 # Room Climate Card
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
 [![Downloads](https://img.shields.io/github/downloads/hyperfelixations/room-climate-card/total?label=Downloads)](https://github.com/hyperfelixations/room-climate-card/releases/latest)
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
 
 A custom dashboard card for [Home Assistant](https://www.home-assistant.io/)
 that shows the climate of one room or of your whole home: temperature,
@@ -56,15 +55,13 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ### HACS
 
-[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
+[![Open your Home Assistant instance and show Room Climate Card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
 
-Add Room Climate Card as a custom repository using the button above or
-manually:
+Use the button above or search in HACS:
 
-1. Open HACS → the three-dot menu → **Custom repositories**.
-2. Add `https://github.com/hyperfelixations/room-climate-card`, category
-   **Dashboard**.
-3. Install "Room Climate Card" and reload your browser.
+1. Open HACS and search for **Room Climate Card**.
+2. Open it and select **Download**.
+3. Reload your browser.
 
 ### Manual
 
