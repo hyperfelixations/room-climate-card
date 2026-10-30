@@ -21,8 +21,9 @@ import { zh } from "./languages/zh.js";
 import { nb } from "./languages/nb.js";
 import { sv } from "./languages/sv.js";
 import { lv } from "./languages/lv.js";
+import { hu } from "./languages/hu.js";
 
-export const TRANSLATIONS = { en, de, nl, fr, it, es, ru, pl, uk, ko, ja, zh, nb, sv, lv };
+export const TRANSLATIONS = { en, de, nl, fr, it, es, ru, pl, uk, ko, ja, zh, nb, sv, lv, hu };
 
 // Load-time only: the check has to run where the assembled table first exists.
 verifyTranslationKeyParity(TRANSLATIONS, DEFAULT_LANGUAGE);

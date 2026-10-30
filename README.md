@@ -29,7 +29,7 @@ below. The card follows your dashboard's light or dark theme.
   `outdoor`, `fridge`, and `freezer` for temperature, plus custom profiles in YAML
 - Built-in color palettes, ramps made from one to three colors, and custom
   palettes in YAML
-- Translated into 15 languages, following your Home Assistant language setting
+- Translated into 16 languages, following your Home Assistant language setting
 - Flexible layouts through the `show:` block, from the full card to compact
   combinations of headers, values, views, and room chips
 - Plenty of optional YAML for views, bands, markers, footers, chips, the
@@ -194,7 +194,7 @@ scale footer when at least two rooms have values.
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
-| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
+| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`, `hu`. `auto` follows your Home Assistant language. |
 
 #### What the card shows
 

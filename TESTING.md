@@ -48,7 +48,7 @@ respectively — so that a directory listing is a map rather than an inventory.
 Shared material lives in three directories and is never a test itself:
 
 - `test/manifests/product-surface.js` — the **one** hand-written statement of what the card
-  supports: fifteen languages, four metrics, four views, the palette keys. Generic matrices
+  supports: sixteen languages, four metrics, four views, the palette keys. Generic matrices
   import it; a curated subset (five typographically extreme languages, say) stays local and
   says in a comment that it is curated.
 - `test/fixtures/scenario.js` — the scenario builder. One way to describe a card situation, for

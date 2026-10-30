@@ -8,9 +8,9 @@
 // Generic matrices import from here; a curated subset (narrow-width-overflow.spec.js picks
 // five typographically extreme languages) stays local and says so.
 
-// The fifteen languages the card ships translations for. English is the reference every
+// The sixteen languages the card ships translations for. English is the reference every
 // other language is key-checked against.
-const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv"];
+const LANGUAGES = ["en", "de", "nl", "fr", "it", "es", "ru", "pl", "uk", "ko", "ja", "zh", "nb", "sv", "lv", "hu"];
 const DEFAULT_LANGUAGE = "en";
 
 // The four things the card can measure, with the units each one accepts. `canonicalUnit`
