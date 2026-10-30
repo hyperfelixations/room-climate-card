@@ -399,6 +399,10 @@ test("hass is usually complete, and every gap in it is reachable", () => {
     (description) => description.theme && (description.hassGaps || []).length > 0
   ).length;
   assert.ok(combined > 0, "theme and hass gaps are mutually exclusive, so their interaction is never tested");
+  const profiled = population.filter((description) => description.profile).length / SAMPLE;
+  assert.ok(profiled > 0.05, `a Home Assistant profile with formats is never generated: ${profiled}`);
+  const profileKeys = new Set(population.flatMap((description) => Object.keys(description.profile || {})));
+  for (const key of ["number_format", "time_format", "time_zone", "server_time_zone"]) assert.ok(profileKeys.has(key), `profile ${key} is never generated`);
 });
 
 test("sometimes one sensor is both the average and a room", () => {

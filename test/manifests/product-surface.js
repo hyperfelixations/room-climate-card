@@ -41,7 +41,8 @@ const CLASSIFICATION_ZONES = ["optimal", "comfort", "outside", "invalid"];
 // architecture suite blocks a second complete copy.
 const TOP_LEVEL_CONFIG_KEYS = [
   "entity", "rooms", "range_entity", "trend_entity", "classification", "palette",
-  "title", "subtitle", "entity_label", "icon", "accent_line", "decimals", "language", "room_sort",
+  "title", "subtitle", "entity_label", "icon", "accent_line", "decimals", "language",
+  "number_format", "time_format", "time_zone", "room_sort",
   "room_label", "show", "room_columns", "room_rows",
   "auto_slide", "swipe", "rotation_seconds", "slide_seconds",
   "tap_action", "hold_action", "views", "start_view",
@@ -79,6 +80,12 @@ const VIEW_OPTIONS = {
   scale: { show_comfort_band: "bool", show_optimal_band: "bool", show_footer: "bool", footer: "bool", markers: ["average", "extremes", "all"] },
   extremes: { show_value: "bool" },
 };
+// The values number_format, time_format and time_zone accept: auto, then Home Assistant's profile values.
+const PROFILE_FORMATS = {
+  number_format: ["auto", "language", "system", "comma_decimal", "decimal_comma", "quote_decimal", "space_comma", "none"],
+  time_format: ["auto", "language", "system", "12", "24"],
+  time_zone: ["auto", "local", "server"],
+};
 const ACTION_TYPES = ["more-info", "toggle", "perform-action", "navigate", "url", "assist", "none"];
 const CUSTOM_CLASSIFICATION_KEYS = ["source", "unit", "comparison", "bands", "scale", "tiers", "valid_range", "icons"];
 
@@ -97,6 +104,7 @@ module.exports = {
   ROOM_KEYS,
   VIEW_ENTRY_KEYS,
   VIEW_OPTIONS,
+  PROFILE_FORMATS,
   ACTION_TYPES,
   CUSTOM_CLASSIFICATION_KEYS,
 };

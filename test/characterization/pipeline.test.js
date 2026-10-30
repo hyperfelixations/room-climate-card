@@ -28,6 +28,10 @@ let resolveLanguage;
 let formatNumber;
 let formatTimeOfDay;
 let metricMetaFor;
+let resolveFormatProfile;
+let NUMBER_FORMATS;
+let TIME_FORMATS;
+let TIME_ZONES;
 let CLASSIFICATION_ZONES;
 let metricKindOfUnit;
 let METRIC_DEFINITIONS;
@@ -51,6 +55,7 @@ test.before(async () => {
   ({ isSupportedLanguage, resolveLanguage, translate } = await import("../../src/i18n/translate.js"));
   ({ formatNumber, formatTimeOfDay } = await import("../../src/i18n/formatters.js"));
   ({ metricMetaFor } = await import("../../src/presentation/view-model/metric-meta.js"));
+  ({ resolveFormatProfile, NUMBER_FORMATS, TIME_FORMATS, TIME_ZONES } = await import("../../src/i18n/format-profile.js"));
   ({ CLASSIFICATION_ZONES } = await import("../../src/domain/classification/zones.js"));
   ({ metricKindOfUnit, resolveUnitProfileKey } = await import("../../src/domain/metrics/resolution.js"));
   ({ METRIC_DEFINITIONS } = await import("../../src/domain/metrics/definitions.js"));
@@ -66,6 +71,7 @@ function configCollaborators() {
   return {
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
+    profileFormats: { numberFormats: NUMBER_FORMATS, timeFormats: TIME_FORMATS, timeZones: TIME_ZONES },
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
     metricKindForUnit: metricKindOfUnit,
@@ -88,8 +94,12 @@ function configCollaborators() {
 function buildTexts(config, hass, unit, metricKind) {
   const language = resolveLanguage(config.language, hass);
   const digitsFor = (digits) => digits ?? config.decimals ?? metricMetaFor(metricKind).decimals;
-  const fmt = (value, digits) => formatNumber(language, value, digitsFor(digits));
-  const fmtSigned = (value, digits) => formatNumber(language, value, digitsFor(digits), "exceptZero");
+  const profile = resolveFormatProfile(
+    { language, configLanguage: config.language, numberFormat: config.number_format, timeFormat: config.time_format, timeZone: config.time_zone },
+    hass
+  );
+  const fmt = (value, digits) => formatNumber(profile, value, digitsFor(digits));
+  const fmtSigned = (value, digits) => formatNumber(profile, value, digitsFor(digits), "exceptZero");
   return {
     language,
     t: (key, vars) => translate(language, key, vars),
@@ -97,7 +107,7 @@ function buildTexts(config, hass, unit, metricKind) {
     fmtWithUnit: (value, digits, withSpace = true) => `${fmt(value, digits)}${withSpace ? " " : ""}${unit}`,
     fmtSigned,
     fmtSignedWithUnit: (value, digits, withSpace = true) => `${fmtSigned(value, digits)}${withSpace ? " " : ""}${unit}`,
-    formatTime: (isoString) => formatTimeOfDay(language, isoString),
+    formatTime: (isoString) => formatTimeOfDay(profile, isoString),
   };
 }
 

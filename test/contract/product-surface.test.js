@@ -22,6 +22,7 @@ let zones;
 let actions;
 let show;
 let topLevelKeys;
+let formatProfile;
 
 test.before(async () => {
   i18nRegistry = await import("../../src/i18n/registry.js");
@@ -33,6 +34,7 @@ test.before(async () => {
   actions = await import("../../src/config/actions.js");
   show = await import("../../src/config/show.js");
   topLevelKeys = await import("../../src/config/top-level-keys.js");
+  formatProfile = await import("../../src/i18n/format-profile.js");
 });
 
 // ------------------------------------------------------------------- languages --
@@ -132,6 +134,12 @@ test("the classification zones are exactly those the manifest claims", () => {
 
 test("the Home Assistant action allowlist matches the public surface", () => {
   assert.deepEqual(actions.allowedActionTypes().sort(), [...surface.ACTION_TYPES].sort());
+});
+
+test("the number, time and time-zone formats take auto and exactly the values the manifest claims", () => {
+  assert.deepEqual(["auto", ...formatProfile.NUMBER_FORMATS], surface.PROFILE_FORMATS.number_format);
+  assert.deepEqual(["auto", ...formatProfile.TIME_FORMATS], surface.PROFILE_FORMATS.time_format);
+  assert.deepEqual(["auto", ...formatProfile.TIME_ZONES], surface.PROFILE_FORMATS.time_zone);
 });
 
 test("every view's option keys match the public surface", () => {

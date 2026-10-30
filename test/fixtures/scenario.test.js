@@ -176,6 +176,15 @@ test("hass can arrive without the fields a card expects", () => {
   assert.equal("themes" in themeGap, false, "a declared theme does not override the missing-themes environment axis");
 });
 
+test("a profile reaches hass.locale, and its server zone hass.config", () => {
+  const profile = { number_format: "none", time_format: "12", time_zone: "server", server_time_zone: "Europe/Berlin" };
+  const hass = buildScenario({ rooms: [{}], language: "de", profile }).hass;
+  assert.deepEqual(hass.locale, { language: "de", number_format: "none", time_format: "12", time_zone: "server" });
+  assert.deepEqual(hass.config, { time_zone: "Europe/Berlin" });
+  assert.equal("config" in buildScenario({ rooms: [{}], profile: { time_format: "24" } }).hass, false, "no zone, no config");
+  assert.equal("locale" in buildScenario({ rooms: [{}], profile, hassGaps: ["locale"] }).hass, false, "a missing locale stays missing");
+});
+
 test("a built scenario carries a description that rebuilds it exactly", () => {
   // This is what makes a randomly found case reportable and shrinkable: the description is
   // plain JSON, and JSON in gives the same card out.

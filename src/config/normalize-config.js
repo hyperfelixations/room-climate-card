@@ -12,6 +12,7 @@
 //   assertPalette         what makes a written-out palette usable
 //   completePalette       fills a validated palette's missing wings
 //   isSupportedLanguage   whether a language code has translations
+//   profileFormats        { numberFormats, timeFormats, timeZones }: Home Assistant's profile values
 //   optionSchemaForView   a view type's option schema, or undefined
 //   viewTypes             every registered view type, for views and start_view
 //   metricKindForUnit     a unit string -> metric kind
@@ -71,6 +72,14 @@ export function legacyShowRequests(userConfig, diagnostics) {
     requests.unavailable_rooms = false;
   }
   return requests;
+}
+
+// number_format, time_format, time_zone: "auto" follows the Home Assistant profile, any profile
+// value overrides it. YAML reads `time_format: 24` as a number, so 12 and 24 are taken as written.
+// See internal dev doc §3 "Konfigurationsvertrag".
+function readProfileFormat(value, path, allowed, diagnostics) {
+  const written = path === "time_format" && (value === 12 || value === 24) ? String(value) : value;
+  return readEnum(written, path, diagnostics, ["auto", ...allowed], "auto");
 }
 
 // Title and subtitle take one shape carrying both what the line says and how it
@@ -155,7 +164,7 @@ function inWrittenOrder(diagnostics, userConfig) {
 }
 
 export function normalizeConfig(config, collaborators) {
-  const { isSupportedLanguage, optionSchemaForView, viewTypes } = collaborators;
+  const { isSupportedLanguage, optionSchemaForView, viewTypes, profileFormats } = collaborators;
   const userConfig = config ?? {};
   if (!isPlainObject(userConfig)) rejectConfiguration("config.not_object");
 
@@ -215,6 +224,9 @@ export function normalizeConfig(config, collaborators) {
     // null: the measurement's own precision, which only the view model knows.
     decimals: readNumber(userConfig.decimals, "decimals", diagnostics, { min: 0, max: 2, integer: true, fallback: null, instead: FALLBACK.METRIC_DECIMALS }),
     language: normalizeLanguage(userConfig.language, isSupportedLanguage, diagnostics),
+    number_format: readProfileFormat(userConfig.number_format, "number_format", profileFormats.numberFormats, diagnostics),
+    time_format: readProfileFormat(userConfig.time_format, "time_format", profileFormats.timeFormats, diagnostics),
+    time_zone: readProfileFormat(userConfig.time_zone, "time_zone", profileFormats.timeZones, diagnostics),
     // The one global footer switch: turns every view's footer off at once. Backlog
     // removal at the next major, leaving per-view `show_footer` as the only spelling.
     hide_footer: readBoolean(userConfig.hide_footer, "hide_footer", diagnostics, DEFAULT_CONFIG.hide_footer),

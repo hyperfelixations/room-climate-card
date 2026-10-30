@@ -62,6 +62,8 @@ const COLLABORATORS = {
   },
   completePalette: (palette) => ({ ...palette, invalid: palette.invalid ?? "#7D7D7D" }),
   isSupportedLanguage: (code) => SUPPORTED.has(code),
+  // A cut-down vocabulary, so a value only the real one has proves the injected one is read.
+  profileFormats: { numberFormats: ["comma_decimal", "none"], timeFormats: ["12", "24"], timeZones: ["server"] },
   viewTypes: VIEWS,
   optionSchemaForView: (type) =>
     type === "scale"
@@ -182,6 +184,9 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.show.rooms, "auto");
   assert.equal(result.show.unavailable_rooms, true);
   assert.equal(result.language, "auto");
+  assert.equal(result.number_format, "auto");
+  assert.equal(result.time_format, "auto");
+  assert.equal(result.time_zone, "auto");
   assert.equal(result.views, null);
   assert.equal(result.decimals, null);
   assert.equal(result.icon, null);
@@ -365,6 +370,25 @@ test("normalizeLanguage() accepts only languages the predicate confirms", () => 
       `${JSON.stringify(value)}: falls back rather than throwing`
     );
   }
+});
+
+test("number_format, time_format and time_zone take auto or a profile value and diagnose anything else", () => {
+  const formats = configure({ number_format: "none", time_format: "12", time_zone: "server" });
+  assert.deepEqual([formats.number_format, formats.time_format, formats.time_zone], ["none", "12", "server"]);
+  assert.deepEqual(configure({ number_format: "auto", time_format: "auto", time_zone: "auto" })._configDiagnostics, []);
+  assert.equal(configure({ time_format: 24 }).time_format, "24", "YAML reads 24 as a number");
+  assert.equal(configure({ time_format: 12 }).time_format, "12");
+
+  const auto = core.fallbackValue("auto");
+  const wrong = configure({ number_format: "Comma_Decimal", time_format: 13, time_zone: "" });
+  assert.deepEqual([wrong.number_format, wrong.time_format, wrong.time_zone], ["auto", "auto", "auto"]);
+  assert.deepEqual(wrong._configDiagnostics, [
+    invalid("number_format", "Comma_Decimal", auto),
+    invalid("time_format", 13, auto),
+    invalid("time_zone", "", auto),
+  ]);
+  assert.deepEqual(configure({ number_format: 24 })._configDiagnostics, [invalid("number_format", 24, auto)], "only time_format reads a number");
+  assert.equal(configure({ number_format: "decimal_comma" }).number_format, "auto", "the injected vocabulary decides");
 });
 
 test("normalizeConfig() reaches the injected collaborators, not a real registry", () => {

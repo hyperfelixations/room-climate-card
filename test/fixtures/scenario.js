@@ -76,6 +76,7 @@ function describeScenario(raw) {
   const defaults = source.defaults ? { ...source.defaults } : {};
   const hassGaps = Array.isArray(source.hassGaps) ? [...source.hassGaps] : [];
   const theme = source.theme;
+  const profile = source.profile ? { ...source.profile } : undefined;
   const rooms = (source.rooms || []).map((room, index) =>
     describeEntity(room, { metric, id: `sensor.room${index}`, index, defaults })
   );
@@ -103,6 +104,9 @@ function describeScenario(raw) {
     // hass gaps and declared theme describe the environment, not the card — see buildScenario().
     hassGaps,
     theme,
+    // The Home Assistant profile's formats (number_format, time_format, time_zone) and its
+    // configured zone (server_time_zone): hass.locale and hass.config, not the card.
+    profile,
     // Merged over the generated configuration, last. Anything the card accepts goes here:
     // palette, views, view options, subtitle, actions, custom profiles.
     config: source.config ? { ...source.config } : {},
@@ -174,7 +178,9 @@ function buildScenario(raw) {
   const gaps = new Set(description.hassGaps || []);
   const hass = {};
   if (!gaps.has("language")) hass.language = description.language;
-  if (!gaps.has("locale")) hass.locale = { language: description.language };
+  const { server_time_zone: serverTimeZone, ...formats } = description.profile || {};
+  if (!gaps.has("locale")) hass.locale = { language: description.language, ...formats };
+  if (serverTimeZone !== undefined) hass.config = { time_zone: serverTimeZone };
   hass.states = gaps.has("states") ? {} : states;
   if (!gaps.has("callService")) hass.callService = () => {};
   // Absent unless asked for: "no themes" is the default every test relies on.

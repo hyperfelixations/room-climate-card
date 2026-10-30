@@ -2,7 +2,7 @@
 // one of them. Contract: see internal dev doc §4 "Render-Signaturvertrag".
 
 // `last_updated` captures attribute-only changes that leave `last_changed` untouched.
-export function entityDataSignature({ config, states, language, activeViewIndex, surface }) {
+export function entityDataSignature({ config, states, language, formats, activeViewIndex, surface }) {
   const relevantEntities = [
     config.entity,
     config.range_entity,
@@ -20,6 +20,8 @@ export function entityDataSignature({ config, states, language, activeViewIndex,
   return [
     relevantStates,
     `lang:${language}`,
+    // The format profile's key: how numbers and times are written (i18n/format-profile.js).
+    `fmt:${formats}`,
     // Theme/card-mod repainting changes no entity, so the surface must be signed explicitly.
     `bg:${surface.samples.join(",")}|${surface.text || ""}`,
     `rotation:${config.rotation_seconds}`,

@@ -29,6 +29,7 @@ const COLLABORATORS = {
   assertPalette: (palette) => palette,
   completePalette: (palette) => palette,
   isSupportedLanguage: (code) => SUPPORTED.has(code),
+  profileFormats: { numberFormats: [], timeFormats: [], timeZones: [] },
   viewTypes: VIEWS,
   optionSchemaForView: () => undefined,
   metricKindForUnit: (unit) => (unit === "°C" ? "temperature" : undefined),
