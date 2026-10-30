@@ -16,6 +16,7 @@
 // controllers/render decides WHETHER and HOW MUCH, controllers/runtime decides WHEN.
 
 import { formatNumber, formatTimeOfDay } from "../i18n/formatters.js";
+import { NUMBER_FORMATS, TIME_FORMATS, TIME_ZONES, resolveFormatProfile } from "../i18n/format-profile.js";
 import { isSupportedLanguage, resolveLanguage, resolveMessageLanguage, translate } from "../i18n/translate.js";
 import { DEFAULT_LANGUAGE } from "../i18n/locales.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
@@ -77,6 +78,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
   const CONFIG_COLLABORATORS = {
     classificationZones: CLASSIFICATION_ZONES,
     isSupportedLanguage,
+    profileFormats: { numberFormats: NUMBER_FORMATS, timeFormats: TIME_FORMATS, timeZones: TIME_ZONES },
     optionSchemaForView,
     viewTypes: VIEW_DEFINITIONS.map((definition) => definition.key),
     metricKindForUnit: metricKindOfUnit,
@@ -222,6 +224,9 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._languageCacheHass = undefined; // _language()
       this._languageCacheConfigLanguage = undefined;
       this._languageCacheValue = undefined;
+      this._formatProfileCacheHass = undefined; // _formatProfile()
+      this._formatProfileCacheConfig = undefined;
+      this._formatProfileCacheValue = undefined;
       this._metricContextCacheHass = undefined; // _resolveMetricContext()
       this._metricContextCacheConfig = undefined;
       this._metricContextCacheValue = undefined;
@@ -477,6 +482,29 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return value;
     }
 
+    // How numbers and times are written; resolution rules in resolveFormatProfile()
+    // (i18n/format-profile.js). Cached by hass and config identity, like _language().
+    _formatProfile() {
+      if (this._formatProfileCacheHass === this._hass && this._formatProfileCacheConfig === this._config) {
+        return this._formatProfileCacheValue;
+      }
+      const config = this._config;
+      const value = resolveFormatProfile(
+        {
+          language: this._language(),
+          configLanguage: config?.language,
+          numberFormat: config?.number_format,
+          timeFormat: config?.time_format,
+          timeZone: config?.time_zone,
+        },
+        this._hass
+      );
+      this._formatProfileCacheHass = this._hass;
+      this._formatProfileCacheConfig = config;
+      this._formatProfileCacheValue = value;
+      return value;
+    }
+
     _t(key, vars) {
       // Translates key in the current language — see translate() in
       // i18n/translate.js for the English fallback and key-fallback rules.
@@ -500,11 +528,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // The digit count is resolved here, where the config override and the
       // metric's own default are known; the formatting itself is locale work.
       const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
-      return formatNumber(this._language(), value, d);
+      return formatNumber(this._formatProfile(), value, d);
     }
 
     _formatTime(isoString) {
-      return formatTimeOfDay(this._language(), isoString);
+      return formatTimeOfDay(this._formatProfile(), isoString);
     }
 
     // Memoized by hass/config identity (HA reassigns hass on every real update, so
@@ -543,7 +571,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
     // both of its bounds read as signed quantities.
     _fmtSigned(value, digits) {
       const d = digits ?? this._config.decimals ?? this._metricMeta().decimals;
-      return formatNumber(this._language(), value, d, "exceptZero");
+      return formatNumber(this._formatProfile(), value, d, "exceptZero");
     }
 
     _fmtSignedWithUnit(value, digits, withSpace = true) {
@@ -634,6 +662,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
           config: this._config,
           states: this._hass.states,
           language: this._language(),
+          formats: this._formatProfile().key,
           activeViewIndex: this._activeView,
           // A theme switch changes no entity and no configuration, so without this the
           // card would keep the colours of the background it is no longer on.

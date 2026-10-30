@@ -73,6 +73,11 @@ function* candidates(description) {
     english.language = "en";
     yield english;
   }
+  if (description.profile) {
+    const unprofiled = clone(description);
+    delete unprofiled.profile;
+    yield unprofiled;
+  }
 }
 
 // One entity, made more ordinary one property at a time. `where` is "primary" or a room

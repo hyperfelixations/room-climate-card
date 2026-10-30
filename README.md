@@ -1,10 +1,10 @@
 # Room Climate Card
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
 [![Downloads](https://img.shields.io/github/downloads/hyperfelixations/room-climate-card/total?label=Downloads)](https://github.com/hyperfelixations/room-climate-card/releases/latest)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
 
 A custom dashboard card for [Home Assistant](https://www.home-assistant.io/)
 that shows the climate of one room or of your whole home: temperature,
@@ -29,7 +29,9 @@ below. The card follows your dashboard's light or dark theme.
   `outdoor`, `fridge`, and `freezer` for temperature, plus custom profiles in YAML
 - Built-in color palettes, ramps made from one to three colors, and custom
   palettes in YAML
-- Translated into 15 languages, following your Home Assistant language setting
+- Translated into 16 languages, following your Home Assistant language setting
+- Numbers, times of day and their time zone written the way your Home Assistant
+  profile says, or the way you set them per card
 - Flexible layouts through the `show:` block, from the full card to compact
   combinations of headers, values, views, and room chips
 - Plenty of optional YAML for views, bands, markers, footers, chips, the
@@ -54,15 +56,13 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ### HACS
 
-[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card&category=plugin)
+[![Open your Home Assistant instance and show Room Climate Card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
 
-Add Room Climate Card as a custom repository using the button above or
-manually:
+Use the button above or search in HACS:
 
-1. Open HACS → the three-dot menu → **Custom repositories**.
-2. Add `https://github.com/hyperfelixations/room-climate-card`, category
-   **Dashboard**.
-3. Install "Room Climate Card" and reload your browser.
+1. Open HACS and search for **Room Climate Card**.
+2. Open it and select **Download**.
+3. Reload your browser.
 
 ### Manual
 
@@ -148,21 +148,6 @@ the average while the main sensor is unavailable.
 
 See [Configuration](#configuration) below for every available option.
 
-## Join the community
-
-The Home Assistant forum thread is where setups, questions and ideas for this
-card are discussed, and the Discord is where that happens as a conversation.
-The remaining links are for following along as new things are built.
-
-[![Questions](https://img.shields.io/badge/Questions%3F-Ask%20here-41BDF5?logo=homeassistant&logoColor=white)](https://community.home-assistant.io/t/i-made-a-room-climate-card-for-home-assistant-and-would-love-some-feedback/1020037)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?logo=github&logoColor=white)](https://github.com/hyperfelixations)
-[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@hyperfelixations)
-[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?logo=instagram&logoColor=white)](https://www.instagram.com/hyperfelixations/)
-
-Ideas and bug reports are welcome as
-[issues](https://github.com/hyperfelixations/room-climate-card/issues) too.
-
 ## Configuration
 
 Everything except a source is optional — leave an option out and you get the
@@ -194,7 +179,10 @@ scale footer when at least two rooms have values.
 | `entity_label` | automatic | Sets the small caption above the large value. `entity_label: ""` removes it. Left out, a single-room card uses that room's name, a card with only `entity` has no caption, and a card with rooms uses the translated "Home avg." caption. |
 | `icon` | automatic | Pins the header icon to an `mdi:*` icon of your choice, for example `mdi:home-thermometer`. Otherwise it follows the current value. |
 | `decimals` | mode-dependent | Sets `0`, `1`, or `2` decimal places for the large value, the room chips, the daily minimum/maximum, the spread, and the trend. Defaults: `0` for CO₂, `1` for the others. Scale and band labels stay whole numbers. |
-| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`. `auto` follows your Home Assistant language. |
+| `language` | `auto` | Forces one of `en`, `de`, `nl`, `fr`, `it`, `es`, `ru`, `pl`, `uk`, `ko`, `ja`, `zh`, `nb`, `sv`, `lv`, `hu`. `auto` follows your Home Assistant language. Numbers and times use this language wherever your Home Assistant profile is set to “Auto (use language setting)”. |
+| `number_format` | `auto` | How numbers are written: `language`, `system`, `comma_decimal` (1,234.5), `decimal_comma` (1.234,5), `space_comma` (1 234,5), `quote_decimal` (1’234.5) or `none` (1234.5). `auto` follows the number format in your Home Assistant profile. The number of decimal places comes from `decimals`. |
+| `time_format` | `auto` | How times of day are written: `language`, `system`, `12` (7:12 AM) or `24` (07:12). `auto` follows the time format in your Home Assistant profile. |
+| `time_zone` | `auto` | Which time zone times of day are shown in: `local` (this device's) or `server` (the one Home Assistant is set to). `auto` follows the time zone in your Home Assistant profile. |
 
 #### What the card shows
 
@@ -705,6 +693,7 @@ title: Indoor climate
 entity_label: Home average
 decimals: 1
 language: auto
+time_format: auto
 
 rooms:
   - name: Kitchen

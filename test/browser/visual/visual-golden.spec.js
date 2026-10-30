@@ -169,11 +169,40 @@ test.describe("visual golden: 1/2/3/4 views", () => {
         entity: "sensor.avg",
         range_entity: "sensor.range",
         views: [{ type: "range" }, { type: "range_scale", enabled: true }, { type: "scale" }, { type: "extremes" }],
+        // The slide only this carousel has, held still: on the first one it would depict views-3.png.
+        start_view: "range_scale",
+        auto_slide: false,
         rooms: [{ entity: "sensor.r1" }, { entity: "sensor.r2" }],
       },
       states
     );
     await shot(page, cardId, "views-4.png");
+  });
+});
+
+// The widest English time of day in the range view's metric cards at a phone's width: whole,
+// with its day period. See internal dev doc §5 "Profilformate".
+test.describe("visual golden: a 12-hour clock", () => {
+  test.use({ timezoneId: "UTC" });
+
+  test("range view at 320px", async ({ page }) => {
+    await gotoHarness(page);
+    const states = {
+      "sensor.avg": mkStateObj("sensor.avg", 22, TEMPERATURE_C),
+      "sensor.range": mkStateObj("sensor.range", 3, {
+        unit_of_measurement: "°C",
+        minimum: 20,
+        maximum: 23,
+        minimum_timestamp: "2026-07-21T10:58:00+00:00",
+        maximum_timestamp: "2026-07-21T22:58:00+00:00",
+      }),
+    };
+    const cardId = await createCard(
+      page,
+      { entity: "sensor.avg", range_entity: "sensor.range", views: [{ type: "range", enabled: true }], time_format: "12" },
+      states
+    );
+    await shot(page, cardId, "range-12h-narrow-320.png", 320);
   });
 });
 

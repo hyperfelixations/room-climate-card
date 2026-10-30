@@ -221,6 +221,12 @@
       "Room Climate Card: \"xx\" is not a valid value for language. Using default: auto."
     ]
   },
+  "number-format-unknown": {
+    "block": "\"dot_decimal\" is not a valid value for number_format. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"dot_decimal\" is not a valid value for number_format. Using default: auto."
+    ]
+  },
   "palette-gradient-with-an-empty-part": {
     "block": "\"teal--black\" is not a valid value for palette. Using default: pastel.",
     "console": [
@@ -339,6 +345,18 @@
     "block": "\"toggle\" is not a valid value for tap_action. Using default: more-info.",
     "console": [
       "Room Climate Card: \"toggle\" is not a valid value for tap_action. Using default: more-info."
+    ]
+  },
+  "time-format-unknown": {
+    "block": "\"am_pm\" is not a valid value for time_format. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"am_pm\" is not a valid value for time_format. Using default: auto."
+    ]
+  },
+  "time-zone-unknown": {
+    "block": "\"Europe/Berlin\" is not a valid value for time_zone. Using default: auto.",
+    "console": [
+      "Room Climate Card: \"Europe/Berlin\" is not a valid value for time_zone. Using default: auto."
     ]
   },
   "title-not-text": {
