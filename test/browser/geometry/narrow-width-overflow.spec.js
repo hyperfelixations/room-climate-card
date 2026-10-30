@@ -12,7 +12,7 @@ const { CO2, PM25, TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 const WIDTHS = [280, 300, 320, 360, 460, 700];
 // A curated subset (`test/architecture/suite-structure.test.js` allows one), not the
-// manifest's fifteen: the typographic extremes — longest German compounds, Polish and
+// manifest's sixteen: the typographic extremes — longest German compounds, Polish and
 // Russian case endings, Latvian unit words — that make a 280 px card overflow.
 const LANGUAGES = ["en", "de", "pl", "ru", "lv"];
 
