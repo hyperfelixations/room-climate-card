@@ -7,9 +7,9 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [main, "rcc/release-*"]
   pull_request:
-    branches: [main]
+    branches: [main, "rcc/release-*"]
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:

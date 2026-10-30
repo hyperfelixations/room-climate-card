@@ -325,7 +325,8 @@ by side. It is never a release asset and never committed.
 
 ## Continuous integration
 
-[`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push and pull request —
+[`ci.yml`](.github/workflows/ci.yml) runs two independent jobs on every push to and pull request
+into `main` or a release line `rcc/release-<major>.x` —
 Node tests and browser tests — deliberately without `needs:` between them, because a failure in
 one says nothing about the other. Both build the bundle themselves, so no job can report green
 against an artifact it did not produce. The browser job installs all three engines, runs the
@@ -354,9 +355,9 @@ The card has no runtime dependencies today, so the first audit guards the moment
 Build and test tooling does not ship: an advisory against it does not change the bundle and
 does not stop CI or a release. GitHub reports it through Dependabot alerts, and Dependabot opens
 a pull request for each security advisory.
-[`security.yml`](.github/workflows/security.yml) runs the check on every push and pull request and
-weekly, and the release workflow runs it before the build. Dependabot proposes npm and action
-updates weekly.
+[`security.yml`](.github/workflows/security.yml) runs the check on every push to and pull request
+into `main` or a release line, weekly on `main`, and the release workflow runs it before the build.
+Dependabot proposes npm and action updates weekly.
 
 An `overrides` entry only raises a transitive package that is in the lockfile to a caret minimum
 such as `^6.16.0`, for a fix its parent does not yet allow. An exact pin is rejected: it holds a

@@ -4,7 +4,7 @@
 name: Release Candidate
 
 run-name: >-
-  Release candidate v${{ inputs.version }} from ${{ inputs.expected_sha }}
+  Release candidate v${{ inputs.version }} from ${{ github.ref_name }} at ${{ inputs.expected_sha }}
   (${{ inputs.release_kind }})
 
 on:
@@ -46,30 +46,35 @@ jobs:
     outputs:
       artifact_sha256: ${{ steps.artifact-metadata.outputs.sha256 }}
       baseline_anchor: ${{ steps.baseline-anchor.outputs.posix }}
+      release_line: ${{ steps.release-metadata.outputs.line }}
+      release_major: ${{ steps.release-metadata.outputs.major }}
       release_sha: ${{ steps.release-metadata.outputs.sha }}
       release_tag: ${{ steps.release-metadata.outputs.tag }}
       release_title: ${{ steps.release-metadata.outputs.title }}
 
     steps:
-      - name: Check out main
+      # Full history: the validation reads every tag and the remote release branches.
+      - name: Check out the selected branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           # Nothing in this job pushes; a persisted token would let a later step write to the repo.
           persist-credentials: false
 
-      # The approved commit may be any commit in the history of main; see internal dev doc §4 "Release-Workflow".
+      # The approved commit may be any commit in the history of the selected branch, main or a
+      # release line; see internal dev doc §4 "Release-Linien".
       - name: Validate branch, SHA, version and HACS contract
         id: release-metadata
         shell: pwsh
         env:
+          ACTOR: ${{ github.actor }}
           ACTUAL_SHA: ${{ github.sha }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           RELEASE_KIND: ${{ inputs.release_kind }}
           RELEASE_VERSION: ${{ inputs.version }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           SELECTED_REF: ${{ github.ref }}
-          TRIGGERING_ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -78,11 +83,20 @@ jobs:
           $version = $env:RELEASE_VERSION.Trim()
           $releaseKind = $env:RELEASE_KIND
 
-          if ($env:TRIGGERING_ACTOR -ne $env:REPOSITORY_OWNER) {
+          # A re-run keeps github.actor but may be started by someone else (github.triggering_actor).
+          if ($env:ACTOR -ne $env:REPOSITORY_OWNER -or $env:TRIGGERING_ACTOR -ne $env:REPOSITORY_OWNER) {
             throw "Only the repository owner may start a release candidate."
           }
-          if ($env:SELECTED_REF -ne "refs/heads/main") {
-            throw "Release candidates must be started with branch 'main' selected."
+          $line = $null
+          if ($env:SELECTED_REF -ceq "refs/heads/main") {
+            $branch = "main"
+          }
+          elseif ($env:SELECTED_REF -cmatch '^refs/heads/(rcc/release-(0|[1-9][0-9]{0,8})\.x)$') {
+            $branch = $Matches[1]
+            $line = [long]$Matches[2]
+          }
+          else {
+            throw "Release candidates must be started with branch 'main' or a release line rcc/release-<major>.x selected."
           }
           if ($expectedSha -notmatch '^[0-9a-f]{40}$') {
             throw "expected_sha must be the complete 40-character commit SHA."
@@ -93,19 +107,20 @@ jobs:
           }
           git merge-base --is-ancestor $expectedSha $actualSha
           if ($LASTEXITCODE -ne 0) {
-            throw "Commit $expectedSha is not part of the main branch history."
+            throw "Commit $expectedSha is not part of the $branch branch history."
           }
 
-          # SemVer without leading zeros. Case-sensitive and ASCII-only on purpose: -notmatch
-          # ignores case and \d accepts every Unicode digit.
+          # SemVer without leading zeros, at most nine digits per number so every number fits a
+          # long. Case-sensitive and ASCII-only on purpose: -notmatch ignores case and \d accepts
+          # every Unicode digit.
           switch ($releaseKind) {
             "stable" {
-              if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+              if ($version -cnotmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$') {
                 throw "A stable version must look like 2.38.0."
               }
             }
             "dev" {
-              if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-dev\.[1-9][0-9]*$') {
+              if ($version -cnotmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})-dev\.[1-9][0-9]{0,8}$') {
                 throw "A dev pre-release version must look like 2.39.0-dev.1."
               }
             }
@@ -121,20 +136,98 @@ jobs:
             throw "Tag '$tag' already exists. Release tags are immutable; use a new version."
           }
 
-          # GitHub orders releases by the date of their commit, so a stable release must be the
-          # newest by version and by history.
-          if ($releaseKind -eq "stable") {
-            $stableTag = '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-            foreach ($existing in @(git tag --list "v*")) {
-              if ($existing -cnotmatch $stableTag) {
-                continue
+          # Major, minor and patch of a version or a release tag; $null for anything else.
+          function Read-ReleaseVersion([string]$text) {
+            if ($text -cnotmatch '^v?(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})(-dev\.[1-9][0-9]{0,8})?$') {
+              return $null
+            }
+            return [pscustomobject]@{
+              Numbers = @([long]$Matches[1], [long]$Matches[2], [long]$Matches[3])
+              Stable  = !$Matches[4]
+            }
+          }
+          function Compare-ReleaseNumbers([long[]]$left, [long[]]$right) {
+            for ($i = 0; $i -lt 3; $i++) {
+              if ($left[$i] -ne $right[$i]) {
+                return [Math]::Sign($left[$i] - $right[$i])
               }
-              if ([version]$existing.Substring(1) -ge [version]$version) {
-                throw "Stable version $version must be higher than the existing release $existing."
-              }
-              git merge-base --is-ancestor "refs/tags/$existing" $expectedSha
+            }
+            return 0
+          }
+          function Read-CommitDates([string]$commit) {
+            $dates = @(git log -1 --format="%at %ct" $commit) -split " "
+            if ($LASTEXITCODE -ne 0 -or $dates.Count -ne 2) {
+              throw "Could not read the dates of $commit."
+            }
+            return [pscustomobject]@{ Author = [long]$dates[0]; Committer = [long]$dates[1] }
+          }
+
+          $requested = Read-ReleaseVersion $version
+          $major = $requested.Numbers[0]
+          if ($null -ne $line -and $major -ne $line) {
+            throw "The release line $branch releases only $line.x.y versions; $version is not one."
+          }
+          if ($null -eq $line) {
+            git show-ref --verify --quiet "refs/remotes/origin/rcc/release-$major.x"
+            if ($LASTEXITCODE -eq 0) {
+              throw "Version $version belongs to the release line rcc/release-$major.x; start the candidate there."
+            }
+          }
+
+          $releases = @()
+          foreach ($name in @(git tag --list "v*")) {
+            $existing = Read-ReleaseVersion $name
+            if ($null -eq $existing) {
+              continue
+            }
+            $commit = git rev-parse --verify --quiet "refs/tags/$name^{commit}"
+            if ($LASTEXITCODE -ne 0 -or !$commit) {
+              throw "Release tag $name does not point to a commit."
+            }
+            $releases += [pscustomobject]@{ Name = $name; Numbers = $existing.Numbers; Stable = $existing.Stable; Commit = $commit.Trim() }
+          }
+
+          # HACS offers the newest release by commit date, so a line ends once a higher major is out.
+          foreach ($existing in $releases) {
+            $existingMajor = $existing.Numbers[0]
+            if ($null -eq $line -and $existingMajor -eq $major) {
+              git merge-base --is-ancestor $existing.Commit $actualSha
               if ($LASTEXITCODE -ne 0) {
-                throw "Release $existing is not an ancestor of $expectedSha; a stable release must contain every earlier stable release."
+                throw "Release $($existing.Name) is not in the history of main, so major $major is released from its release line rcc/release-$major.x."
+              }
+            }
+            if ($null -ne $line -and $existingMajor -gt $line) {
+              if ($existing.Stable) {
+                throw "Release line $line ended with $($existing.Name); HACS would offer a later $line.x release over it."
+              }
+              if ($releaseKind -eq "dev") {
+                throw "Dev releases of line $line ended with the pre-release $($existing.Name); HACS would offer a later $line.x pre-release over it."
+              }
+            }
+          }
+
+          # GitHub orders releases by the author and committer date of their commit, so a stable
+          # release must be the newest by version and by date, and contain every earlier stable
+          # release of its major version.
+          if ($releaseKind -eq "stable") {
+            $stable = @($releases | Where-Object { $_.Stable })
+            if ($null -ne $line -and @($stable | Where-Object { $_.Numbers[0] -eq $line }).Count -eq 0) {
+              throw "Release line $line has no stable release yet; the first stable release of a major comes from main."
+            }
+            $releaseDates = Read-CommitDates $expectedSha
+            foreach ($existing in $stable) {
+              if ((Compare-ReleaseNumbers $existing.Numbers $requested.Numbers) -ge 0) {
+                throw "Stable version $version must be higher than the existing release $($existing.Name)."
+              }
+              if ($existing.Numbers[0] -eq $major) {
+                git merge-base --is-ancestor $existing.Commit $expectedSha
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Release $($existing.Name) is not an ancestor of $expectedSha; a stable release must contain every earlier stable release of its major version."
+                }
+              }
+              $existingDates = Read-CommitDates $existing.Commit
+              if ($releaseDates.Author -le $existingDates.Author -or $releaseDates.Committer -le $existingDates.Committer) {
+                throw "Commit $expectedSha is not newer than release $($existing.Name) by author and committer date; GitHub and HACS would not order it first. Release a new bump commit."
               }
             }
           }
@@ -142,6 +235,8 @@ jobs:
           "tag=$tag" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
           "title=$title" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
           "sha=$expectedSha" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "line=$line" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "major=$major" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
 
       - name: Check out the approved commit
         shell: pwsh
@@ -393,6 +488,8 @@ jobs:
       EXPECTED_SHA256: ${{ needs.build-and-test.outputs.artifact_sha256 }}
       GH_TOKEN: ${{ github.token }}
       RELEASE_KIND: ${{ inputs.release_kind }}
+      RELEASE_LINE: ${{ needs.build-and-test.outputs.release_line }}
+      RELEASE_MAJOR: ${{ needs.build-and-test.outputs.release_major }}
       RELEASE_TAG: ${{ needs.build-and-test.outputs.release_tag }}
       RELEASE_TITLE: ${{ needs.build-and-test.outputs.release_title }}
 
@@ -428,6 +525,44 @@ jobs:
             exit 1
           fi
 
+      # Drafts have no tag until they are published, so the tag checks of build-and-test cannot
+      # see them; only this job's contents: write lists them.
+      - name: List every release including drafts
+        shell: bash
+        env:
+          RELEASE_LIST: ${{ runner.temp }}/releases.tsv
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | [.tag_name, .draft, .prerelease] | @tsv' > "$RELEASE_LIST"
+
+      - name: Refuse a release that would cross a release line
+        shell: pwsh
+        env:
+          RELEASE_LIST: ${{ runner.temp }}/releases.tsv
+        run: |
+          $ErrorActionPreference = "Stop"
+          $major = [long]$env:RELEASE_MAJOR
+          foreach ($row in @(Get-Content -LiteralPath $env:RELEASE_LIST)) {
+            $name, $draft, $prerelease = $row -split "`t"
+            if ($name -cnotmatch '^v(0|[1-9][0-9]{0,8})\.') {
+              continue
+            }
+            $releaseMajor = [long]$Matches[1]
+            $state = "release"
+            if ($draft -eq "true") {
+              $state = "draft"
+            }
+            if ($env:RELEASE_LINE -ne "") {
+              if ($releaseMajor -gt $major -and ($prerelease -ne "true" -or $env:RELEASE_KIND -eq "dev")) {
+                throw "The $state $name of a higher major ends release line $major; HACS would offer a later $major.x release over it."
+              }
+            }
+            elseif ($draft -eq "true" -and $releaseMajor -lt $major) {
+              throw "The draft $name of an older major would be ordered after $env:RELEASE_TAG once published; delete it first."
+            }
+          }
+
       # The tag does NOT exist yet after this step. GitHub records the target commit on
       # the draft and creates the tag when the draft is published — which is why a
       # discarded draft leaves nothing behind to clean up.
@@ -462,6 +597,8 @@ jobs:
           EOF
           fi
 
+          # No --fail-on-no-commits: gh compares the latest release with the default branch, not
+          # with the target, and refuses every release once two lines have diverged.
           args=(
             gh release create "$RELEASE_TAG"
             "release-asset/$RELEASE_ASSET"
@@ -470,7 +607,6 @@ jobs:
             --target "$EXPECTED_SHA"
             --title "$RELEASE_TITLE"
             --notes-file "$notes_file"
-            --fail-on-no-commits
           )
           if [[ "$RELEASE_KIND" == "dev" ]]; then
             args+=(--prerelease --latest=false)
