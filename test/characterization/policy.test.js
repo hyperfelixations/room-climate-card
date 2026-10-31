@@ -48,6 +48,13 @@ test("the file counts in POLICY.md match what is on disk", () => {
   }
 });
 
+test("the total in POLICY.md matches what is on disk", () => {
+  const stated = policy.match(/the (\d+) files under `test\/baseline\/`/);
+  assert.ok(stated, "POLICY.md no longer states a total");
+  const actual = groups.reduce((total, group) => total + fs.readdirSync(path.join(BASELINE_DIR, group)).length, 0);
+  assert.equal(Number(stated[1]), actual, `POLICY.md says ${stated[1]} files, disk has ${actual}`);
+});
+
 test("every baseline group has a test that actually reads it", () => {
   // A recorded file nothing compares against is not a baseline, it is a leftover — and it will
   // sit there looking like coverage for as long as nobody checks.
