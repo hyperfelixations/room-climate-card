@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/github/downloads/hyperfelixations/room-climate-card/total?label=Downloads)](https://github.com/hyperfelixations/room-climate-card/releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/zfGKCVEvwe)
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
+[![Open in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=hyperfelixations&repository=room-climate-card)
 
 A custom dashboard card for [Home Assistant](https://www.home-assistant.io/)
 that shows the climate of one room or of your whole home: temperature,
@@ -53,15 +53,20 @@ With more than one view enabled (here: the scale and room-comparison views), the
 
 ## Installation
 
-### HACS
+### Marketplace
 
-[![Open your Home Assistant instance and show Room Climate Card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card)
+[![Open your Home Assistant instance and show Room Climate Card in the Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=hyperfelixations&repository=room-climate-card)
 
-Use the button above or search in HACS:
+Use the button above or search in the Marketplace:
 
-1. Open HACS and search for **Room Climate Card**.
-2. Open it and select **Download**.
+1. Go to **Settings → Marketplace** and search for **Room Climate Card**.
+2. Open it and select **Install**, check the version in the dialog, and select
+   **Install** again.
 3. Reload your browser.
+
+On Home Assistant 2026.10 or older, open the card in
+[HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=hyperfelixations&repository=room-climate-card),
+select **Download**, and reload your browser.
 
 ### Manual
 
@@ -771,12 +776,13 @@ card_mod:
 > has one.
 
 **The card doesn't appear after installing.**
-Confirm the dashboard resource was actually added (Settings → Dashboards →
-the three-dot menu → **Resources**) and points at the right path/module
-type, then do a hard browser reload (see below). After a HACS install, a
-normal Home Assistant restart or resource re-registration is usually
-enough; a manual install needs the resource step from
-[Installation](#installation) done explicitly.
+Hard-reload the browser (see below). If a repair under Settings → System →
+**Repairs** asks for a restart, restart Home Assistant. Then open Settings →
+Dashboards → the three-dot menu → **Resources** and make sure the card is listed
+there exactly once, as a JavaScript module — remove a manually added copy when
+the Marketplace or HACS installed the card too. If you manage dashboard
+resources in YAML, add the resource the install dialog shows. A manual install
+needs the resource step from [Installation](#installation).
 
 **Changes don't show up, or the card looks outdated after an update.**
 Browsers aggressively cache dashboard resources. Hard-reload the dashboard
