@@ -2,12 +2,13 @@
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 // The lengths the automatic column count is derived from come from room-chip-metrics.js.
 
-import { ROOM_CHIP_REGIMES, ROOM_CHIP_SHAPE } from "../presentation/view-model/room-chip-metrics.js";
+import { ROOM_CHIP_REGIMES, ROOM_CHIP_SHAPE, roomChipLengths } from "../presentation/view-model/room-chip-metrics.js";
 import { em, px } from "./css-units.js";
 
-const { wide } = ROOM_CHIP_REGIMES;
-
-export const ROOMS_CSS = `        .rtc-room-grid {
+export function roomsCss(size) {
+  const { rooms } = size;
+  const wide = roomChipLengths(ROOM_CHIP_REGIMES.wide, size);
+  return `        .rtc-room-grid {
           /* Flex stacks per-row grids because native grid cannot vary column count by row. */
           display: flex;
           flex-direction: column;
@@ -22,8 +23,8 @@ export const ROOMS_CSS = `        .rtc-room-grid {
 
         .rtc-room-chip {
           min-width: 0;
-          border-radius: 13px;
-          padding: 7px ${px(wide.chipPaddingX)} 8px;
+          border-radius: ${px(13, rooms)};
+          padding: ${px(7, rooms)} ${px(wide.chipPaddingX)} ${px(8, rooms)};
           background: var(--room-bg);
           border: ${px(ROOM_CHIP_SHAPE.border)} solid var(--room-border);
           cursor: pointer;
@@ -36,7 +37,7 @@ export const ROOMS_CSS = `        .rtc-room-grid {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: ${px(ROOM_CHIP_SHAPE.labelGap)};
+          gap: ${px(wide.labelGap)};
           min-width: 0;
         }
 
@@ -61,14 +62,14 @@ export const ROOMS_CSS = `        .rtc-room-grid {
         }
 
         .rtc-room-mark {
-          flex: 0 0 ${px(ROOM_CHIP_SHAPE.mark)};
-          width: ${px(ROOM_CHIP_SHAPE.mark)};
-          height: ${px(ROOM_CHIP_SHAPE.mark)};
+          flex: 0 0 ${px(wide.mark)};
+          width: ${px(wide.mark)};
+          height: ${px(wide.mark)};
           border-radius: 999px;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 9px;
+          font-size: ${px(9, rooms)};
           font-weight: 900;
           line-height: 1;
           color: var(--room-color);
@@ -79,7 +80,7 @@ export const ROOMS_CSS = `        .rtc-room-grid {
           display: flex;
           align-items: baseline;
           gap: ${px(wide.valueGap)};
-          margin-top: 5px;
+          margin-top: ${px(5, rooms)};
           font-size: ${px(wide.valueFont)};
           font-weight: 920;
           line-height: 1;
@@ -96,3 +97,4 @@ export const ROOMS_CSS = `        .rtc-room-grid {
         }
 
 `;
+}

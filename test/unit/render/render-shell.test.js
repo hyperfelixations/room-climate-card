@@ -489,11 +489,14 @@ test("the stylesheet is assembled from its sections with nothing inserted betwee
   assert.ok(css.indexOf("@container rtc-card") < css.indexOf("prefers-reduced-motion"));
 });
 
-test("the stylesheet is a pure function of its five inputs", () => {
+test("the stylesheet is a pure function of its six inputs", () => {
   const inputs = { keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100, viewHeight: 70 };
   assert.equal(styles.buildStyles(inputs), styles.buildStyles({ ...inputs }));
   assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewCount: 2 }));
   assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewHeight: 140 }));
+  const unscaled = { shell: 1, header: 1, panel: 1, rooms: 1 };
+  assert.equal(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, size: unscaled }), "the default is the unscaled card");
+  assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, size: { ...unscaled, rooms: 1.5 } }));
 });
 
 test("the view-area height is written once, as two tokens, and every view slot reads it", () => {

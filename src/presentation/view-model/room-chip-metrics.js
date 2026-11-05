@@ -21,6 +21,22 @@ export const ROOM_CHIP_SHAPE = Object.freeze({ border: 1, mark: 15, labelGap: 4,
 // The widest two-letter short code; a code of two uppercase letters always stays whole.
 export const REFERENCE_SHORT_LABEL = "WW";
 
+// A regime's lengths at the card's size factors: the card padding follows `shell`, every chip
+// length follows `rooms`. The chip border stays a hairline and the letter spacing is in em.
+export function roomChipLengths(regime, { shell, rooms }) {
+  return {
+    cardPaddingX: regime.cardPaddingX * shell,
+    gridGap: regime.gridGap * rooms,
+    chipPaddingX: regime.chipPaddingX * rooms,
+    valueFont: regime.valueFont * rooms,
+    valueGap: regime.valueGap * rooms,
+    unitFont: regime.unitFont * rooms,
+    labelFont: regime.labelFont * rooms,
+    mark: ROOM_CHIP_SHAPE.mark * rooms,
+    labelGap: ROOM_CHIP_SHAPE.labelGap * rooms,
+  };
+}
+
 // Advance widths in em of Roboto, Home Assistant's font, at the chip weights (value 920, drawn at
 // Roboto's 900, with tabular figures; unit 750; label 900). Measured in Chromium and checked by
 // test/browser/geometry/room-chip-fit.spec.js. A character not listed counts as the widest of

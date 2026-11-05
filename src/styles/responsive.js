@@ -2,15 +2,16 @@
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 // The narrow chip lengths and the container breakpoint come from room-chip-metrics.js.
 
-import { NARROW_CONTAINER_MAX_PX, ROOM_CHIP_REGIMES } from "../presentation/view-model/room-chip-metrics.js";
+import { NARROW_CONTAINER_MAX_PX, ROOM_CHIP_REGIMES, roomChipLengths } from "../presentation/view-model/room-chip-metrics.js";
 import { px } from "./css-units.js";
 
-const { narrow } = ROOM_CHIP_REGIMES;
-
-export const RESPONSIVE_CSS = `        @container rtc-card (max-width: ${px(NARROW_CONTAINER_MAX_PX)}) {
+export function responsiveCss(size) {
+  const { shell, panel, rooms } = size;
+  const narrow = roomChipLengths(ROOM_CHIP_REGIMES.narrow, size);
+  return `        @container rtc-card (max-width: ${px(NARROW_CONTAINER_MAX_PX, shell)}) {
           .rtc-root { padding: ${px(narrow.cardPaddingX)}; }
-          .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
-          .rtc-avg-value { font-size: 29px; }
+          .rtc-main-panel { grid-template-columns: minmax(${px(96, panel)}, auto) minmax(40%, 1fr); }
+          .rtc-avg-value { font-size: ${px(29, panel)}; }
           .rtc-room-grid { gap: ${px(narrow.gridGap)}; }
           .rtc-room-row { gap: ${px(narrow.gridGap)}; }
           .rtc-room-chip {
@@ -27,56 +28,56 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: ${px(NARR
           .rtc-room-value-unit {
             font-size: ${px(narrow.unitFont)};
             line-height: 1;
-            transform: translateY(-1px);
+            transform: translateY(${px(-1, rooms)});
           }
           .rtc-room-short { font-size: ${px(narrow.labelFont)}; }
           .rtc-extremes-view,
-          .rtc-range-view { gap: 6px; }
+          .rtc-range-view { gap: ${px(6, panel)}; }
           .rtc-extreme-card {
-            padding: 8px 7px 7px;
+            padding: ${px(8, panel)} ${px(7, panel)} ${px(7, panel)};
           }
           .rtc-extreme-label {
             grid-column: 1;
             grid-row: 1;
-            font-size: 9.5px;
+            font-size: ${px(9.5, panel)};
             white-space: nowrap;
           }
           .rtc-extreme-name {
-            font-size: 12.5px;
+            font-size: ${px(12.5, panel)};
           }
           .rtc-extreme-value {
-            font-size: 22px;
+            font-size: ${px(22, panel)};
           }
-          .rtc-extreme-value-unit { font-size: 9px; }
+          .rtc-extreme-value-unit { font-size: ${px(9, panel)}; }
         }
 
-        @container rtc-card (max-width: 360px) {
+        @container rtc-card (max-width: ${px(360, shell)}) {
           .rtc-main-panel {
-            grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
+            grid-template-columns: minmax(${px(90, panel)}, auto) minmax(40%, 1fr);
           }
           .rtc-root {
             --rtc-view-height: var(--rtc-view-height-narrow);
           }
           .rtc-extreme-card {
-            padding-left: 6px;
-            padding-right: 6px;
+            padding-left: ${px(6, panel)};
+            padding-right: ${px(6, panel)};
           }
           .rtc-extreme-label {
-            font-size: 9px;
+            font-size: ${px(9, panel)};
           }
           .rtc-extreme-name {
-            font-size: 12px;
+            font-size: ${px(12, panel)};
           }
           .rtc-extreme-value {
-            font-size: 21px;
+            font-size: ${px(21, panel)};
           }
         }
 
         @supports not (container-type: inline-size) {
-          @media (max-width: 600px) {
+          @media (max-width: ${px(600, shell)}) {
             .rtc-root { padding: ${px(narrow.cardPaddingX)}; }
-            .rtc-main-panel { grid-template-columns: minmax(96px, auto) minmax(40%, 1fr); }
-            .rtc-avg-value { font-size: 29px; }
+            .rtc-main-panel { grid-template-columns: minmax(${px(96, panel)}, auto) minmax(40%, 1fr); }
+            .rtc-avg-value { font-size: ${px(29, panel)}; }
             .rtc-room-grid { gap: ${px(narrow.gridGap)}; }
             .rtc-room-row { gap: ${px(narrow.gridGap)}; }
             .rtc-room-chip {
@@ -93,48 +94,49 @@ export const RESPONSIVE_CSS = `        @container rtc-card (max-width: ${px(NARR
             .rtc-room-value-unit {
               font-size: ${px(narrow.unitFont)};
               line-height: 1;
-              transform: translateY(-1px);
+              transform: translateY(${px(-1, rooms)});
             }
             .rtc-room-short { font-size: ${px(narrow.labelFont)}; }
             .rtc-extremes-view,
-            .rtc-range-view { gap: 6px; }
+            .rtc-range-view { gap: ${px(6, panel)}; }
             .rtc-extreme-card {
-              padding: 8px 7px 7px;
+              padding: ${px(8, panel)} ${px(7, panel)} ${px(7, panel)};
             }
             .rtc-extreme-label {
-              font-size: 9.5px;
+              font-size: ${px(9.5, panel)};
               white-space: nowrap;
             }
             .rtc-extreme-name {
-              font-size: 12.5px;
+              font-size: ${px(12.5, panel)};
             }
             .rtc-extreme-value {
-              font-size: 22px;
+              font-size: ${px(22, panel)};
             }
-            .rtc-extreme-value-unit { font-size: 9px; }
+            .rtc-extreme-value-unit { font-size: ${px(9, panel)}; }
           }
 
-          @media (max-width: 380px) {
+          @media (max-width: ${px(380, shell)}) {
             .rtc-main-panel {
-              grid-template-columns: minmax(90px, auto) minmax(40%, 1fr);
+              grid-template-columns: minmax(${px(90, panel)}, auto) minmax(40%, 1fr);
             }
             .rtc-root {
               --rtc-view-height: var(--rtc-view-height-narrow);
             }
             .rtc-extreme-card {
-              padding-left: 6px;
-              padding-right: 6px;
+              padding-left: ${px(6, panel)};
+              padding-right: ${px(6, panel)};
             }
             .rtc-extreme-label {
-              font-size: 9px;
+              font-size: ${px(9, panel)};
             }
             .rtc-extreme-name {
-              font-size: 12px;
+              font-size: ${px(12, panel)};
             }
             .rtc-extreme-value {
-              font-size: 21px;
+              font-size: ${px(21, panel)};
             }
           }
         }
 
 `;
+}

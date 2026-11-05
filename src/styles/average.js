@@ -1,7 +1,10 @@
 // SHIPPED STYLESHEET SLICE: average button/value/unit/trend states.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const AVERAGE_CSS = `        /* appearance:none removes widget styling, not engine-specific UA padding. */
+import { px } from "./css-units.js";
+
+export function averageCss({ panel }) {
+  return `        /* appearance:none removes widget styling, not engine-specific UA padding. */
         button {
           appearance: none;
           -webkit-appearance: none;
@@ -19,8 +22,8 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
           display: block;
           width: 100%;
           min-width: 0;
-          padding: 1px 6px;
-          border-radius: 13px;
+          padding: ${px(1, panel)} ${px(6, panel)};
+          border-radius: ${px(13, panel)};
           cursor: pointer;
           background: transparent;
           touch-action: manipulation;
@@ -44,7 +47,7 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
         .rtc-avg-label {
           contain: inline-size;
           display: block;
-          font-size: 10px;
+          font-size: ${px(10, panel)};
           font-weight: 850;
           letter-spacing: .075em;
           text-transform: uppercase;
@@ -57,8 +60,8 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
         /* Ellipsis is the backstop after the value column reaches the view's floor. */
         .rtc-avg-value {
           display: block;
-          margin-top: 4px;
-          font-size: 33px;
+          margin-top: ${px(4, panel)};
+          font-size: ${px(33, panel)};
           font-weight: 950;
           line-height: .95;
           color: var(--primary-text-color);
@@ -73,7 +76,7 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
         }
 
         .rtc-avg-unit-gap {
-          font-size: 14px;
+          font-size: ${px(14, panel)};
         }
 
         .rtc-avg-unit-core {
@@ -91,7 +94,7 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
 
         .rtc-avg-value-unit {
           display: inline;
-          font-size: 14px;
+          font-size: ${px(14, panel)};
           font-weight: 750;
           line-height: 1;
           color: var(--rtc-faint);
@@ -100,16 +103,16 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
         .rtc-avg-trend-arrow {
           display: block;
           align-self: end;
-          width: 10px;
-          height: 10px;
+          width: ${px(10, panel)};
+          height: ${px(10, panel)};
           color: var(--rtc-muted);
-          transform: translateY(-1px);
+          transform: translateY(${px(-1, panel)});
         }
 
         .rtc-avg-trend-arrow-svg {
           display: block;
-          width: 10px;
-          height: 10px;
+          width: ${px(10, panel)};
+          height: ${px(10, panel)};
           overflow: visible;
           stroke-width: 1.2;
           stroke-linecap: round;
@@ -132,3 +135,4 @@ export const AVERAGE_CSS = `        /* appearance:none removes widget styling, n
 
         .rtc-rotator,
 `;
+}

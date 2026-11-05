@@ -1,18 +1,21 @@
 // SHIPPED STYLESHEET SLICE: header parts, the warnings block and the main panel below them.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const HEADER_CSS = `        .rtc-header {
+import { px } from "./css-units.js";
+
+export function headerCss({ shell, header, panel }) {
+  return `        .rtc-header {
           display: grid;
           grid-template-columns: auto 1fr auto;
-          gap: 11px;
+          gap: ${px(11, header)};
           align-items: center;
           min-width: 0;
         }
 
         .rtc-icon-badge {
-          width: 39px;
-          height: 39px;
-          border-radius: 14px;
+          width: ${px(39, header)};
+          height: ${px(39, header)};
+          border-radius: ${px(14, header)};
           display: flex;
           align-items: center;
           justify-content: center;
@@ -21,8 +24,8 @@ export const HEADER_CSS = `        .rtc-header {
         }
 
         .rtc-icon-badge ha-icon {
-          width: 22px;
-          height: 22px;
+          width: ${px(22, header)};
+          height: ${px(22, header)};
           color: var(--tone-ink);
         }
 
@@ -62,7 +65,7 @@ export const HEADER_CSS = `        .rtc-header {
         }
 
         .rtc-title {
-          font-size: 21px;
+          font-size: ${px(21, header)};
           font-weight: 920;
           line-height: 1.05;
           color: var(--primary-text-color);
@@ -76,8 +79,8 @@ export const HEADER_CSS = `        .rtc-header {
         }
 
         .rtc-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
+          margin-top: ${px(4, header)};
+          font-size: ${px(12, header)};
           font-weight: 650;
           line-height: 1.25;
           color: var(--rtc-muted);
@@ -96,9 +99,9 @@ export const HEADER_CSS = `        .rtc-header {
         }
 
         .rtc-status-pill {
-          padding: 6px 10px;
+          padding: ${px(6, header)} ${px(10, header)};
           border-radius: 999px;
-          font-size: 12px;
+          font-size: ${px(12, header)};
           font-weight: 900;
           white-space: nowrap;
           color: var(--tone-ink);
@@ -111,21 +114,21 @@ export const HEADER_CSS = `        .rtc-header {
         .rtc-warning {
           display: flex;
           align-items: flex-start;
-          gap: 8px;
-          padding: 8px 10px;
-          border-radius: 14px;
+          gap: ${px(8, shell)};
+          padding: ${px(8, shell)} ${px(10, shell)};
+          border-radius: ${px(14, shell)};
           background: var(--rtc-warning-bg);
           border: 1px solid var(--rtc-warning-border);
           color: var(--primary-text-color);
-          font-size: 12px;
+          font-size: ${px(12, shell)};
           font-weight: 650;
           line-height: 1.3;
         }
 
         .rtc-warning-icon {
-          flex: 0 0 16px;
-          width: 16px;
-          height: 16px;
+          flex: 0 0 ${px(16, shell)};
+          width: ${px(16, shell)};
+          height: ${px(16, shell)};
           fill: var(--rtc-warning-ink);
         }
 
@@ -138,13 +141,14 @@ export const HEADER_CSS = `        .rtc-header {
            40% of a definite panel width; min-width:0 on the rotator permits negotiation. */
         .rtc-main-panel {
           display: grid;
-          grid-template-columns: minmax(106px, auto) minmax(40%, 1fr);
-          gap: 8px;
+          grid-template-columns: minmax(${px(106, panel)}, auto) minmax(40%, 1fr);
+          gap: ${px(8, panel)};
           align-items: center;
-          border-radius: 17px;
-          padding: 9px 10px;
+          border-radius: ${px(17, panel)};
+          padding: ${px(9, panel)} ${px(10, panel)};
           background: var(--rtc-panel);
           border: 1px solid var(--rtc-hairline);
         }
 
 `;
+}

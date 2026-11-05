@@ -1,20 +1,23 @@
 // SHIPPED STYLESHEET SLICE: daily-range scale labels and lifted row.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const RANGE_SCALE_VIEW_CSS = `        /* Shared scale geometry with current/min/max labels resolved by JS. */
+import { px } from "./css-units.js";
+
+export function rangeScaleViewCss({ panel }) {
+  return `        /* Shared scale geometry with current/min/max labels resolved by JS. */
         .rtc-range-scale-view {
           height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           align-content: center;
-          gap: 4px;
-          padding: 0 1px;
+          gap: ${px(4, panel)};
+          padding: 0 ${px(1, panel)};
         }
 
         .rtc-range-scale-top-row {
           position: relative;
-          height: 12px;
-          font-size: 10px;
+          height: ${px(12, panel)};
+          font-size: ${px(10, panel)};
           font-weight: 800;
           color: var(--rtc-faint);
           white-space: nowrap;
@@ -39,14 +42,14 @@ export const RANGE_SCALE_VIEW_CSS = `        /* Shared scale geometry with curre
           .rtc-range-scale-label-min,
         .rtc-range-scale-top-row.rtc-range-scale-has-upper
           .rtc-range-scale-label-max {
-          top: 4px;
-          line-height: 12px;
+          top: ${px(4, panel)};
+          line-height: ${px(12, panel)};
         }
 
         .rtc-range-scale-top-row.rtc-range-scale-has-upper
           .rtc-range-scale-label-upper {
-          top: -8px;
-          line-height: 12px;
+          top: ${px(-8, panel)};
+          line-height: ${px(12, panel)};
           /* Lifted short labels may paint glyph ink beyond their tight line box; allow
              free paint without changing position, row height or bar geometry. */
           overflow: visible;
@@ -54,3 +57,4 @@ export const RANGE_SCALE_VIEW_CSS = `        /* Shared scale geometry with curre
         }
 
 `;
+}
