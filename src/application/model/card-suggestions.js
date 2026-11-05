@@ -72,7 +72,24 @@ function readInstallation(hass) {
     devices: recordOf(source?.devices),
     areas,
     areaRank: new Map((areas ? Object.keys(areas) : []).map((areaId, rank) => [areaId, rank])),
+    // Called on hass itself, the object the frontend attaches it to.
+    formatEntityName: typeof source?.formatEntityName === "function" ? (stateObject) => source.formatEntityName(stateObject) : null,
   };
+}
+
+// The name Home Assistant shows for the entity (formatEntityName(), Home Assistant 2026.4 and
+// later), else its friendly_name. Only this foreign call is guarded by a catch: a failing
+// frontend function counts as no name. See internal dev doc §4 "Card-Picker-Vertrag".
+function systemNameOf(installation, stateObject, attributes) {
+  let formatted = null;
+  if (installation.formatEntityName) {
+    try {
+      formatted = installation.formatEntityName(stateObject);
+    } catch (_error) {
+      formatted = null;
+    }
+  }
+  return textOf(formatted) ?? textOf(attributes.friendly_name);
 }
 
 // As the frontend's getEntityAreaId(): the entity's area, else its device's, else the parent device's.
@@ -92,13 +109,14 @@ function candidatesOf(installation, { usable }) {
   const candidates = [];
   for (const entityId of Object.keys(states).sort()) {
     if (!entityId.startsWith(SENSOR_DOMAIN)) continue;
-    const attributes = recordOf(recordOf(states[entityId])?.attributes);
+    const stateObject = recordOf(states[entityId]);
+    const attributes = recordOf(stateObject?.attributes);
     const { metricKind } = classifyDeviceClass(attributes?.device_class);
     if (!metricKind) continue;
     const registryEntry = entryOf(installation.entities, entityId);
     if (registryEntry?.hidden === true || textOf(registryEntry?.entity_category)) continue;
     if (usable && buildEntityModel(states, null, entityId, "room").availability !== AVAILABILITY.USABLE) continue;
-    candidates.push({ entityId, metricKind, area: areaOf(installation, registryEntry), friendlyName: textOf(attributes.friendly_name) });
+    candidates.push({ entityId, metricKind, area: areaOf(installation, registryEntry), systemName: systemNameOf(installation, stateObject, attributes) });
   }
   return candidates;
 }
@@ -120,18 +138,19 @@ function areaRooms(candidates) {
   return rooms;
 }
 
-// Still one room per area, but named by friendly_name, so area-less sensors can join.
+// Still one room per area, but named as Home Assistant names the sensor, so area-less sensors
+// can join.
 function namedRooms(candidates) {
   const placed = candidates.filter((candidate) => candidate.area).sort((a, b) => a.area.rank - b.area.rank);
   const rooms = [];
   const areas = new Set();
   const names = new Set();
-  for (const { area, entityId, friendlyName } of [...placed, ...candidates.filter((candidate) => !candidate.area)]) {
+  for (const { area, entityId, systemName } of [...placed, ...candidates.filter((candidate) => !candidate.area)]) {
     if (rooms.length >= BROWSE_ROOM_LIMIT) break;
-    if ((area && areas.has(area.id)) || !friendlyName || names.has(friendlyName)) continue;
+    if ((area && areas.has(area.id)) || !systemName || names.has(systemName)) continue;
     if (area) areas.add(area.id);
-    names.add(friendlyName);
-    rooms.push({ name: friendlyName, entity: entityId });
+    names.add(systemName);
+    rooms.push({ name: systemName, entity: entityId });
   }
   return rooms;
 }
