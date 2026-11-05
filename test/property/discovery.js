@@ -4,8 +4,9 @@
 // invariants its start configuration must satisfy over any of them. A description is plain JSON
 // in the shape test/fixtures/installation.js builds: areas in registry order, devices (some
 // nested under a parent), sensors of the four measurements — 0 to 5 each, declared correctly,
-// misspelled, undeclared or foreign, usable or not, named or not, placed or not — and
-// distractors that must never be found. DISCOVERY_WEIGHTS is measured by discovery.test.js.
+// misspelled, undeclared or foreign, usable or not, named or not, placed or not — distractors
+// that must never be found, and with or without the frontend's formatEntityName() and the names
+// it returns. DISCOVERY_WEIGHTS is measured by discovery.test.js.
 // See internal dev doc §4 "Die Property-Schicht" and "Card-Picker-Vertrag".
 
 const { SeededRandom } = require("../helpers/seeded-random.js");
@@ -81,6 +82,22 @@ const DISCOVERY_WEIGHTS = {
     [5, "blank"],
     [9, "duplicate"],
     [8, "awkward"],
+  ],
+  // Home Assistant 2026.4 and later hand the picker formatEntityName(); older frontends do not.
+  formatter: [
+    [60, "present"],
+    [40, "absent"],
+  ],
+  // What formatEntityName() returns for a sensor; `fallback` is Home Assistant's own fallback to
+  // the friendly_name or the object id.
+  systemName: [
+    [58, "composed"],
+    [8, "duplicate"],
+    [6, "awkward"],
+    [6, "blank"],
+    [6, "notText"],
+    [6, "throws"],
+    [10, "fallback"],
   ],
   registry: [
     [78, "plain"],
@@ -286,13 +303,38 @@ function generateSensor(rng, metric, index, context) {
 
   const domain = weighted(rng, DISCOVERY_WEIGHTS.domain);
   const prefix = rng.pick(["a", "bath", "living", "z", "kitchen"]);
-  return {
+  const generated = {
     id: `${domain}.${prefix}_${metric}_${index}`,
     state: generateReading(rng, metric, unit),
     attributes,
     name,
     registry: generateRegistry(rng, context.areas, context.devices),
   };
+  const systemName = context.formatter ? generateSystemName(rng, metric, index, context) : undefined;
+  return systemName === undefined ? generated : { ...generated, systemName };
+}
+
+// The return value of formatEntityName() for one sensor; undefined leaves Home Assistant's fallback.
+function generateSystemName(rng, metric, index, context) {
+  switch (weighted(rng, DISCOVERY_WEIGHTS.systemName)) {
+    case "duplicate":
+      return context.systemNames.length ? rng.pick(context.systemNames) : "Sensor Temperature";
+    case "awkward":
+      return rng.pick(V.AWKWARD_TEXT);
+    case "blank":
+      return rng.pick(["", "  "]);
+    case "notText":
+      return rng.pick([42, null, {}, ["Thermostat"]]);
+    case "throws":
+      return { throws: true };
+    case "fallback":
+      return undefined;
+    default: {
+      const composed = `${rng.pick(["Thermostat", "Multisensor", "Air monitor", "TIMMERFLOTTE"])} ${index} ${metric}`;
+      context.systemNames.push(composed);
+      return composed;
+    }
+  }
 }
 
 function distractorAt(rng, index, context) {
@@ -306,7 +348,8 @@ function generateInstallation(seedOrRng) {
   const rng = typeof seedOrRng === "number" ? new SeededRandom(seedOrRng) : seedOrRng;
   const areas = generateAreas(rng);
   const devices = generateDevices(rng, areas);
-  const context = { areas, devices, names: [] };
+  const formatter = weighted(rng, DISCOVERY_WEIGHTS.formatter) === "present";
+  const context = { areas, devices, names: [], formatter, systemNames: [] };
   const sensors = [];
   const withClimateSensors = weighted(rng, DISCOVERY_WEIGHTS.installation) === "withClimateSensors";
   for (const metric of METRIC_KINDS) {
@@ -320,7 +363,7 @@ function generateInstallation(seedOrRng) {
     const other = rng.int(0, index);
     [sensors[index], sensors[other]] = [sensors[other], sensors[index]];
   }
-  return { areas, devices, sensors };
+  return { areas, devices, sensors, formatter };
 }
 
 // ------------------------------------------------------------------- the reference --
@@ -347,6 +390,21 @@ function areaOf(hass, entityId) {
   const areaId = entry?.area_id || device?.area_id || parent?.area_id || null;
   const name = areaId && Object.hasOwn(hass.areas, areaId) ? hass.areas[areaId].name : null;
   return typeof name === "string" && name.trim() ? { id: areaId, name: name.trim() } : null;
+}
+
+// The name a room takes when it is named by the system: what formatEntityName() returns, when it
+// returns text, else the friendly_name.
+function systemNameOf(hass, entityId) {
+  const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : null);
+  let formatted = null;
+  if (typeof hass.formatEntityName === "function") {
+    try {
+      formatted = hass.formatEntityName(hass.states[entityId]);
+    } catch (_error) {
+      formatted = null;
+    }
+  }
+  return text(formatted) ?? text(hass.states[entityId].attributes.friendly_name);
 }
 
 // Whether the browse path may take this entity at all, and in the usable pass.
@@ -422,8 +480,8 @@ function checkDiscovery(description, { stubFor, isUsable, template }) {
   if (new Set(placed).size !== placed.length) violations.push("two rooms share an area");
 
   const byArea = rooms.every((room, index) => areas[index] && areas[index].name === room.name);
-  const byName = rooms.every((room) => (hass.states[room.entity].attributes.friendly_name ?? "").trim() === room.name);
-  if (!byArea && !byName) violations.push("room names are neither all area names nor all friendly names");
+  const byName = rooms.every((room) => systemNameOf(hass, room.entity) === room.name);
+  if (!byArea && !byName) violations.push("room names are neither all area names nor all names the system shows");
 
   // Two named areas of the chosen measurement: every room is an area, up to three of them.
   const kindIds = ids.filter((id) => declaredKind(hass, id) === kind && qualifies(hass, id, { usable: usablePass, isUsable }));

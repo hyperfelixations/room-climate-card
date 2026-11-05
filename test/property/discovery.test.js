@@ -91,6 +91,28 @@ test("sensors are declared, placed, named and registered in the declared proport
   assertNear(share((sensor) => sensor.name === undefined), weightShare(DISCOVERY_WEIGHTS.friendlyName, "missing"), 0.015, "nameless");
 });
 
+test("the frontend's formatEntityName() and the names it returns follow their weights", () => {
+  const withFormatter = population.filter((description) => description.formatter);
+  assertNear(withFormatter.length / SAMPLE, weightShare(DISCOVERY_WEIGHTS.formatter, "present"), 0.03, "installations with formatEntityName()");
+  assert.ok(population.filter((description) => !description.formatter).every((description) => description.sensors.every((sensor) => !("systemName" in sensor))), "a name without the function to return it");
+
+  const named = withFormatter.flatMap((description) => description.sensors.filter((sensor) => !isDistractor(sensor)));
+  const share = (predicate) => named.filter(predicate).length / named.length;
+  const isText = (value) => typeof value === "string";
+  assertNear(share((sensor) => !("systemName" in sensor)), weightShare(DISCOVERY_WEIGHTS.systemName, "fallback"), 0.02, "Home Assistant's own fallback");
+  assertNear(share((sensor) => sensor.systemName?.throws === true), weightShare(DISCOVERY_WEIGHTS.systemName, "throws"), 0.015, "a failing formatEntityName()");
+  assertNear(share((sensor) => "systemName" in sensor && !isText(sensor.systemName) && sensor.systemName?.throws !== true), weightShare(DISCOVERY_WEIGHTS.systemName, "notText"), 0.015, "a name that is not text");
+  assert.ok(named.some((sensor) => isText(sensor.systemName) && !sensor.systemName.trim()), "no blank name");
+  assert.ok(named.some((sensor) => V.AWKWARD_TEXT.includes(sensor.systemName) && sensor.systemName.trim()), "no awkward name");
+  assert.ok(
+    withFormatter.some((description) => {
+      const names = description.sensors.map((sensor) => sensor.systemName).filter((name) => isText(name) && name.trim());
+      return new Set(names).size < names.length;
+    }),
+    "no duplicate name"
+  );
+});
+
 test("every way of placing a sensor, and every distractor, actually occurs", () => {
   const placements = {
     "own area": (sensor) => sensor.registry?.area_id?.startsWith("area_") && !sensor.registry.device_id,

@@ -1,6 +1,6 @@
 // Assemble 13 contiguous slices with no separator; their order and owned blank lines are normative.
 // Only carousel keyframes/animation/view count/view width vary; the shadow root keeps one inspectable <style>.
-// Contract: see internal dev doc §5 "Build, Rollup und HACS-Artefakt".
+// Contract: see internal dev doc §5 "Build, Rollup und Release-Asset".
 
 import { tokensCss } from "./tokens.js";
 import { CARD_CSS } from "./card.js";
