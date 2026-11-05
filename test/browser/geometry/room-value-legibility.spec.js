@@ -91,7 +91,7 @@ async function autoRowLimit(page, reading) {
   const probeId = await createCard(page, { entity: "sensor.avg", rooms: roomsOf(1) }, statesOf(reading, 1), LANGUAGE);
   return page.evaluate((id) => {
     const card = document.getElementById(id);
-    const columns = card._autoRoomColumns();
+    const columns = card._sizing(1).autoColumns;
     card.remove();
     return columns;
   }, probeId);

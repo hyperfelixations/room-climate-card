@@ -232,6 +232,7 @@ test("two markers closer than the overlap threshold are nudged apart, not reposi
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(80, 20), { first: 0, second: 0 });
   // Symmetric: argument order only decides which gets the negative offset.
   assert.deepEqual(scaleViewModel.resolveMarkerNudge(51.4, 50), { first: -4, second: 4 });
+  assert.deepEqual(scaleViewModel.resolveMarkerNudge(50, 50, 1.5), { first: -6, second: 6 }, "the nudge grows with the panel");
 });
 
 // ------------------------------------------------- boundary and band labels --
@@ -489,6 +490,36 @@ function cfgWithTwoRooms(overrides = {}) {
   });
 }
 
+// A fixed large size on a card wide enough to hold it: every factor at its step.
+const LARGE = { header: 1.5, panel: 1.5, rooms: 2, dynamic: false, hierarchy: true };
+
+test("the view model draws the size its measured width allows; the panel factor scales the view area and the label gap", () => {
+  const unscaled = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms(), texts: stubTexts(), layoutWidth: 600 });
+  const scaled = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms({ size: LARGE }), texts: stubTexts(), layoutWidth: 600 });
+  assert.deepEqual(unscaled.size, { shell: 1, header: 1, panel: 1, entityLabel: 1, rooms: 1, roomValue: 1 }, "no size, nothing changes");
+  assert.equal(scaled.size.panel, 1.5);
+  assert.equal(scaled.size.header, 1.5);
+  assert.equal(scaled.size.shell, 1.5);
+  assert.ok(scaled.size.roomValue >= 2, "the rooms at their step at least");
+  assert.equal(scaled.views.height, unscaled.views.height * 1.5);
+  const gaps = scaled.views.keys.filter((key) => "labelGap" in scaled.views.byKey[key]);
+  assert.ok(gaps.length > 0, "a scale-shaped view is active");
+  for (const key of gaps) {
+    assert.equal(scaled.views.byKey[key].labelGap, unscaled.views.byKey[key].labelGap * 1.5, key);
+  }
+  assert.equal(unscaled.views.byKey[gaps[0]].labelGap, scaleViewModel.LABEL_GAP_PX);
+  // A narrow card holds less: header and panel stop where the narrowest proven card does.
+  const narrow = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms({ size: LARGE }), texts: stubTexts(), layoutWidth: 375 });
+  assert.ok(narrow.size.panel < 1.5 && narrow.size.panel > 1);
+  // Without a measured width the reference card's width decides.
+  const unmeasured = cardViewModel.buildCardViewModel({ domainModel: withTwoRooms(), config: cfgWithTwoRooms({ size: LARGE }), texts: stubTexts() });
+  assert.deepEqual(unmeasured.size, narrow.size);
+  // Everything that is not a length stays: the texts, the values, the colours.
+  assert.equal(scaled.subtitle, unscaled.subtitle);
+  assert.deepEqual(scaled.rooms.chips.map((chip) => chip.valueText), unscaled.rooms.chips.map((chip) => chip.valueText));
+  assert.equal(scaled.tone.color, unscaled.tone.color);
+});
+
 test("hiding the chips touches nothing else", () => {
   const domainModel = withTwoRooms();
   const shown = cardViewModel.buildCardViewModel({ domainModel, config: cfgWithTwoRooms(), texts: stubTexts() });
@@ -588,6 +619,15 @@ function noDataDomain({
     diagnostics: { warnings: [], hints: [] },
   };
 }
+
+test("the no-data view model draws the size too and scales its view area with the panel", () => {
+  const size = { header: 1, panel: 1.25, rooms: 1, dynamic: false, hierarchy: true };
+  const unscaled = cardViewModel.buildCardViewModel({ domainModel: noDataDomain(), config: cfg(), texts: stubTexts(), layoutWidth: 600 });
+  const scaled = cardViewModel.buildCardViewModel({ domainModel: noDataDomain(), config: cfg({ size }), texts: stubTexts(), layoutWidth: 600 });
+  assert.equal(scaled.size.panel, 1.25);
+  assert.equal(scaled.size.rooms, 1);
+  assert.equal(scaled.views.height, unscaled.views.height * 1.25);
+});
 
 test("the no-data view model carries the normal shell contract", () => {
   const result = cardViewModel.buildCardViewModel({

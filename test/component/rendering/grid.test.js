@@ -27,7 +27,7 @@ function totalItems(rowSizes) {
   return rowSizes.reduce((sum, r) => sum + r.itemCount, 0);
 }
 
-// An automatic row limit; the card's own comes from autoRoomColumnsFor() in room-chip-fit.js.
+// An automatic row limit; the card's own comes from resolveCardSize() in card-size.js.
 const AUTO_COLUMNS = 7;
 
 test("count <= 0 returns no rows and zero capacity", () => {

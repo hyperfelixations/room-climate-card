@@ -76,7 +76,7 @@ async function typicalRow(page, scenario) {
     const card = document.getElementById(cardId);
     const profile = card._resolveMetricContext().displayUnitProfile;
     const { min, max } = metricMetaFor(card._metricType()).typicalReading;
-    const row = { columns: card._autoRoomColumns(), values: [profile.fromCanonical(max), profile.fromCanonical(min)] };
+    const row = { columns: card._sizing(1).autoColumns, values: [profile.fromCanonical(max), profile.fromCanonical(min)] };
     card.remove();
     return row;
   }, probe);

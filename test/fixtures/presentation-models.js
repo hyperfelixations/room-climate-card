@@ -48,6 +48,7 @@ function cfg(overrides = {}) {
     room_columns: null,
     room_rows: null,
     views: null,
+    size: { header: 1, panel: 1, rooms: 1, dynamic: true, hierarchy: true },
     _configDiagnostics: [],
     ...rest,
     show: { ...SHOW_EVERYTHING, ...show },

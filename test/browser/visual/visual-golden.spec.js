@@ -272,6 +272,56 @@ test.describe("visual golden: the card the README advertises", () => {
   });
 });
 
+// The README hero with seven rooms at the sizes a dashboard on a phone or a tablet column draws:
+// header, panel and chips grow together, the chips fill their rows, the readings stay below the
+// headline. Width-dependent by design: the card measures itself, so each golden names its width.
+test.describe("visual golden: card sizes", () => {
+  const ROOMS = [
+    { name: "Bedroom", short: "BE", value: 20.6 },
+    { name: "Living Room", short: "LR", value: 21.8 },
+    { name: "Kitchen", short: "KI", value: 22.4 },
+    { name: "Office", short: "OF", value: 23.1 },
+    { name: "Bathroom", short: "BA", value: 24.0 },
+    { name: "Hallway", short: "HW", value: 21.2 },
+    { name: "Guest Room", short: "GU", value: 22.9 },
+  ];
+
+  async function sizedCard(page, size) {
+    const states = { "sensor.house": mkStateObj("sensor.house", 22.4, TEMPERATURE_C) };
+    const rooms = ROOMS.map((room, i) => {
+      states[`sensor.r${i}`] = mkStateObj(`sensor.r${i}`, room.value, TEMPERATURE_C);
+      return { entity: `sensor.r${i}`, name: room.name, short: room.short };
+    });
+    return createCard(page, { entity: "sensor.house", rooms, auto_slide: false, size }, states);
+  }
+
+  // The drawn card's chip reading at 400 and 440 px (its narrow layout); a sized card reads larger.
+  const DRAWN_CHIP_FONT_PX = 14;
+
+  async function chipFont(page, cardId) {
+    return page.locator(`#${cardId}`).evaluate((card) => parseFloat(getComputedStyle(card.shadowRoot.querySelector(".rtc-room-value")).fontSize));
+  }
+
+  for (const [name, size, width, dark] of [
+    ["size-medium-400.png", "medium", 400, false],
+    ["size-large-440.png", "large", 440, false],
+    ["size-large-dark-440.png", "large", 440, true],
+    ["size-rooms-large-400.png", { rooms: "large" }, 400, false],
+  ]) {
+    test(name, async ({ page }) => {
+      if (dark) await page.emulateMedia({ colorScheme: "dark" });
+      await gotoHarness(page);
+      const cardId = await sizedCard(page, size);
+      await setCardWidth(page, cardId, width);
+      const card = page.locator(`#${cardId}`);
+      await expect(card.locator(".rtc-room-chip")).toHaveCount(7);
+      await expect(card.locator(".rtc-room-row")).toHaveCount(2);
+      expect(await chipFont(page, cardId)).toBeGreaterThanOrEqual(1.3 * DRAWN_CHIP_FONT_PX);
+      await shot(page, cardId, name, width);
+    });
+  }
+});
+
 test("visual golden: dark color scheme", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoHarness(page);

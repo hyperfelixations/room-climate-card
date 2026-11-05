@@ -26,6 +26,7 @@ import { rejectConfiguration } from "./errors.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
 import { normalizeShowConfig, resolveShowConfig } from "./show.js";
+import { normalizeSizeConfig } from "./size.js";
 import { checkTopLevelKeys } from "./top-level-keys.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
@@ -169,6 +170,8 @@ export function normalizeConfig(config, collaborators) {
       ACCENT_LINE_POSITIONS,
       DEFAULT_CONFIG.accent_line
     ),
+    // The size factors of the card's frame (`shell`, written `card`), header, panel and rooms.
+    size: normalizeSizeConfig(userConfig.size, diagnostics),
     // WHETHER each part is drawn; "" on the part's key and `show.<part>: false` are two
     // roads to the same absent node.
     show,

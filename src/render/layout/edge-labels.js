@@ -4,7 +4,6 @@
 // Runs before the optimal label, which is placed between the two.
 
 import { measuredWidth, setStyleProperty, setText } from "../primitives/dom.js";
-import { LABEL_GAP_PX } from "./side-labels.js";
 
 export function resolveEdgeLabels(containerEl, content) {
   if (!containerEl || !content?.boundaryLabels) return;
@@ -18,7 +17,7 @@ export function resolveEdgeLabels(containerEl, content) {
   setStyleProperty(maxEl, "max-width", "");
   const barWidth = measuredWidth(bar);
   if (!barWidth) return;
-  const available = barWidth - LABEL_GAP_PX;
+  const available = barWidth - content.labelGap;
   const fits = () => measuredWidth(minEl) + measuredWidth(maxEl) <= available;
 
   setText(minEl, content.boundaryLabels.min);

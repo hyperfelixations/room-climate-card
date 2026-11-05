@@ -182,6 +182,7 @@ test("normalizeConfig() fills in every default for a minimal config", () => {
   assert.equal(result.auto_slide, true);
   assert.equal(result.swipe, true);
   assert.equal(result.accent_line, "top");
+  assert.deepEqual(result.size, { header: 1, panel: 1, rooms: 1, dynamic: true, hierarchy: true });
   assert.equal(Object.hasOwn(result, "hide_footer"), false, "each view owns its footer");
   assert.equal(result.show.rooms, "auto");
   assert.equal(result.show.unavailable_rooms, true);

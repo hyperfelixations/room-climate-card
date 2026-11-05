@@ -4,7 +4,7 @@
 import { clamp } from "../../core/numbers.js";
 import { measuredWidth, setStyleProperty } from "../primitives/dom.js";
 import { resolveLabelForm } from "./label-form.js";
-import { LABEL_GAP_PX, layoutSideLabelGroup } from "./side-labels.js";
+import { layoutSideLabelGroup } from "./side-labels.js";
 
 const SIDE_LABEL_SELECTOR = {
   min: ".rtc-range-scale-label-min",
@@ -27,7 +27,7 @@ export function resolveRangeScaleLabels(containerEl, content) {
     return;
   }
 
-  const gap = LABEL_GAP_PX;
+  const gap = content.labelGap;
   // Reset previous caps before measuring natural widths; measure-before-shrink is idempotent.
   for (const element of [currentEl, ...sideElements]) setStyleProperty(element, "max-width", "");
 

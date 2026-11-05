@@ -332,6 +332,33 @@ test("getCardSize(): reserves the chip rows the card draws for its measurement a
   assert.ok(drawnRows.size > 1, "the measurement changes the rows, so the comparison means something");
 });
 
+test("getCardSize(): grows with the size the card draws and reserves the rows its chips take", () => {
+  // Header and panel are three units at their drawn size, each chip row one; both grow with the
+  // size the card draws. Without a measured width (jsdom) the reference card's width decides.
+  const rooms = Array.from({ length: 7 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` }));
+  const states = { "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) };
+  for (const room of rooms) states[room.entity] = mkState(room.entity, 22, TEMPERATURE_C);
+  const sized = (size) => {
+    const el = env.document.createElement("room-climate-card");
+    el.setConfig({ entity: "sensor.avg", rooms, size });
+    el.hass = mkHass(states);
+    const model = el._computeViewModel();
+    return { drawn: model.rooms.rowSizes.length, size: model.size, hint: el.getCardSize() };
+  };
+  const unscaled = sized(undefined);
+  assert.deepEqual(sized("small"), unscaled);
+  assert.equal(unscaled.hint, 3 + unscaled.drawn);
+
+  for (const size of ["medium", "large", { rooms: "large", dynamic: false }, { panel: "large" }]) {
+    const card = sized(size);
+    const where = JSON.stringify(size);
+    assert.equal(card.hint, Math.ceil(3 * Math.max(card.size.header, card.size.panel) + card.drawn * card.size.roomValue), where);
+    assert.ok(card.hint >= unscaled.hint, where);
+  }
+  assert.ok(sized({ rooms: "large", dynamic: false }).drawn > unscaled.drawn, "larger chips take more rows");
+  assert.equal(sized({ panel: "large" }).drawn, unscaled.drawn, "the panel leaves the chips alone");
+});
+
 test("getCardSize(): the hint applies the same source rule the card does", () => {
   // A room the card can never use is not a source, so the hint reserves no chip row for it.
   // Before any hass update the config alone decides -- the stable answer for a layout hint.

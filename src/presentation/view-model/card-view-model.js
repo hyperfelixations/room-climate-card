@@ -4,9 +4,11 @@
 
 import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
-import { autoRoomColumnsFor } from "./room-chip-fit.js";
+import { typicalChipTexts } from "./room-chip-fit.js";
+import { resolveCardSize } from "./card-size.js";
+import { ROOM_CHIP_REFERENCE_WIDTH_PX } from "./room-chip-metrics.js";
 import { FALLBACK_VIEW_AREA_HEIGHT, buildViewContent, buildViewState } from "./view-state.js";
-import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
+import { LABEL_GAP_PX, buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
 import { buildBoundaryLabel, buildCompactBoundaryLabel } from "./view-content/scale-bar.js";
 import { SOURCE_TOPOLOGY, chipsWouldDuplicateHeadline } from "../../application/model/source-topology.js";
 import { buildRoomMarker } from "./marker.js";
@@ -184,7 +186,7 @@ function buildNoDataSubtitle({ domainModel, headline, texts }) {
 }
 
 // No-data keeps the normal shell contracts, neutral paint and a collapsed view area.
-function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta, notices, warning }) {
+function buildNoDataViewModel({ domainModel, config, texts, layoutWidth, topology, headerTitle, metricKind, meta, notices, warning }) {
   const title = headerTitle.title;
   const headline = noDataHeadlineSource(domainModel, config, topology);
   const label = resolveHeadlineLabel({ config, topology, roomIndex: headline.roomIndex, texts });
@@ -205,8 +207,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
   const displayRooms = buildDisplayRooms(domainModel, config);
   const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
   // Without data there is no display unit; the chips are sized for the canonical one.
-  const autoColumns = autoRoomColumnsFor({ metricKind, displayUnitProfile: null, fmt: texts.fmt });
-  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, autoColumns, language: texts.language });
+  const chipTexts = typicalChipTexts({ metricKind, displayUnitProfile: null, fmt: texts.fmt });
+  const sizing = sizeFor(config, layoutWidth, chipTexts, decoratedRooms.length);
+  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, autoColumns: sizing.autoColumns, language: texts.language });
   const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
   const showChips =
     config.show.rooms !== false &&
@@ -215,6 +218,7 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
 
   return {
     empty: true,
+    size: sizing.size,
     metric: { kind: metricKind, unit: "", displayUnitProfile: null },
     title,
     subtitle: headerSubtitle.subtitle,
@@ -264,12 +268,22 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
     range: null,
     trend: { model: null, text: "" },
     scale: null,
-    views: { keys: [], entries: [], options: {}, collapsed: true, height: FALLBACK_VIEW_AREA_HEIGHT, byKey: {} },
+    views: { keys: [], entries: [], options: {}, collapsed: true, height: FALLBACK_VIEW_AREA_HEIGHT * sizing.size.panel, byKey: {} },
     carousel: { hint: null, noActiveViewsHint: "" },
   };
 }
 
-export function buildCardViewModel({ domainModel, config, texts }) {
+// The card's measured width decides how large a sized card draws; without one, the reference width.
+function sizeFor(config, layoutWidth, chipTexts, count) {
+  return resolveCardSize({
+    size: config.size,
+    width: layoutWidth ?? ROOM_CHIP_REFERENCE_WIDTH_PX,
+    chipTexts,
+    grid: { count, columns: config.room_columns, rows: config.room_rows },
+  });
+}
+
+export function buildCardViewModel({ domainModel, config, texts, layoutWidth = null }) {
   // Reuse state-resolved topology for label and chip redundancy decisions.
   const topology = domainModel.topology;
   const metricKind = domainModel.metric.kind;
@@ -280,7 +294,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   const warning = buildWarningBlock({ config, warnings: notices.warnings, t: texts.t });
 
   if (domainModel.empty) {
-    return buildNoDataViewModel({ domainModel, config, texts, topology, headerTitle, metricKind, meta, notices, warning });
+    return buildNoDataViewModel({ domainModel, config, texts, layoutWidth, topology, headerTitle, metricKind, meta, notices, warning });
   }
 
   const unit = domainModel.metric.unit;
@@ -302,8 +316,9 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     decoratedByIndex.set(room.index, decorated);
     return decorated;
   });
-  const autoColumns = autoRoomColumnsFor({ metricKind, displayUnitProfile: domainModel.metric.displayUnitProfile, fmt: texts.fmt });
-  const layout = buildRoomLayout({ declaredRooms: decoratedDeclared, config, autoColumns, language: texts.language });
+  const chipTexts = typicalChipTexts({ metricKind, displayUnitProfile: domainModel.metric.displayUnitProfile, fmt: texts.fmt });
+  const sizing = sizeFor(config, layoutWidth, chipTexts, decoratedDeclared.length);
+  const layout = buildRoomLayout({ declaredRooms: decoratedDeclared, config, autoColumns: sizing.autoColumns, language: texts.language });
 
   const average = domainModel.average.value;
   const rooms = domainModel.rooms;
@@ -372,7 +387,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
   if (hasExtremes) {
     const coolestPosition = scale.markerPositions.coolest;
     const warmestPosition = scale.markerPositions.warmest;
-    const nudge = resolveMarkerNudge(coolestPosition, warmestPosition);
+    const nudge = resolveMarkerNudge(coolestPosition, warmestPosition, sizing.size.panel);
     extremes = {
       coolest: decoratedByIndex.get(coolest.index),
       warmest: decoratedByIndex.get(warmest.index),
@@ -412,6 +427,7 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     range,
     trend: { ...domainModel.trend, text: trendText },
     scale,
+    labelGap: LABEL_GAP_PX * sizing.size.panel,
     buildRangeScaleAxis: () =>
       buildScaleAxis({
         ...axisInputs,
@@ -442,6 +458,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
 
   return {
     empty: false,
+    // The size factors, which the stylesheet bakes in.
+    size: sizing.size,
     metric: {
       kind: metricKind,
       unit,
@@ -489,7 +507,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
       entries: viewState.entries,
       options: viewState.options,
       collapsed: viewState.collapsed,
-      height: viewState.height,
+      // The tallest active view, scaled with the panel; the stylesheet bakes it in.
+      height: viewState.height * sizing.size.panel,
       byKey,
     },
     carousel: {

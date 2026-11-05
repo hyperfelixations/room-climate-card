@@ -3,15 +3,16 @@
 // The narrow chip lengths and the container breakpoint come from room-chip-metrics.js.
 
 import { NARROW_CONTAINER_MAX_PX, ROOM_CHIP_REGIMES, roomChipLengths } from "../presentation/view-model/room-chip-metrics.js";
+import { HEADLINE_FONT_PX } from "../presentation/view-model/card-size.js";
 import { px } from "./css-units.js";
 
 export function responsiveCss(size) {
-  const { shell, panel, rooms } = size;
+  const { shell, panel, roomValue } = size;
   const narrow = roomChipLengths(ROOM_CHIP_REGIMES.narrow, size);
   return `        @container rtc-card (max-width: ${px(NARROW_CONTAINER_MAX_PX, shell)}) {
           .rtc-root { padding: ${px(narrow.cardPaddingX)}; }
           .rtc-main-panel { grid-template-columns: minmax(${px(96, panel)}, auto) minmax(40%, 1fr); }
-          .rtc-avg-value { font-size: ${px(29, panel)}; }
+          .rtc-avg-value { font-size: ${px(HEADLINE_FONT_PX.narrow, panel)}; }
           .rtc-room-grid { gap: ${px(narrow.gridGap)}; }
           .rtc-room-row { gap: ${px(narrow.gridGap)}; }
           .rtc-room-chip {
@@ -28,7 +29,7 @@ export function responsiveCss(size) {
           .rtc-room-value-unit {
             font-size: ${px(narrow.unitFont)};
             line-height: 1;
-            transform: translateY(${px(-1, rooms)});
+            transform: translateY(${px(-1, roomValue)});
           }
           .rtc-room-short { font-size: ${px(narrow.labelFont)}; }
           .rtc-extremes-view,
@@ -77,7 +78,7 @@ export function responsiveCss(size) {
           @media (max-width: ${px(600, shell)}) {
             .rtc-root { padding: ${px(narrow.cardPaddingX)}; }
             .rtc-main-panel { grid-template-columns: minmax(${px(96, panel)}, auto) minmax(40%, 1fr); }
-            .rtc-avg-value { font-size: ${px(29, panel)}; }
+            .rtc-avg-value { font-size: ${px(HEADLINE_FONT_PX.narrow, panel)}; }
             .rtc-room-grid { gap: ${px(narrow.gridGap)}; }
             .rtc-room-row { gap: ${px(narrow.gridGap)}; }
             .rtc-room-chip {
@@ -94,7 +95,7 @@ export function responsiveCss(size) {
             .rtc-room-value-unit {
               font-size: ${px(narrow.unitFont)};
               line-height: 1;
-              transform: translateY(${px(-1, rooms)});
+              transform: translateY(${px(-1, roomValue)});
             }
             .rtc-room-short { font-size: ${px(narrow.labelFont)}; }
             .rtc-extremes-view,

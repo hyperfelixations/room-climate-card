@@ -46,7 +46,10 @@ import {
 import { stubConfigFor } from "../application/model/card-suggestions.js";
 import { boundaryDigits, readingDigits } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
-import { autoRoomColumnsFor } from "../presentation/view-model/room-chip-fit.js";
+import { UNSCALED_SIZE } from "../core/size.js";
+import { typicalChipTexts } from "../presentation/view-model/room-chip-fit.js";
+import { isDrawnSize, resolveCardSize } from "../presentation/view-model/card-size.js";
+import { ROOM_CHIP_REFERENCE_WIDTH_PX } from "../presentation/view-model/room-chip-metrics.js";
 import { FALLBACK_VIEW_AREA_HEIGHT, VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
 import { messageForConfigError, renderMessage } from "../presentation/view-model/notices.js";
@@ -152,7 +155,11 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       // change the rendered width without any entity changing.
       this._resize = createResizeRuntime({
         platform: this._platform,
-        onMeasure: () => this._resolveViewLayouts(this._renderController.lastViewModel),
+        onMeasure: () => {
+          // A sized card draws for its width: a new width is a new card, everything else a new layout.
+          if (this._takeLayoutWidth()) this._renderSafely(false);
+          else this._resolveViewLayouts(this._renderController.lastViewModel);
+        },
       });
 
       // A theme switch, an OS dark-mode flip, a stylesheet card-mod places or rewrites in
@@ -396,9 +403,13 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const roomCount = isSource ? rooms.filter((room) => isSource(room.entity)).length : rooms.length;
       const chipsDrawn =
         roomCount >= 1 && showRooms !== false && (showRooms === true || !chipsWouldDuplicateHeadline(topology));
-      if (!chipsDrawn) return 3;
-      const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumns()).rowSizes.length;
-      return 4 + Math.max(0, rowCount - 1);
+      // Header and panel take three units at their drawn size, each chip row one; both grow with
+      // the size they draw at the last measured width.
+      const sizing = this._sizing(roomCount);
+      const frame = 3 * Math.max(sizing.size.header, sizing.size.panel);
+      if (!chipsDrawn) return Math.ceil(frame);
+      const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, sizing.autoColumns).rowSizes.length;
+      return Math.ceil(frame + rowCount * sizing.size.roomValue);
     }
 
     getGridOptions() {
@@ -514,13 +525,29 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return translate(this._language(), key, vars);
     }
 
-    // The same inputs the view model sizes the chips with: measurement, display unit, formatter.
-    _autoRoomColumns() {
-      return autoRoomColumnsFor({
-        metricKind: this._metricType(),
-        displayUnitProfile: this._resolveMetricContext().displayUnitProfile,
-        fmt: (value) => this._fmt(value),
+    // The same inputs the view model sizes the card with: measurement, display unit, formatter,
+    // size and width.
+    _sizing(roomCount) {
+      return resolveCardSize({
+        size: this._config?.size,
+        width: this._layoutWidth ?? ROOM_CHIP_REFERENCE_WIDTH_PX,
+        chipTexts: typicalChipTexts({
+          metricKind: this._metricType(),
+          displayUnitProfile: this._resolveMetricContext().displayUnitProfile,
+          fmt: (value) => this._fmt(value),
+        }),
+        grid: { count: roomCount, columns: this._config?.room_columns, rows: this._config?.room_rows },
       });
+    }
+
+    // Records the card's width when a sized card draws for it; true when it changed. A card without
+    // a size never reads it.
+    _takeLayoutWidth() {
+      if (isDrawnSize(this._config?.size)) return false;
+      const width = Math.round(this.getBoundingClientRect().width);
+      if (!width || width === this._layoutWidth) return false;
+      this._layoutWidth = width;
+      return true;
     }
 
     // The digit counts are resolved here, where the config override and the unit's own
@@ -626,7 +653,8 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
         // The surface the palette is about to be painted on.
         surface: this._surface(),
       });
-      return buildCardViewModel({ domainModel, config: this._config, texts: this._texts() });
+      if (this._layoutWidth == null && this.isConnected) this._takeLayoutWidth();
+      return buildCardViewModel({ domainModel, config: this._config, texts: this._texts(), layoutWidth: this._layoutWidth ?? null });
     }
 
     // The narrow presentation collaborator: a translator and five formatters,
@@ -751,7 +779,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       this._activeView = nextIndex === -1 ? 0 : nextIndex;
 
       const context = this._renderContext();
-      this._shadowMount.mount(context, { css: this._styles(viewModel.views.height), bodyHtml: renderCardBody(context, viewModel, VIEW_RENDERERS) });
+      this._shadowMount.mount(context, { css: this._styles(viewModel.views.height, viewModel.size), bodyHtml: renderCardBody(context, viewModel, VIEW_RENDERERS) });
       if (hadCardFocus) {
         const matchingSource = focusedEntity
           ? Array.from(this.shadowRoot.querySelectorAll("[data-entity]")).find(
@@ -901,15 +929,17 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
 
     // ==== Styles ====
     // All CSS for the card, scoped to the shadow DOM. The stylesheet itself lives in
-    // styles/; the five values below are its only per-render inputs: four from the
-    // carousel, and the view-area height from the view model being mounted.
-    _styles(viewHeight = FALLBACK_VIEW_AREA_HEIGHT) {
+    // styles/; the six values below are its only per-render inputs: four from the
+    // carousel, the view-area height and the size factors from the view model being
+    // mounted. A failed render has no view model and draws unscaled.
+    _styles(viewHeight = FALLBACK_VIEW_AREA_HEIGHT, size = UNSCALED_SIZE) {
       return buildStyles({
         keyframes: this._slideKeyframes(),
         trackAnimationCss: this._trackAnimationCss(),
         viewCount: (this._views || []).length,
         viewWidthPct: this._viewWidthPct(),
         viewHeight,
+        size,
       });
     }
   }

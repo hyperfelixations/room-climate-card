@@ -33,11 +33,13 @@ function columns(metricKind, { profileKey, language = "de", numberFormat, decima
   const key = profileKey ?? definition.canonicalProfileKey;
   const profile = formatProfile.resolveFormatProfile({ language, numberFormat }, undefined);
   const digits = metricMeta.readingDigits(metricKind, key, decimals);
-  return fit.autoRoomColumnsFor({
-    metricKind,
-    displayUnitProfile: definition.unitProfiles[key],
-    fmt: (value) => formatters.formatNumber(profile, value, digits),
-  });
+  return fit.autoRoomColumns(
+    fit.typicalChipTexts({
+      metricKind,
+      displayUnitProfile: definition.unitProfiles[key],
+      fmt: (value) => formatters.formatNumber(profile, value, digits),
+    })
+  );
 }
 
 // Every language with every number format, each written as a chip writes it.
@@ -77,11 +79,11 @@ test("the two-letter short code beside its mark limits every chip, also one with
 });
 
 test("the chip's own formatter writes the typical readings", () => {
-  const sized = (fmt) => fit.autoRoomColumnsFor({ metricKind: "co2", displayUnitProfile: null, fmt });
+  const sized = (fmt) => fit.autoRoomColumns(fit.typicalChipTexts({ metricKind: "co2", displayUnitProfile: null, fmt }));
   assert.ok(sized(() => "2.000.000.000") < sized(() => "2"), "a longer text fits fewer chips");
   const written = [];
   const fahrenheit = definitions.METRIC_DEFINITIONS.temperature.unitProfiles.fahrenheit;
-  fit.autoRoomColumnsFor({
+  fit.typicalChipTexts({
     metricKind: "temperature",
     displayUnitProfile: fahrenheit,
     fmt: (value) => {
@@ -118,8 +120,8 @@ test("a character outside the measured table counts as the widest one of its rol
 
 test("an unknown measurement is sized like temperature, in its canonical unit", () => {
   const fmt = (value) => formatters.formatNumber(formatProfile.resolveFormatProfile({ language: "de" }, undefined), value, 1);
-  assert.equal(fit.autoRoomColumnsFor({ metricKind: null, displayUnitProfile: null, fmt }), 7);
-  assert.equal(fit.autoRoomColumnsFor({ metricKind: "pressure", displayUnitProfile: null, fmt }), 7);
+  assert.equal(fit.autoRoomColumns(fit.typicalChipTexts({ metricKind: null, displayUnitProfile: null, fmt })), 7);
+  assert.equal(fit.autoRoomColumns(fit.typicalChipTexts({ metricKind: "pressure", displayUnitProfile: null, fmt })), 7);
 });
 
 test("the glyph table covers every unit the card writes", () => {
@@ -133,4 +135,36 @@ test("the glyph table covers every unit the card writes", () => {
   for (const character of metrics.REFERENCE_SHORT_LABEL) {
     assert.ok(Object.hasOwn(metrics.GLYPH_ADVANCE_EM.label, character), character);
   }
+});
+
+// A sized card at its measured width (resolveCardSize() in card-size.js uses these).
+const UNSCALED = { shell: 1, header: 1, panel: 1, entityLabel: 1, rooms: 1, roomValue: 1 };
+const TEMPERATURE = { valueTexts: ["10,0", "35,0"], unitText: "°C" };
+
+test("a sized card's chips: fewer the larger they are, more the wider the card, in the layout its width selects", () => {
+  assert.equal(fit.chipRegimeAt(462, 1), "narrow", "460 px of content is still narrow");
+  assert.equal(fit.chipRegimeAt(463, 1), "wide");
+  assert.equal(fit.chipRegimeAt(600, 1.5), "narrow", "a larger frame moves the start of the wide layout");
+  assert.equal(fit.roomColumnsAt({ ...TEMPERATURE, width: metrics.ROOM_CHIP_REFERENCE_WIDTH_PX, size: UNSCALED }), fit.autoRoomColumns(TEMPERATURE), "at the reference width the drawn card's count");
+  let previous = Infinity;
+  for (const roomValue of [1, 1.25, 1.5, 2, 2.5]) {
+    const count = fit.roomColumnsAt({ ...TEMPERATURE, width: 400, size: { ...UNSCALED, roomValue } });
+    assert.ok(count <= previous && count >= 1, `${roomValue}: ${count}`);
+    previous = count;
+  }
+  previous = 0;
+  for (const width of [360, 400, 440]) {
+    const count = fit.roomColumnsAt({ ...TEMPERATURE, width, size: { ...UNSCALED, roomValue: 1.5, rooms: 1.25 } });
+    assert.ok(count >= previous, `${width}: ${count}`);
+    previous = count;
+  }
+});
+
+test("the fill grows a reading as far as its columns still fit, never past its cap and never below its start", () => {
+  const filled = fit.fillRoomValue({ ...TEMPERATURE, width: 400, size: UNSCALED, columns: 4, from: 1.25, cap: 2.5, labelCap: 1.25 });
+  assert.ok(filled > 1.25 && filled <= 2.5);
+  assert.ok(fit.roomColumnsAt({ ...TEMPERATURE, width: 400, size: { ...UNSCALED, roomValue: filled, rooms: 1.25 } }) >= 4, "the four still fit");
+  assert.ok(filled === 2.5 || fit.roomColumnsAt({ ...TEMPERATURE, width: 400, size: { ...UNSCALED, roomValue: filled * 1.01, rooms: 1.25 } }) < 4, "and nothing larger");
+  assert.equal(fit.fillRoomValue({ ...TEMPERATURE, width: 400, size: UNSCALED, columns: 4, from: 1.25, cap: 1.25, labelCap: 1.25 }), 1.25, "a cap at the start");
+  assert.equal(fit.fillRoomValue({ ...TEMPERATURE, width: 400, size: UNSCALED, columns: 9, from: 1.25, cap: 2.5, labelCap: 1.25 }), 1.25, "columns that do not fit even at the start");
 });

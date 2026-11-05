@@ -29,7 +29,7 @@ export function resolveRoomDisplayOrder(list, sortMode, language) {
 
 // Splits chips into `{ itemCount, columnCount }` rows. Fixed columns keep their
 // width on a short final row. Capacity is capped only when both dimensions are set.
-// `autoMaxColumns` is the automatic row limit, autoRoomColumnsFor() in room-chip-fit.js.
+// `autoMaxColumns` is the automatic row limit, resolveCardSize() in card-size.js.
 export function roomGridRows(count, columns, rows, autoMaxColumns) {
   if (count <= 0) return { rowSizes: [], capacity: 0 };
 

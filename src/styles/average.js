@@ -1,9 +1,10 @@
 // SHIPPED STYLESHEET SLICE: average button/value/unit/trend states.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
+import { ENTITY_LABEL_FONT_PX, HEADLINE_FONT_PX } from "../presentation/view-model/card-size.js";
 import { px } from "./css-units.js";
 
-export function averageCss({ panel }) {
+export function averageCss({ panel, entityLabel }) {
   return `        /* appearance:none removes widget styling, not engine-specific UA padding. */
         button {
           appearance: none;
@@ -47,7 +48,7 @@ export function averageCss({ panel }) {
         .rtc-avg-label {
           contain: inline-size;
           display: block;
-          font-size: ${px(10, panel)};
+          font-size: ${px(ENTITY_LABEL_FONT_PX, entityLabel)};
           font-weight: 850;
           letter-spacing: .075em;
           text-transform: uppercase;
@@ -61,7 +62,7 @@ export function averageCss({ panel }) {
         .rtc-avg-value {
           display: block;
           margin-top: ${px(4, panel)};
-          font-size: ${px(33, panel)};
+          font-size: ${px(HEADLINE_FONT_PX.wide, panel)};
           font-weight: 950;
           line-height: .95;
           color: var(--primary-text-color);

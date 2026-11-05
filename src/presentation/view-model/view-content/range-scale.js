@@ -47,6 +47,7 @@ export function buildRangeScaleViewContent(shared, options, axis) {
       // Daily span remains available with zero comparable rooms.
       footerText: options.show_footer ? buildFooterText(shared, options.footer, (value) => texts.fmtWithUnit(value)) : null,
       compactFooterText: options.show_footer ? buildCompactFooterText(shared, options.footer) : null,
+      labelGap: shared.labelGap,
     }),
     topLabels: {
       current: {

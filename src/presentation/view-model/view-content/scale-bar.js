@@ -42,9 +42,11 @@ export function buildBandLabelForms(texts, unit, { min, max, longKey, shortKey }
   };
 }
 
-export function buildScaleBarContent({ geometry, texts, unit, showComfortBand, showOptimalBand, footerText, compactFooterText = null }) {
+// `labelGap` is the least gap in px the layout keeps between two labels.
+export function buildScaleBarContent({ geometry, texts, unit, showComfortBand, showOptimalBand, footerText, compactFooterText = null, labelGap }) {
   return {
     geometry,
+    labelGap,
     showComfortBand,
     showOptimalBand,
     optimalLabel: showOptimalBand

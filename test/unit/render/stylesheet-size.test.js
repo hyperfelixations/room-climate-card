@@ -73,8 +73,11 @@ test("each part scales its own region of the card", () => {
   assert.match(stylesheet({ header: 2 }), /\.rtc-title \{[^}]*font-size: 42px;/, "header: the title");
   assert.match(stylesheet({ panel: 2 }), /\.rtc-avg-value \{[^}]*font-size: 66px;/, "panel: the headline value");
   assert.match(stylesheet({ panel: 2 }), /--rtc-view-height: 140px;[^}]*--rtc-view-height-narrow: 148px;/, "panel: the view area");
-  assert.match(stylesheet({ rooms: 2 }), /\.rtc-room-value \{[^}]*font-size: 34px;/, "rooms: the chip value");
+  assert.match(stylesheet({ entityLabel: 2 }), /\.rtc-avg-label \{[^}]*font-size: 20px;/, "entityLabel: the caption above the headline");
   assert.match(stylesheet({ rooms: 2 }), /\.rtc-room-mark \{[^}]*width: 30px;/, "rooms: the chip mark");
+  assert.match(stylesheet({ rooms: 2 }), /\.rtc-room-short \{[^}]*font-size: 22px;/, "rooms: the short code");
+  assert.match(stylesheet({ roomValue: 2 }), /\.rtc-room-value \{[^}]*font-size: 34px;/, "roomValue: the reading");
+  assert.match(stylesheet({ roomValue: 2 }), /\.rtc-room-value-unit \{[^}]*font-size: 20px;/, "roomValue: its unit");
 });
 
 test("a factor that is not a whole number writes lengths with at most four decimals", () => {
@@ -91,5 +94,5 @@ test("CSS comments are the same bytes at every size", () => {
   const comments = (css) => css.match(/\/\*[\s\S]*?\*\//g);
   const base = comments(stylesheet({}));
   assert.ok(base.length > 20);
-  assert.deepEqual(comments(stylesheet({ shell: 1.5, header: 2, panel: 1.25, rooms: 1.75 })), base);
+  assert.deepEqual(comments(stylesheet({ shell: 1.5, header: 2, panel: 1.25, entityLabel: 1.4, rooms: 1.75, roomValue: 1.9 })), base);
 });
