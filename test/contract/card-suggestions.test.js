@@ -383,6 +383,91 @@ test("a room needs a name of its own: nameless, blank and repeated names are ski
   });
 });
 
+// -------------------------------------------------- the name Home Assistant shows --
+
+// Home Assistant 2026.11 names an entity after its device and itself; friendly_name keeps an
+// older name until the entity is renamed. The frontend's formatEntityName() is that new name.
+test("rooms named by the system take the name Home Assistant shows for the sensor", () => {
+  const home = installation({
+    formatter: true,
+    sensors: [
+      sensor("sensor.a", TEMPERATURE_C, { name: "Temperature", systemName: "Thermostat Temperature" }),
+      sensor("sensor.b", TEMPERATURE_C, { name: "Temperature 2", systemName: " Hall sensor Temperature " }),
+    ],
+  });
+  assert.deepEqual(suggestions.stubConfigFor(home), {
+    rooms: [
+      { name: "Thermostat Temperature", entity: "sensor.a" },
+      { name: "Hall sensor Temperature", entity: "sensor.b" },
+    ],
+  });
+  // Without the function, as before Home Assistant 2026.4, the friendly_name names the room.
+  const older = installation({ sensors: [sensor("sensor.a", TEMPERATURE_C, { name: "Temperature", systemName: "Thermostat Temperature" })] });
+  assert.deepEqual(suggestions.stubConfigFor(older), { rooms: [{ name: "Temperature", entity: "sensor.a" }] });
+});
+
+test("a blank, non-text or failing name from Home Assistant falls back to the friendly_name", () => {
+  for (const [label, systemName] of [
+    ["blank", "  "],
+    ["empty", ""],
+    ["a number", 42],
+    ["null", null],
+    ["an object", { name: "Thermostat" }],
+    ["a throw", { throws: true }],
+  ]) {
+    const home = installation({ formatter: true, sensors: [sensor("sensor.a", TEMPERATURE_C, { name: "Hall", systemName })] });
+    assert.deepEqual(suggestions.stubConfigFor(home), { rooms: [{ name: "Hall", entity: "sensor.a" }] }, label);
+  }
+  // Neither name usable: no room, so the template.
+  const nameless = installation({ formatter: true, sensors: [sensor("sensor.a", TEMPERATURE_C, { systemName: "" })] });
+  assert.deepEqual(suggestions.stubConfigFor(nameless), TEMPLATE);
+});
+
+test("the frontend's formatter is called on hass, the object that carries it", () => {
+  const states = { "sensor.t": { entity_id: "sensor.t", state: "21", attributes: { ...TEMPERATURE_C, friendly_name: "T" } } };
+  const hass = {
+    states,
+    formatEntityName(stateObject) {
+      return this === hass && stateObject === states["sensor.t"] ? "Bound" : "Unbound";
+    },
+  };
+  assert.deepEqual(suggestions.stubConfigFor(hass), { rooms: [{ name: "Bound", entity: "sensor.t" }] });
+});
+
+test("names Home Assistant shows are trimmed and never offered twice", () => {
+  const home = installation({
+    formatter: true,
+    sensors: [
+      sensor("sensor.a", TEMPERATURE_C, { name: "A", systemName: "Hall" }),
+      sensor("sensor.b", TEMPERATURE_C, { name: "B", systemName: " Hall " }),
+      sensor("sensor.c", TEMPERATURE_C, { name: "C", systemName: "Study" }),
+    ],
+  });
+  assert.deepEqual(suggestions.stubConfigFor(home), {
+    rooms: [
+      { name: "Hall", entity: "sensor.a" },
+      { name: "Study", entity: "sensor.c" },
+    ],
+  });
+});
+
+test("area names still win over the names Home Assistant shows", () => {
+  const home = installation({
+    formatter: true,
+    areas: [["a", "Attic"], ["b", "Basement"]],
+    sensors: [
+      sensor("sensor.a", TEMPERATURE_C, { systemName: "Attic sensor Temperature", registry: { area_id: "a" } }),
+      sensor("sensor.b", TEMPERATURE_C, { systemName: "Basement sensor Temperature", registry: { area_id: "b" } }),
+    ],
+  });
+  assert.deepEqual(suggestions.stubConfigFor(home), {
+    rooms: [
+      { name: "Attic", entity: "sensor.a" },
+      { name: "Basement", entity: "sensor.b" },
+    ],
+  });
+});
+
 // ------------------------------------------------------------- usable before merely declared --
 
 test("usable sensors are preferred; every kind of unusable one is left for the second pass", () => {
@@ -503,6 +588,19 @@ test("neither function throws, whatever the picker hands it", () => {
     JSON.parse('{"__proto__": {"area_id": "a", "name": "Polluted"}}'),
     Object.create(null),
   ];
+  const formatters = [
+    "not a function",
+    null,
+    () => {
+      throw new Error("formatter failed");
+    },
+    () => undefined,
+    () => ({ toString: () => "Object" }),
+    () => ["List"],
+    function needsItsHost() {
+      return this.states === valid ? "Bound" : "Unbound";
+    },
+  ];
   const hosts = [
     ...hostile.map((states) => ({ states })),
     ...hostile,
@@ -512,6 +610,7 @@ test("neither function throws, whatever the picker hands it", () => {
       { states: valid, areas: registry, entities: { "sensor.t": { area_id: "__proto__" } } },
       { states: valid, entities: registry, devices: registry, areas: registry },
     ]),
+    ...formatters.map((formatEntityName) => ({ states: valid, formatEntityName })),
   ];
   for (const hass of hosts) {
     for (const options of [undefined, null, "rooms", {}, { discovery: "entity" }, { discovery: 5 }]) {
