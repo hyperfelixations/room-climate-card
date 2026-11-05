@@ -187,7 +187,7 @@ jobs:
             $releases += [pscustomobject]@{ Name = $name; Numbers = $existing.Numbers; Stable = $existing.Stable; Commit = $commit.Trim() }
           }
 
-          # HACS offers the newest release by commit date, so a line ends once a higher major is out.
+          # The Marketplace and HACS offer the newest release by commit date, so a line ends once a higher major is out.
           foreach ($existing in $releases) {
             $existingMajor = $existing.Numbers[0]
             if ($null -eq $line -and $existingMajor -eq $major) {
@@ -198,10 +198,10 @@ jobs:
             }
             if ($null -ne $line -and $existingMajor -gt $line) {
               if ($existing.Stable) {
-                throw "Release line $line ended with $($existing.Name); HACS would offer a later $line.x release over it."
+                throw "Release line $line ended with $($existing.Name); the Marketplace and HACS would offer a later $line.x release over it."
               }
               if ($releaseKind -eq "dev") {
-                throw "Dev releases of line $line ended with the pre-release $($existing.Name); HACS would offer a later $line.x pre-release over it."
+                throw "Dev releases of line $line ended with the pre-release $($existing.Name); the Marketplace and HACS would offer a later $line.x pre-release over it."
               }
             }
           }
@@ -227,7 +227,7 @@ jobs:
               }
               $existingDates = Read-CommitDates $existing.Commit
               if ($releaseDates.Author -le $existingDates.Author -or $releaseDates.Committer -le $existingDates.Committer) {
-                throw "Commit $expectedSha is not newer than release $($existing.Name) by author and committer date; GitHub and HACS would not order it first. Release a new bump commit."
+                throw "Commit $expectedSha is not newer than release $($existing.Name) by author and committer date; GitHub, the Marketplace and HACS would not order it first. Release a new bump commit."
               }
             }
           }
@@ -555,7 +555,7 @@ jobs:
             }
             if ($env:RELEASE_LINE -ne "") {
               if ($releaseMajor -gt $major -and ($prerelease -ne "true" -or $env:RELEASE_KIND -eq "dev")) {
-                throw "The $state $name of a higher major ends release line $major; HACS would offer a later $major.x release over it."
+                throw "The $state $name of a higher major ends release line $major; the Marketplace and HACS would offer a later $major.x release over it."
               }
             }
             elseif ($draft -eq "true" -and $releaseMajor -lt $major) {
@@ -586,14 +586,14 @@ jobs:
 
           ## Installation
 
-          Install or update Room Climate Card through HACS. Reload the browser after the update.
+          Install or update Room Climate Card through the Marketplace (HACS on Home Assistant 2026.10 or older). Reload the browser after the update.
           EOF
           if [[ "$RELEASE_KIND" == "dev" ]]; then
             cat >> "$notes_file" <<'EOF'
 
           ## Pre-release
 
-          This is a development pre-release for testing. HACS offers it only where pre-releases are enabled for this repository.
+          This is a development pre-release for testing. The Marketplace and HACS offer it only where pre-releases are enabled for this repository.
           EOF
           fi
 
@@ -622,7 +622,7 @@ jobs:
           {
             echo "## Unpublished release draft created"
             echo
-            echo "Nothing has been published. HACS cannot see this draft."
+            echo "Nothing has been published. Neither the Marketplace nor HACS can see this draft."
             echo
             echo "- Draft: ${{ steps.draft.outputs.url }}"
             echo "- Tag to be created on publish: \`$RELEASE_TAG\`"

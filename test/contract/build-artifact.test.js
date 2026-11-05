@@ -1,11 +1,12 @@
 "use strict";
 
 // Smoke test for the distribution contract. The rest of the suite tests what the card does;
-// this file tests what the shipped file is. HACS copies dist/room-climate-card.js verbatim
-// and Lovelace runs it as a plain dashboard resource — no module resolver, no bundler, no
-// network fetch — so a stray `import` or a missing registration would fail in every user's
-// browser. The bundle is evaluated in a bare jsdom realm here (no ResizeObserver/matchMedia/
-// document.fonts stubs, unlike load-card.jsdom.js), so anything a plain browser lacks shows up.
+// this file tests what the shipped file is. The Marketplace and HACS install the release asset
+// dist/room-climate-card.js verbatim and Lovelace runs it as a plain dashboard resource — no
+// module resolver, no bundler, no network fetch — so a stray `import` or a missing registration
+// would fail in every user's browser. The bundle is evaluated in a bare jsdom realm here (no
+// ResizeObserver/matchMedia/document.fonts stubs, unlike load-card.jsdom.js), so anything a
+// plain browser lacks shows up.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -35,7 +36,7 @@ test("the artifact is a self-contained IIFE with no module syntax", () => {
   assert.doesNotMatch(source, /^\s*export\s/m, "no export statements");
   assert.doesNotMatch(source, /\bimport\s*\(/, "no dynamic import()");
   assert.doesNotMatch(source, /\brequire\s*\(/, "no CommonJS require()");
-  assert.doesNotMatch(source, /\/\/# sourceMappingURL/, "no source map reference (HACS ships only .js files)");
+  assert.doesNotMatch(source, /\/\/# sourceMappingURL/, "no source map reference (a release ships only the .js asset)");
 });
 
 test("the artifact performs no network, storage, or dynamic code execution", () => {
@@ -151,5 +152,5 @@ test("the artifact exposes its version global, matching package.json", () => {
 });
 
 test("the package declares no runtime dependencies", () => {
-  assert.equal(packageJson.dependencies, undefined, "the card must stay dependency-free for HACS");
+  assert.equal(packageJson.dependencies, undefined, "the card must stay dependency-free: the release asset is the whole card");
 });

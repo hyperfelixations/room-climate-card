@@ -1,4 +1,4 @@
-// The card's identity: the values Home Assistant and HACS key on, and the only module
+// The card's identity: the values Home Assistant and its Marketplace key on, and the only module
 // `npm run build:dev` replaces — every constant here gets a development counterpart there
 // (scripts/build-dev.mjs). See internal dev doc §4 "Build-/Dist-Vertrag".
 //
