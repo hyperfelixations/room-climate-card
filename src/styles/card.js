@@ -1,7 +1,12 @@
 // SHIPPED STYLESHEET SLICE: card surface, content root and top accent.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 // The surface is selected by type, so an `ha-card` rule a frontend module such as card-mod
-// appends after this sheet wins at equal specificity.
+// appends after this sheet wins at equal specificity. The card border and the horizontal
+// padding come from room-chip-metrics.js; room-chip-fit.js derives the automatic chip columns
+// from them.
+
+import { CARD_BORDER_PX, ROOM_CHIP_REGIMES } from "../presentation/view-model/room-chip-metrics.js";
+import { px } from "./css-units.js";
 
 export const CARD_CSS = `        ha-card {
           container: rtc-card / inline-size;
@@ -9,13 +14,13 @@ export const CARD_CSS = `        ha-card {
           padding: 0;
           overflow: hidden;
           background: linear-gradient(135deg, var(--rtc-top-overlay), transparent), var(--ha-card-background, var(--card-background-color));
-          border: 1px solid var(--rtc-card-border);
+          border: ${px(CARD_BORDER_PX)} solid var(--rtc-card-border);
           box-shadow: var(--ha-card-box-shadow, 0 8px 26px rgba(0,0,0,0.18));
         }
 
         .rtc-root {
           position: relative;
-          padding: 15px 16px 16px;
+          padding: 15px ${px(ROOM_CHIP_REGIMES.wide.cardPaddingX)} 16px;
           display: grid;
           gap: 11px;
         }

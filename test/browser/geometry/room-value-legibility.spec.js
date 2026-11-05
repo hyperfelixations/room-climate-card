@@ -1,9 +1,10 @@
 "use strict";
 
 // Room values stay legible at common phone widths: ellipsis must not truncate a normal
-// value like "24,7 °C". Room numbers and units are non-truncatable — automatic layout
-// allows at most 7 temperature/humidity or 5 CO2/PM2.5 chips per row before adding rows.
-// Two-letter short codes stay fully visible; longer labels keep ellipsis. Boundary:
+// value like "24,7 °C". Room numbers and units are non-truncatable — the automatic layout puts
+// as many chips into a row as the card computes for its reading (room-chip-fit.js) before
+// adding rows. Two-letter short codes stay fully visible; longer labels keep ellipsis.
+// Boundary: room-chip-fit.spec.js holds the computation against the widest typical reading,
 // narrow-width-overflow.spec.js covers the wider containment contracts.
 
 const { test, expect } = require("../../helpers/playwright.js");
@@ -62,201 +63,89 @@ async function assertNumberAndUnitContained(chip, width) {
   await assertFullyVisible(numLoc, width, "room value number");
 }
 
-// ==== Temperature: 7 chips in one row, all fully legible ====
+// ==== Automatic rows of realistic readings ====
 
-function tempRooms() {
-  return [
-    { entity: "sensor.wz", short: "WZ" },
-    { entity: "sensor.wc", short: "WC" },
-    { entity: "sensor.sz", short: "SZ" },
-    { entity: "sensor.fl", short: "FL" },
-    { entity: "sensor.ba", short: "BA" },
-    { entity: "sensor.ku", short: "KÜ" },
-    { entity: "sensor.az", short: "AZ" },
-  ];
+// Two-letter codes for up to twenty rooms, so a row is as full as the computation allows.
+const ROOM_CODES = ["WZ", "WC", "SZ", "FL", "BA", "KÜ", "AZ", "GZ", "HW", "EZ", "AR", "DG", "KZ", "FZ", "SP", "TR", "GA", "KE", "DB", "BU"];
+
+const READINGS = {
+  temperature: { attributes: TEMPERATURE_C, average: 24.5, values: [24.7, 23.8, 24.1, 24.3, 24.6, 25.2, 25.4, 22.9, 23.3, 24.0] },
+  humidity: { attributes: HUMIDITY, average: 39, values: [37.8, 35.5, 39.4, 41.0, 42.2, 43.1, 38.6, 36.9, 40.4, 44.7] },
+  co2: { attributes: CO2, average: 1200, values: [800, 1200, 2000, 950, 1500, 700, 1100, 1800, 650, 1350] },
+  pm25: { attributes: PM25, average: 20, values: [8.3, 15.9, 24.6, 41.2, 12.1, 30.0, 9.7, 18.4, 27.5, 35.2] },
+};
+
+function roomsOf(count) {
+  return ROOM_CODES.slice(0, count).map((short, i) => ({ entity: `sensor.r${i}`, short }));
 }
 
-function tempStates(values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 24.5, TEMPERATURE_C) };
-  for (const room of tempRooms()) {
-    const key = room.entity.split(".")[1];
-    states[room.entity] = mkStateObj(room.entity, values[key], TEMPERATURE_C);
-  }
+function statesOf(reading, count) {
+  const { attributes, average, values } = READINGS[reading];
+  const states = { "sensor.avg": mkStateObj("sensor.avg", average, attributes) };
+  for (let i = 0; i < count; i++) states[`sensor.r${i}`] = mkStateObj(`sensor.r${i}`, values[i % values.length], attributes);
   return states;
 }
 
-const TEMP_VALUES = { wz: 24.7, wc: 23.8, sz: 24.1, fl: 24.3, ba: 24.6, ku: 25.2, az: 25.4 };
-
-for (const width of WIDTHS) {
-  test(`temperature: 7 rooms (WZ/WC/SZ/FL/BA/KÜ/AZ) stay in one row, fully legible at ${width}px`, async ({ page }) => {
-    await gotoHarness(page);
-    const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
-    await setCardWidth(page, cardId, width);
-    const card = page.locator(`#${cardId}`);
-    const rows = await card.locator(".rtc-room-row").all();
-    expect(rows.length, `7 temperature rooms must fit in a single row (autoMaxColumns=7) at ${width}px`).toBe(1);
-    const chips = await card.locator(".rtc-room-chip").all();
-    expect(chips.length).toBe(7);
-    for (const chip of chips) {
-      await assertNumberAndUnitContained(chip, width);
-    }
-  });
+// The automatic row limit the card computes for the reading, read from a one-room card.
+async function autoRowLimit(page, reading) {
+  const probeId = await createCard(page, { entity: "sensor.avg", rooms: roomsOf(1) }, statesOf(reading, 1), LANGUAGE);
+  return page.evaluate((id) => {
+    const card = document.getElementById(id);
+    const columns = card._autoRoomColumns();
+    card.remove();
+    return columns;
+  }, probeId);
 }
 
-test("temperature: an 8th room automatically wraps into a second, evenly-split row (4+4)", async ({ page }) => {
-  await gotoHarness(page);
-  const rooms = [...tempRooms(), { entity: "sensor.extra", short: "EX" }];
-  const states = tempStates(TEMP_VALUES);
-  states["sensor.extra"] = mkStateObj("sensor.extra", 22.9, TEMPERATURE_C);
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
-  await setCardWidth(page, cardId, 390);
-  const card = page.locator(`#${cardId}`);
-  const rows = await card.locator(".rtc-room-row").all();
-  expect(rows.length, "8 rooms must split into 2 rows").toBe(2);
+async function chipCountsPerRow(card) {
   const counts = [];
-  for (const row of rows) counts.push((await row.locator(".rtc-room-chip").all()).length);
-  counts.sort((a, b) => b - a);
-  expect(counts).toEqual([4, 4]);
-});
-
-// ==== Humidity: 7 chips in one row, all fully legible ====
-
-function humidityRooms() {
-  return [
-    { entity: "sensor.hwz", short: "WZ" },
-    { entity: "sensor.hwc", short: "WC" },
-    { entity: "sensor.hsz", short: "SZ" },
-    { entity: "sensor.hfl", short: "FL" },
-    { entity: "sensor.hba", short: "BA" },
-    { entity: "sensor.hku", short: "KÜ" },
-    { entity: "sensor.haz", short: "AZ" },
-  ];
+  for (const row of await card.locator(".rtc-room-row").all()) counts.push(await row.locator(".rtc-room-chip").count());
+  return counts;
 }
 
-const HUMIDITY_VALUES = { hwz: 37.8, hwc: 35.5, hsz: 39.4, hfl: 41.0, hba: 42.2, hku: 43.1, haz: 38.6 };
-
-function humidityStates(values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 39, HUMIDITY) };
-  for (const room of humidityRooms()) {
-    const key = room.entity.split(".")[1];
-    states[room.entity] = mkStateObj(room.entity, values[key], HUMIDITY);
+for (const reading of Object.keys(READINGS)) {
+  for (const width of WIDTHS) {
+    test(`${reading}: a full automatic row stays in one row, fully legible at ${width}px`, async ({ page }) => {
+      await gotoHarness(page);
+      const columns = await autoRowLimit(page, reading);
+      const cardId = await createCard(page, { entity: "sensor.avg", rooms: roomsOf(columns) }, statesOf(reading, columns), LANGUAGE);
+      await setCardWidth(page, cardId, width);
+      const card = page.locator(`#${cardId}`);
+      expect(await chipCountsPerRow(card), `${columns} ${reading} rooms must fit in a single row at ${width}px`).toEqual([columns]);
+      for (const chip of await card.locator(".rtc-room-chip").all()) {
+        await assertNumberAndUnitContained(chip, width);
+        if (reading === "pm25") {
+          const unitText = await chip.locator(".rtc-room-value-unit").innerText();
+          expect(unitText, "the full µg/m³ unit must render, not a truncated form").toContain("µg/m³");
+        }
+      }
+    });
   }
-  return states;
-}
 
-for (const width of WIDTHS) {
-  test(`humidity: 7 rooms stay in one row, fully legible at ${width}px (35,5/39,4/43,1% etc.)`, async ({ page }) => {
+  test(`${reading}: one room more than the automatic row limit wraps into two evenly split rows`, async ({ page }) => {
     await gotoHarness(page);
-    const cardId = await createCard(page, { entity: "sensor.avg", rooms: humidityRooms() }, humidityStates(HUMIDITY_VALUES), LANGUAGE);
-    await setCardWidth(page, cardId, width);
+    const columns = await autoRowLimit(page, reading);
+    const count = columns + 1;
+    const cardId = await createCard(page, { entity: "sensor.avg", rooms: roomsOf(count) }, statesOf(reading, count), LANGUAGE);
+    await setCardWidth(page, cardId, 390);
     const card = page.locator(`#${cardId}`);
-    const rows = await card.locator(".rtc-room-row").all();
-    expect(rows.length, `7 humidity rooms must fit in a single row at ${width}px`).toBe(1);
+    expect(await chipCountsPerRow(card), `${count} ${reading} rooms must split into two rows`).toEqual([Math.ceil(count / 2), Math.floor(count / 2)]);
     for (const chip of await card.locator(".rtc-room-chip").all()) {
-      await assertNumberAndUnitContained(chip, width);
+      await assertNumberAndUnitContained(chip, 390);
     }
   });
 }
-
-// ==== CO2: autoMaxColumns=5 -- exact single-row limit AND the 6-room split ====
-
-function co2Rooms(count) {
-  return Array.from({ length: count }, (_, i) => ({ entity: `sensor.co${i}`, short: `C${i}` }));
-}
-
-function co2States(count, values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 1200, CO2) };
-  for (let i = 0; i < count; i++) {
-    states[`sensor.co${i}`] = mkStateObj(`sensor.co${i}`, values[i], CO2);
-  }
-  return states;
-}
-
-for (const width of WIDTHS) {
-  test(`CO2: exactly 5 rooms stay in one row (autoMaxColumns limit) at ${width}px`, async ({ page }) => {
-    await gotoHarness(page);
-    const values = [800, 1200, 2000, 950, 1500];
-    const cardId = await createCard(page, { entity: "sensor.avg", rooms: co2Rooms(5) }, co2States(5, values), LANGUAGE);
-    await setCardWidth(page, cardId, width);
-    const card = page.locator(`#${cardId}`);
-    const rows = await card.locator(".rtc-room-row").all();
-    expect(rows.length, `5 CO2 rooms must fit in a single row at ${width}px`).toBe(1);
-    for (const chip of await card.locator(".rtc-room-chip").all()) {
-      await assertNumberAndUnitContained(chip, width);
-    }
-  });
-}
-
-test("CO2: a 6th room automatically wraps into a second, evenly-split row (3+3)", async ({ page }) => {
-  await gotoHarness(page);
-  const values = [800, 1200, 2000, 950, 1500, 700];
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms: co2Rooms(6) }, co2States(6, values), LANGUAGE);
-  await setCardWidth(page, cardId, 390);
-  const card = page.locator(`#${cardId}`);
-  const rows = await card.locator(".rtc-room-row").all();
-  expect(rows.length, "6 CO2 rooms must split into 2 rows").toBe(2);
-  const counts = [];
-  for (const row of rows) counts.push((await row.locator(".rtc-room-chip").all()).length);
-  counts.sort((a, b) => b - a);
-  expect(counts).toEqual([3, 3]);
-  for (const chip of await card.locator(".rtc-room-chip").all()) {
-    await assertNumberAndUnitContained(chip, 390);
-  }
-});
-
-// ==== PM2.5: autoMaxColumns=5 -- exact single-row limit AND the 6-room split ====
-
-function pm25Rooms(count) {
-  return Array.from({ length: count }, (_, i) => ({ entity: `sensor.pm${i}`, short: `P${i}` }));
-}
-
-function pm25States(count, values) {
-  const states = { "sensor.avg": mkStateObj("sensor.avg", 20, PM25) };
-  for (let i = 0; i < count; i++) {
-    states[`sensor.pm${i}`] = mkStateObj(`sensor.pm${i}`, values[i], PM25);
-  }
-  return states;
-}
-
-for (const width of WIDTHS) {
-  test(`PM2.5: exactly 5 rooms stay in one row (autoMaxColumns limit) at ${width}px, full µg/m³ unit`, async ({ page }) => {
-    await gotoHarness(page);
-    const values = [8.3, 15.9, 24.6, 41.2, 12.1];
-    const cardId = await createCard(page, { entity: "sensor.avg", rooms: pm25Rooms(5) }, pm25States(5, values), LANGUAGE);
-    await setCardWidth(page, cardId, width);
-    const card = page.locator(`#${cardId}`);
-    const rows = await card.locator(".rtc-room-row").all();
-    expect(rows.length, `5 PM2.5 rooms must fit in a single row at ${width}px`).toBe(1);
-    for (const chip of await card.locator(".rtc-room-chip").all()) {
-      await assertNumberAndUnitContained(chip, width);
-      const unitText = await chip.locator(".rtc-room-value-unit").innerText();
-      expect(unitText, "the full µg/m³ unit must render, not a truncated form").toContain("µg/m³");
-    }
-  });
-}
-
-test("PM2.5: a 6th room automatically wraps into a second, evenly-split row (3+3)", async ({ page }) => {
-  await gotoHarness(page);
-  const values = [8.3, 15.9, 24.6, 41.2, 12.1, 30.0];
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms: pm25Rooms(6) }, pm25States(6, values), LANGUAGE);
-  await setCardWidth(page, cardId, 390);
-  const card = page.locator(`#${cardId}`);
-  const rows = await card.locator(".rtc-room-row").all();
-  expect(rows.length, "6 PM2.5 rooms must split into 2 rows").toBe(2);
-  const counts = [];
-  for (const row of rows) counts.push((await row.locator(".rtc-room-chip").all()).length);
-  counts.sort((a, b) => b - a);
-  expect(counts).toEqual([3, 3]);
-});
 
 // ==== Room short codes: exactly-two-uppercase-letter guarantee ====
 
-test("room short codes: all seven example codes (WZ/WC/AZ/SZ/FL/BA/KÜ) stay fully visible at 360px", async ({ page }) => {
+test("room short codes: the codes of a full automatic temperature row stay fully visible at 360px", async ({ page }) => {
   await gotoHarness(page);
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
+  const columns = await autoRowLimit(page, "temperature");
+  const rooms = roomsOf(columns);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms }, statesOf("temperature", columns), LANGUAGE);
   await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
-  for (const room of tempRooms()) {
+  for (const room of rooms) {
     const chip = card.locator(`.rtc-room-chip[data-entity="${room.entity}"]`);
     const chipBox = await chip.boundingBox();
     const shortLoc = chip.locator(".rtc-room-short");
@@ -270,16 +159,17 @@ test("room short codes: all seven example codes (WZ/WC/AZ/SZ/FL/BA/KÜ) stay ful
   }
 });
 
+// The next two tests squeeze a long label into one of seven chips in a 360px row; room_columns
+// makes that row independent of the automatic limit.
 test("room short codes: a long explicit short (WOHNZ) is NOT guaranteed and still ellipsizes when squeezed", async ({ page }) => {
   await gotoHarness(page);
-  const rooms = [...tempRooms().slice(0, 6), { entity: "sensor.long", short: "WOHNZ" }];
-  const states = tempStates(TEMP_VALUES);
+  const rooms = [...roomsOf(6), { entity: "sensor.long", short: "WOHNZ" }];
+  const states = statesOf("temperature", 6);
   states["sensor.long"] = mkStateObj("sensor.long", 22.5, TEMPERATURE_C);
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms, room_columns: 7 }, states, LANGUAGE);
   await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
-  const rows = await card.locator(".rtc-room-row").all();
-  expect(rows.length, "7 rooms must still fit in a single row (autoMaxColumns=7)").toBe(1);
+  expect(await chipCountsPerRow(card), "7 rooms in a single row").toEqual([7]);
   const chip = card.locator('.rtc-room-chip[data-entity="sensor.long"]');
   const shortEl = chip.locator(".rtc-room-short");
   expect(await shortEl.getAttribute("data-short-guaranteed"), "WOHNZ must not carry the guarantee attribute").toBeNull();
@@ -288,10 +178,10 @@ test("room short codes: a long explicit short (WOHNZ) is NOT guaranteed and stil
 
 test("room short codes: a room with no configured short (long derived name) is NOT guaranteed and still ellipsizes when squeezed", async ({ page }) => {
   await gotoHarness(page);
-  const rooms = [...tempRooms().slice(0, 6), { entity: "sensor.noname", name: "Gaestezimmer im Dachgeschoss" }];
-  const states = tempStates(TEMP_VALUES);
+  const rooms = [...roomsOf(6), { entity: "sensor.noname", name: "Gaestezimmer im Dachgeschoss" }];
+  const states = statesOf("temperature", 6);
   states["sensor.noname"] = mkStateObj("sensor.noname", 21.3, TEMPERATURE_C);
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms }, states, LANGUAGE);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms, room_columns: 7 }, states, LANGUAGE);
   await setCardWidth(page, cardId, 360);
   const card = page.locator(`#${cardId}`);
   const chip = card.locator('.rtc-room-chip[data-entity="sensor.noname"]');
@@ -304,7 +194,7 @@ test("room short codes: a room with no configured short (long derived name) is N
 
 test("average value never ellipsizes at any of the mandated widths (regression guard, unrelated to this fix)", async ({ page }) => {
   await gotoHarness(page);
-  const cardId = await createCard(page, { entity: "sensor.avg", rooms: tempRooms() }, tempStates(TEMP_VALUES), LANGUAGE);
+  const cardId = await createCard(page, { entity: "sensor.avg", rooms: roomsOf(7) }, statesOf("temperature", 7), LANGUAGE);
   for (const width of WIDTHS) {
     await setCardWidth(page, cardId, width);
     const card = page.locator(`#${cardId}`);

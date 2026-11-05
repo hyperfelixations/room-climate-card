@@ -10,7 +10,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO_PPB, CO2, TEMPERATURE_C, TEMPERATURE_K } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -313,6 +313,23 @@ test("getCardSize(): show.rooms auto scales with a multi-room grid (regression)"
     rooms: Array.from({ length: 10 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` })),
   });
   assert.ok(el.getCardSize() > 3, "10 rooms with chips visible must exceed the base size");
+});
+
+test("getCardSize(): reserves the chip rows the card draws for its measurement and unit", () => {
+  // Twenty rooms; how many rows they take depends on the reading's width, and the hint follows.
+  const drawnRows = new Set();
+  for (const [attributes, value] of [[TEMPERATURE_C, 22], [CO2, 800], [TEMPERATURE_K, 295], [CO_PPB, 1500]]) {
+    const rooms = Array.from({ length: 20 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` }));
+    const states = { "sensor.avg": mkState("sensor.avg", value, attributes) };
+    for (const room of rooms) states[room.entity] = mkState(room.entity, value, attributes);
+    const el = env.document.createElement("room-climate-card");
+    el.setConfig({ entity: "sensor.avg", rooms });
+    el.hass = mkHass(states);
+    const drawn = el._computeViewModel().rooms.rowSizes.length;
+    assert.equal(el.getCardSize(), 3 + drawn, `${attributes.unit_of_measurement}: the hint reserves the ${drawn} drawn rows`);
+    drawnRows.add(drawn);
+  }
+  assert.ok(drawnRows.size > 1, "the measurement changes the rows, so the comparison means something");
 });
 
 test("getCardSize(): the hint applies the same source rule the card does", () => {

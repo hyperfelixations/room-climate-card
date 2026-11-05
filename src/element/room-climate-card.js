@@ -44,8 +44,9 @@ import {
   resolveSourceTopology,
 } from "../application/model/source-topology.js";
 import { stubConfigFor } from "../application/model/card-suggestions.js";
-import { autoRoomColumnsFor, boundaryDigits, readingDigits } from "../presentation/view-model/metric-meta.js";
+import { boundaryDigits, readingDigits } from "../presentation/view-model/metric-meta.js";
 import { roomGridRows } from "../presentation/view-model/room-layout.js";
+import { autoRoomColumnsFor } from "../presentation/view-model/room-chip-fit.js";
 import { FALLBACK_VIEW_AREA_HEIGHT, VIEW_DEFINITIONS, optionSchemaForView } from "../presentation/view-model/view-state.js";
 import { buildCardViewModel } from "../presentation/view-model/card-view-model.js";
 import { messageForConfigError, renderMessage } from "../presentation/view-model/notices.js";
@@ -396,7 +397,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       const chipsDrawn =
         roomCount >= 1 && showRooms !== false && (showRooms === true || !chipsWouldDuplicateHeadline(topology));
       if (!chipsDrawn) return 3;
-      const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumnsFor(this._metricType())).rowSizes.length;
+      const rowCount = this._roomGridRows(roomCount, this._config?.room_columns, this._config?.room_rows, this._autoRoomColumns()).rowSizes.length;
       return 4 + Math.max(0, rowCount - 1);
     }
 
@@ -513,8 +514,13 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return translate(this._language(), key, vars);
     }
 
-    _autoRoomColumnsFor(metricType) {
-      return autoRoomColumnsFor(metricType);
+    // The same inputs the view model sizes the chips with: measurement, display unit, formatter.
+    _autoRoomColumns() {
+      return autoRoomColumnsFor({
+        metricKind: this._metricType(),
+        displayUnitProfile: this._resolveMetricContext().displayUnitProfile,
+        fmt: (value) => this._fmt(value),
+      });
     }
 
     // The digit counts are resolved here, where the config override and the unit's own
@@ -574,7 +580,7 @@ import { entityDataSignature, structuralConfigSignature } from "../controllers/r
       return `${this._fmt(value, digits)} ${this._unit()}`;
     }
 
-    _roomGridRows(count, columns, rows, autoMaxColumns = 7) {
+    _roomGridRows(count, columns, rows, autoMaxColumns) {
       return roomGridRows(count, columns, rows, autoMaxColumns);
     }
 

@@ -60,7 +60,13 @@ function minimalDomainModel(overrides = {}) {
     // The model resolves topology and the view model reads it (recomputing would need
     // `states`), so a fixture must state it, like resolveSourceTopology().
     topology: { kind: "primaryOnly", headlineEntity: "sensor.avg", roomIndex: null },
-    metric: { kind: "temperature", canonicalUnit: "°C", unit: "°C", displayUnitProfile: { key: "celsius" } },
+    // Celsius is the canonical temperature unit, so its conversions are the identity.
+    metric: {
+      kind: "temperature",
+      canonicalUnit: "°C",
+      unit: "°C",
+      displayUnitProfile: { key: "celsius", displayUnit: "°C", fromCanonical: (value) => value, toCanonical: (value) => value },
+    },
     context: { diagnostics: [], consistent: true, excludedRoomIds: [], sourceKind: "primary", sourceEntity: "sensor.avg" },
     average: { value: 22, source: "sensor", entity: "sensor.avg", roomIndex: null },
     rooms: { declared: [], byValue: [], count: 0, comparable: false, missing: 0 },

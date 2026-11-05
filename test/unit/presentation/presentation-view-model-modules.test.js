@@ -51,7 +51,7 @@ test("every metric kind has complete presentation metadata", () => {
     assert.match(meta.highRoomKey, /^card\./, `${kind}: highRoomKey`);
     assert.match(meta.aboveAdjectiveKey, /^adjective\./, `${kind}: aboveAdjectiveKey`);
     assert.match(meta.belowAdjectiveKey, /^adjective\./, `${kind}: belowAdjectiveKey`);
-    assert.ok(meta.autoRoomColumns > 0, `${kind}: autoRoomColumns`);
+    assert.ok(meta.typicalReading.min < meta.typicalReading.max, `${kind}: typicalReading`);
   }
 });
 
@@ -78,8 +78,6 @@ test("a boundary shows at least as many digits as its unit's readings", () => {
 test("an unknown metric kind resolves to temperature", () => {
   assert.equal(metricMeta.metricMetaFor("pressure"), metricMeta.METRIC_META.temperature);
   assert.equal(metricMeta.metricMetaFor(null), metricMeta.METRIC_META.temperature);
-  assert.equal(metricMeta.autoRoomColumnsFor("pressure"), 7);
-  assert.equal(metricMeta.autoRoomColumnsFor("co2"), 5, "the denser metrics fit fewer chips per row");
 });
 
 // ------------------------------------------------------------ room layout --
@@ -453,7 +451,12 @@ test("the metric-specific adjective is used, not a generic one", () => {
   const texts = stubTexts();
   const humidity = cardViewModel.buildCardViewModel({
     domainModel: minimalDomainModel({
-      metric: { kind: "humidity", canonicalUnit: "%", unit: "%", displayUnitProfile: { key: "percent" } },
+      metric: {
+        kind: "humidity",
+        canonicalUnit: "%",
+        unit: "%",
+        displayUnitProfile: { key: "percent", displayUnit: "%", fromCanonical: (value) => value, toCanonical: (value) => value },
+      },
       subtitle: { kind: "aboveComfort", diff: 5, count: 1, total: 3, adjective: "above" },
     }),
     config: cfg(),

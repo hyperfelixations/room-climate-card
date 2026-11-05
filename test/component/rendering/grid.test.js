@@ -1,6 +1,6 @@
 "use strict";
 
-// Room-chip grid (_roomGridRows(count, columns, rows)), a pure function:
+// Room-chip grid (_roomGridRows(count, columns, rows, autoMaxColumns)), a pure function:
 // 0-20 rooms; auto-distribution for 8/9/13/14/15; only columns, only
 // rows, both; capacity smaller than room count; no empty rows; stable
 // column width in a shorter last row; capped chips still count toward
@@ -27,77 +27,52 @@ function totalItems(rowSizes) {
   return rowSizes.reduce((sum, r) => sum + r.itemCount, 0);
 }
 
+// An automatic row limit; the card's own comes from autoRoomColumnsFor() in room-chip-fit.js.
+const AUTO_COLUMNS = 7;
+
 test("count <= 0 returns no rows and zero capacity", () => {
-  assert.deepEqual(normalize(el._roomGridRows(0, null, null)), { rowSizes: [], capacity: 0 });
-  assert.deepEqual(normalize(el._roomGridRows(-3, null, null)), { rowSizes: [], capacity: 0 });
+  assert.deepEqual(normalize(el._roomGridRows(0, null, null, AUTO_COLUMNS)), { rowSizes: [], capacity: 0 });
+  assert.deepEqual(normalize(el._roomGridRows(-3, null, null, AUTO_COLUMNS)), { rowSizes: [], capacity: 0 });
 });
 
 test("fully automatic distribution for 1-20 rooms: no empty rows, every room accounted for", () => {
   for (let count = 1; count <= 20; count++) {
-    const result = normalize(el._roomGridRows(count, null, null));
+    const result = normalize(el._roomGridRows(count, null, null, AUTO_COLUMNS));
     assert.equal(result.capacity, count, `count=${count}`);
     assert.ok(result.rowSizes.every((r) => r.itemCount > 0), `count=${count}: no row may be empty`);
     assert.equal(totalItems(result.rowSizes), count, `count=${count}: rows must sum to count`);
   }
 });
 
-test("automatic distribution matches the documented default (max 7 per row, evenly split, earliest rows get the remainder)", () => {
-  assert.deepEqual(normalize(el._roomGridRows(8, null, null)).rowSizes, [
+test("autoMaxColumns=7 splits evenly, earliest rows get the remainder", () => {
+  const call = (count) => normalize(el._roomGridRows(count, null, null, AUTO_COLUMNS)).rowSizes;
+  assert.deepEqual(call(8), [
     { itemCount: 4, columnCount: 4 },
     { itemCount: 4, columnCount: 4 },
   ]);
-  assert.deepEqual(normalize(el._roomGridRows(9, null, null)).rowSizes, [
+  assert.deepEqual(call(9), [
     { itemCount: 5, columnCount: 5 },
     { itemCount: 4, columnCount: 4 },
   ]);
-  assert.deepEqual(normalize(el._roomGridRows(13, null, null)).rowSizes, [
+  assert.deepEqual(call(13), [
     { itemCount: 7, columnCount: 7 },
     { itemCount: 6, columnCount: 6 },
   ]);
-  assert.deepEqual(normalize(el._roomGridRows(14, null, null)).rowSizes, [
+  assert.deepEqual(call(14), [
     { itemCount: 7, columnCount: 7 },
     { itemCount: 7, columnCount: 7 },
   ]);
-  assert.deepEqual(normalize(el._roomGridRows(15, null, null)).rowSizes, [
+  assert.deepEqual(call(15), [
     { itemCount: 5, columnCount: 5 },
     { itemCount: 5, columnCount: 5 },
     { itemCount: 5, columnCount: 5 },
   ]);
-  assert.deepEqual(normalize(el._roomGridRows(1, null, null)).rowSizes, [{ itemCount: 1, columnCount: 1 }]);
-  assert.deepEqual(normalize(el._roomGridRows(7, null, null)).rowSizes, [{ itemCount: 7, columnCount: 7 }]);
+  assert.deepEqual(call(1), [{ itemCount: 1, columnCount: 1 }]);
+  assert.deepEqual(call(7), [{ itemCount: 7, columnCount: 7 }]);
 });
 
-test("autoMaxColumns=7 (default, explicit and implicit) matches the documented cases", () => {
-  for (const autoMaxColumns of [undefined, 7]) {
-    const call = (count) => normalize(el._roomGridRows(count, null, null, autoMaxColumns)).rowSizes;
-    assert.deepEqual(call(7), [{ itemCount: 7, columnCount: 7 }]);
-    assert.deepEqual(call(8), [
-      { itemCount: 4, columnCount: 4 },
-      { itemCount: 4, columnCount: 4 },
-    ]);
-    assert.deepEqual(call(9), [
-      { itemCount: 5, columnCount: 5 },
-      { itemCount: 4, columnCount: 4 },
-    ]);
-    assert.deepEqual(call(13), [
-      { itemCount: 7, columnCount: 7 },
-      { itemCount: 6, columnCount: 6 },
-    ]);
-    assert.deepEqual(call(14), [
-      { itemCount: 7, columnCount: 7 },
-      { itemCount: 7, columnCount: 7 },
-    ]);
-    assert.deepEqual(call(15), [
-      { itemCount: 5, columnCount: 5 },
-      { itemCount: 5, columnCount: 5 },
-      { itemCount: 5, columnCount: 5 },
-    ]);
-  }
-});
-
-// CO2/PM2.5 use a stricter autoMaxColumns=5 (see _autoRoomColumnsFor()) —
-// same balanced base-plus-remainder distribution, just a lower per-row cap.
-test("autoMaxColumns=5 matches the CO2/PM2.5 documented cases", () => {
+// A lower per-row cap keeps the same balanced base-plus-remainder distribution.
+test("autoMaxColumns=5 splits evenly under the lower cap", () => {
   const call = (count) => normalize(el._roomGridRows(count, null, null, 5)).rowSizes;
   assert.deepEqual(call(5), [{ itemCount: 5, columnCount: 5 }]);
   assert.deepEqual(call(6), [

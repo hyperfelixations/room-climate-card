@@ -4,7 +4,6 @@
 import { rgba } from "../../core/color.js";
 import { tintRecipeFor } from "../../domain/classification/tone-legibility.js";
 import { isTwoUpperLetterLabel, UNAVAILABLE_TEXT } from "../../core/text.js";
-import { autoRoomColumnsFor } from "./metric-meta.js";
 import { NO_DATA_COLOR } from "./tone.js";
 
 // Out-of-comfort chips add palette tint and border; others keep the neutral surface.
@@ -30,7 +29,8 @@ export function resolveRoomDisplayOrder(list, sortMode, language) {
 
 // Splits chips into `{ itemCount, columnCount }` rows. Fixed columns keep their
 // width on a short final row. Capacity is capped only when both dimensions are set.
-export function roomGridRows(count, columns, rows, autoMaxColumns = 7) {
+// `autoMaxColumns` is the automatic row limit, autoRoomColumnsFor() in room-chip-fit.js.
+export function roomGridRows(count, columns, rows, autoMaxColumns) {
   if (count <= 0) return { rowSizes: [], capacity: 0 };
 
   // Both fixed: fill row-major, cap overflow and omit empty trailing rows.
@@ -76,8 +76,8 @@ export function roomGridRows(count, columns, rows, autoMaxColumns = 7) {
 
 // Apply the cap in declaration order before display sorting so the visible set is
 // stable as values change.
-export function buildRoomLayout({ declaredRooms, config, metricKind, language }) {
-  const grid = roomGridRows(declaredRooms.length, config.room_columns, config.room_rows, autoRoomColumnsFor(metricKind));
+export function buildRoomLayout({ declaredRooms, config, autoColumns, language }) {
+  const grid = roomGridRows(declaredRooms.length, config.room_columns, config.room_rows, autoColumns);
   // Placeholders follow usable rooms; capacity still selects usable rooms first.
   const usable = declaredRooms.filter((room) => !room.placeholder);
   const placeholders = declaredRooms.filter((room) => room.placeholder).sort((a, b) => a.index - b.index);

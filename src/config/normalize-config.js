@@ -46,7 +46,8 @@ const ROOM_SORTS = ["configured", "name", "value_asc", "value_desc"];
 const ROOM_LABELS = ["auto", "short", "name"];
 const ACCENT_LINE_POSITIONS = ["top", "bottom"];
 // room_columns/room_rows: a larger grid cannot be a deliberate layout; null decides automatically.
-const ROOM_GRID = { min: 1, max: 20, integer: true, fallback: null, instead: FALLBACK.AUTOMATIC };
+export const ROOM_GRID_MAX = 20;
+const ROOM_GRID = { min: 1, max: ROOM_GRID_MAX, integer: true, fallback: null, instead: FALLBACK.AUTOMATIC };
 
 // Optional language override; "auto" keeps the automatic hass-based detection. Only a language
 // that actually has a translation block is accepted, so an override can never select one that

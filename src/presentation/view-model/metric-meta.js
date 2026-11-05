@@ -1,5 +1,6 @@
-// Presentation-only metadata for titles, icons, formatting and chip density, one entry per
-// metric kind; classification bands remain in the semantic profiles.
+// Presentation-only metadata for titles, icons, formatting and the readings room chips are sized
+// for, one entry per metric kind; classification bands remain in the semantic profiles.
+// `typicalReading` is in the canonical unit; see internal dev doc §5 "Raumchip-Passung".
 
 // PM1, PM2.5, PM4 and PM10 differ only in their title.
 const PARTICULATE_META = {
@@ -10,7 +11,7 @@ const PARTICULATE_META = {
   highRoomKey: "card.highestRoom",
   aboveAdjectiveKey: "adjective.elevated",
   belowAdjectiveKey: "adjective.low",
-  autoRoomColumns: 5,
+  typicalReading: { min: 0, max: 75 },
 };
 
 export const METRIC_META = {
@@ -23,7 +24,7 @@ export const METRIC_META = {
     highRoomKey: "card.warmestRoom",
     aboveAdjectiveKey: "adjective.warm",
     belowAdjectiveKey: "adjective.cool",
-    autoRoomColumns: 7,
+    typicalReading: { min: 10, max: 35 },
   },
   humidity: {
     titleKey: "title.humidity",
@@ -34,7 +35,7 @@ export const METRIC_META = {
     highRoomKey: "card.mostHumidRoom",
     aboveAdjectiveKey: "adjective.humid",
     belowAdjectiveKey: "adjective.dry",
-    autoRoomColumns: 7,
+    typicalReading: { min: 20, max: 80 },
   },
   co2: {
     titleKey: "title.co2",
@@ -45,7 +46,7 @@ export const METRIC_META = {
     highRoomKey: "card.highestRoom",
     aboveAdjectiveKey: "adjective.elevated",
     belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
+    typicalReading: { min: 400, max: 2000 },
   },
   pm25: { ...PARTICULATE_META, titleKey: "title.pm25" },
   pm1: { ...PARTICULATE_META, titleKey: "title.pm1" },
@@ -61,18 +62,14 @@ export const METRIC_META = {
     highRoomKey: "card.highestRoom",
     aboveAdjectiveKey: "adjective.elevated",
     belowAdjectiveKey: "adjective.low",
-    autoRoomColumns: 5,
+    // 0–12 mg/m³ is about 0–10 ppm.
+    typicalReading: { min: 0, max: 12 },
   },
 };
 
 // Unknown kinds use temperature metadata so mixed-kind cards remain presentable.
 export function metricMetaFor(metricKind) {
   return METRIC_META[metricKind] || METRIC_META.temperature;
-}
-
-// Conservative automatic-grid limit that keeps values and units readable.
-export function autoRoomColumnsFor(metricKind) {
-  return metricMetaFor(metricKind).autoRoomColumns || 7;
 }
 
 // Maps the structural low/high role to metric-specific wording.

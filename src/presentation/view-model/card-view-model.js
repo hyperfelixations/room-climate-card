@@ -4,6 +4,7 @@
 
 import { metricMetaFor } from "./metric-meta.js";
 import { buildRoomChipModel, buildRoomChipRows, buildRoomLayout, decorateRoomForDisplay } from "./room-layout.js";
+import { autoRoomColumnsFor } from "./room-chip-fit.js";
 import { FALLBACK_VIEW_AREA_HEIGHT, buildViewContent, buildViewState } from "./view-state.js";
 import { buildScaleAxis, resolveMarkerNudge } from "./scale-view-model.js";
 import { buildBoundaryLabel, buildCompactBoundaryLabel } from "./view-content/scale-bar.js";
@@ -203,7 +204,9 @@ function buildNoDataViewModel({ domainModel, config, texts, topology, headerTitl
 
   const displayRooms = buildDisplayRooms(domainModel, config);
   const decoratedRooms = displayRooms.map((room) => decorateRoomForDisplay(room, config.room_label));
-  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, metricKind, language: texts.language });
+  // Without data there is no display unit; the chips are sized for the canonical one.
+  const autoColumns = autoRoomColumnsFor({ metricKind, displayUnitProfile: null, fmt: texts.fmt });
+  const layout = buildRoomLayout({ declaredRooms: decoratedRooms, config, autoColumns, language: texts.language });
   const chips = layout.visible.map((room) => buildRoomChipModel({ room, color: null, comfort: null, unit: "", texts }));
   const showChips =
     config.show.rooms !== false &&
@@ -299,7 +302,8 @@ export function buildCardViewModel({ domainModel, config, texts }) {
     decoratedByIndex.set(room.index, decorated);
     return decorated;
   });
-  const layout = buildRoomLayout({ declaredRooms: decoratedDeclared, config, metricKind, language: texts.language });
+  const autoColumns = autoRoomColumnsFor({ metricKind, displayUnitProfile: domainModel.metric.displayUnitProfile, fmt: texts.fmt });
+  const layout = buildRoomLayout({ declaredRooms: decoratedDeclared, config, autoColumns, language: texts.language });
 
   const average = domainModel.average.value;
   const rooms = domainModel.rooms;
