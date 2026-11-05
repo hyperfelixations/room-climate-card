@@ -77,7 +77,7 @@ test("a fifth view registers with one definition and one renderer, and runs ever
   const label = root.querySelector(".rtc-rotator-solo .fifth-view");
   assert.equal(label.textContent, "Hello");
   assert.equal(model.views.height, 140);
-  assert.match(cardShell.cardStructureSignature(model, renderers), /\|viewHeight:140\|fifth:l$/);
+  assert.match(cardShell.cardStructureSignature(model, renderers), /\|viewHeight:140\|size:1,1,1,1,1,1\|fifth:l$/);
 
   cardShell.patchCardBody(context, root, fifthModel(definitions, "Bye"), renderers);
   assert.equal(root.querySelector(".fifth-view"), label, "patched in place");

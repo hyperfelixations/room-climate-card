@@ -45,6 +45,7 @@ export function buildScaleViewContent(shared, options) {
       // Room-dependent footer also respects per-view visibility.
       footerText: showFooter ? buildFooterText(shared, (value) => texts.fmtWithUnit(value)) : null,
       compactFooterText: showFooter ? buildCompactFooterText(shared) : null,
+      labelGap: shared.labelGap,
     }),
     // Layout keeps the first comfort form that fits its measured width.
     comfortLabel: options.show_comfort_band

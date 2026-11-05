@@ -36,6 +36,7 @@ function scaleBarContent(overrides = {}) {
     optimalLabel: { long: "Optimal 21–23 °C", short: "Opt. 21–23 °C", center: 50, visible: true },
     boundaryLabels: axis().boundaryLabels,
     footerText: "3 of 4 in comfort",
+    labelGap: 4,
     ...overrides,
   };
 }
@@ -84,6 +85,7 @@ function viewModel(overrides = {}) {
   const chips = [chip(0, "KI"), chip(1, "BA")];
   return {
     empty: false,
+    size: { shell: 1, header: 1, panel: 1, entityLabel: 1, rooms: 1, roomValue: 1 },
     metric: { kind: "temperature", unit: "°C", displayUnitProfile: null },
     title: "Temperature",
     subtitle: "All rooms comfortable",

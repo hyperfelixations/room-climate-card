@@ -1,19 +1,22 @@
 // SHIPPED STYLESHEET SLICE: main scale layout and comfort label.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const SCALE_VIEW_CSS = `        .rtc-scale-view {
+import { px } from "./css-units.js";
+
+export function scaleViewCss({ panel }) {
+  return `        .rtc-scale-view {
           height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           align-content: center;
-          gap: 4px;
-          padding: 0 1px;
+          gap: ${px(4, panel)};
+          padding: 0 ${px(1, panel)};
         }
 
         .rtc-scale-comfort-row {
           position: relative;
-          height: 12px;
-          font-size: 10px;
+          height: ${px(12, panel)};
+          font-size: ${px(10, panel)};
           font-weight: 800;
           color: var(--rtc-faint);
           white-space: nowrap;
@@ -30,3 +33,4 @@ export const SCALE_VIEW_CSS = `        .rtc-scale-view {
         }
 
 `;
+}

@@ -1,36 +1,37 @@
 // Assemble 13 contiguous slices with no separator; their order and owned blank lines are normative.
-// Only carousel keyframes/animation/view count/view width and the view-area height vary; the shadow
-// root keeps one inspectable <style>.
-// Contract: see internal dev doc §5 "Build, Rollup und Release-Asset".
+// Only carousel keyframes/animation/view count/view width, the view-area height and the size
+// factors vary; the shadow root keeps one inspectable <style>.
+// Contract: see internal dev doc §5 "Build, Rollup und Release-Asset" and "Kartengröße".
 
+import { UNSCALED_SIZE } from "../core/size.js";
 import { tokensCss } from "./tokens.js";
-import { CARD_CSS } from "./card.js";
-import { HEADER_CSS } from "./header.js";
-import { AVERAGE_CSS } from "./average.js";
+import { cardCss } from "./card.js";
+import { headerCss } from "./header.js";
+import { averageCss } from "./average.js";
 import { carouselCss } from "./carousel.js";
-import { SCALE_VIEW_CSS } from "./scale-view.js";
-import { RANGE_SCALE_VIEW_CSS } from "./range-scale-view.js";
-import { SCALE_BAR_CSS } from "./scale-bar.js";
-import { CARDS_CSS } from "./cards.js";
-import { ROOMS_CSS } from "./rooms.js";
-import { AVAILABILITY_CSS } from "./availability.js";
-import { RESPONSIVE_CSS } from "./responsive.js";
+import { scaleViewCss } from "./scale-view.js";
+import { rangeScaleViewCss } from "./range-scale-view.js";
+import { scaleBarCss } from "./scale-bar.js";
+import { cardsCss } from "./cards.js";
+import { roomsCss } from "./rooms.js";
+import { availabilityCss } from "./availability.js";
+import { responsiveCss } from "./responsive.js";
 import { MOTION_CSS } from "./motion.js";
 
-export function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct, viewHeight }) {
+export function buildStyles({ keyframes, trackAnimationCss, viewCount, viewWidthPct, viewHeight, size = UNSCALED_SIZE }) {
   return [
-    tokensCss({ keyframes, viewHeight }),
-    CARD_CSS,
-    HEADER_CSS,
-    AVERAGE_CSS,
-    carouselCss({ trackAnimationCss, viewCount, viewWidthPct }),
-    SCALE_VIEW_CSS,
-    RANGE_SCALE_VIEW_CSS,
-    SCALE_BAR_CSS,
-    CARDS_CSS,
-    ROOMS_CSS,
-    AVAILABILITY_CSS,
-    RESPONSIVE_CSS,
+    tokensCss({ keyframes, viewHeight }, size),
+    cardCss(size),
+    headerCss(size),
+    averageCss(size),
+    carouselCss({ trackAnimationCss, viewCount, viewWidthPct }, size),
+    scaleViewCss(size),
+    rangeScaleViewCss(size),
+    scaleBarCss(size),
+    cardsCss(size),
+    roomsCss(size),
+    availabilityCss(size),
+    responsiveCss(size),
     MOTION_CSS,
   ].join("");
 }

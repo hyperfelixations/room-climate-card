@@ -1,13 +1,16 @@
 // SHIPPED STYLESHEET SLICE: daily-range and extreme-value metric cards.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const CARDS_CSS = `        .rtc-range-view {
+import { px } from "./css-units.js";
+
+export function cardsCss({ panel }) {
+  return `        .rtc-range-view {
           height: var(--rtc-view-height);
           box-sizing: border-box;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
-          padding: 0 1px;
+          gap: ${px(8, panel)};
+          padding: 0 ${px(1, panel)};
         }
 
         .rtc-extreme-card {
@@ -15,14 +18,14 @@ export const CARDS_CSS = `        .rtc-range-view {
           min-width: 0;
           height: var(--rtc-view-height);
           box-sizing: border-box;
-          border-radius: 14px;
-          padding: 8px 9px 7px;
+          border-radius: ${px(14, panel)};
+          padding: ${px(8, panel)} ${px(9, panel)} ${px(7, panel)};
           overflow: hidden;
           display: grid;
           grid-template-columns: 1fr;
           grid-template-rows: auto auto 1fr;
           column-gap: 0;
-          row-gap: 1px;
+          row-gap: ${px(1, panel)};
           background: linear-gradient(135deg, var(--extreme-bg), transparent 72%);
           border: 1px solid var(--extreme-border);
           box-shadow: inset 0 1px 0 color-mix(in srgb, var(--extreme-color) 16%, transparent);
@@ -37,9 +40,9 @@ export const CARDS_CSS = `        .rtc-range-view {
           left: 0;
           top: 0;
           right: 0;
-          height: 2px;
+          height: ${px(2, panel)};
           background: linear-gradient(90deg, var(--extreme-color), transparent);
-          box-shadow: 0 0 10px var(--extreme-line-shadow);
+          box-shadow: 0 0 ${px(10, panel)} var(--extreme-line-shadow);
           opacity: .98;
         }
 
@@ -47,7 +50,7 @@ export const CARDS_CSS = `        .rtc-range-view {
           grid-column: 1;
           grid-row: 1;
           min-width: 0;
-          font-size: 10px;
+          font-size: ${px(10, panel)};
           font-weight: 900;
           letter-spacing: 0;
           color: var(--extreme-color);
@@ -64,7 +67,7 @@ export const CARDS_CSS = `        .rtc-range-view {
           align-self: start;
           min-width: 0;
           max-width: 100%;
-          font-size: 13px;
+          font-size: ${px(13, panel)};
           font-weight: 900;
           line-height: 1.05;
           color: var(--primary-text-color);
@@ -81,7 +84,7 @@ export const CARDS_CSS = `        .rtc-range-view {
           display: flex;
           align-items: flex-end;
           justify-content: flex-end;
-          font-size: 25px;
+          font-size: ${px(25, panel)};
           font-weight: 950;
           line-height: .88;
           color: var(--extreme-color);
@@ -92,9 +95,10 @@ export const CARDS_CSS = `        .rtc-range-view {
         }
 
         .rtc-extreme-value-unit {
-          font-size: 10px;
+          font-size: ${px(10, panel)};
           font-weight: 850;
           letter-spacing: 0;
         }
 
 `;
+}

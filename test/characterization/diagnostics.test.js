@@ -88,6 +88,7 @@ const INVALID_CONFIGS = [
     { entity: "sensor.avg", classification: { ...validCustom(), unit: "hPa", scale: { min: 16, max: 28, step: 2, anchorScale: false } } },
   ],
   ["palette-unknown-key", VALID_HASS, { entity: "sensor.avg", palette: { optimal: "1DB85D", abve: "FD9808" } }],
+  ["size-unknown-key", VALID_HASS, { entity: "sensor.avg", size: { room: "large" } }],
 ];
 
 // [name, config, hass]; hass defaults to VALID_HASS.
@@ -103,6 +104,9 @@ const WARNING_CONFIGS = [
   ["entity-label-not-text", { entity: "sensor.avg", entity_label: 5 }],
   ["icon-empty", { entity: "sensor.avg", icon: "" }],
   ["accent-line-unknown", { entity: "sensor.avg", accent_line: "under" }],
+  ["size-unknown", { entity: "sensor.avg", size: "huge" }],
+  ["size-part-out-of-range", { entity: "sensor.avg", size: { panel: "large", rooms: 3 } }],
+  ["size-dynamic-not-a-boolean", { entity: "sensor.avg", size: { rooms: "large", dynamic: "yes" } }],
   ["decimals-out-of-range", { entity: "sensor.avg", decimals: 3 }],
   ["language-unsupported", { entity: "sensor.avg", language: "xx" }],
   ["number-format-unknown", { entity: "sensor.avg", number_format: "dot_decimal" }],

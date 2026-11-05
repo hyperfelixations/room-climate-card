@@ -36,6 +36,7 @@ function viewModelOf({ empty = false, structure = "s1", hintKind = "value-unavai
     warning: { visible: false },
     rooms: { showChips: true },
     noData: { hintKind },
+    size: { shell: 1, header: 1, panel: 1, entityLabel: 1, rooms: 1, roomValue: 1 },
     views: empty
       ? { keys: [], collapsed: true, byKey: {} }
       : { keys: ["scale"], collapsed: false, byKey: { scale: { marker: structure } } },

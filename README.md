@@ -24,6 +24,8 @@ individual rooms below. The card follows your dashboard's light or dark theme.
   values
 - Room chips with a coldest/warmest comparison, wrapping into more rows as you
   add rooms — or laid out to a grid you choose
+- Three card sizes for wall tablets and reading from across the room, for the
+  whole card or its header, panel, and room chips separately
 - Daily minimum/maximum views and a rate-of-change display
 - Built-in classification profiles for every measurement, including `indoor`,
   `outdoor`, `fridge`, and `freezer` for temperature, plus custom profiles in YAML
@@ -218,6 +220,33 @@ show:
 
 Setting both `room_columns` and `room_rows` limits the grid to that many chips,
 selected in the order written under `rooms:`.
+
+#### Card size
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `size` | `small` | Makes the card larger and easier to read from a distance: `small`, `medium`, or `large`, or a factor from `1` to `2`. The card keeps its width and grows in height. |
+
+```yaml
+size: large
+```
+
+To size the header, the panel, and the room chips separately, write a block.
+A part you leave out stays `small`:
+
+```yaml
+size:
+  panel: medium
+  rooms: large
+  dynamic: false
+```
+
+| Key | Default | What it sizes |
+| --- | --- | --- |
+| `header` | `small` | The icon, title, subtitle, and status pill. |
+| `panel` | `small` | The large value and the views beside it. |
+| `rooms` | `small` | The room chips. |
+| `dynamic` | `true` | `true` fits the size to the card's width: the full size where the card is wide enough, a smaller one on a narrow card such as on a phone. `false` keeps the room chips at their size on every screen. |
 
 #### Card chrome, carousel, and actions
 
@@ -688,6 +717,7 @@ palette: vivid
 title: Indoor climate
 entity_label: Home average
 decimals: 1
+size: medium
 language: auto
 time_format: auto
 

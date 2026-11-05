@@ -1,9 +1,12 @@
 // SHIPPED STYLESHEET SLICE: shared scale bands, markers, labels and footer.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const SCALE_BAR_CSS = `        .rtc-scale-bar {
+import { px } from "./css-units.js";
+
+export function scaleBarCss({ panel }) {
+  return `        .rtc-scale-bar {
           position: relative;
-          height: 9px;
+          height: ${px(9, panel)};
           border-radius: 999px;
           background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
           overflow: visible;
@@ -31,31 +34,31 @@ export const SCALE_BAR_CSS = `        .rtc-scale-bar {
         .rtc-marker {
           top: 50%;
           transform: translate(-50%, -50%);
-          width: 4px;
-          height: 17px;
+          width: ${px(4, panel)};
+          height: ${px(17, panel)};
           border-radius: 999px;
           background: var(--marker-color);
-          box-shadow: 0 0 0 3px var(--marker-shadow);
+          box-shadow: 0 0 0 ${px(3, panel)} var(--marker-shadow);
         }
 
         .rtc-marker-cold { z-index: 4; }
         .rtc-marker-warm { z-index: 5; }
         .rtc-marker-room {
-          height: 13px;
+          height: ${px(13, panel)};
           z-index: 4;
         }
         .rtc-marker-avg {
-          height: 15px;
+          height: ${px(15, panel)};
           z-index: 6;
         }
         .rtc-marker-avg.rtc-marker-emphasized {
-          height: 19px;
+          height: ${px(19, panel)};
         }
 
         .rtc-scale-labels {
           position: relative;
-          height: 12px;
-          font-size: 10px;
+          height: ${px(12, panel)};
+          font-size: ${px(10, panel)};
           font-weight: 750;
           color: var(--rtc-faint);
           white-space: nowrap;
@@ -74,7 +77,7 @@ export const SCALE_BAR_CSS = `        .rtc-scale-bar {
         .rtc-scale-label-max { right: 0; }
 
         .rtc-scale-footer {
-          font-size: 10.5px;
+          font-size: ${px(10.5, panel)};
           font-weight: 750;
           color: var(--rtc-muted);
           white-space: nowrap;
@@ -84,3 +87,4 @@ export const SCALE_BAR_CSS = `        .rtc-scale-bar {
 
         .rtc-extremes-view,
 `;
+}

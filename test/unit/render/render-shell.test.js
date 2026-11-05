@@ -317,6 +317,15 @@ test("the structure signature composes the shell's parts with each view's own", 
   assert.ok(!signature.includes("range:"), "an inactive view contributes nothing");
 });
 
+test("a size factor moves the signature: the stylesheet bakes the sizes in", () => {
+  const reference = cardShell.cardStructureSignature(viewModel(), registry.VIEW_RENDERERS);
+  assert.match(reference, /\|size:1,1,1,1,1,1\|/);
+  for (const part of ["shell", "header", "panel", "entityLabel", "rooms", "roomValue"]) {
+    const sized = viewModel({ size: { ...viewModel().size, [part]: 1.5 } });
+    assert.notEqual(cardShell.cardStructureSignature(sized, registry.VIEW_RENDERERS), reference, part);
+  }
+});
+
 test("the warnings block's presence moves the signature, its text does not", () => {
   const reference = cardShell.cardStructureSignature(viewModel(), registry.VIEW_RENDERERS);
   const shown = (text) => viewModel({ warning: { visible: true, text, label: "Warning" } });
@@ -489,11 +498,14 @@ test("the stylesheet is assembled from its sections with nothing inserted betwee
   assert.ok(css.indexOf("@container rtc-card") < css.indexOf("prefers-reduced-motion"));
 });
 
-test("the stylesheet is a pure function of its five inputs", () => {
+test("the stylesheet is a pure function of its six inputs", () => {
   const inputs = { keyframes: "", trackAnimationCss: "", viewCount: 1, viewWidthPct: 100, viewHeight: 70 };
   assert.equal(styles.buildStyles(inputs), styles.buildStyles({ ...inputs }));
   assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewCount: 2 }));
   assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, viewHeight: 140 }));
+  const unscaled = { shell: 1, header: 1, panel: 1, entityLabel: 1, rooms: 1, roomValue: 1 };
+  assert.equal(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, size: unscaled }), "the default is the unscaled card");
+  assert.notEqual(styles.buildStyles(inputs), styles.buildStyles({ ...inputs, size: { ...unscaled, rooms: 1.5 } }));
 });
 
 test("the view-area height is written once, as two tokens, and every view slot reads it", () => {

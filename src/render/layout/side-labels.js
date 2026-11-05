@@ -32,6 +32,3 @@ export function layoutSideLabelGroup(items, edgeMin, edgeMax, gap) {
     for (const item of items) item.left -= underflow;
   }
 }
-
-// Shared minimum label gap across both scale-shaped views.
-export const LABEL_GAP_PX = 4;
