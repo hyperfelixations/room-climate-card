@@ -1,15 +1,17 @@
 // SHIPPED STYLESHEET SLICE: carousel rotator, track and view slots.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
+import { px } from "./css-units.js";
+
+export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }, { panel }) {
   return `        .rtc-rotator-solo {
           min-width: 0;
           height: var(--rtc-view-height);
           /* Extend paint upward for RangeScale's upper label while clipping horizontally;
              the directional clip does not alter layout or bar geometry. */
           overflow: visible;
-          clip-path: inset(-10px 0 0 0);
-          border-radius: 14px;
+          clip-path: inset(${px(-10, panel)} 0 0 0);
+          border-radius: ${px(14, panel)};
           contain: layout style;
         }
 
@@ -25,8 +27,8 @@ export function carouselCss({ trackAnimationCss, viewCount, viewWidthPct }) {
           align-items: center;
           justify-content: center;
           text-align: center;
-          padding: 0 14px;
-          font-size: 13px;
+          padding: 0 ${px(14, panel)};
+          font-size: ${px(13, panel)};
           font-weight: 700;
           line-height: 1.3;
           color: var(--secondary-text-color);

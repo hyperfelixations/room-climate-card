@@ -1,8 +1,11 @@
 // SHIPPED STYLESHEET SLICE: availability state for the normal card shell.
 // Slice order is normative; CSS comments inside template literals are baseline-pinned bytes.
 
-export const AVAILABILITY_CSS = `        .rtc-root[data-state="no-data"] .rtc-main-panel {
-          grid-template-columns: minmax(94px, 106px);
+import { px } from "./css-units.js";
+
+export function availabilityCss({ panel }) {
+  return `        .rtc-root[data-state="no-data"] .rtc-main-panel {
+          grid-template-columns: minmax(${px(94, panel)}, ${px(106, panel)});
         }
 
         .rtc-root[data-state="no-data"] .rtc-avg-value,
@@ -16,3 +19,4 @@ export const AVAILABILITY_CSS = `        .rtc-root[data-state="no-data"] .rtc-ma
         }
 
 `;
+}

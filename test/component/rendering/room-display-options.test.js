@@ -10,7 +10,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { loadCardInternals } = require("../../helpers/card-internals.js");
-const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { CO_PPB, CO2, TEMPERATURE_C, TEMPERATURE_K } = require("../../fixtures/attributes.js");
 
 // Load cross-module compositions through the dedicated test helper.
 let internals;
@@ -313,6 +313,50 @@ test("getCardSize(): show.rooms auto scales with a multi-room grid (regression)"
     rooms: Array.from({ length: 10 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` })),
   });
   assert.ok(el.getCardSize() > 3, "10 rooms with chips visible must exceed the base size");
+});
+
+test("getCardSize(): reserves the chip rows the card draws for its measurement and unit", () => {
+  // Twenty rooms; how many rows they take depends on the reading's width, and the hint follows.
+  const drawnRows = new Set();
+  for (const [attributes, value] of [[TEMPERATURE_C, 22], [CO2, 800], [TEMPERATURE_K, 295], [CO_PPB, 1500]]) {
+    const rooms = Array.from({ length: 20 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` }));
+    const states = { "sensor.avg": mkState("sensor.avg", value, attributes) };
+    for (const room of rooms) states[room.entity] = mkState(room.entity, value, attributes);
+    const el = env.document.createElement("room-climate-card");
+    el.setConfig({ entity: "sensor.avg", rooms });
+    el.hass = mkHass(states);
+    const drawn = el._computeViewModel().rooms.rowSizes.length;
+    assert.equal(el.getCardSize(), 3 + drawn, `${attributes.unit_of_measurement}: the hint reserves the ${drawn} drawn rows`);
+    drawnRows.add(drawn);
+  }
+  assert.ok(drawnRows.size > 1, "the measurement changes the rows, so the comparison means something");
+});
+
+test("getCardSize(): grows with the size the card draws and reserves the rows its chips take", () => {
+  // Header and panel are three units at their drawn size, each chip row one; both grow with the
+  // size the card draws. Without a measured width (jsdom) the reference card's width decides.
+  const rooms = Array.from({ length: 7 }, (_, i) => ({ entity: `sensor.r${i}`, name: `Room ${i}` }));
+  const states = { "sensor.avg": mkState("sensor.avg", 22, TEMPERATURE_C) };
+  for (const room of rooms) states[room.entity] = mkState(room.entity, 22, TEMPERATURE_C);
+  const sized = (size) => {
+    const el = env.document.createElement("room-climate-card");
+    el.setConfig({ entity: "sensor.avg", rooms, size });
+    el.hass = mkHass(states);
+    const model = el._computeViewModel();
+    return { drawn: model.rooms.rowSizes.length, size: model.size, hint: el.getCardSize() };
+  };
+  const unscaled = sized(undefined);
+  assert.deepEqual(sized("small"), unscaled);
+  assert.equal(unscaled.hint, 3 + unscaled.drawn);
+
+  for (const size of ["medium", "large", { rooms: "large", dynamic: false }, { panel: "large" }]) {
+    const card = sized(size);
+    const where = JSON.stringify(size);
+    assert.equal(card.hint, Math.ceil(3 * Math.max(card.size.header, card.size.panel) + card.drawn * card.size.roomValue), where);
+    assert.ok(card.hint >= unscaled.hint, where);
+  }
+  assert.ok(sized({ rooms: "large", dynamic: false }).drawn > unscaled.drawn, "larger chips take more rows");
+  assert.equal(sized({ panel: "large" }).drawn, unscaled.drawn, "the panel leaves the chips alone");
 });
 
 test("getCardSize(): the hint applies the same source rule the card does", () => {

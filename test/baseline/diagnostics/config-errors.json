@@ -14,6 +14,7 @@
   "room-unknown-key": "Invalid configuration: rooms[0].nmae is not an option of this card. Did you mean rooms[0].name?",
   "rooms-not-an-array": "Invalid configuration: rooms must be a list.",
   "show-unknown-key": "Invalid configuration: show.ikon is not an option of this card. Did you mean show.icon?",
+  "size-unknown-key": "Invalid configuration: size.room is not an option of this card. Did you mean size.rooms?",
   "title-unknown-key": "Invalid configuration: title.overflw is not an option of this card. Did you mean title.overflow?",
   "top-level-misspelled-key": "Invalid configuration: pallete is not an option of this card. Did you mean palette?",
   "views-entry-unknown-key": "Invalid configuration: views[0].enable is not an option of this card. Did you mean views[0].enabled?",

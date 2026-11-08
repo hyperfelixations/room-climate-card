@@ -673,12 +673,14 @@ test("the same profile with >= reaches the same answer by the other road", () =>
 // detach at bar centre or collapse to width 0. Widths below are measured from Chromium; the
 // browser-side check is test/browser/geometry/optimal-label-anchored-huge-reading.spec.js.
 
+const OPTIMAL_LABEL_GAP_PX = 4; // LABEL_GAP_PX of an unscaled panel
+
 // long === short so resolveLabelForm() measures exactly once; center ≈ 0 is the
 // optimal band (20–24) on an axis of [10, reading + 1], checked against buildScaleAxis().
 const OPTIMAL_LABEL_CONTENT = {
   optimalLabel: { long: "20–24 °C optimal", short: "20–24 °C optimal", center: 6e-5, visible: true },
+  labelGap: OPTIMAL_LABEL_GAP_PX,
 };
-const OPTIMAL_LABEL_GAP_PX = 4; // LABEL_GAP_PX
 
 function buildOptimalLabelContainer({ barWidth, minWidth, centerWidth, maxWidth }) {
   const container = new JSDOM("<!doctype html><div id='c'></div>").window.document.getElementById("c");

@@ -1,6 +1,7 @@
 // View-agnostic card shell; registry-injected renderers get their own content and slide only.
 // Template-literal indentation is shipped markup and baseline-pinned; see internal dev doc §4 "Render-Primitive-/Composition-Vertrag".
 
+import { SIZE_PARTS } from "../../core/size.js";
 import { escapeHtml } from "../../core/text.js";
 import { renderAverage, updateAverage } from "../primitives/average.js";
 import { setAttr, setText } from "../primitives/dom.js";
@@ -80,6 +81,7 @@ export function cardStructureSignature(viewModel, viewRenderers) {
     `collapsed:${viewModel.views.collapsed ? 1 : 0}`,
     // Baked into the stylesheet, which only a full render rewrites.
     `viewHeight:${viewModel.views.height}`,
+    `size:${SIZE_PARTS.map((part) => viewModel.size[part]).join(",")}`,
   ];
   if (viewModel.empty) {
     // No-data nodes are structural; the keyed grid still reconciles its chips.

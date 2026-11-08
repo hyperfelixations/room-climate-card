@@ -433,7 +433,8 @@ function edgeLabelRow(barWidth, widths) {
   return { container: realm.root, bar, minEl, maxEl };
 }
 
-const LABEL_GAP = 4; // LABEL_GAP_PX
+// The least gap between the edge labels, as the content carries it for an unscaled panel.
+const LABEL_GAP = 4;
 const EDGE_WIDTHS = { "0µg/m³": 30, "1,200µg/m³": 60, "1.2K µg/m³": 50, "-5°C": 24, "1,000,000,000°C": 90, "1B°C": 30 };
 
 test("the edge labels keep their full form while both fit beside each other with the gap", () => {
@@ -441,9 +442,21 @@ test("the edge labels keep their full form while both fit beside each other with
   edgeLabels.resolveEdgeLabels(container, {
     boundaryLabels: { min: "0µg/m³", max: "1,200µg/m³" },
     compactBoundaryLabels: { min: null, max: "1.2K µg/m³" },
+    labelGap: LABEL_GAP,
   });
   assert.deepEqual([minEl.textContent, maxEl.textContent], ["0µg/m³", "1,200µg/m³"]);
   assert.deepEqual([minEl.style.maxWidth, maxEl.style.maxWidth], ["", ""]);
+});
+
+test("the edge labels keep the gap their content carries, which grows with the panel", () => {
+  // 30 + 60 px fit a 94 px bar beside a 4 px gap, not beside the 6 px gap of a 1.5 panel.
+  const { container, minEl, maxEl } = edgeLabelRow(94, EDGE_WIDTHS);
+  edgeLabels.resolveEdgeLabels(container, {
+    boundaryLabels: { min: "0µg/m³", max: "1,200µg/m³" },
+    compactBoundaryLabels: { min: null, max: "1.2K µg/m³" },
+    labelGap: LABEL_GAP * 1.5,
+  });
+  assert.deepEqual([minEl.textContent, maxEl.textContent], ["0µg/m³", "1.2K µg/m³"]);
 });
 
 test("the edge labels take their compact forms together once the full ones would touch", () => {
@@ -451,6 +464,7 @@ test("the edge labels take their compact forms together once the full ones would
   edgeLabels.resolveEdgeLabels(container, {
     boundaryLabels: { min: "0µg/m³", max: "1,200µg/m³" },
     compactBoundaryLabels: { min: null, max: "1.2K µg/m³" },
+    labelGap: LABEL_GAP,
   });
   assert.deepEqual([minEl.textContent, maxEl.textContent], ["0µg/m³", "1.2K µg/m³"], "a side without a compact form keeps its own");
   assert.deepEqual([minEl.style.maxWidth, maxEl.style.maxWidth], ["", ""]);
@@ -461,6 +475,7 @@ test("edge labels that still do not fit are capped: the narrow one keeps its wid
   edgeLabels.resolveEdgeLabels(container, {
     boundaryLabels: { min: "-5°C", max: "1,000,000,000°C" },
     compactBoundaryLabels: { min: null, max: "1B°C" },
+    labelGap: LABEL_GAP,
   });
   assert.deepEqual([minEl.textContent, maxEl.textContent], ["-5°C", "1B°C"]);
   assert.equal(minEl.style.maxWidth, "");
@@ -474,6 +489,7 @@ test("edge labels that are both wider than half the row share it evenly", () => 
   edgeLabels.resolveEdgeLabels(container, {
     boundaryLabels: { min: "-5°C", max: "1,000,000,000°C" },
     compactBoundaryLabels: { min: null, max: "1B°C" },
+    labelGap: LABEL_GAP,
   });
   assert.deepEqual([minEl.style.maxWidth, maxEl.style.maxWidth], ["18px", "18px"]);
   // The mirror case: a narrow max label keeps its width and the min label takes the rest.
@@ -481,6 +497,7 @@ test("edge labels that are both wider than half the row share it evenly", () => 
   edgeLabels.resolveEdgeLabels(mirrored.container, {
     boundaryLabels: { min: "1,000,000,000°C", max: "-5°C" },
     compactBoundaryLabels: { min: "1B°C", max: null },
+    labelGap: LABEL_GAP,
   });
   assert.deepEqual([mirrored.minEl.style.maxWidth, mirrored.maxEl.style.maxWidth], [`${60 - LABEL_GAP - 24}px`, ""]);
 });
@@ -490,6 +507,7 @@ test("the edge-label layout starts over on every pass, so the labels widen back 
   const content = {
     boundaryLabels: { min: "-5°C", max: "1,000,000,000°C" },
     compactBoundaryLabels: { min: null, max: "1B°C" },
+    labelGap: LABEL_GAP,
   };
   edgeLabels.resolveEdgeLabels(container, content);
   edgeLabels.resolveEdgeLabels(container, content);

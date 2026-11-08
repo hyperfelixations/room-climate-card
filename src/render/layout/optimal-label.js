@@ -17,7 +17,6 @@
 import { clamp } from "../../core/numbers.js";
 import { measuredWidth, setStyleProperty } from "../primitives/dom.js";
 import { resolveLabelForm } from "./label-form.js";
-import { LABEL_GAP_PX } from "./side-labels.js";
 
 export function resolveOptimalLabelPosition(containerEl, content) {
   if (!containerEl || !content?.optimalLabel) return;
@@ -39,7 +38,7 @@ export function resolveOptimalLabelPosition(containerEl, content) {
   if (!barWidth) return;
   const minWidth = measuredWidth(minEl);
   const maxWidth = measuredWidth(maxEl);
-  const gap = LABEL_GAP_PX;
+  const gap = content.labelGap;
 
   // "Fits" is the exact same lowLimit <= highLimit criterion computed below, just
   // evaluated for whichever candidate form actually measures at that width.

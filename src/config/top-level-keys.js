@@ -32,6 +32,7 @@ export const TOP_LEVEL_KEYS = Object.freeze(
     "entity_label",
     "icon",
     "accent_line",
+    "size",
     "decimals",
     "language",
     "number_format",

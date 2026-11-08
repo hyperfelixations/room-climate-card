@@ -406,6 +406,11 @@ const SCENARIOS = [
     states: { "sensor.avg": st("sensor.avg", 22.4, C), ...sevenRoomStates() },
   },
   {
+    name: "size-large",
+    config: { entity: "sensor.avg", rooms: sevenRoomConfig(), size: "large" },
+    states: { "sensor.avg": st("sensor.avg", 22.4, C), ...sevenRoomStates() },
+  },
+  {
     name: "rooms-sorted-by-name-full-label",
     config: { entity: "sensor.avg", rooms: sevenRoomConfig(), room_sort: "name", room_label: "name" },
     states: { "sensor.avg": st("sensor.avg", 22.4, C), ...sevenRoomStates() },

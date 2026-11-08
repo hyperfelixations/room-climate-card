@@ -335,6 +335,24 @@
       "Room Climate Card: \"alway\" is not a valid value for show.rooms. Using default: auto."
     ]
   },
+  "size-dynamic-not-a-boolean": {
+    "block": "\"yes\" is not a valid value for size.dynamic. Using default: true.",
+    "console": [
+      "Room Climate Card: \"yes\" is not a valid value for size.dynamic. Using default: true."
+    ]
+  },
+  "size-part-out-of-range": {
+    "block": "3 is not a valid value for size.rooms. Using default: small.",
+    "console": [
+      "Room Climate Card: 3 is not a valid value for size.rooms. Using default: small."
+    ]
+  },
+  "size-unknown": {
+    "block": "\"huge\" is not a valid value for size. Using default: small.",
+    "console": [
+      "Room Climate Card: \"huge\" is not a valid value for size. Using default: small."
+    ]
+  },
   "slide-seconds-not-a-number": {
     "block": "\"NaN\" is not a valid value for slide_seconds. Using default: 1.",
     "console": [

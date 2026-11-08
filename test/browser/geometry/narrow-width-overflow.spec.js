@@ -193,8 +193,8 @@ test.describe(".rtc-avg-label stays inside its column whatever the room is calle
 
 test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes realistic CO2/PM2.5 values", () => {
   // Realistic values only (room-value-legibility.spec.js has the full matrix): natural
-  // width is guaranteed by metric-specific auto-max-columns (5/row for CO2/PM2.5), not by
-  // ellipsis as a safety net.
+  // width is guaranteed by the automatic row limit the card computes from the reading's width
+  // (room-chip-fit.js), not by ellipsis as a safety net.
   function coHass() {
     return {
       "sensor.avg": mkStateObj("sensor.avg", 1200, CO2),
@@ -213,8 +213,7 @@ test.describe("room-value-legibility fix: .rtc-room-value-num never ellipsizes r
       "sensor.r4": mkStateObj("sensor.r4", 15.9, PM25),
     };
   }
-  // 4 rooms stays within CO2/PM2.5's autoMaxColumns=5 (single row, tightest realistic
-  // per-chip width in automatic mode).
+  // Four rooms, laid out automatically.
   const roomsFor4 = [
     { entity: "sensor.r1" }, { entity: "sensor.r2" }, { entity: "sensor.r3" }, { entity: "sensor.r4" },
   ];

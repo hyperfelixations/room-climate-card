@@ -26,6 +26,7 @@ import { rejectConfiguration } from "./errors.js";
 import { normalizeRooms } from "./rooms.js";
 import { normalizeViewsConfig } from "./views.js";
 import { normalizeShowConfig, resolveShowConfig } from "./show.js";
+import { normalizeSizeConfig } from "./size.js";
 import { checkTopLevelKeys } from "./top-level-keys.js";
 import { normalizeClassificationConfig } from "./classification/normalize.js";
 import { normalizePalette } from "./classification/palette.js";
@@ -46,7 +47,8 @@ const ROOM_SORTS = ["configured", "name", "value_asc", "value_desc"];
 const ROOM_LABELS = ["auto", "short", "name"];
 const ACCENT_LINE_POSITIONS = ["top", "bottom"];
 // room_columns/room_rows: a larger grid cannot be a deliberate layout; null decides automatically.
-const ROOM_GRID = { min: 1, max: 20, integer: true, fallback: null, instead: FALLBACK.AUTOMATIC };
+export const ROOM_GRID_MAX = 20;
+const ROOM_GRID = { min: 1, max: ROOM_GRID_MAX, integer: true, fallback: null, instead: FALLBACK.AUTOMATIC };
 
 // Optional language override; "auto" keeps the automatic hass-based detection. Only a language
 // that actually has a translation block is accepted, so an override can never select one that
@@ -168,6 +170,8 @@ export function normalizeConfig(config, collaborators) {
       ACCENT_LINE_POSITIONS,
       DEFAULT_CONFIG.accent_line
     ),
+    // The size factors of the card's frame (`shell`, written `card`), header, panel and rooms.
+    size: normalizeSizeConfig(userConfig.size, diagnostics),
     // WHETHER each part is drawn; "" on the part's key and `show.<part>: false` are two
     // roads to the same absent node.
     show,
