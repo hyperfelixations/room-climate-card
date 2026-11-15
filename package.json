@@ -57,7 +57,7 @@
     "test:property:run": "node --test \"test/property/*.test.js\""
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stryker-mutator/core": "10.1.1",
     "c8": "12.0.0",
     "card-mod": "https://codeload.github.com/thomasloven/lovelace-card-mod/tar.gz/11005313b240da0f7880b95aedc5a9876c293b83",
@@ -65,7 +65,7 @@
     "istanbul-lib-report": "3.0.1",
     "istanbul-reports": "3.2.0",
     "jsdom": "^30.1.3",
-    "rollup": "^4.65.0",
+    "rollup": "^4.68.0",
     "v8-to-istanbul": "9.3.0"
   },
   "overrides": {
