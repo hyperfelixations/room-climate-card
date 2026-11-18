@@ -13,6 +13,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../../helpers/gestures.js");
+const { assertTranslateXPercent } = require("../../helpers/css-values.js");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
 let env;
@@ -77,9 +78,9 @@ test("setConfig mid-drag settles the transform and schedules a resume", () => {
 
   const viewWidthPct = el._viewWidthPct();
   assert.equal(el._activeView, 1);
-  assert.equal(
+  assertTranslateXPercent(
     track.style.transform,
-    `translate3d(${-(el._activeView) * viewWidthPct}%,0,0)`,
+    -(el._activeView) * viewWidthPct,
     "track must be snapped to the resolved view's exact position, not left at the arbitrary frozen transform"
   );
   assert.ok(el._carousel.resumeTimerHandle !== null && el._carousel.resumeTimerHandle !== undefined, "a phase-aligned resume must be scheduled, matching a completed swipe");
