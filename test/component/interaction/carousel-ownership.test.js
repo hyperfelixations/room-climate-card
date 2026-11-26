@@ -13,6 +13,7 @@ const assert = require("node:assert/strict");
 const { createTestEnvironment } = require("../../helpers/load-card.jsdom.js");
 const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
+const { assertTranslateXPercent } = require("../../helpers/css-values.js");
 
 let env;
 
@@ -131,7 +132,7 @@ test("the second swipe completes normally: one view, exactly one new resume", ()
 
   const track = el.shadowRoot.querySelector(".rtc-track");
   assert.ok(track.classList.contains("rtc-manual"), "the track stays under manual control until the resume fires");
-  assert.match(track.style.transform, /translate3d\(-66\./, "and sits on the new view");
+  assertTranslateXPercent(track.style.transform, -el._activeView * el._viewWidthPct(), "and sits on the new view");
   env.cleanup(el);
 });
 

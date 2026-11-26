@@ -12,6 +12,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { JSDOM } = require("jsdom");
 const { createFakePlatform } = require("../../helpers/fake-platform.js");
+const { assertTranslateXPercent } = require("../../helpers/css-values.js");
 
 let timing;
 let runtime;
@@ -320,7 +321,10 @@ test("engaging auto-slide hands the track to the animation, with the phase as a 
   platform.setNow(5000);
   controller.applyAutoSlideStyles();
   assert.equal(track.classList.contains("rtc-manual"), false);
-  assert.match(track.style.animation, /rtc-track-slide 52000ms linear infinite/);
+  assert.equal(track.style.animationName, "rtc-track-slide");
+  assert.equal(track.style.animationDuration, "52000ms");
+  assert.equal(track.style.animationTimingFunction, "linear");
+  assert.equal(track.style.animationIterationCount, "infinite");
   assert.equal(track.style.animationDelay, "-5000ms");
 });
 
@@ -334,10 +338,10 @@ test("every manual path marks the track and kills the animation", () => {
   assert.ok(track.classList.contains("rtc-manual"));
   assert.equal(track.style.animation, "none");
   assert.equal(track.style.transition, "none");
-  assert.match(track.style.transform, /translate3d\(-33\.33/);
+  assertTranslateXPercent(track.style.transform, -100 / 3);
 
   controller.setTrackTranslate(-10);
-  assert.match(track.style.transform, /translate3d\(-10%/);
+  assertTranslateXPercent(track.style.transform, -10);
   controller.setTrackTransition(true);
   assert.match(track.style.transition, /transform 420ms/);
 });
@@ -361,7 +365,7 @@ test("pausing freezes the track exactly where it is", () => {
   assert.equal(frozenAt, -40 / 3);
   assert.ok(track.classList.contains("rtc-manual"));
   assert.equal(track.style.transition, "none");
-  assert.match(track.style.transform, /translate3d\(-13\.33/);
+  assertTranslateXPercent(track.style.transform, frozenAt);
 });
 
 // ------------------------------------- controller: the visible view index ----

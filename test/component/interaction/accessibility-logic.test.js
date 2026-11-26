@@ -15,10 +15,15 @@ const { mkState, mkHass } = require("../../helpers/hass-fixtures.js");
 const { beginConfirmedDrag, beginTouch, cancelDrag, endDrag } = require("../../helpers/gestures.js");
 const { TEMPERATURE_C } = require("../../fixtures/attributes.js");
 
+// With auto-slide on, the visible view is `Date.now() % cycle`; a flip falling between the render
+// and the assertion would leave the attributes one timer behind the index the test reads.
+const FIXED_NOW_MS = 1_750_000_000_000;
+
 let env;
 
 test.before(() => {
   env = createTestEnvironment();
+  env.window.Date.now = () => FIXED_NOW_MS;
 });
 test.after(() => {
   env.cleanupAll();
